@@ -289,6 +289,26 @@ MIGRATIONS: list[str] = [
     ALTER TABLE posting ADD COLUMN user_keep INTEGER NOT NULL DEFAULT 0;
     CREATE INDEX posting_user_keep ON posting(user_keep);
     """,
+    # 18 — BỎ HẲN personal project. Máy không nghĩ đề bài nữa; Vin tự chọn
+    # project của mình.
+    #
+    # Vì sao bỏ: bảng này sống được 14 bước migration và giữ đúng 0 dòng.
+    # Đổi lại là 1.253 dòng máy dựng đề bài cộng 955 dòng khung repo. Cách
+    # thay thế — lấy project mẫu trên YouTube — đo ra không sạch: lượt tìm
+    # "data science portfolio project tutorial" cho 0/10 là project thật
+    # (9/10 là video dạy làm website), nên máy khớp từ khoá không có cách nào
+    # chọn đúng; và chính cổng TUTORIAL trong brief.py đã loại sẵn lớp đó.
+    #
+    # Bước 14 và 16 KHÔNG sửa: DB nào đã chạy qua chúng rồi thì sửa lại là
+    # viết lại lịch sử. Danh sách này chỉ được thêm vào đuôi.
+    #
+    # Hai thứ trong cụm đó KHÔNG chết theo, vì chúng chưa bao giờ thuộc về
+    # nó: phép đếm thị trường (-> scoring/market.py) và bộ từ ngành
+    # (-> scoring/vocab.py). Cả hai chỉ đọc `posting`, không biết project là gì.
+    """
+    DROP INDEX IF EXISTS project_state;
+    DROP TABLE IF EXISTS project;
+    """,
 ]
 
 

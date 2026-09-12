@@ -127,8 +127,8 @@ with tempfile.TemporaryDirectory() as tmp:
           "realism" not in Q(chance="").where()[0])
 
     # TAG NGUỒN — lọc theo CÁCH TÌM.
-    check("chrome = chỉ LinkedIn", "source = 'linkedin'" in Q(found="chrome").where()[0])
-    check("api = mọi thứ trừ LinkedIn", "source <> 'linkedin'" in Q(found="api").where()[0])
+    check("linkedin = chỉ LinkedIn", "source = 'linkedin'" in Q(found="linkedin").where()[0])
+    check("board = mọi thứ trừ LinkedIn", "source <> 'linkedin'" in Q(found="board").where()[0])
     check("mọi nguồn thì không lọc gì", "source" not in Q(found="").where()[0])
     check("nguồn lạ bị vứt", Q(found="bịa").found == "")
 
@@ -141,7 +141,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
 print("\n[bộ lọc chọn HIỆN TIN NÀO, không đổi TIN TRÔNG RA SAO]")
 # LỖI THẬT: badge nguồn, "+N nơi" và điểm được tính trên phần ĐÃ LỌC. Nên bấm
-# tag "chrome" một cái là tin Man Group rụng badge api, mất "+1 nơi", và mất
+# bấm tag nguồn LinkedIn một cái là tin Man Group rụng badge board, mất "+1 nơi", và mất
 # luôn điểm 100 — vì dòng LinkedIn của nó chưa đọc kỹ nên chưa có điểm. Cùng
 # một việc, hai bộ lọc, hai bộ mặt.
 with tempfile.TemporaryDirectory() as tmp:
@@ -161,17 +161,17 @@ with tempfile.TemporaryDirectory() as tmp:
     group.regroup(conn)
 
     het = live.jobs(conn, Q())[0]
-    chr_ = live.jobs(conn, Q(found="chrome"))[0]
-    api = live.jobs(conn, Q(found="api"))[0]
-    check("không lọc: thấy cả hai nguồn", het["found_by"] == ["api", "chrome"])
-    check("lọc chrome: VẪN thấy cả hai nguồn", chr_["found_by"] == ["api", "chrome"])
-    check("lọc api: VẪN thấy cả hai nguồn", api["found_by"] == ["api", "chrome"])
+    chr_ = live.jobs(conn, Q(found="linkedin"))[0]
+    api = live.jobs(conn, Q(found="board"))[0]
+    check("không lọc: thấy cả hai nguồn", het["found_by"] == ["board", "linkedin"])
+    check("lọc linkedin: VẪN thấy cả hai nguồn", chr_["found_by"] == ["board", "linkedin"])
+    check("lọc board: VẪN thấy cả hai nguồn", api["found_by"] == ["board", "linkedin"])
     check("số '+N nơi' không đổi theo bộ lọc",
           het["merged"] == chr_["merged"] == api["merged"] == 2)
     check("điểm không đổi theo bộ lọc",
           het["score"] == chr_["score"] == api["score"] == 100)
     check("nhưng bộ lọc VẪN chọn đúng tin",
-          len(live.jobs(conn, Q(found="chrome"))) == 1)
+          len(live.jobs(conn, Q(found="linkedin"))) == 1)
     conn.close()
 
 print("\n[phân trang phải LỢP KÍN số đếm — không thiếu, không lặp]")

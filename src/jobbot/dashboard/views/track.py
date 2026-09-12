@@ -94,60 +94,50 @@ def _table(rows: list[dict]) -> str:
             f"<td class=tev>{event}</td>"
             f"<td class=tact>{moves}</td></tr>")
     return (
-        "<table class=board><thead><tr>"
+        "<table class=trackboard><thead><tr>"
         "<th>công ty · vị trí</th><th>nộp</th><th>bản CV</th>"
         "<th>trạng thái</th><th>thư gần nhất</th><th></th>"
         "</tr></thead><tbody>" + body + "</tbody></table>")
 
 
-def _mailbox(ready: bool, address: str) -> str:
-    """Ô nhập hộp thư. KHÔNG bao giờ vẽ mật khẩu ra — kể cả dạng chấm.
+def _mailbox(ready: bool, address: str, days: int = 30) -> str:
+    """Dòng hộp thư trên đầu bảng — CHỈ CÒN VIỆC, không còn cấu hình.
 
-    Trang này Vin mở hàng ngày; một ô password có sẵn giá trị là mật khẩu nằm
-    trong HTML, đọc được bằng View Source và bị trình duyệt lưu vào bộ nhớ
-    đệm. Server chỉ vẽ ĐỊA CHỈ và TRẠNG THÁI; giá trị thật nằm trong
-    config.toml (chmod 600, đã gitignore).
+    Ô nhập địa chỉ + app password đã chuyển sang Cài đặt · Gmail. Nó là thứ
+    nối một lần rồi thôi, mà trang này Vin mở hàng ngày; để một form cấu hình
+    nằm trên đầu bảng việc là bắt mắt đọc lại nó mỗi ngày.
+
+    Cái ở lại đây là VIỆC: bấm Quét thư. Chưa nối thì chỉ ra đúng chỗ nối.
     """
-    if ready:
-        # "đã lưu", KHÔNG phải "đã nối": trang chỉ biết config CÓ chuỗi, không
-        # biết chuỗi đó còn đăng nhập được không. App password bị thu hồi bên
-        # Google thì dòng này vẫn xanh, và Vin tin là hộp thư đang chạy.
-        return (f"<div class=boxrow><span class=boxok>hộp thư "
-                f"<b>{esc(address)}</b> đã lưu — bấm Quét để kiểm</span>"
-                f"<button class='mbtn apply' data-post='/api/track/mail/scan'>"
-                f"Quét thư 30 ngày</button>"
-                f"<button class='mbtn tiny' data-post='/api/mail/forget'"
-                f" data-arg='xoa'>xoá mật khẩu</button></div>")
-    return (
-        "<form class=boxform data-post='/api/mail/setup'>"
-        "<div class=boxhead>Nối hộp thư việc làm — thư về là thứ tự cập nhật "
-        "bảng này</div>"
-        f"<input name=address type=email placeholder='địa chỉ hộp thư việc làm'"
-        f" value='{esc(address)}' required>"
-        "<input name=password type=password autocomplete=off"
-        " placeholder='app password 16 ký tự' required>"
-        "<button class='mbtn apply' type=submit>Nối</button>"
-        "<div class=boxwhy>Lấy ở <code>myaccount.google.com/apppasswords</code>"
-        " (bật xác minh 2 bước trước). KHÔNG phải mật khẩu tài khoản — Gmail đã"
-        " ngắt IMAP bằng mật khẩu tài khoản từ 2022. App password lưu vào"
-        " <code>config/config.toml</code>, chmod 600, đã gitignore."
-        "<span class=formnote></span></div></form>")
+    if not ready:
+        return ("<div class=boxrow><span class=muted>chưa nối hộp thư việc "
+                "làm — thư trả lời sẽ không tự cập nhật bảng này</span>"
+                "<button class='mbtn apply' data-appset='gmail'>"
+                "Nối hộp thư…</button></div>")
+    # "đã lưu", KHÔNG phải "đã nối": chỗ này chỉ biết config CÓ chuỗi, không
+    # biết chuỗi đó còn đăng nhập được không. App password bị thu hồi bên
+    # Google thì dòng này vẫn xanh, và Vin tin là hộp thư đang chạy.
+    return (f"<div class=boxrow><span class=boxok>hộp thư "
+            f"<b>{esc(address)}</b> đã lưu — bấm Quét để kiểm</span>"
+            f"<button class='mbtn apply' data-post='/api/track/mail/scan'>"
+            f"Quét thư {days} ngày</button></div>")
 
 
 def render(*, rows: list[dict], asks: list[dict], counts: dict,
-           mail_ready: bool = False, mail_address: str = "") -> str:
+           mail_ready: bool = False, mail_address: str = "",
+           mail_days: int = 30) -> str:
     open_now = sum(counts.get(s, 0) for s in OPEN)
     draft = counts.get("draft", 0)
     note = ((f"{draft} đang điền · " if draft else "")
             + f"{counts.get('total', 0)} lần nộp · {open_now} đang chờ · "
             f"{counts.get('silent', 0)} im lặng · "
             f"{counts.get('rejected', 0)} từ chối")
-    scan = _mailbox(mail_ready, mail_address)
+    scan = _mailbox(mail_ready, mail_address, mail_days)
     return runtime.render(
         title="Quản lí", active="/track", stream="search", journal="bottom",
         note=note, cols=1,
         panels=[runtime.panel(
             "Đã nộp",
-            f"<div class=boardtop>{scan}</div>" + _ask(asks) + _table(rows),
+            f"<div class=tracktop>{scan}</div>" + _ask(asks) + _table(rows),
             span=1)],
     )

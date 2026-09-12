@@ -299,7 +299,7 @@ check("kho kỹ năng vẫn lấy từ vựng chấm điểm", len(_sug("skills"
 # Kho ngành cũng KHÔNG gõ tay: nó đúng bằng bộ ngành mà projects/inventory.py
 # dùng để dán nhãn cho tin thật. Gõ danh sách riêng cho màn hình thì người
 # dùng chọn được ngành mà máy không biết nhận ra.
-from jobbot.projects.inventory import INDUSTRY as _IND
+from jobbot.scoring.vocab import INDUSTRY as _IND
 check("kho ngành lấy từ bộ máy ĐANG dùng để nhận ngành trên tin",
       _sug("industries") == sorted(_IND))
 check("ô ngành là ô thẻ", all_questions()["industries"].tags == ", ")

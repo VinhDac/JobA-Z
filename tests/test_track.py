@@ -221,8 +221,22 @@ print("\n[nối hộp thư từ giao diện — mật khẩu không được rò
 from jobbot.core import config as _cfg
 from jobbot.dashboard.views import track as _tv
 
-_keep = _cfg.PATH.read_text() if _cfg.PATH.exists() else None
+# CHẠY TRÊN REPO GIẢ. Bản cũ ghi thẳng vào config.toml THẬT rồi khôi phục ở
+# finally — và khi tệp thật chưa tồn tại thì không có gì để khôi phục, nên nó
+# để lại địa chỉ giả "a@b.c" với app password rỗng trong tệp của Vin. Chuyện
+# đó xảy ra thật ngày 12/09.
+import os as _osc, shutil as _shc, tempfile as _tfc
+_ctmp = _tfc.mkdtemp()
+_cu_root_c = _osc.environ.get("JOBBOT_ROOT")
+_osc.environ["JOBBOT_ROOT"] = _ctmp
 try:
+    (Path(_ctmp) / "config").mkdir(parents=True, exist_ok=True)
+    _shc.copy(Path(__file__).resolve().parent.parent
+              / "config" / "config.example.toml",
+              Path(_ctmp) / "config" / "config.example.toml")
+    # CHỐT: không bao giờ ghi vào config THẬT. Cùng luật với chốt "test đang
+    # trỏ vào DB THẬT" — và chốt này có vì đã mất một app password thật.
+    assert str(_cfg.PATH).startswith(_ctmp), f"đang ghi vào config THẬT: {_cfg.PATH}"
     _cfg.write_value("mail", "address", "a@b.c")
     _cfg.write_value("mail", "password", 'p"w\\d')
     check("ghi rồi đọc lại ra đúng", _cfg.section("mail")["password"] == 'p"w\\d')
@@ -234,25 +248,55 @@ try:
     _cfg.write_value("mail", "password", "")
     check("xoá được", _cfg.section("mail")["password"] == "")
 finally:
-    if _keep is not None:
-        _cfg.PATH.write_text(_keep)
+    if _cu_root_c is None:
+        _osc.environ.pop("JOBBOT_ROOT", None)
+    else:
+        _osc.environ["JOBBOT_ROOT"] = _cu_root_c
+    _shc.rmtree(_ctmp, ignore_errors=True)
 
-# Trang Quản lí Vin mở hàng ngày. Một ô password có sẵn giá trị nghĩa là mật
-# khẩu nằm trong HTML, đọc được bằng View Source.
+# Ô NHẬP HỘP THƯ ĐÃ CHUYỂN SANG CÀI ĐẶT · GMAIL. Nó là cấu hình — nối một
+# lần rồi thôi — mà trang Quản lí thì Vin mở hàng ngày; để một form cấu hình
+# trên đầu bảng việc là bắt mắt đọc lại nó mỗi ngày.
 _html = _tv.render(rows=[], asks=[], counts={}, mail_ready=False,
                    mail_address="a@b.c")
-check("có ô nhập hộp thư", "/api/mail/setup" in _html)
-check("ô mật khẩu là type=password", "type=password" in _html)
-check("KHÔNG vẽ giá trị mật khẩu ra HTML",
-      not re.search(r"type=password[^>]*value=", _html))
-check("địa chỉ thì vẽ ra được", "a@b.c" in _html)
-_on = _tv.render(rows=[], asks=[], counts={}, mail_ready=True, mail_address="a@b.c")
+check("Quản lí KHÔNG còn form nối hộp thư", "/api/mail/setup" not in _html)
+check("nhưng chỉ ra đúng chỗ nối", "data-appset='gmail'" in _html)
+_on = _tv.render(rows=[], asks=[], counts={}, mail_ready=True,
+                 mail_address="a@b.c", mail_days=45)
 check("nối rồi thì hiện nút quét", "/api/track/mail/scan" in _on)
-check("và nút xoá mật khẩu", "/api/mail/forget" in _on)
-# Đường PHÁ HOẠI không được là đường mặc định: một POST rỗng đã xoá mất app
-# password thật 12 lần trong lúc thử, và không ai biết cho tới khi quét thư
-# báo "chưa cấu hình".
-check("nút xoá phải gửi kèm xác nhận", "data-arg='xoa'" in _on)
+check("nút quét nói đúng số ngày đang đặt", "Quét thư 45 ngày" in _on)
+
+# Form nối giờ nằm trong Cài đặt — mọi lời hứa về mật khẩu vẫn phải giữ.
+from jobbot.dashboard.views import settings as _sv
+_set = _sv.render(every=60, hours=(8, 22), status=[], mail_ready=False,
+                  mail_address="a@b.c", mail_days=30)
+check("Cài đặt có ô nhập hộp thư", "/api/mail/setup" in _set)
+check("ô mật khẩu là type=password", "type=password" in _set)
+check("KHÔNG vẽ giá trị mật khẩu ra HTML",
+      not re.search(r"type=password[^>]*value=", _set))
+check("địa chỉ thì vẽ ra được", "a@b.c" in _set)
+_set_on = _sv.render(every=60, hours=(8, 22), status=[], mail_ready=True,
+                     mail_address="a@b.c", mail_days=30, mail_profile="a@b.c")
+# NỐI MỘT LẦN, và chỉ "Làm lại từ đầu" mới xoá. Hai đường phá hoại cho cùng
+# một thứ là hai chỗ bấm nhầm — app password này đã mất ba lần trong một ngày.
+check("KHÔNG còn nút xoá mật khẩu riêng", "/api/mail/forget" not in _set_on)
+check("và nói rõ chỉ Làm lại từ đầu mới xoá", "Làm lại từ đầu" in _set_on)
+check("nhưng vẫn đổi được bằng cách dán đè", "/api/mail/setup" in _set_on)
+_srv3 = (Path(__file__).resolve().parent.parent
+         / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
+check("route xoá đã gỡ hẳn", '"/api/mail/forget"' not in _srv3)
+# CHỐT: hộp thư quét phải ĐÚNG hộp thư khai trong hồ sơ. Nối nhầm thì app
+# quét một nơi mà thư về một nơi — bảng Quản lí báo "đang chờ" mãi cho những
+# đơn đã có hồi âm, và không có dấu hiệu nào cho thấy sai.
+check("nối hộp thư có chốt khớp hồ sơ",
+      'store.load(conn_ho_so).get("email")' in _srv3)
+_set_khac = _sv.render(every=60, hours=(8, 22), status=[], mail_ready=False,
+                       mail_address="", mail_days=30, mail_profile="vin@x.y")
+check("nói TRƯỚC phải khớp địa chỉ nào", "vin@x.y" in _set_khac)
+check("và điền sẵn để khỏi gõ sai", "value='vin@x.y'" in _set_khac)
+check("hồ sơ chưa khai thì chỉ đường đi khai",
+      "Hồ sơ chưa khai địa chỉ" in _sv.render(every=60, hours=(8, 22), status=[]))
+check("và có ô đặt số ngày đọc lại thư", "name=mail_days" in _set)
 _srv2 = (Path(__file__).resolve().parent.parent
          / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
 check("route xoá đòi xác nhận", '!= "xoa"' in _srv2)
@@ -564,8 +608,22 @@ print("\n[nối hộp thư từ giao diện — mật khẩu không được rò
 from jobbot.core import config as _cfg
 from jobbot.dashboard.views import track as _tv
 
-_keep = _cfg.PATH.read_text() if _cfg.PATH.exists() else None
+# CHẠY TRÊN REPO GIẢ. Bản cũ ghi thẳng vào config.toml THẬT rồi khôi phục ở
+# finally — và khi tệp thật chưa tồn tại thì không có gì để khôi phục, nên nó
+# để lại địa chỉ giả "a@b.c" với app password rỗng trong tệp của Vin. Chuyện
+# đó xảy ra thật ngày 12/09.
+import os as _osc, shutil as _shc, tempfile as _tfc
+_ctmp = _tfc.mkdtemp()
+_cu_root_c = _osc.environ.get("JOBBOT_ROOT")
+_osc.environ["JOBBOT_ROOT"] = _ctmp
 try:
+    (Path(_ctmp) / "config").mkdir(parents=True, exist_ok=True)
+    _shc.copy(Path(__file__).resolve().parent.parent
+              / "config" / "config.example.toml",
+              Path(_ctmp) / "config" / "config.example.toml")
+    # CHỐT: không bao giờ ghi vào config THẬT. Cùng luật với chốt "test đang
+    # trỏ vào DB THẬT" — và chốt này có vì đã mất một app password thật.
+    assert str(_cfg.PATH).startswith(_ctmp), f"đang ghi vào config THẬT: {_cfg.PATH}"
     _cfg.write_value("mail", "address", "a@b.c")
     _cfg.write_value("mail", "password", 'p"w\\d')
     check("ghi rồi đọc lại ra đúng", _cfg.section("mail")["password"] == 'p"w\\d')
@@ -577,25 +635,55 @@ try:
     _cfg.write_value("mail", "password", "")
     check("xoá được", _cfg.section("mail")["password"] == "")
 finally:
-    if _keep is not None:
-        _cfg.PATH.write_text(_keep)
+    if _cu_root_c is None:
+        _osc.environ.pop("JOBBOT_ROOT", None)
+    else:
+        _osc.environ["JOBBOT_ROOT"] = _cu_root_c
+    _shc.rmtree(_ctmp, ignore_errors=True)
 
-# Trang Quản lí Vin mở hàng ngày. Một ô password có sẵn giá trị nghĩa là mật
-# khẩu nằm trong HTML, đọc được bằng View Source.
+# Ô NHẬP HỘP THƯ ĐÃ CHUYỂN SANG CÀI ĐẶT · GMAIL. Nó là cấu hình — nối một
+# lần rồi thôi — mà trang Quản lí thì Vin mở hàng ngày; để một form cấu hình
+# trên đầu bảng việc là bắt mắt đọc lại nó mỗi ngày.
 _html = _tv.render(rows=[], asks=[], counts={}, mail_ready=False,
                    mail_address="a@b.c")
-check("có ô nhập hộp thư", "/api/mail/setup" in _html)
-check("ô mật khẩu là type=password", "type=password" in _html)
-check("KHÔNG vẽ giá trị mật khẩu ra HTML",
-      not re.search(r"type=password[^>]*value=", _html))
-check("địa chỉ thì vẽ ra được", "a@b.c" in _html)
-_on = _tv.render(rows=[], asks=[], counts={}, mail_ready=True, mail_address="a@b.c")
+check("Quản lí KHÔNG còn form nối hộp thư", "/api/mail/setup" not in _html)
+check("nhưng chỉ ra đúng chỗ nối", "data-appset='gmail'" in _html)
+_on = _tv.render(rows=[], asks=[], counts={}, mail_ready=True,
+                 mail_address="a@b.c", mail_days=45)
 check("nối rồi thì hiện nút quét", "/api/track/mail/scan" in _on)
-check("và nút xoá mật khẩu", "/api/mail/forget" in _on)
-# Đường PHÁ HOẠI không được là đường mặc định: một POST rỗng đã xoá mất app
-# password thật 12 lần trong lúc thử, và không ai biết cho tới khi quét thư
-# báo "chưa cấu hình".
-check("nút xoá phải gửi kèm xác nhận", "data-arg='xoa'" in _on)
+check("nút quét nói đúng số ngày đang đặt", "Quét thư 45 ngày" in _on)
+
+# Form nối giờ nằm trong Cài đặt — mọi lời hứa về mật khẩu vẫn phải giữ.
+from jobbot.dashboard.views import settings as _sv
+_set = _sv.render(every=60, hours=(8, 22), status=[], mail_ready=False,
+                  mail_address="a@b.c", mail_days=30)
+check("Cài đặt có ô nhập hộp thư", "/api/mail/setup" in _set)
+check("ô mật khẩu là type=password", "type=password" in _set)
+check("KHÔNG vẽ giá trị mật khẩu ra HTML",
+      not re.search(r"type=password[^>]*value=", _set))
+check("địa chỉ thì vẽ ra được", "a@b.c" in _set)
+_set_on = _sv.render(every=60, hours=(8, 22), status=[], mail_ready=True,
+                     mail_address="a@b.c", mail_days=30, mail_profile="a@b.c")
+# NỐI MỘT LẦN, và chỉ "Làm lại từ đầu" mới xoá. Hai đường phá hoại cho cùng
+# một thứ là hai chỗ bấm nhầm — app password này đã mất ba lần trong một ngày.
+check("KHÔNG còn nút xoá mật khẩu riêng", "/api/mail/forget" not in _set_on)
+check("và nói rõ chỉ Làm lại từ đầu mới xoá", "Làm lại từ đầu" in _set_on)
+check("nhưng vẫn đổi được bằng cách dán đè", "/api/mail/setup" in _set_on)
+_srv3 = (Path(__file__).resolve().parent.parent
+         / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
+check("route xoá đã gỡ hẳn", '"/api/mail/forget"' not in _srv3)
+# CHỐT: hộp thư quét phải ĐÚNG hộp thư khai trong hồ sơ. Nối nhầm thì app
+# quét một nơi mà thư về một nơi — bảng Quản lí báo "đang chờ" mãi cho những
+# đơn đã có hồi âm, và không có dấu hiệu nào cho thấy sai.
+check("nối hộp thư có chốt khớp hồ sơ",
+      'store.load(conn_ho_so).get("email")' in _srv3)
+_set_khac = _sv.render(every=60, hours=(8, 22), status=[], mail_ready=False,
+                       mail_address="", mail_days=30, mail_profile="vin@x.y")
+check("nói TRƯỚC phải khớp địa chỉ nào", "vin@x.y" in _set_khac)
+check("và điền sẵn để khỏi gõ sai", "value='vin@x.y'" in _set_khac)
+check("hồ sơ chưa khai thì chỉ đường đi khai",
+      "Hồ sơ chưa khai địa chỉ" in _sv.render(every=60, hours=(8, 22), status=[]))
+check("và có ô đặt số ngày đọc lại thư", "name=mail_days" in _set)
 _srv2 = (Path(__file__).resolve().parent.parent
          / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
 check("route xoá đòi xác nhận", '!= "xoa"' in _srv2)

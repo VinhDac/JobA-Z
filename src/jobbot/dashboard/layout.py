@@ -26,12 +26,10 @@ from html import escape as esc
 # việc, chỉ là mấy công tắc mở ra chỉnh rồi đóng), Jobs và Score. Danh sách việc sẽ nằm trong Search — "tìm" và "xem
 # kết quả tìm" là một việc. Chấm điểm không phải một hệ chạy riêng, nó là
 # giai đoạn cuối của cùng một lần quét.
-# /jobs/<id>, /jobs/<id>/cv, /jobs/<id>/project VẪN SỐNG — danh sách mới sẽ
-# trỏ tới đó.
+# /jobs/<id> và /jobs/<id>/cv VẪN SỐNG — danh sách mới sẽ trỏ tới đó.
 NAV = [
     ("/",          "Home",     "◈"),
     ("/search",    "Search",   "⌕"),      # rt — bước 1
-    ("/projects",  "Projects", "▦"),      # rt — bước 4
     ("/cv",        "CV",       "▤"),      # rt — mọi bản sẽ gửi
     ("/track",     "Quản lí",  "▣"),      # rt — bước 5-6: nộp và theo dõi
     ("/profile",   "Profile",  "◇"),

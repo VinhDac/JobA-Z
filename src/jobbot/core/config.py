@@ -13,9 +13,41 @@ from __future__ import annotations
 import re
 import tomllib
 
-from .paths import PROJECT_ROOT
+from pathlib import Path
 
-PATH = PROJECT_ROOT / "config" / "config.toml"
+from .paths import project_root
+
+
+def _tep(ten: str) -> Path:
+    """Đường tới một tệp cấu hình, tính LÚC CHẠY.
+
+    Hằng số ở mức module thì bài test không chuyển hướng được, và nó đã ghi
+    thẳng vào config.toml THẬT — để lại địa chỉ giả "a@b.c" và app password
+    rỗng trong tệp của Vin ngày 12/09.
+    """
+    return project_root() / "config" / ten
+
+
+class _Duong:
+    """Cho `config.PATH` vẫn dùng được như một Path, nhưng tính lúc gọi."""
+
+    def __init__(self, ten: str) -> None:
+        self._ten = ten
+
+    def __fspath__(self) -> str:
+        return str(_tep(self._ten))
+
+    def __getattr__(self, ten: str):
+        return getattr(_tep(self._ten), ten)
+
+    def __truediv__(self, khac):
+        return _tep(self._ten) / khac
+
+    def __str__(self) -> str:
+        return str(_tep(self._ten))
+
+
+PATH = _Duong("config.toml")
 
 
 def load() -> dict:
@@ -32,7 +64,7 @@ def section(name: str) -> dict:
     return got if isinstance(got, dict) else {}
 
 
-EXAMPLE = PROJECT_ROOT / "config" / "config.example.toml"
+EXAMPLE = _Duong("config.example.toml")
 SECRET = 0o600          # chỉ chủ máy đọc được — trong này có app password
 
 

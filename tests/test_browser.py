@@ -99,6 +99,7 @@ print("\n[vòng đọc kỹ KHÔNG được đọc lại thứ đã đọc]")
 # đó đẻ ra: 17 phút mỗi vòng -> ~5.000 lượt gọi/ngày -> bị bóp 40-82% -> phải
 # nghỉ lâu hơn -> phải cắt 12 chức danh còn 5. Sửa một chỗ, cả chuỗi tan.
 from jobbot.ingest.web import linkedin as li
+import jobbot.scan_runner as _sr_doc
 
 class FakeTab:
     """Trả danh sách 3 tin, và đếm xem vòng đọc kỹ mở bao nhiêu trang chi tiết."""
@@ -152,14 +153,35 @@ try:
     li.fetch(FakeTab(), ["Quant Analyst"], pages=1, deep=False)
     check("quét đầy thì KHÔNG kèm cửa sổ thời gian",
           not any("f_TPR" in u for u in opened))
+    # CỬA SỔ CHỈ ÁP CHO CẶP ĐÃ PHỦ. Cặp chưa hỏi bao giờ mà cũng chỉ hỏi 24
+    # giờ thì tin cũ khớp nó không bao giờ được tìm thấy.
+    _phu = frozenset({"Quant Analyst|United Kingdom"})
     opened.clear()
-    li.fetch(FakeTab(), ["Quant Analyst"], pages=1, deep=False, recent=li.NGAY)
-    check("cập nhật thì hỏi đúng 24 giờ qua",
+    li.fetch(FakeTab(), ["Quant Analyst"], pages=1, deep=False,
+             recent=li.NGAY, covered=_phu)
+    check("cặp ĐÃ phủ -> chỉ hỏi 24 giờ qua",
           all("f_TPR=r86400" in u for u in opened), str(opened[:1]))
     opened.clear()
-    li.fetch(FakeTab(), ["Quant Analyst"], pages=1, deep=False, recent=li.TUAN)
+    li.fetch(FakeTab(), ["Quant Analyst"], pages=1, deep=False,
+             recent=li.TUAN, covered=_phu)
     check("nghỉ mấy hôm thì nới ra 7 ngày",
           all("f_TPR=r604800" in u for u in opened), str(opened[:1]))
+    opened.clear()
+    li.fetch(FakeTab(), ["Quant Analyst"], pages=1, deep=False, recent=li.NGAY)
+    check("cặp CHƯA phủ -> hỏi đầy, bất kể cửa sổ",
+          not any("f_TPR" in u for u in opened), str(opened[:1]))
+
+    # HAI KIỂU TRONG CÙNG MỘT LƯỢT — đây là cả điểm của việc nhớ theo cặp.
+    opened.clear()
+    _xong = set()
+    li.fetch(FakeTab(), ["Quant Analyst", "Data Scientist"], pages=1, deep=False,
+             recent=li.NGAY, covered=_phu, done_out=_xong)
+    _day = [u for u in opened if "f_TPR" not in u]
+    _hep = [u for u in opened if "f_TPR" in u]
+    check("cặp cũ hỏi cửa sổ, cặp mới hỏi đầy — trong cùng một lượt",
+          len(_day) == 1 and len(_hep) == 1, f"{len(_day)} đầy / {len(_hep)} hẹp")
+    check("và chỉ cặp vừa hỏi ĐẦY mới được ghi là đã phủ",
+          _xong == {"Data Scientist|United Kingdom"}, str(_xong))
 finally:
     li.open_page, li._pause = real_open, real_pause
 
@@ -180,8 +202,129 @@ try:
     check("chỉ mở đúng trang chi tiết của tin dở",
           sum(1 for u in opened if "jobPosting" in u) == 1)
     check("mô tả được vá thẳng vào tin đó", len(do_dang[0].description) > 200)
+    # TÊN NGUỒN TRONG NHẬT KÝ PHẢI ĐÚNG NGUỒN. Trang thì vẫn là trang
+    # LinkedIn, nhưng tin tới từ đâu là chuyện khác: đọc 106 tin thư báo mà
+    # nhật ký ghi "linkedin: 106 tin" thì người dùng tưởng vòng quét LinkedIn
+    # đang chạy trong khi họ vừa tắt nó đi.
+    from jobbot.core import journal as _jn
+    _dong = []
+    _that_emit = _jn.log.emit
+    _jn.log.emit = lambda stream, text, **k: _dong.append(text)
+    try:
+        li.read_deep(FakeTab(), [_P(source_id="1000002", title="Q", company="A",
+                                    location="London", url="https://x/b-1000002")],
+                     ten="alert")
+    finally:
+        _jn.log.emit = _that_emit
+    check("đọc tin thư báo -> nhật ký ghi 'alert', KHÔNG ghi 'linkedin'",
+          any(d.startswith("alert:") for d in _dong)
+          and not any(d.startswith("linkedin:") for d in _dong), str(_dong[:3]))
 finally:
     li.open_page, li._pause = real_open, real_pause
+
+print("\n[công tắc nguồn: TẮT thì phải thật sự không chạy]")
+# Một nguồn tắt mà vòng quét vẫn chạy nó thì công tắc chỉ là cái nút trang
+# trí. Kiểm bằng cách đếm số nguồn API thật sự được gọi.
+import tempfile as _tf, os as _os
+from pathlib import Path as _P
+with _tf.TemporaryDirectory() as _tmp:
+    _cu_dir = _os.environ.get("JOBBOT_DATA_DIR")
+    _cu_root_b = _os.environ.get("JOBBOT_ROOT")
+    _os.environ["JOBBOT_DATA_DIR"] = _tmp
+    # JOBBOT_ROOT: không thì bài test đọc config.toml THẬT, thấy hộp thư của
+    # Vin đã nối, và bật luôn nguồn thư báo. Test phải chạy trên thế giới của
+    # chính nó, không phụ thuộc máy ai đang nối cái gì.
+    (_P(_tmp) / "config").mkdir(exist_ok=True)
+    _os.environ["JOBBOT_ROOT"] = _tmp
+    try:
+        from jobbot.core import db as _db, prefs as _pf
+        from jobbot.core.paths import db_path as _dbp
+        from jobbot.profile import store as _ps
+        import jobbot.scan_runner as _sr
+        # CHỐT: test KHÔNG được chạm DB thật. Đã xảy ra một lần.
+        assert str(_dbp()).startswith(_tmp), f"test đang trỏ vào DB THẬT: {_dbp()}"
+        _c = _db.connect()
+        _ps.save(_c, {"job_titles": "Data Scientist", "markets": ["uk_onsite"],
+                      "work_auth": "citizen", "location": "London"}, "t")
+        _goi = []
+        _that_run = _sr._run_source
+        _that_chrome = _sr._chrome_pass
+        _sr._run_source = lambda conn, name, fn, *a, log=None: (_goi.append(name), (0, 0))[1]
+        _sr._chrome_pass = lambda *a, **k: (_goi.append("CHROME"), (0, 0))[1]
+        try:
+            _pf.set_flag(_c, _pf.SRC_BOARD, True)
+            _pf.set_flag(_c, _pf.SRC_LINKEDIN, True)
+            _c.close()
+            _goi.clear(); _sr.run_scan(manual=True, deep=False)
+            check("bật cả hai -> chạy cả board lẫn Chrome",
+                  len(_goi) > 1 and "CHROME" in _goi, str(_goi[-3:]))
+
+            _c = _db.connect(); _pf.set_flag(_c, _pf.SRC_BOARD, False); _c.close()
+            _goi.clear(); _sr.run_scan(manual=True, deep=False)
+            # Thư báo có công tắc RIÊNG, không nằm dưới công tắc board — nên
+            # tắt board không được kéo theo nó.
+            check("tắt board -> KHÔNG gọi board nào",
+                  not [g for g in _goi if ":" in g], str(_goi[:4]))
+
+            # TỪNG ATS một. Công tắc to và công tắc nhỏ là hai tầng; tắt tầng
+            # nào cũng phải dừng đúng nhóm đó, không nhiều không ít.
+            _c = _db.connect()
+            _pf.set_flag(_c, _pf.SRC_BOARD, True)
+            _pf.set_flag(_c, _pf.SRC_ATS["greenhouse"], False)
+            _c.close()
+            _goi.clear(); _sr.run_scan(manual=True, deep=False)
+            check("tắt greenhouse -> không gọi board greenhouse nào",
+                  not [g for g in _goi if g.startswith("greenhouse")],
+                  str([g for g in _goi if g.startswith("greenhouse")][:3]))
+            check("nhưng lever/ashby vẫn chạy",
+                  any(g.startswith(("lever", "ashby")) for g in _goi),
+                  str(_goi[:4]))
+            _c = _db.connect()
+            _pf.set_flag(_c, _pf.SRC_ATS["greenhouse"], True)
+            _c.close()
+
+            _c = _db.connect()
+            _pf.set_flag(_c, _pf.SRC_BOARD, True)
+            _pf.set_flag(_c, _pf.SRC_LINKEDIN, False)
+            _c.close()
+            _goi.clear(); _sr.run_scan(manual=True, deep=False)
+            # TẮT LINKEDIN KHÔNG PHẢI TẮT CHROME. Chrome còn là đường lấy mô
+            # tả cho tin của nguồn KHÁC (thư báo), và thư báo có công tắc
+            # riêng. Gộp lại thì tắt một nguồn làm chết một nguồn khác — đã
+            # xảy ra thật, 107 tin thư báo nằm im không ai chấm.
+            check("tắt LinkedIn -> vòng Chrome VẪN chạy (còn đọc tin nguồn khác)",
+                  "CHROME" in _goi, str(_goi[:4]))
+            _c = _db.connect()
+            _pf.set_flag(_c, _pf.SRC_ALERT, False)
+            _c.close()
+            _goi.clear(); _sr.run_scan(manual=True, deep=False)
+            # Nhưng tắt HẾT nguồn cần trang web thì đừng mở cửa sổ nào. Ở đây
+            # _chrome_pass bị thay bằng hàm giả nên vẫn được gọi; phần "không
+            # có việc thì không mở Chrome" do test TIEP ở dưới chứng minh.
+            _c = _db.connect()
+            _pf.set_flag(_c, _pf.SRC_ALERT, True)
+            _pf.set_flag(_c, _pf.SRC_LINKEDIN, True)
+            _c.close()
+        finally:
+            _sr._run_source, _sr._chrome_pass = _that_run, _that_chrome
+    finally:
+        for _k, _v in (("JOBBOT_DATA_DIR", _cu_dir), ("JOBBOT_ROOT", _cu_root_b)):
+            if _v is None:
+                _os.environ.pop(_k, None)
+            else:
+                _os.environ[_k] = _v
+
+print("\n[nhớ theo CẶP: không chạy đi chạy lại một thứ]")
+# Đơn vị quét là CẶP (chức danh × nơi), không phải cả lưới. Vân tay cho cả
+# lưới thì thô quá: bỏ bớt một chức danh cũng bắt quét lại từ đầu, trong khi
+# bỏ bớt thì làm gì có gì mới để tìm.
+_src = (Path(__file__).resolve().parent.parent
+        / "src/jobbot/scan_runner.py").read_text(encoding="utf-8")
+_than = _src.split("def _chrome_pass")[1]
+_truoc = _than.split("prefs.put(conn, prefs.LI_DONE")[0].split("\n")[-8:]
+_truoc = "\n".join(_truoc)
+check("chỉ ghi nhớ khi lượt chạy LÀNH", "health.ok" in _truoc, _truoc[-70:])
+check("cộng DỒN chứ không ghi đè", "cu_phu | vua_phu" in _than)
 
 print("\n[nhịp gọi: núm hiệu năng THẬT, và nó là núm đánh đổi]")
 # Vì sao không làm "chạy N tab song song": N tab với nhịp P giống hệt 1 tab
@@ -209,6 +352,155 @@ try:
 finally:
     li.time.sleep = _that
     li.open_page = real_open
+
+print("\n[thư báo phải đi HẾT dây chuyền, không dừng ở bước lấy về]")
+# Thư báo và vòng quét Chrome trỏ tới đúng MỘT trang /jobs/view/<id>, chỉ
+# khác đường mang id về. Vòng đọc kỹ chỉ nhìn source='linkedin' thì tin thư
+# báo đi được nửa dây chuyền: đo 12/09 là 195 tin về, LỌC chạy đúng (110 giữ
+# / 85 bỏ), nhưng 0 tin có mô tả và 0 tin được chấm — mà 181/195 là việc vòng
+# quét Chrome KHÔNG tìm ra.
+import tempfile as _tf2, os as _os2
+from pathlib import Path as _P2
+check("hai nguồn cùng một vòng đọc kỹ",
+      set(_sr_doc.DOC_KY) == {"linkedin", "alert"})
+with _tf2.TemporaryDirectory() as _t2:
+    _cu2 = _os2.environ.get("JOBBOT_DATA_DIR")
+    _os2.environ["JOBBOT_DATA_DIR"] = _t2
+    try:
+        from jobbot.core import db as _db2, postings as _po2
+        from jobbot.ingest.base import Posting as _P3
+        _c2 = _db2.connect()
+        assert str(_db2.paths.db_path()).startswith(_t2) if hasattr(_db2, "paths") else True
+        for _ng in ("linkedin", "alert"):
+            _po2.save_batch(_c2, _ng, [_P3(source_id="777", title="Quant",
+                                           company="X", location="London",
+                                           url="https://x/777", description="")])
+        _c2.execute("UPDATE posting SET kept = 1")
+        _c2.commit()
+        _do = _sr_doc._tin_do_dang(_c2)
+        check("tin thư báo NẰM TRONG hàng đợi đọc kỹ", "alert" in _do, str(list(_do)))
+        check("và tách theo NGUỒN, không trộn một rổ",
+              set(_do) == {"linkedin", "alert"}, str(list(_do)))
+        # save_batch ghi theo cặp (nguồn, id): gộp lại rồi lưu dưới một tên là
+        # đẻ ra dòng mới thay vì vá mô tả vào đúng dòng cũ.
+        check("mỗi nguồn đúng một tin", all(len(v) == 1 for v in _do.values()))
+        # Đọc xong ở nguồn này thì nguồn kia khỏi mở lại — cùng một trang.
+        _c2.execute("UPDATE posting SET description = ? WHERE raw_id IN"
+                    " (SELECT id FROM raw_posting WHERE source='alert')",
+                    ("x" * 300,))
+        _c2.commit()
+        check("đọc ở thư báo rồi thì LinkedIn khỏi mở lại",
+              "777" in _po2.already_read(_c2, _sr_doc.DOC_KY))
+        _c2.close()
+    finally:
+        if _cu2 is None:
+            _os2.environ.pop("JOBBOT_DATA_DIR", None)
+        else:
+            _os2.environ["JOBBOT_DATA_DIR"] = _cu2
+
+print("\n[hai nguồn, hai công tắc: tắt LinkedIn thì thư báo vẫn chạy trọn]")
+# "mặc dù allert cũng lấy từ linkdln nhưng 2 cách khác nhau phải làm 2 nguồn
+# khác nhau, đừng gộp chung, khi tôi tắt linkdn thì nó tự search từ nguồn
+# allert email thôi"
+#
+# Trước đây cả vùng Chrome nằm sau công tắc linkedin, mà vòng ĐỌC KỸ nằm
+# trong vùng đó — nên tắt linkedin là 107 tin thư báo đứng im: có chức danh,
+# có công ty, không có mô tả, không có điểm. Test này chạy THẬT _chrome_pass
+# với linkedin TẮT và kiểm mô tả có vào đúng dòng thư báo hay không.
+import tempfile as _tf4, os as _os4
+with _tf4.TemporaryDirectory() as _t4:
+    _cu4 = _os4.environ.get("JOBBOT_DATA_DIR")
+    _cu4r = _os4.environ.get("JOBBOT_ROOT")
+    _os4.environ["JOBBOT_DATA_DIR"] = _t4
+    _os4.environ["JOBBOT_ROOT"] = _t4
+    try:
+        from jobbot.core import db as _db4, prefs as _pf4, postings as _po4
+        from jobbot.ingest.base import Posting as _P4
+        from jobbot.profile import store as _ps4
+        from jobbot.browser import chrome as _ch4, cdp as _cdp4
+        from jobbot.core.paths import db_path as _dbp4
+        # CHỐT: test KHÔNG được chạm DB thật. Đã xảy ra một lần.
+        assert str(_dbp4()).startswith(_t4), f"test đang trỏ vào DB THẬT: {_dbp4()}"
+
+        _c4 = _db4.connect()
+        _ps4.save(_c4, {"job_titles": "Quant Analyst", "markets": ["uk_onsite"],
+                        "work_auth": "citizen", "location": "London"}, "t")
+        # Một tin của THƯ BÁO, chưa có mô tả — đúng thứ thư báo mang về.
+        _po4.save_batch(_c4, "alert", [_P4(
+            source_id="1000001", title="Quant Analyst", company="A",
+            location="London", url="https://x/jobs/view/a-1000001")])
+        _c4.execute("UPDATE posting SET kept = 1")
+        _c4.commit()
+        _pf4.set_flag(_c4, _pf4.SRC_LINKEDIN, False)     # <- TẮT LinkedIn
+        _pf4.set_flag(_c4, _pf4.SRC_ALERT, True)
+        _c4.commit()
+
+        _kieu = _sr_doc.scan_mode(_c4)
+        check("LinkedIn tắt mà còn tin dở -> nút vẫn mời Tiếp tục",
+              _kieu["mode"] == _sr_doc.TIEP, f"{_kieu['mode']} · {_kieu['note']}")
+        check("và KHÔNG còn đòi bật LinkedIn",
+              "bật LinkedIn" not in _kieu["note"], _kieu["note"])
+        check("thư báo là nguồn cần đọc kỹ, độc lập với linkedin",
+              _sr_doc.nguon_doc(_c4) == ("alert",), str(_sr_doc.nguon_doc(_c4)))
+
+        _mo4, _dong4 = [], []
+        _th_l, _th_s, _th_t = _ch4.launch, _ch4.shutdown, _cdp4.open_tab
+        _th_w = _sr_doc.__dict__.get("in_human_window")
+        class _Tab4(FakeTab):
+            def close(self): _dong4.append(1)
+        _ch4.launch = lambda **k: _mo4.append("launch")
+        _ch4.shutdown = lambda: True
+        _cdp4.open_tab = lambda *a, **k: _Tab4()
+        li.open_page = lambda tab, url, timeout=30: opened.append(url)
+        li._pause = lambda *a: None
+        try:
+            opened.clear()
+            _s4, _n4 = _sr_doc._chrome_pass(_c4, _ps4.load(_c4),
+                                            lambda _m: None, True, manual=True)
+            check("TẮT LinkedIn -> vòng đọc kỹ VẪN chạy", _mo4 == ["launch"], str(_mo4))
+            check("và KHÔNG gõ một lượt tìm từ khoá nào",
+                  not any("seeMoreJobPostings" in u for u in opened),
+                  str([u for u in opened if "seeMore" in u][:2]))
+            check("mở đúng trang chi tiết của tin thư báo",
+                  sum(1 for u in opened if "jobPosting" in u) == 1, str(opened))
+            _mo_ta = _c4.execute(
+                "SELECT length(COALESCE(p.description,'')) FROM posting p"
+                " JOIN raw_posting r ON p.raw_id = r.id"
+                " WHERE r.source = 'alert'").fetchone()[0]
+            check("mô tả vào ĐÚNG dòng thư báo, không đẻ dòng linkedin mới",
+                  _mo_ta > 200, f"dài {_mo_ta}")
+            check("không đẻ dòng nguồn linkedin nào",
+                  _c4.execute("SELECT COUNT(*) FROM raw_posting WHERE source"
+                              " = 'linkedin'").fetchone()[0] == 0)
+            # vua_phu: lỗi này nằm im vì `except Exception` nuốt NameError, rồi
+            # ghi lượt quét là HỎNG trong khi mô tả đã lưu xong.
+            _hong = _c4.execute("SELECT ok, error FROM source_run WHERE source"
+                                " = 'alert' ORDER BY id DESC LIMIT 1").fetchone()
+            check("và lượt chạy được ghi là LÀNH, không NameError",
+                  _hong and _hong[0] == 1, str(tuple(_hong) if _hong else None))
+            check("tab được đóng lại", _dong4 == [1], str(_dong4))
+
+            # Tắt CẢ HAI -> không có việc nào cần trang web -> đừng mở Chrome.
+            _c4.execute("UPDATE posting SET description = ''")
+            _c4.commit()
+            _pf4.set_flag(_c4, _pf4.SRC_ALERT, False)
+            _c4.commit()
+            _mo4.clear(); opened.clear()
+            _sr_doc._chrome_pass(_c4, _ps4.load(_c4), lambda _m: None, True,
+                                 manual=True)
+            check("tắt hết nguồn -> KHÔNG mở cửa sổ Chrome nào", _mo4 == [],
+                  str(_mo4))
+        finally:
+            _ch4.launch, _ch4.shutdown, _cdp4.open_tab = _th_l, _th_s, _th_t
+            li.open_page, li._pause = real_open, real_pause
+        _c4.close()
+    finally:
+        for _k4, _v4 in (("JOBBOT_DATA_DIR", _cu4), ("JOBBOT_ROOT", _cu4r)):
+            if _v4 is None:
+                _os4.environ.pop(_k4, None)
+            else:
+                _os4.environ[_k4] = _v4
+
 
 print("\n[đọc kỹ là chỗ TỐN NHẤT — chỉ đọc tin sẽ được giữ]")
 # Đo trên kho thật: 2.389 tin LinkedIn, chỉ 257 tin lọt lưới sàng. 89% số tin

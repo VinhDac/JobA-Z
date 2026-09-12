@@ -32,8 +32,7 @@ from .paths import db_path
 SYSTEM = "system"
 SEARCH = "search"
 SCORE = "score"
-PROJECT = "project"
-STREAMS = (SYSTEM, SEARCH, SCORE, PROJECT)
+STREAMS = (SYSTEM, SEARCH, SCORE)
 
 INFO, OK, WARN, ERROR = "info", "ok", "warn", "error"
 

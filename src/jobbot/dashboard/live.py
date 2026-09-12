@@ -4,7 +4,7 @@ mock.py đã bị xoá hẳn — không còn số bịa nào trong app.
 Đó là lý do trang không phải sửa gì khi chuyển từ giả sang thật.
 
 Đã nối thật:  run_status · counters · jobs · job_detail · activity
-Còn dùng giả: proposals · pipeline · projects · stats   (bước 4-6)
+Còn dùng giả: proposals · stats   (bước 5-6)
 """
 
 from __future__ import annotations
@@ -59,6 +59,7 @@ def sieve(conn: sqlite3.Connection) -> dict:
     sửa ở đây đổi cả vòng lọc, cả từ khoá gửi cho LinkedIn, lẫn phần chấm
     điểm theo chức danh.
     """
+    from ..core import prefs
     from ..profile.schema import section_by_id
     from ..profile import store as pstore
 
@@ -79,6 +80,11 @@ def sieve(conn: sqlite3.Connection) -> dict:
         "seniority_options": opts.get("seniority", []),
         "market_options": opts.get("markets", []),
         "missed": missed_titles(conn),
+        # Công tắc nguồn — KHÔNG phải hồ sơ, nên nó không đi qua nút Áp dụng
+        # và không làm phán lại 5.000 tin. Chỉ là hai cái công tắc của máy.
+        "src_board": prefs.flag(conn, prefs.SRC_BOARD),
+        "src_linkedin": prefs.flag(conn, prefs.SRC_LINKEDIN),
+        "src_alert": prefs.flag(conn, prefs.SRC_ALERT),
         "total": total,
         # Đo thật trên 4.660 tin: 1,1 giây. Làm tròn lên để câu hứa không hụt.
         "seconds": max(1, round(total / 4000)),
@@ -114,14 +120,14 @@ def jobs(conn: sqlite3.Connection, flt) -> list[dict]:
     rows = conn.execute(
         # `ca_nhom` đếm CẢ nhóm, trên bảng CHƯA lọc. Badge "◆ api ⌕ chrome" và
         # số "+1 nơi" nói về CÁI TIN, không nói về bộ lọc đang bật — tính
-        # chúng từ phần đã lọc thì bấm tag "chrome" một cái là tin Man Group
-        # rụng mất badge api và tụt từ "+1 nơi" xuống không còn gì, tức là màn
+        # chúng từ phần đã lọc thì bấm tag nguồn LinkedIn một cái là tin Man Group
+        # rụng mất badge board và tụt từ "+1 nơi" xuống không còn gì, tức là màn
         # hình khai man về chính cái tin nó đang hiện.
         # LUẬT: bộ lọc chọn HIỆN TIN NÀO, không bao giờ đổi TIN TRÔNG RA SAO.
         #
         # Nên mọi thứ mô tả cái tin — badge nguồn, "+1 nơi", điểm, chức danh —
         # đều tính trên CẢ nhóm, trên bảng chưa lọc. Trước đây chúng tính trên
-        # phần đã lọc, nên bấm tag "chrome" một cái là tin Man Group rụng mất
+        # phần đã lọc, nên bấm tag nguồn LinkedIn một cái là tin Man Group rụng mất
         # badge api, mất "+1 nơi", và mất luôn cả điểm 100 (vì dòng LinkedIn
         # của nó chưa được đọc kỹ nên chưa có điểm). Cùng một việc, hai bộ lọc,
         # hai bộ mặt — màn hình khai man về chính cái tin nó đang hiện.
@@ -151,7 +157,7 @@ def jobs(conn: sqlite3.Connection, flt) -> list[dict]:
         # Cách nào tìm ra tin này. Đây là badge quan trọng nhất trên mỗi dòng:
         # hai cách tìm mù ở hai chỗ khác nhau, nên nhìn danh sách là thấy ngay
         # cách nào đang mang về cái gì. Tin cả hai cùng thấy -> hai badge.
-        found_by = sorted({"chrome" if s == "linkedin" else "api"
+        found_by = sorted({s if s in ("linkedin", "alert") else "board"
                            for s in sources if s})
         out.append({
             "id": str(row["id"]),
@@ -243,17 +249,19 @@ def _links(same, url_minh: str) -> list[dict]:
         nguon, dia_chi = url
         if not dia_chi or dia_chi in thay:
             continue
-        chrome = nguon == "linkedin"
+        # Thư báo dẫn tới đúng trang LinkedIn như nguồn Chrome, chỉ khác
+        # đường mang nó về — nên nút mở ra vẫn ghi "LinkedIn".
+        tren_li = nguon in ("linkedin", "alert")
         thay[dia_chi] = {
             "url": dia_chi,
-            "kind": "chrome" if chrome else "api",
-            "name": "LinkedIn" if chrome else nguon.split(":")[0],
+            "kind": nguon if tren_li else "board",
+            "name": "LinkedIn" if tren_li else nguon.split(":")[0],
             # Tên miền để người xem BIẾT TRƯỚC mình sắp đi đâu. Một nút ghi
             # "Mở tin gốc" mà không nói dẫn tới đâu thì phải bấm mới biết.
             "host": dia_chi.split("/")[2] if "//" in dia_chi else dia_chi[:40],
             "minh": dia_chi == url_minh,
         }
-    return sorted(thay.values(), key=lambda x: x["kind"] != "api")
+    return sorted(thay.values(), key=lambda x: x["kind"] != "board")
 
 
 def _reqs(row) -> list[dict]:
@@ -267,7 +275,10 @@ def _reqs(row) -> list[dict]:
 
 # ---------------------------------------------------------------- settings
 
-CHROME_SOURCES = {"efinancialcareers", "linkedin"}
+# CHROME_SOURCES ĐÃ BỎ. Nó từng có hai thành viên, và đó chính là lý do cái
+# huy hiệu từng mang tên "chrome": hồi ấy phải gọi theo CÁCH LẤY vì có hai
+# nguồn cùng đi qua Chrome. eFinancialCareers bị gỡ khỏi app từ lâu (67% tin
+# của nó là môi giới), nên giờ chỉ còn đúng một nguồn — và nó có tên riêng.
 
 
 def sources(conn: sqlite3.Connection) -> list[dict]:
@@ -282,7 +293,7 @@ def sources(conn: sqlite3.Connection) -> list[dict]:
         run = runs.get(name)
         out.append({
             "name": name,
-            "kind": "chrome" if family in CHROME_SOURCES else "api",
+            "kind": family if family in ("linkedin", "alert") else "board",
             "on": bool(run and run["ok"]),
             "last": _ago(run["at"]) if run else "never",
             "found": counts.get(name, 0),
@@ -306,7 +317,40 @@ def settings(conn: sqlite3.Connection) -> dict:
 
     from ..browser import chrome as ch
     from ..core import reset as reset_mod
+    from ..profile import store as pstore
+    from ..track import mail as _mail
     kho = reset_mod.inventory(conn)
+
+    # Số THẬT cho mỗi nguồn. Giới thiệu bằng tính từ ("phổ biến", "hiện đại")
+    # thì không giúp ai chọn được gì; đưa ra "lấy về bao nhiêu, giữ được bao
+    # nhiêu" mới là thứ quyết định được.
+    from ..scan_runner import load_boards
+    boards = load_boards(conn)
+    def _dem(like: str) -> tuple[int, int, int]:
+        row = conn.execute(
+            "SELECT COUNT(*), SUM(kept), SUM(remote) FROM posting WHERE source LIKE ?",
+            (like,)).fetchone()
+        return int(row[0] or 0), int(row[1] or 0), int(row[2] or 0)
+
+    nguon = []
+    for ats, note in (
+        ("greenhouse", "ATS hay gặp nhất ở quỹ và công ty lớn"),
+        ("lever", "hay gặp ở scale-up · có báo việc remote"),
+        ("ashby", "công ty AI / startup · gần như tin nào cũng khai remote"),
+    ):
+        tin, giu, rem = _dem(f"{ats}:%")
+        nguon.append({"id": ats, "ten": ats, "note": note,
+                      "on": prefs.flag(conn, prefs.SRC_ATS[ats]),
+                      "boards": len(boards.get(ats, [])),
+                      "tin": tin, "giu": giu, "remote": rem})
+    # Thư báo việc — cùng nhóm "nguồn nhanh" nên để chung bảng, nhưng nó
+    # không phải ATS: không có board nào để đếm.
+    _tin, _giu, _rem = _dem("alert")
+    nguon.append({"id": "alert", "ten": "thư báo", "boards": 0,
+                  "note": "LinkedIn gửi vào hộp thư · nhanh nhất, không cào ·"
+                          " nguồn riêng, chạy dù LinkedIn đang tắt",
+                  "on": prefs.flag(conn, prefs.SRC_ALERT),
+                  "tin": _tin, "giu": _giu, "remote": _rem})
     return {
         "reset_rows": kho["total_rows"],
         "reset_files": kho["files"],
@@ -314,6 +358,13 @@ def settings(conn: sqlite3.Connection) -> dict:
         "reset_backup_dir": str(reset_mod.backup_dir()),
         "every": prefs.num(conn, prefs.SCAN_EVERY, MIN_EVERY, MAX_EVERY),
         "pace": prefs.get(conn, prefs.PACE) or "thuong",
+        "sources": nguon,
+        "board_on": prefs.flag(conn, prefs.SRC_BOARD),
+        # CHỈ địa chỉ và trạng thái. Mật khẩu không bao giờ rời config.toml.
+        "mail_ready": all(_mail.account()),
+        "mail_address": _mail.account()[0],
+        "mail_days": prefs.num(conn, prefs.MAIL_DAYS, 1, 365),
+        "mail_profile": (pstore.load(conn).get("email") or "").strip(),
         "hours": human_window(),
         "status": [
             ("Chrome", "đang mở" if ch.alive() else "tắt"),
@@ -373,42 +424,20 @@ def health(conn: sqlite3.Connection) -> dict:
     }
 # ---------------------------------------------------------------- projects
 
-def cv_projects(conn: sqlite3.Connection) -> list:
-    """Project ĐÃ có trên CV — nguồn cung thứ nhất của lưới khoảng trống."""
-    from ..cv.blocks import parse as parse_cv
-    from ..profile import store as pstore
-    text = pstore.load(conn).get("cv_text") or ""
-    return [b for b in parse_cv(text) if b.kind == "project"]
-
-
-def project_board(conn: sqlite3.Connection) -> dict:
-    """Ba ô của tab Projects, một lần đọc.
-
-    Lưới KHÔNG lưu trong bảng — nó là phép trừ giữa cầu (tin đòi gì) và cung
-    (CV + kho). Lưu thì phải giữ nó khớp với hai thứ luôn đổi.
-    """
-    from ..projects import inventory
-
-    mine = cv_projects(conn)
-    return {"grid": inventory.coverage(conn, mine),
-            "store": inventory.all(conn),
-            "scored": inventory.total_scored(conn)}
-
-
-# ---------------------------------------------------------------------- CV
-
-# Dựng CV cho 101 tin mất 1,4 giây. Không được trả cái giá đó MỖI LẦN mở trang
-# — đúng lỗi trang /projects/<nhóm> cũ. Nhớ lại trong bộ nhớ tiến trình, và
-# quên đi khi một trong ba thứ đầu vào đổi: chữ CV, luật chấm, tập tin.
-_CV_CACHE: dict = {}
-
-
 def _cv_key(conn: sqlite3.Connection, cv_text: str) -> tuple:
     from ..core import versions
     row = conn.execute(
         "SELECT COUNT(*), COALESCE(MAX(id), 0) FROM posting"
         " WHERE kept = 1 AND realism IN ('likely','possible')").fetchone()
     return (hash(cv_text), versions.SCORE_RULES, row[0], row[1])
+
+
+# ---------------------------------------------------------------------- CV
+
+# Dựng CV cho 101 tin mất 1,4 giây. Không được trả cái giá đó MỖI LẦN mở
+# trang. Nhớ lại trong bộ nhớ tiến trình, và quên đi khi một trong ba thứ đầu
+# vào đổi: chữ CV, luật chấm, tập tin.
+_CV_CACHE: dict = {}
 
 
 def cv_versions(conn: sqlite3.Connection) -> dict:
@@ -664,10 +693,10 @@ def cv_blocks(conn: sqlite3.Connection) -> list[dict]:
     key = _cv_key(conn, answers_now.get("cv_text") or "")
     if _BLOCK_CACHE.get("key") == key:
         return _BLOCK_CACHE["value"]
-    from ..projects import inventory
+    from ..scoring.market import demand as thi_truong
 
     text = pstore.load(conn).get("cv_text") or ""
-    demand = inventory.demand(conn)
+    demand = thi_truong(conn)
     out = []
     for block in parse_cv(text):
         if block.kind not in ("experience", "project"):

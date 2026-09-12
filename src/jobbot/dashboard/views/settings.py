@@ -69,8 +69,129 @@ def _nhip(pace: str) -> str:
             "bên duy nhất app đang ở nhờ.</div>")
 
 
+def _nguon(sources: list[dict], board_on: bool) -> str:
+    """Bật/tắt từng ATS. BA cái, không phải 34 cái.
+
+    "API" ở đây là ba nhà cung cấp ATS, không phải 34 board công ty. Giới
+    thiệu từng công ty thì vô nghĩa ("Jane Street — một quỹ"), còn ba ATS thì
+    khác nhau thật: cách trả dữ liệu khác, loại công ty khác, tỉ lệ dùng được
+    khác hẳn.
+
+    Giới thiệu bằng SỐ THẬT của chính kho này, không bằng tính từ. "Hiện đại",
+    "phổ biến" thì không ai chọn được gì; "600 tin, giữ 6" thì chọn được ngay.
+    """
+    hang = ""
+    for n in sources:
+        hang += (
+            f"<label class='prow srcline{'' if n['on'] else ' off'}'>"
+            f"<input type=checkbox name=ats value='{esc(n['id'])}'"
+            f"{' checked' if n['on'] else ''}>"
+            f"<b>{esc(n['ten'])}</b>"
+            f"<span class=muted>{esc(n['note'])}</span>"
+            f"<span class=srcnum>"
+            + (f"{n['boards']} board · " if n["boards"] else "")
+            + f"{n['tin']:,} tin về · giữ {n['giu']:,}"
+            + (f" · {n['remote']:,} khai remote" if n["remote"] else "")
+            + "</span></label>")
+    # Công tắc TO đang tắt thì mấy công tắc nhỏ chưa có tác dụng. Không nói ra
+    # thì người dùng bật/tắt ở đây rồi ngồi đợi một thứ không bao giờ tới.
+    canh = ("" if board_on else
+            "<div class=safe><b>Board đang TẮT</b> ở tấm Điều chỉnh · Search — "
+            "mấy công tắc dưới đây chưa có tác dụng cho tới khi bật lại.</div>")
+    return (
+        "<form class=setform method=post action='/settings'>"
+        "<input type=hidden name=phan value=nguon>"
+        + canh +
+        "<div class=sthead>Nguồn nhanh</div>"
+        "<div class=safe>Ba nhà cung cấp ATS, cộng thư báo việc LinkedIn gửi "
+        "vào hộp thư. Bỏ tick là lần quét sau không gọi tới nguồn đó nữa — "
+        "tin cũ vẫn nằm nguyên trong kho.</div>"
+        + hang +
+        "<div class=setfoot>"
+        "<button class='mbtn apply' type=submit>Lưu</button>"
+        "<span class=applynote>có tác dụng từ lần quét sau · "
+        "không xoá tin đã lấy về</span></div>"
+        "</form>")
+
+
+def _gmail(ready: bool, address: str, days: int, ho_so: str = "") -> str:
+    """Nối hộp thư + số ngày đọc lại. KHÔNG bao giờ vẽ mật khẩu ra.
+
+    Trước đây ô này nằm trên đầu tab Quản lí — trang Vin mở hàng ngày. Nó là
+    CẤU HÌNH: nối một lần rồi thôi, nên chỗ của nó là Cài đặt. Cái ở lại bên
+    Quản lí là VIỆC: nút Quét thư.
+
+    Kể cả ở đây cũng chỉ vẽ ĐỊA CHỈ và TRẠNG THÁI. Một ô password có sẵn giá
+    trị là mật khẩu nằm trong HTML — đọc được bằng View Source và bị trình
+    duyệt lưu vào bộ nhớ đệm. Giá trị thật nằm trong config.toml (chmod 600,
+    đã gitignore).
+    """
+    ngay = (
+        "<form class=setform method=post action='/settings'>"
+        "<input type=hidden name=phan value=gmail>"
+        "<div class=sthead>Đọc lại bao nhiêu ngày thư</div>"
+        "<label class=srow><span>Mỗi lượt quét đọc lại</span>"
+        + _num("mail_days", days, 1, 365, "ngày") + "</label>"
+        "<div class=safe>Thư trả lời cho đơn nộp tháng trước vẫn cần bắt được, "
+        "nên 30 ngày là mặc định. Đặt ngắn thì quét nhanh hơn nhưng dễ bỏ sót "
+        "thư về muộn.</div>"
+        "<div class=setfoot>"
+        "<button class='mbtn apply' type=submit>Lưu</button>"
+        "<span class=applynote>có tác dụng từ lần quét thư sau</span></div>"
+        "</form>")
+
+    if ready:
+        # "đã lưu", KHÔNG phải "đã nối": chỗ này chỉ biết config CÓ chuỗi,
+        # không biết chuỗi đó còn đăng nhập được không. App password bị thu
+        # hồi bên Google thì dòng này vẫn xanh, và Vin tin là hộp thư đang
+        # chạy.
+        # KHÔNG có nút xoá ở đây. Nối một lần rồi thôi; đường xoá duy nhất
+        # là "Làm lại từ đầu" bên tab kia. Đổi mật khẩu thì dán đè lên.
+        noi = (f"<div class=safe>Hộp thư <b>{esc(address)}</b> đã lưu — sang "
+               f"tab Quản lí bấm Quét thư để kiểm xem còn đăng nhập được "
+               f"không.<br>Nối một lần là xong: mật khẩu chỉ mất khi bạn bấm "
+               f"<b>Làm lại từ đầu</b>. Muốn đổi thì dán mật khẩu mới đè lên."
+               f"</div>"
+               f"<form class=boxform data-post='/api/mail/setup'>"
+               f"<input name=address type=email value='{esc(address)}'"
+               f" placeholder='địa chỉ hộp thư việc làm' required>"
+               "<input name=password type=password autocomplete=off"
+               " placeholder='dán app password mới để đổi' required>"
+               "<button class='mbtn apply' type=submit>Đổi</button>"
+               "<span class=formnote></span></form>")
+    else:
+        noi = (
+            "<form class=boxform data-post='/api/mail/setup'>"
+            f"<input name=address type=email value='{esc(address)}'"
+            f" placeholder='địa chỉ hộp thư việc làm' required>"
+            "<input name=password type=password autocomplete=off"
+            " placeholder='app password 16 ký tự' required>"
+            "<button class='mbtn apply' type=submit>Nối</button>"
+            "<div class=boxwhy>Lấy ở <code>myaccount.google.com/apppasswords</code>"
+            " (bật xác minh 2 bước trước). KHÔNG phải mật khẩu tài khoản —"
+            " Gmail đã ngắt IMAP bằng mật khẩu tài khoản từ 2022. App password"
+            " lưu vào <code>config/config.toml</code>, chmod 600, đã gitignore."
+            "<span class=formnote></span></div></form>")
+
+    # Nói TRƯỚC là phải khớp, đừng để bấm Nối xong mới báo hỏng. Và điền
+    # sẵn địa chỉ hồ sơ: gõ tay một địa chỉ đã biết là mời gõ sai.
+    khop = (f"<div class=safe>Phải đúng địa chỉ khai trong hồ sơ — "
+            f"<b>{esc(ho_so)}</b>. Đó là địa chỉ in lên CV và điền vào form "
+            f"nộp, tức là chỗ nhà tuyển dụng bấm Trả lời; nối hộp thư khác "
+            f"thì app quét một nơi mà thư về một nơi.</div>"
+            if ho_so else
+            "<div class=safe>Hồ sơ chưa khai địa chỉ liên hệ — điền ở tab "
+            "Profile trước, rồi nối đúng hộp thư đó.</div>")
+    return (f"<div class=sthead>Hộp thư việc làm</div>"
+            f"<div class=safe>Thư về là thứ tự cập nhật bảng Quản lí — trả "
+            f"lời, hẹn phỏng vấn, từ chối.</div>{khop}{noi}{ngay}")
+
+
 def render(*, every: int, hours: tuple[int, int],
            status: list[tuple[str, str]], pace: str = "thuong",
+           sources: list[dict] | None = None, board_on: bool = True,
+           mail_ready: bool = False, mail_address: str = "", mail_days: int = 30,
+           mail_profile: str = "",
            reset_rows: int = 0, reset_files: int = 0, reset_mb: float = 0.0,
            reset_backup_dir: str = "") -> str:
     rows = "".join(f"<div class=strow><span>{esc(k)}</span><b>{esc(v)}</b></div>"
@@ -78,6 +199,7 @@ def render(*, every: int, hours: tuple[int, int],
 
     chay = (
         "<form class=setform method=post action='/settings'>"
+        "<input type=hidden name=phan value=chay>"
         "<label class=srow><span>Quét lại mỗi</span>"
         + _num("every", every, 5, 1440, "phút") + "</label>"
         "<label class=srow><span>Chrome chạy từ</span>"
@@ -103,6 +225,10 @@ def render(*, every: int, hours: tuple[int, int],
         "Bị chặn thì dừng và ghi nhật ký, không cãi lại.</div>")
 
     tab = [("chay", "Chạy", chay),
+           ("nguon", "Nguồn", _nguon(sources or [], board_on)),
+           ("gmail", "Gmail",
+            _gmail(mail_ready, mail_address or mail_profile, mail_days,
+                   mail_profile)),
            ("xem", "Tình trạng", tinh_trang),
            ("lam-lai", "Làm lại",
             _lam_lai(reset_rows, reset_files, reset_mb, reset_backup_dir))]

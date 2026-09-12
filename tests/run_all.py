@@ -23,6 +23,27 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 SUMMARY = re.compile(r"^(\d+) ok, (\d+) fail\s*$", re.M)
 
+# TỆP CỦA NGƯỜI DÙNG — chạy test KHÔNG được đụng tới, dù chỉ một byte.
+#
+# Đây không phải lo xa. Ngày 12/09 bài test đường "làm lại từ đầu" XOÁ thật
+# config/config.toml của Vin ở mọi lần chạy, và một bài khác ghi đè địa chỉ
+# giả "a@b.c" vào đó — nuốt mất app password Gmail anh vừa dán. Cả hai đều
+# xanh lè, vì không bài test nào canh chính bài test.
+CANH = ("config/config.toml", "config/boards.toml", "config/companies.toml",
+        "config/profile.seed.json")
+
+
+def _dau_van_tay() -> dict:
+    """Băm mấy tệp người dùng. Không đọc nội dung ra đâu cả — trong đó có
+    app password."""
+    import hashlib
+    out = {}
+    for ten in CANH:
+        f = HERE.parent / ten
+        out[ten] = (hashlib.sha1(f.read_bytes()).hexdigest()
+                    if f.exists() else None)
+    return out
+
 
 def main() -> int:
     files = sorted(f for f in HERE.glob("test_*.py"))
@@ -32,6 +53,7 @@ def main() -> int:
 
     width = max(len(f.name) for f in files)
     total_ok = total_fail = broken = 0
+    truoc = _dau_van_tay()
 
     for path in files:
         done = subprocess.run([sys.executable, str(path)],
@@ -64,6 +86,17 @@ def main() -> int:
             for line in out.splitlines():
                 if line.lstrip().startswith("FAIL"):
                     print("       " + line.strip())
+
+    # Chạy xong, mấy tệp của người dùng phải y nguyên. Bài test nào đụng vào
+    # thì HỎNG CẢ LƯỢT — kể cả khi mọi câu check đều xanh.
+    sau = _dau_van_tay()
+    dung = [t for t in CANH if truoc[t] != sau[t]]
+    for ten in dung:
+        cu_co, moi_co = truoc[ten] is not None, sau[ten] is not None
+        sao = ("bị XOÁ" if cu_co and not moi_co else
+               "bị TẠO ra" if moi_co and not cu_co else "bị SỬA")
+        print(f"  HỎNG  tệp người dùng {ten} {sao} trong lúc chạy test")
+        broken += 1
 
     print(f"\n{len(files)} file · {total_ok} ok · {total_fail} fail"
           + (f" · {broken} file có vấn đề về chính nó" if broken else ""))

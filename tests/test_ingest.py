@@ -184,5 +184,44 @@ with _tf.TemporaryDirectory() as _tmp:
     _conn.close()
     _os.environ.pop("JOBBOT_DATA_DIR", None)
 
+print("\n[thư báo việc — nguồn thứ ba, và là nguồn sạch nhất]")
+# LinkedIn TỰ GỬI thư này vào hộp thư của Vin. Đọc hộp thư của chính mình thì
+# không đụng gì tới Điều khoản của ai — khác hẳn vòng quét Chrome, vốn nằm
+# ngoài mục 8.2 và app phải ghi rõ điều đó.
+from jobbot.ingest import alerts as _al
+
+_THU = """
+<a href="https://www.linkedin.com/comm/jobs/view/4464889773/?trk=x"><img></a>
+<a href="https://www.linkedin.com/comm/jobs/view/4464889773/?trk=y">
+  <span>Data Analyst, Business Intelligence &mdash; Entry Level</span>
+  <span>Jobright.ai &middot; United Kingdom (Remote)</span>
+  <span>Fast growing</span>
+</a>
+<a href="https://www.linkedin.com/comm/jobs/view/4466042742/?trk=z">
+  <span>Junior Data Analysis - 12 months FTC</span>
+  <span>Slater and Gordon Lawyers (UK) &middot; London</span>
+</a>
+"""
+_tin = _al.parse(_THU)
+check("bóc được đủ số việc", len(_tin) == 2)
+_m = {t.source_id: t for t in _tin}
+check("tách đúng chức danh",
+      _m["4464889773"].title == "Data Analyst, Business Intelligence — Entry Level")
+# Chức danh và tên công ty nằm ở hai phần tử CẠNH NHAU, không có dấu gì ngăn.
+# Nối bằng khoảng trắng thì ra "…Entry Level Jobright.ai" và không tách lại
+# được — nên phải thay THẺ bằng XUỐNG DÒNG.
+check("tách đúng công ty", _m["4464889773"].company == "Jobright.ai")
+check("tách đúng địa điểm", _m["4464889773"].location == "United Kingdom (Remote)")
+check("bỏ nhãn quảng cáo", "Fast growing" not in _m["4464889773"].title)
+# URL trong thư là đường theo dõi dài loằng ngoằng; dựng lại URL sạch từ id.
+check("dựng lại URL sạch, bỏ tham số theo dõi",
+      _m["4464889773"].url == "https://www.linkedin.com/jobs/view/4464889773/")
+check("cùng một việc xuất hiện 3 lần -> chỉ lấy một", len(set(_m)) == 2)
+check("thư rỗng thì trả rỗng, không nổ", _al.parse("") == [])
+check("thư không có việc nào cũng không nổ", _al.parse("<p>hello</p>") == [])
+# Khối logo/nút không mang chữ -> phải bỏ, không được đẻ ra tin rỗng.
+check("khối không có 'công ty · nơi' thì bỏ",
+      not _al.parse('<a href="/jobs/view/9999999/"><img></a>'))
+
 print(f"\n{ok} ok, {fail} fail")
 sys.exit(1 if fail else 0)

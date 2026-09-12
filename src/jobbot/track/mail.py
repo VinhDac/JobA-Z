@@ -127,9 +127,31 @@ def _body(msg) -> str:
     return ""
 
 
+def _html_body(msg) -> str:
+    """Thân HTML nguyên văn. Rỗng nếu thư chỉ có chữ trơn."""
+    for part in (msg.walk() if msg.is_multipart() else [msg]):
+        if part.get_content_type() != "text/html" or part.get_filename():
+            continue
+        try:
+            body = part.get_payload(decode=True) or b""
+        except Exception:                    # noqa: BLE001
+            continue
+        return body.decode(part.get_content_charset() or "utf-8", "replace")
+    return ""
+
+
 def fetch(address: str, password: str, since_days: int = SINCE_DAYS,
-          limit: int = MAX_MESSAGES) -> list[dict]:
-    """Thư trong `since_days` ngày gần nhất. Không đổi gì trên máy chủ."""
+          limit: int = MAX_MESSAGES, sender: str = "",
+          want_html: bool = False) -> list[dict]:
+    """Thư trong `since_days` ngày gần nhất. Không đổi gì trên máy chủ.
+
+    `sender` lọc thẳng trên máy chủ IMAP — rẻ hơn hẳn kéo cả hộp thư về rồi
+    lọc bằng Python, và là thứ làm cho nguồn "thư báo việc" khả thi: hộp thư
+    của Vin có 381 thư báo lẫn trong 5.513 thư.
+
+    `want_html` chỉ bật khi người gọi THẬT SỰ cần: thân HTML của một thư báo
+    là 86 KB, mà vòng quét đơn chỉ cần 400 ký tự chữ trơn.
+    """
     if not address or not password:
         raise MailError("chưa điền [mail] address/password trong config.toml")
 
@@ -139,7 +161,13 @@ def fetch(address: str, password: str, since_days: int = SINCE_DAYS,
         box.login(address, password)
         # readonly=True: máy chủ KHÔNG đánh dấu thư đã đọc.
         box.select("INBOX", readonly=True)
-        ok, data = box.search(None, f'(SINCE "{since}")')
+        loc = f'(SINCE "{since}"'
+        if sender:
+            # Escape dấu nháy: chuỗi lọt vào câu lệnh IMAP, không phải SQL,
+            # nhưng cùng một luật — chữ người dùng đưa vào thì không được ghép
+            # thẳng vào câu lệnh.
+            loc += f' FROM "{sender.replace(chr(34), "")}"'
+        ok, data = box.search(None, loc + ")")
         if ok != "OK":
             raise MailError(f"tìm thư hỏng: {ok}")
         ids = (data[0] or b"").split()[-limit:]
@@ -176,6 +204,7 @@ def fetch(address: str, password: str, since_days: int = SINCE_DAYS,
                 "subject": _text(msg.get("Subject")),
                 "received_at": when.isoformat(timespec="seconds") if when else "",
                 "snippet": _body(msg),
+                **({"html": _html_body(msg)} if want_html else {}),
             })
         if broken:
             from ..core.journal import SEARCH, log as jlog

@@ -177,3 +177,34 @@ def alias_hits(normed: str) -> list[str]:
         if canonical not in found and pattern.search(normed):
             found.append(canonical)
     return found
+
+
+# ------------------------------------------------------------------ ngành
+# BẢY NHÃN, không hơn. Đây là bộ từ dùng cho ô "ngành" trong hồ sơ: gõ một
+# danh sách riêng cho màn hình thì người dùng chọn được ngành mà máy không
+# biết nhận ra.
+#
+# Trước ở projects/inventory.py. Nó chưa bao giờ thuộc về tính năng đó — đây
+# là TỪ VỰNG, mà từ vựng thì ở đây: "thiếu từ thì thêm vào đây, không sửa chỗ
+# khác".
+INDUSTRY: dict[str, set[str]] = {
+    "hedge fund": {"hedge fund", "systematic fund", "multi-strategy",
+                   "multi strategy", "prop trading", "proprietary trading",
+                   "market making", "market maker", "quant fund"},
+    # "structuring" trần bị bỏ: đo được nó khớp vào "cleansing and structuring
+    # for downstream" — cấu trúc DỮ LIỆU, không phải cấu trúc sản phẩm tài chính.
+    "investment bank": {"investment bank", "sell-side", "sell side",
+                        "trading desk", "front office", "deal structuring",
+                        "product structuring"},
+    "asset management": {"asset management", "asset manager", "buy-side",
+                         "buy side", "wealth management", "pension fund",
+                         "fund management", "institutional investor"},
+    "fintech": {"fintech", "payment", "neobank", "challenger bank",
+                "lending platform", "e-money"},
+    "insurance": {"insurance", "insurer", "actuarial", "reinsurance",
+                  "underwriting"},
+    "crypto": {"crypto", "cryptocurrency", "cryptocurrencies", "cryptoasset",
+               "digital asset", "blockchain", "defi"},
+    "energy": {"energy trading", "commodity trading", "commodities trading",
+               "power trading", "carbon market"},
+}

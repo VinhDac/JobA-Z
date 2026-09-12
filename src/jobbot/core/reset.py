@@ -23,11 +23,11 @@ import tarfile
 from datetime import datetime
 from pathlib import Path
 
-from .paths import PROJECT_ROOT, data_dir, db_path
+from .paths import data_dir, db_path, project_root
 
 # Tệp/thư mục là dữ liệu NGƯỜI DÙNG. Đường dẫn tương đối so với gốc repo.
 USER_FILES = ("config/config.toml", "config/profile.seed.json")
-USER_DIRS = ("cv", "projects", "chrome-profile", "chrome-pdf",
+USER_DIRS = ("cv", "chrome-profile", "chrome-pdf",
              "chrome-apply", "chrome-ui")
 # Tệp trong data/ không thuộc thư mục nào ở trên.
 DATA_FILES = ("app.log",)
@@ -53,7 +53,7 @@ def inventory(conn: sqlite3.Connection) -> dict:
                     files += 1
                     size += f.stat().st_size
     for name in USER_FILES:
-        if (PROJECT_ROOT / name).exists():
+        if (project_root() / name).exists():
             files += 1
     return {"rows": rows, "total_rows": sum(rows.values()),
             "files": files, "bytes": size}
@@ -73,12 +73,12 @@ def backup(stamp: str | None = None) -> Path:
     out = backup_dir() / f"jobbot-sao-luu-{stamp}.tar.gz"
     with tarfile.open(out, "w:gz") as tar:
         for name in USER_FILES:
-            path = PROJECT_ROOT / name
+            path = project_root() / name
             if path.exists():
                 tar.add(path, arcname=name)
         if db_path().exists():
             tar.add(db_path(), arcname="data/jobbot.db")
-        for name in ("cv", "projects"):
+        for name in ("cv",):
             d = data_dir() / name
             if d.is_dir():
                 tar.add(d, arcname=f"data/{name}")
@@ -118,7 +118,7 @@ def run(conn: sqlite3.Connection) -> dict:
             shutil.rmtree(d, ignore_errors=True)
             xoa_tep += 1
     for name in USER_FILES:
-        path = PROJECT_ROOT / name
+        path = project_root() / name
         if path.exists():
             path.unlink()
             xoa_tep += 1

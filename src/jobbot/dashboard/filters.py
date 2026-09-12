@@ -62,7 +62,8 @@ VIA = [("direct", "Chủ trực tiếp"), ("all", "Cả môi giới"), ("agency"
 # Tìm bằng CÁCH NÀO. Hai cách tìm mù ở hai chỗ khác nhau, và chúng cho ra hai
 # loại tin khác hẳn: board công ty có mô tả đầy đủ, LinkedIn thì phải mở từng
 # tin mới có. Lọc được theo cách tìm là soi được ngay cách nào đang đẻ ra rác.
-FOUND = [("", "Mọi nguồn"), ("api", "api"), ("chrome", "chrome")]
+FOUND = [("", "Mọi nguồn"), ("board", "board"), ("linkedin", "linkedin"),
+         ("alert", "alert")]
 
 # UK_LIKE ĐÃ BỎ. Nó là bản sao thứ BA của cùng một danh sách địa danh
 # (ingest/filter.UK_WORDS, ingest/web/linkedin.MARKET_PLACE, và đây) — ba bản
@@ -206,9 +207,11 @@ class JobFilter:
             clauses.append("score >= ?")
             args.append(int(self.band))
 
-        if self.found == "chrome":
+        if self.found == "alert":
+            clauses.append("source = 'alert'")
+        elif self.found == "linkedin":
             clauses.append("source = 'linkedin'")
-        elif self.found == "api":
+        elif self.found == "board":
             clauses.append("source <> 'linkedin'")
 
         # MỘT nút thay cho hai. "Can't tell" (chưa đoán được cơ hội) và

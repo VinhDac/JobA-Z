@@ -68,9 +68,14 @@ def _breakdown(job: dict) -> str:
     return card(f"<div class=bd>{rows}</div>{tail}", "bdcard")
 
 
-# Huy hiệu nguồn — DÙNG CHUNG lớp CSS với danh sách bên tab Search, để cùng
-# một tin nhìn ở hai chỗ ra cùng một ký hiệu.
-NGUON_DAU = {"api": "◆", "chrome": "⌕"}
+# Huy hiệu nguồn — DÙNG CHUNG cả ký hiệu lẫn lớp CSS với danh sách bên tab
+# Search, để cùng một tin nhìn ở hai chỗ ra cùng một thứ.
+#
+# Suy ra từ FOUND_BY chứ không gõ lại: hai bảng ký hiệu ở hai file thì trùng
+# nhau được đúng tới hôm có người sửa một bên.
+from .search import FOUND_BY
+
+NGUON_DAU = {k: v[0] for k, v in FOUND_BY.items()}
 
 
 def _mo_tin_goc(job: dict) -> str:

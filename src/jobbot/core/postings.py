@@ -74,7 +74,7 @@ def recent_audit(conn: sqlite3.Connection, limit: int = 30) -> list[sqlite3.Row]
 HAVE_DESC = 200
 
 
-def already_read(conn: sqlite3.Connection, source: str) -> set[str]:
+def already_read(conn: sqlite3.Connection, source) -> set[str]:
     """id bên nguồn của những tin ĐÃ có mô tả tử tế.
 
     Vòng đọc kỹ dùng cái này để BỎ QUA. Không có nó thì mỗi lần quét lại mở
@@ -85,10 +85,15 @@ def already_read(conn: sqlite3.Connection, source: str) -> set[str]:
 
     Tin đọc hỏng (mô tả rỗng) KHÔNG nằm trong đây — lần sau thử lại.
     """
+    # Nhận MỘT tên hoặc NHIỀU tên. Thư báo và vòng quét Chrome trỏ tới cùng
+    # một trang LinkedIn, chỉ khác đường mang id về — đọc xong ở nguồn này thì
+    # nguồn kia không việc gì phải mở lại.
+    ten = (source,) if isinstance(source, str) else tuple(source)
     return {r[0] for r in conn.execute(
         "SELECT r.source_id FROM raw_posting r JOIN posting p ON p.raw_id = r.id"
-        " WHERE r.source = ? AND length(COALESCE(p.description,'')) >= ?",
-        (source, HAVE_DESC))}
+        f" WHERE r.source IN ({','.join('?' * len(ten))})"
+        "   AND length(COALESCE(p.description,'')) >= ?",
+        (*ten, HAVE_DESC))}
 
 
 def save_batch(conn: sqlite3.Connection, source: str,

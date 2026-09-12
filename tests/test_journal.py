@@ -18,7 +18,7 @@ def check(name, cond, extra=""):
 with tempfile.TemporaryDirectory() as tmp:
     os.environ["JOBBOT_DATA_DIR"] = tmp
     from jobbot.core import db
-    from jobbot.core.journal import (ERROR, PROJECT, SEARCH, SCORE, SYSTEM,
+    from jobbot.core.journal import (ERROR, SEARCH, SCORE, SYSTEM,
                                      Journal, RING)
 
     db.connect().close()                      # dựng bảng audit
@@ -36,7 +36,7 @@ with tempfile.TemporaryDirectory() as tmp:
     print("\n[luồng: mỗi tab chỉ thấy việc của mình]")
     check("lọc theo luồng search", len(j.tail(SEARCH, 99)) == 2)
     check("lọc theo luồng score", len(j.tail(SCORE, 99)) == 1)
-    check("luồng chưa dùng thì rỗng", j.tail(PROJECT, 99) == [])
+    check("luồng chưa dùng thì rỗng", j.tail(SYSTEM, 99) == [])
     check("không lọc thì thấy tất cả", len(j.tail(None, 99)) == 3)
 
     print("\n[tiến độ: ghi đè, KHÔNG ghi đĩa]")
@@ -87,13 +87,13 @@ with tempfile.TemporaryDirectory() as tmp:
     print("\n[còn lại sau khi tắt app]")
     m = Journal()
     m.open()                                # gắn vào DB tạm
-    m.emit(PROJECT, "trước khi tắt")
-    m.error(PROJECT, "một lỗi cần nhớ")
+    m.emit(SCORE, "trước khi tắt")
+    m.error(SCORE, "một lỗi cần nhớ")
     after = Journal()                          # "mở app lại"
     after.open()
-    texts = [e.text for e in after.tail(PROJECT, 99)]
+    texts = [e.text for e in after.tail(SCORE, 99)]
     check("sự kiện được nạp lại từ đĩa", "trước khi tắt" in texts)
-    check("và giữ đúng mức", after.tail(PROJECT, 1)[0].level == ERROR)
+    check("và giữ đúng mức", after.tail(SCORE, 1)[0].level == ERROR)
     check("gắn lần hai không nhân đôi", after.open() == 0)
 
     # Dòng đời trước ghi bằng postings.log() chỉ có `kind`, detail rỗng —

@@ -557,9 +557,9 @@ def suggestions(name: str) -> list[str]:
         from ..scoring.vocab import ALIASES
         return sorted(set(ALIASES.values()))
     if name == "industries":
-        # Kho ngành ĐÃ CÓ trong projects/inventory.py — chính bộ từ mà máy
-        # dùng để dán nhãn ngành cho tin thật. Gõ một danh sách riêng cho màn
-        # hình thì người dùng chọn được ngành mà máy không biết nhận ra.
-        from ..projects.inventory import INDUSTRY
+        # Kho ngành ĐÃ CÓ trong scoring/vocab.py — cùng bộ từ máy dùng để
+        # đọc tin. Gõ một danh sách riêng cho màn hình thì người dùng chọn
+        # được ngành mà máy không biết nhận ra.
+        from ..scoring.vocab import INDUSTRY
         return sorted(INDUSTRY)
     return []

@@ -265,7 +265,7 @@
   // kind='stage' -> tấm bên phải (⚟ điều chỉnh khúc)
   // kind='app'   -> hộp giữa màn (Cài đặt cả app). Cùng bộ máy mở/đóng, khác
   //                 chỗ đứng, để nhìn là biết thứ này của khúc hay của app.
-  function openSheet(url, kind) {
+  function openSheet(url, kind, tab) {
     const sheet = document.querySelector('[data-sheet]');
     if (!sheet) return;
     sheet.classList.toggle('mid', kind === 'app');
@@ -274,7 +274,16 @@
     sheet.hidden = false;
     fetch(url || '/settings')
       .then((r) => r.text())
-      .then((html) => { box.innerHTML = html; })
+      .then((html) => {
+        box.innerHTML = html;
+        // Mở đúng TAB được chỉ. Bấm ở đây chứ không hẹn giờ: nội dung nạp về
+        // bằng fetch, đặt setTimeout là đoán xem mạng nhanh hay chậm — và
+        // trên máy chậm thì cái nút chưa tồn tại lúc hẹn giờ nổ.
+        if (tab) {
+          const nut = box.querySelector(`[data-stab="${tab}"]`);
+          if (nut) nut.click();
+        }
+      })
       .catch(() => { box.innerHTML = '<div class=sheetwait>không mở được</div>'; });
   }
 
@@ -435,7 +444,14 @@
   function wireSheet() {
     document.addEventListener('click', (e) => {
       const app = e.target.closest('[data-appset]');
-      if (app) { e.preventDefault(); openSheet('/settings', 'app'); return; }
+      if (app) {
+        e.preventDefault();
+        // data-appset có thể mang TÊN TAB: một nút "Nối hộp thư…" bên Quản lí
+        // mà mở ra tab Chạy thì người dùng phải tự đi tìm — chỉ đường nửa vời
+        // còn khó chịu hơn không chỉ.
+        openSheet('/settings', 'app', app.dataset.appset);
+        return;
+      }
       const knob = e.target.closest('[data-settings]');
       if (knob) { e.preventDefault(); openSheet(knob.dataset.settings, 'stage'); return; }
       // Bấm ra ngoài hộp thì đóng — nhưng bấm TRONG hộp thì không.
@@ -546,6 +562,11 @@
               return;
             }
             post.textContent = s.note || was;
+            // NÚT BẬT/TẮT khác nút một-lần. Mặc định nút bị khoá sau khi bấm
+            // (chặn bấm hai lần ra hai luồng việc nền) — đúng cho "Nộp",
+            // "Dựng", nhưng sai cho một công tắc: bật rồi không tắt lại được.
+            if (s.again) post.disabled = false;
+            if (typeof s.on === 'boolean') post.classList.toggle('off', !s.on);
           })
           .catch(() => { post.disabled = false; post.textContent = was; });
         return;

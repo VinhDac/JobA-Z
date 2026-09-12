@@ -28,8 +28,12 @@ from . import runtime
 
 # Badge nguồn: hai cách tìm mù ở hai chỗ khác nhau, nên nhìn dòng nào cũng
 # biết ngay cách nào mang nó về. Tin cả hai cùng thấy thì hai badge.
-FOUND_BY = {"chrome": ("⌕", "chrome", "tìm bằng từ khoá trên LinkedIn"),
-            "api": ("◆", "api", "board tuyển dụng của chính công ty")}
+# Huy hiệu gọi tên NGUỒN, không gọi tên cách lấy. "chrome" là công cụ mình
+# dùng — người đọc không quan tâm, và nó cũng chẳng nói gì về cái tin. Cái
+# tên đó là tàn dư từ hồi có HAI nguồn cùng đi qua Chrome (xem live.py).
+FOUND_BY = {"linkedin": ("⌕", "linkedin", "tìm bằng từ khoá trên LinkedIn"),
+            "board": ("◆", "board", "board tuyển dụng của chính công ty"),
+            "alert": ("✉", "alert", "thư báo việc LinkedIn gửi vào hộp thư")}
 
 CHANCE_TEXT = {"likely": ("đáng nộp", "ok"),
                "possible": ("có thể", ""),
@@ -309,7 +313,30 @@ def _sieve(sieve: dict) -> str:
         f"{' checked' if v in sieve['markets'] else ''}>{esc(l)}</label>"
         for v, l in sieve["market_options"])
 
+    # CÔNG TẮC NGUỒN — nằm NGOÀI form. Chúng không phải hồ sơ: bấm là có tác
+    # dụng ngay, không đi qua nút Áp dụng, và không làm phán lại 5.000 tin.
+    #
+    # Đặt trên cùng vì đây là công tắc thô nhất: tắt một nguồn thì mọi núm
+    # bên dưới chỉ còn tác dụng với nửa còn lại.
+    nguon = "".join(
+        f"<button class='mbtn tiny srcbtn {esc(k)}{'' if on else ' off'}'"
+        f" data-post='/api/source' data-arg='{esc(k)}'"
+        f" title='{esc(mo)}'>{dau} {esc(k)} · {'bật' if on else 'tắt'}</button>"
+        for k, dau, on, mo in (
+            ("board", FOUND_BY["board"][0], sieve.get("src_board", True),
+             "board tuyển dụng của chính công ty — thuần HTTP, ~20 giây"),
+            ("linkedin", FOUND_BY["linkedin"][0], sieve.get("src_linkedin", True),
+             "tìm bằng từ khoá trên LinkedIn — mở Chrome, lâu hơn nhiều. "
+             "Tắt chỉ dừng việc gõ từ khoá; tin của nguồn khác vẫn được "
+             "đọc kỹ và chấm điểm"),
+            ("alert", FOUND_BY["alert"][0], sieve.get("src_alert", True),
+             "thư báo việc LinkedIn gửi vào hộp thư — nhanh nhất, không cào. "
+             "Nguồn RIÊNG: chạy trọn dây chuyền dù LinkedIn đang tắt")))
+
     return (
+        "<label class=slab>Nguồn<span>bấm để bật/tắt · có tác dụng ngay, "
+        "không cần Áp dụng</span></label>"
+        f"<div class=srcrow>{nguon}</div>"
         "<form class=sieve method=post action='/api/sieve'>"
         "<label class=slab>Chức danh nhắm tới<span>gõ rồi Enter để thêm · "
         "vừa là từ khoá gửi cho LinkedIn, vừa là điều kiện giữ tin</span></label>"

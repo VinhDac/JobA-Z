@@ -257,15 +257,13 @@ def _o_khoi(question: Question, answers: Answers,
     from ...cv.blocks import parse as parse_cv
     loai = question.block_kind
     co = [b for b in parse_cv(str(answers.get("cv_text") or "")) if b.kind == loai]
-    may = {t.strip().lower() for t in (kho or {}).get("may_de", []) if t.strip()}
-    hang = "".join(_hang_khoi(question, b, b.title.strip().lower() in may)
-                   for b in co) or _hang_khoi(question)
+    hang = "".join(_hang_khoi(question, b) for b in co) or _hang_khoi(question)
     ten = "việc" if loai == "experience" else "project"
     return (f"<div class=blockrows data-rows>{hang}</div>"
             f"<button type=button class='mbtn tiny' data-rowadd>+ thêm {ten}</button>")
 
 
-def _hang_khoi(question: Question, b=None, may_de: bool = False) -> str:
+def _hang_khoi(question: Question, b=None) -> str:
     key = question.id
     title = getattr(b, "title", "")
     meta = getattr(b, "meta", "")
@@ -273,11 +271,8 @@ def _hang_khoi(question: Question, b=None, may_de: bool = False) -> str:
     nhan_meta = ("Nơi làm · thời gian" if question.block_kind == "experience"
                  else "Ghi chú · thời gian")
     return (
-        f"<div class='blockrow{' machine' if may_de else ''}'>"
-        + ("<span class=maybadge title='Khối này do jobbot đẻ ra rồi chèn vào "
-           "CV, không phải bạn viết. Bấm × để gỡ.'>jobbot đẻ</span>"
-           if may_de else "")
-        + f"<label class='edufield btitle'><span>Tên</span>"
+        "<div class=blockrow>"
+        f"<label class='edufield btitle'><span>Tên</span>"
         f"<input class=txt type=text name='{esc(key)}__title' value='{esc(title)}'"
         f" placeholder='Quantitative Analyst — Schonfeld' autocomplete=off></label>"
         f"<label class='edufield bmeta'><span>{esc(nhan_meta)}</span>"

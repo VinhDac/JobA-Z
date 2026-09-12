@@ -74,44 +74,122 @@ def _run_source(conn, name: str, fn, *args, log: Log) -> tuple[int, int]:
 DAU, TIEP, MOI = "dau", "tiep", "moi"
 
 
+def _cap(answers: dict) -> tuple[list[tuple[str, str]], list[str]]:
+    """(mọi cặp chức danh × nơi, cấp bậc) — dựng ĐÚNG như vòng tìm sẽ dựng.
+
+    Phải đi qua cả trần MAX_QUERIES: `scan_mode` mà đếm 27 chức danh trong
+    khi vòng tìm chỉ gõ 20 thì 7 cặp kia vĩnh viễn "chưa quét", và nút đứng
+    ở "Chạy" mãi mãi.
+    """
+    from .ingest.web import linkedin as li
+    titles = [t.strip() for t in (answers.get("job_titles") or "").splitlines()
+              if t.strip()][:li.MAX_QUERIES]
+    places = li.places_for(answers.get("markets") or [],
+                           answers.get("location") or "")
+    levels = sorted(answers.get("seniority") or ["grad", "junior"])
+    return [(q, p) for q in titles for p in places], levels
+
+
+def da_quet(conn) -> tuple[set[str], list[str]]:
+    """Những cặp đã quét đầy, và cấp bậc lúc quét. Đọc hỏng thì coi như chưa."""
+    import json as _json
+    from .core import prefs
+    try:
+        xong = set(_json.loads(prefs.get(conn, prefs.LI_DONE) or "[]"))
+        muc = list(_json.loads(prefs.get(conn, prefs.LI_LEVELS) or "[]"))
+    except (ValueError, TypeError):
+        return set(), []
+    return xong, muc
+
+
+def con_thieu(conn, answers: dict) -> tuple[list[tuple[str, str]], int]:
+    """Cặp nào CHƯA quét đầy bao giờ, và tổng số cặp.
+
+    Đây là cả luật, gói trong một hàm: thứ chưa từng hỏi thì hỏi đầy, thứ hỏi
+    rồi thì chỉ hỏi tin mới. Bỏ bớt chức danh -> cặp ít đi -> không còn gì
+    thiếu -> không quét lại cái gì cả. Thêm chức danh -> đúng những cặp mới
+    là thiếu, và chỉ chúng được quét đầy.
+    """
+    cap, muc = _cap(answers)
+    xong, muc_cu = da_quet(conn)
+    # NỚI RỘNG cấp bậc thì f_E đổi cho mọi cặp -> coi như chưa phủ gì. THU HẸP
+    # thì không: bớt một cấp bậc không đẻ ra tin nào mới.
+    if not set(muc) <= set(muc_cu):
+        xong = set()
+    return [c for c in cap if f"{c[0]}|{c[1]}" not in xong], len(cap)
+
+
 def scan_mode(conn) -> dict:
     """Lượt quét TỚI sẽ làm gì. MỘT chỗ quyết, nút Chạy chỉ đọc lại để đặt tên.
 
+    CHỈ NÓI VỀ CHROME. Board API xong trong 22 giây và chạy mọi lượt, không có
+    trạng thái gì để kể; thứ mất nửa tiếng và dở dang được là LinkedIn.
+
+        Chạy      còn cặp chưa quét bao giờ  -> quét ĐẦY đúng mấy cặp đó
+        Tiếp tục  đang dở                    -> KHÔNG tìm gì, đọc nốt chỗ dở
+        Cập nhật  phủ hết rồi                -> chỉ hỏi tin đăng gần đây
+
+    KHÔNG CHẠY ĐI CHẠY LẠI MỘT THỨ. Đơn vị là CẶP (chức danh × nơi), nên bỏ
+    bớt một chức danh thì chẳng phải quét lại gì, còn thêm một chức danh thì
+    chỉ mấy cặp mới được quét đầy — phần còn lại vẫn chỉ hỏi tin mới.
+
     Nút đoán một kiểu còn vòng quét làm một kiểu thì chữ trên nút là lời nói
-    dối — và người dùng học được rằng đừng tin cái nút đó nữa.
-
-        Bắt đầu   kho rỗng          -> tìm đầy, không giới hạn thời gian
-        Tiếp tục  còn việc đọc dở   -> KHÔNG tìm gì cả, đọc nốt chỗ dở
-        Cập nhật  xong hết          -> chỉ tìm tin ĐĂNG TỪ LẦN QUÉT TRƯỚC
-
-    "Tiếp tục" mà vẫn chạy vòng tìm thì nó chỉ là chữ khác của "quét lại từ
-    đầu": tìm lại 2.296 tin y hệt, mất 30 phút, để rồi đọc nốt 11 tin.
+    dối, và người dùng học được rằng đừng tin cái nút đó nữa.
     """
     from datetime import datetime, timezone
+    from .core import prefs
     from .core.postings import HAVE_DESC
     from .ingest.web import linkedin as li
+    from .profile import store
 
     one = lambda q, a=(): conn.execute(q, a).fetchone()[0]      # noqa: E731
-    co_tin = one("SELECT COUNT(*) FROM posting")
-    # Việc DỞ = tin vòng đọc kỹ THẬT SỰ sẽ mở: lọt lưới sàng, hoặc do người
-    # tự giữ lại. Đếm cả tin lưới đã loại thì nút hứa 1.855 trong khi việc
-    # thật là 11 — đo được ngày 12/09, và 1.844 tin kia bấm bao nhiêu lần
-    # cũng không ai đọc.
-    do_dang = one("SELECT COUNT(*) FROM posting WHERE source = 'linkedin'"
-                  " AND length(COALESCE(description,'')) < ?"
-                  " AND (kept = 1 OR user_keep = 1)", (HAVE_DESC,))
 
-    if not co_tin:
-        return {"mode": DAU, "label": "Bắt đầu", "recent": 0, "todo": 0,
-                "note": "kho đang rỗng — quét đầy lần đầu"}
+    # 1. ĐANG DỞ? Xét trước mọi thứ: việc dở là việc đã trả tiền một nửa, bỏ
+    #    đi rồi tìm lại từ đầu là trả hai lần.
+    #
+    # Đếm ĐÚNG hàng đợi mà vòng đọc kỹ sẽ chạy, nên chỉ đếm nguồn ĐANG BẬT:
+    # đếm cả nguồn đã tắt thì nút mời "đọc nốt 107 tin" rồi chạy xong đọc 0.
+    doc = nguon_doc(conn)
+    do_dang = one("SELECT COUNT(*) FROM posting WHERE source IN"
+                  f" ({','.join('?' * len(doc))})"
+                  " AND length(COALESCE(description,'')) < ?"
+                  " AND (kept = 1 OR user_keep = 1)",
+                  (*doc, HAVE_DESC)) if doc else 0
     if do_dang:
         return {"mode": TIEP, "label": "Tiếp tục", "recent": 0, "todo": do_dang,
                 "note": f"còn {do_dang:,} tin chưa đọc kỹ — đọc nốt chỗ dở,"
                         f" không tìm lại từ đầu"}
 
-    # Cửa sổ thời gian co giãn theo chính khoảng nghỉ: quét đều thì hỏi 24
-    # giờ, nghỉ vài hôm thì hỏi 7 ngày, nghỉ lâu quá thì quét đầy cho chắc.
-    # Một con số cứng sẽ bỏ sót đúng lúc người dùng đi vắng lâu nhất.
+    # 2. LINKEDIN TẮT -> KHÔNG CÓ LƯỚI NÀO ĐỂ PHỦ. Lưới chức danh × nơi là
+    #    của riêng nguồn linkedin; board và thư báo chạy mọi lượt và xong
+    #    trong vài giây, chẳng có gì "chưa quét bao giờ" để kể. Nút mà vẫn ghi
+    #    "Chạy — 80 lượt tìm chưa quét" trong khi vòng tìm không chạy thì đó
+    #    là lời nói dối, và người dùng học được rằng đừng tin cái nút đó nữa.
+    bat_li = prefs.flag(conn, prefs.SRC_LINKEDIN)
+    if not bat_li:
+        con = ", ".join(n for n in ("board", "alert")
+                        if prefs.flag(conn, getattr(prefs, f"SRC_{n.upper()}")))
+        return {"mode": MOI, "label": "Cập nhật", "recent": 0, "todo": 0,
+                "note": ("LinkedIn đang tắt — chỉ hỏi tin mới từ " + con)
+                        if con else "mọi nguồn đang tắt — chưa quét được gì"}
+
+    # 3. CÒN CẶP NÀO CHƯA HỎI BAO GIỜ?
+    thieu, tong = con_thieu(conn, store.load(conn))
+    if not tong:
+        # Không có cặp nào để hỏi = hồ sơ chưa khai chức danh. "Cập nhật" ở
+        # đây là vô nghĩa — không có gì để cập nhật. Và run_scan cũng sẽ từ
+        # chối chạy, nên nút phải nói đúng thứ sắp xảy ra.
+        return {"mode": DAU, "label": "Chạy", "recent": 0, "todo": 0,
+                "note": "hồ sơ chưa khai chức danh nào — chưa quét được"}
+    if thieu:
+        rieng = "" if len(thieu) == tong else " (phần còn lại chỉ hỏi tin mới)"
+        return {"mode": DAU, "label": "Chạy", "recent": 0, "todo": len(thieu),
+                "note": f"{len(thieu)}/{tong} lượt tìm chưa quét bao giờ — "
+                        f"quét đầy đúng mấy lượt đó{rieng}"}
+
+    # 4. Phủ hết rồi -> chỉ hỏi tin mới. Cửa sổ co giãn theo chính khoảng
+    #    nghỉ: quét đều thì 24 giờ, nghỉ vài hôm thì nới ra 7 ngày. Một con số
+    #    cứng sẽ bỏ sót đúng lúc người dùng đi vắng lâu nhất.
     row = conn.execute(
         "SELECT started_at FROM source_run WHERE source = 'linkedin' AND ok = 1"
         " ORDER BY id DESC LIMIT 1").fetchone()
@@ -120,65 +198,192 @@ def scan_mode(conn) -> dict:
         try:
             cach = (datetime.now(timezone.utc)
                     - datetime.fromisoformat(row[0])).total_seconds()
-        except ValueError:
+        except (ValueError, TypeError):
             cach = 0.0
-    if not row:
-        # Kho KHÔNG rỗng (board đã về) nhưng LinkedIn chưa chạy lần nào. Gọi
-        # là "Bắt đầu" thì sai — có tin rồi; gọi là "Cập nhật" còn sai hơn —
-        # hỏi cửa sổ 24 giờ thì bỏ sót tất cả những gì LinkedIn đang có.
-        return {"mode": DAU, "label": "Quét đầy", "recent": 0, "todo": 0,
-                "note": "LinkedIn chưa quét lần nào — quét đầy một lượt"}
     if cach <= li.NGAY:
         return {"mode": MOI, "label": "Cập nhật", "recent": li.NGAY, "todo": 0,
-                "note": "chỉ tìm tin đăng trong 24 giờ qua"}
-    if cach <= li.TUAN:
-        return {"mode": MOI, "label": "Cập nhật", "recent": li.TUAN, "todo": 0,
-                "note": "nghỉ mấy hôm rồi — tìm tin đăng trong 7 ngày qua"}
-    return {"mode": DAU, "label": "Quét đầy", "recent": 0, "todo": 0,
-            "note": "nghỉ hơn một tuần — quét đầy cho chắc"}
+                "note": "đã phủ hết lưới — chỉ hỏi tin đăng trong 24 giờ qua"}
+    return {"mode": MOI, "label": "Cập nhật", "recent": li.TUAN, "todo": 0,
+            "note": "nghỉ mấy hôm rồi — hỏi tin đăng trong 7 ngày qua"}
 
 
-def _tin_do_dang(conn) -> list:
-    """Tin LinkedIn đáng đọc kỹ mà chưa có mô tả — dựng lại từ DB.
+# HAI NGUỒN, HAI CÁCH, HAI CÔNG TẮC. Cùng trỏ tới một trang
+# `/jobs/view/<id>` của LinkedIn, nhưng đường mang cái id về khác hẳn nhau:
+#
+#     linkedin   gõ từ khoá vào endpoint khách — 80 lượt tìm, nửa tiếng, nằm
+#                ngoài Điều khoản mục 8.2 (xem ingest/web/linkedin.py)
+#     alert      đọc thư báo trong hộp thư của CHÍNH MÌNH — 6 giây, sạch
+#
+# Nên không gộp. Tắt `linkedin` thì `alert` vẫn đi TRỌN dây chuyền: về, lọc,
+# đọc kỹ, chấm. Tắt một nguồn không được làm chết nguồn khác.
+#
+# CHROME LÀ CÔNG CỤ, KHÔNG PHẢI NGUỒN. Mô tả việc nằm trên trang web, nên tin
+# của nguồn nào cũng phải mở trang ra mà đọc — kể cả tin do thư báo mang về,
+# vì thư báo chỉ cho chức danh, công ty, nơi và id. Trước đây cả vùng Chrome
+# nằm sau công tắc `linkedin`, nên tắt nó là 107 tin thư báo đứng im không ai
+# chấm: một công tắc tắt luôn một nguồn khác.
+DOC_KY = ("linkedin", "alert")
 
-    Đủ để `read_deep` mở trang và `save_batch` vá mô tả vào đúng dòng cũ:
-    source_id để tìm trang, title/company để viết lên thanh tiến độ.
+# Công tắc của từng nguồn cần đọc kỹ. Bảng chứ không phải if/else: thêm nguồn
+# thứ tư thì thêm một dòng, không phải đi sửa bốn chỗ.
+CONG_TAC = {"linkedin": "SRC_LINKEDIN", "alert": "SRC_ALERT"}
+
+
+def nguon_doc(conn) -> tuple[str, ...]:
+    """Nguồn nào ĐANG BẬT và cần đọc kỹ. Mỗi nguồn tự quyết phần của mình."""
+    from .core import prefs
+    return tuple(n for n in DOC_KY
+                 if prefs.flag(conn, getattr(prefs, CONG_TAC[n])))
+
+
+def _tin_do_dang(conn, nguon: tuple[str, ...] = DOC_KY) -> dict:
+    """{nguồn: [tin]} — tin đáng đọc kỹ mà chưa có mô tả, dựng lại từ DB.
+
+    Trả về THEO NGUỒN chứ không trộn một rổ: `save_batch` ghi theo cặp
+    (nguồn, id), nên gộp lại rồi lưu dưới một tên là đẻ ra dòng mới thay vì
+    vá mô tả vào đúng dòng cũ. Và vì hai nguồn tắt bật riêng, `nguon` phải
+    lọc được — hàng đợi của nguồn đang tắt không phải việc của lượt này.
     """
     from .core.postings import HAVE_DESC
     from .ingest.base import Posting
+    if not nguon:
+        return {}
     rows = conn.execute(
-        "SELECT r.source_id, p.title, p.company, p.location, p.url"
+        "SELECT r.source, r.source_id, p.title, p.company, p.location, p.url"
         "  FROM raw_posting r JOIN posting p ON p.raw_id = r.id"
-        " WHERE r.source = 'linkedin'"
+        f" WHERE r.source IN ({','.join('?' * len(nguon))})"
         "   AND length(COALESCE(p.description,'')) < ?"
-        "   AND (p.kept = 1 OR p.user_keep = 1)", (HAVE_DESC,)).fetchall()
-    return [Posting(source_id=r["source_id"], title=r["title"] or "",
+        "   AND (p.kept = 1 OR p.user_keep = 1)",
+        (*nguon, HAVE_DESC)).fetchall()
+    out: dict = {}
+    for r in rows:
+        out.setdefault(r["source"], []).append(
+            Posting(source_id=r["source_id"], title=r["title"] or "",
                     company=r["company"] or "", location=r["location"] or "",
-                    url=r["url"] or "", payload={"guest": True}) for r in rows]
+                    url=r["url"] or "", payload={"guest": True}))
+    return out
 
 
 def _chrome_pass(conn, answers: dict, log: Log, deep: bool,
                  manual: bool = False) -> tuple[int, int]:
-    """Nguồn phải qua Chrome. Chạy sau nguồn API, chỉ trong cửa sổ giờ người.
+    """Việc cần tới TRANG WEB. Chạy sau nguồn API, chỉ trong cửa sổ giờ người.
+
+    CHROME LÀ CÔNG CỤ DÙNG CHUNG. Hai việc khác nhau cùng cần nó:
+
+        tìm       gõ từ khoá vào endpoint khách  -> của riêng nguồn linkedin
+        đọc kỹ    mở /jobs/view/<id> lấy mô tả   -> của MỌI nguồn đang bật
+
+    Nên công tắc `linkedin` chỉ tắt được việc TÌM. Tin thư báo vẫn được đọc
+    kỹ, vì `alert` là nguồn khác và nó đang bật.
 
     Mỗi nguồn chạy độc lập: một nguồn bị chặn hay hỏng KHÔNG được làm chết
     các nguồn còn lại.
     """
     from .browser import cdp, chrome
+    from .core import prefs
     from .core.scheduler import in_human_window
     from .ingest.web import linkedin as li
     from .ingest.web.base import Blocked
+
+    # titles[:5] ĐÃ BỎ: nó cắt 7/12 chức danh của hồ sơ mà không báo gì, và nó
+    # tồn tại chỉ vì vòng đọc kỹ chạy quá lâu. Sửa gốc rồi thì không cần cắt —
+    # trần bây giờ nằm ở li.MAX_QUERIES và có ghi nhật ký khi chạm.
+    # eFinancialCareers đã BỎ: 67% tin của nó là môi giới (LinkedIn 24%), mà
+    # chỉ cho 5 tin đạt 75+ so với 20 của LinkedIn. Bẩn gấp ba, ít hơn bốn lần.
+    titles = [t.strip() for t in (answers.get("job_titles") or "").splitlines() if t.strip()]
+    levels = answers.get("seniority") or ["grad", "junior"]
+    nhip = prefs.get(conn, prefs.PACE) or "thuong"
+    bat_li = prefs.flag(conn, prefs.SRC_LINKEDIN)
+
+    # LƯỢT NÀY LÀM GÌ — hỏi đúng chỗ đã đặt tên cho nút Chạy, nên thứ máy làm
+    # và thứ nút hứa không bao giờ lệch nhau.
+    kieu = scan_mode(conn)
+
+    # DỰNG DANH SÁCH VIỆC TRƯỚC KHI MỞ CHROME. Toàn đọc DB, không tốn gì —
+    # mà đổi lại: không có việc thì không mở cửa sổ nào. Trước đây Chrome mở
+    # trước rồi mới biết chẳng có gì làm, và người dùng thấy một cửa sổ nhảy
+    # lên rồi tắt mà không hiểu vì sao.
+    viec: list[tuple[str, object]] = []
+    dem: dict[str, int] = {}
+
+    if kieu["mode"] == TIEP:
+        # KHÔNG TÌM GÌ CẢ. Chỗ dở nằm sẵn trong DB rồi; chạy lại vòng tìm là
+        # mở lại 2.296 tin y hệt trong 30 phút để rồi đọc nốt mấy tin đã biết
+        # từ đầu là tin nào.
+        #
+        # MỖI NGUỒN MỘT LƯỢT LƯU. save_batch ghi theo cặp (nguồn, id): đọc
+        # xong tin của thư báo rồi lưu dưới tên "linkedin" là đẻ ra một dòng
+        # mới, còn dòng thư báo vẫn trống mô tả như cũ.
+        do_dang = _tin_do_dang(conn, nguon_doc(conn))
+        dem = {n: len(v) for n, v in do_dang.items()}
+
+        def _doc(_ten, _items):
+            def chay(tab):
+                suc = li.read_deep(tab, _items, pace=nhip, ten=_ten,
+                                   stop=lambda: halt.wanted(STAGE))
+                return _items, suc
+            return chay
+        viec = [(ten, _doc(ten, items)) for ten, items in sorted(do_dang.items())]
+
+    places = li.places_for(answers.get("markets") or [],
+                           answers.get("location") or "")
+    # `vua_phu` phải có mặt dù vòng tìm không chạy: vòng lưu ở dưới đọc nó để
+    # biết có cặp nào vừa phủ không. Định nghĩa trong nhánh else thì bấm "Tiếp
+    # tục" là NameError — bị `except Exception` bắt mất, nên mô tả đã lưu
+    # xong rồi mà lượt quét vẫn bị ghi là HỎNG. Không nguồn nào báo lỗi ra.
+    vua_phu: set[str] = set()
+    phu, _muc_cu = da_quet(conn)
+    seen: set[str] = set()
+    tu_giu: set[str] = set()
+
+    if kieu["mode"] != TIEP and bat_li and titles:
+        # Đã đọc rồi thì thôi — tính trên CẢ HAI nguồn, vì cùng một id là cùng
+        # một trang. Đây KHÔNG phải gộp nguồn: chỉ là không mở lại một trang
+        # đã đọc. Chỉ hỏi mỗi "linkedin" thì một tin thư báo đã có mô tả vẫn
+        # bị mở lại lần nữa.
+        seen = postings.already_read(conn, DOC_KY)
+
+        # Cộng thêm những tin Vin đã tự tay GIỮ LẠI: lưới sàng loại chúng, nên
+        # nếu chỉ hỏi mỗi lưới thì chúng không bao giờ được đọc kỹ — giữ lại
+        # một tin rồi nó đứng mãi ở "máy chưa đọc" là nút Giữ tự phản bội mình.
+        tu_giu = {r[0] for r in conn.execute(
+            "SELECT r.source_id FROM raw_posting r JOIN posting p ON p.raw_id = r.id"
+            " WHERE r.source IN ({}) AND p.user_keep = 1".format(
+                ",".join("?" * len(DOC_KY))), DOC_KY)}
+
+        # ĐÁNG ĐỌC KỸ KHÔNG. Trả lời bằng đúng bộ lọc mà derive() sẽ dùng sau
+        # đó, nên không có hai luật song song có ngày lệch nhau.
+        def dang_doc(item) -> bool:
+            if item.source_id in tu_giu:
+                return True
+            giu, _ = jobfilter.judge(item, answers)
+            return giu
+
+        # Cặp nào đã phủ thì chỉ hỏi tin mới; cặp chưa phủ thì hỏi đầy.
+        # `vua_phu` là chỗ vòng tìm ghi lại những cặp nó vừa hỏi đầy trọn vẹn
+        # — chỉ chúng mới được cộng vào trí nhớ. Cửa sổ cho cặp ĐÃ phủ; chưa
+        # từng quét trọn lượt nào (phu rỗng) thì mọi cặp đều hỏi đầy.
+        cua_so = kieu["recent"] or li.NGAY
+        viec.append((li.NAME, lambda tab: li.fetch(
+            tab, titles, location=places, levels=levels, pages=4, deep=deep,
+            skip=frozenset(seen), worth=dang_doc, pace=nhip, recent=cua_so,
+            covered=frozenset(phu), done_out=vua_phu,
+            stop=lambda: halt.wanted(STAGE))))
+
+    if not viec:
+        # Nói ra vì sao trống. "Không có gì xảy ra" mà im lặng thì người dùng
+        # chỉ thấy lượt quét xong nhanh lạ và không biết mình tắt mất cái gì.
+        jlog.emit(SEARCH, "không có việc nào cần trang web"
+                          + ("" if bat_li else " · LinkedIn đang tắt")
+                          + ("" if titles else " · hồ sơ chưa khai chức danh"))
+        return 0, 0
 
     # Cửa sổ giờ tồn tại vì lướt web lúc 3 giờ sáng MỖI ĐÊM là nhịp máy, không
     # phải nhịp người. Nhưng khi chính người dùng bấm chạy thì đó LÀ người thật.
     if not manual and not in_human_window():
         log("  chrome: ngoài cửa sổ giờ người, bỏ tới lượt sau")
+        jlog.warn(SEARCH, f"ngoài cửa sổ giờ người — {len(viec)} việc chờ lượt sau")
         return 0, 0
-
-    titles = [t.strip() for t in (answers.get("job_titles") or "").splitlines() if t.strip()]
-    if not titles:
-        return 0, 0
-    levels = answers.get("seniority") or ["grad", "junior"]
 
     jlog.progress(SEARCH, "mở Chrome")
     try:
@@ -196,66 +401,21 @@ def _chrome_pass(conn, answers: dict, log: Log, deep: bool,
     # cửa sổ Chrome nằm lại trên màn hình cho tới khi tắt app. Mà app này
     # chạy 24/7: "tới khi tắt app" nghĩa là mãi mãi.
     try:
-        # eFinancialCareers đã BỎ: 67% tin của nó là môi giới (LinkedIn 24%), mà chỉ
-        # cho 5 tin đạt 75+ so với 20 của LinkedIn. Bẩn gấp ba, ít hơn bốn lần.
-        # titles[:5] ĐÃ BỎ: nó cắt 7/12 chức danh của hồ sơ mà không báo gì, và
-        # nó tồn tại chỉ vì vòng đọc kỹ chạy quá lâu. Sửa gốc rồi thì không cần
-        # cắt nữa — trần bây giờ nằm ở li.MAX_QUERIES và có ghi nhật ký khi chạm.
-        places = li.places_for(answers.get("markets") or [],
-                               answers.get("location") or "")
-        seen = postings.already_read(conn, li.NAME)
-
-        # ĐÁNG ĐỌC KỸ KHÔNG. Trả lời bằng đúng bộ lọc mà derive() sẽ dùng sau
-        # đó, nên không có hai luật song song có ngày lệch nhau.
-        #
-        # Cộng thêm những tin Vin đã tự tay GIỮ LẠI: lưới sàng loại chúng, nên
-        # nếu chỉ hỏi mỗi lưới thì chúng không bao giờ được đọc kỹ — giữ lại
-        # một tin rồi nó đứng mãi ở "máy chưa đọc" là nút Giữ tự phản bội mình.
-        from .core import prefs
-        nhip = prefs.get(conn, prefs.PACE) or "thuong"
-
-        tu_giu = {r[0] for r in conn.execute(
-            "SELECT r.source_id FROM raw_posting r JOIN posting p ON p.raw_id = r.id"
-            " WHERE r.source = ? AND p.user_keep = 1", (li.NAME,))}
-
-        def dang_doc(item) -> bool:
-            if item.source_id in tu_giu:
-                return True
-            giu, _ = jobfilter.judge(item, answers)
-            return giu
-
-        # LƯỢT NÀY LÀM GÌ — hỏi đúng chỗ đã đặt tên cho nút Chạy, nên thứ máy
-        # làm và thứ nút hứa không bao giờ lệch nhau.
-        kieu = scan_mode(conn)
-        jlog.emit(SEARCH, f"linkedin · {kieu['label'].upper()} — {kieu['note']}")
-
+        # NÓI RA LƯỢT NÀY LÀM GÌ, theo từng việc một. "quét" là một chữ che
+        # mất ba việc khác nhau; người dùng phải đọc được mình đang trả tiền
+        # cho cái gì.
+        jlog.emit(SEARCH, f"{kieu['label'].upper()} — {kieu['note']}")
         if kieu["mode"] == TIEP:
-            # KHÔNG TÌM GÌ CẢ. Chỗ dở nằm sẵn trong DB rồi; chạy lại vòng tìm
-            # là mở lại 2.296 tin y hệt trong 30 phút để rồi đọc nốt mấy tin
-            # đã biết từ đầu là tin nào.
-            do_dang = _tin_do_dang(conn)
-            jlog.emit(SEARCH, f"linkedin: đọc nốt {len(do_dang)} tin dở,"
-                              f" bỏ qua vòng tìm")
-            def _chay(tab, _items=do_dang):
-                suc = li.read_deep(tab, _items, pace=nhip,
-                                   stop=lambda: halt.wanted(STAGE))
-                return _items, suc
-            sources = [(li.NAME, _chay)]
+            jlog.emit(SEARCH, f"đọc nốt {sum(dem.values()):,} tin dở, bỏ qua"
+                              " vòng tìm · "
+                              + " · ".join(f"{n} {c}" for n, c in sorted(dem.items())))
         else:
             jlog.emit(SEARCH, f"linkedin: {len(titles)} chức danh × {len(places)} nơi"
                               f" · bỏ qua {len(seen)} tin đã đọc"
                               + (f" · {len(tu_giu)} tin bạn tự giữ" if tu_giu else ""))
-            sources = [
-                (li.NAME, lambda tab: li.fetch(tab, titles, location=places,
-                                               levels=levels, pages=4, deep=deep,
-                                               skip=frozenset(seen),
-                                               worth=dang_doc, pace=nhip,
-                                               recent=kieu["recent"],
-                                               stop=lambda: halt.wanted(STAGE))),
-            ]
 
         total_seen = total_new = 0
-        for name, run in sources:
+        for name, run in viec:
             tab = None
             try:
                 tab = cdp.open_tab()
@@ -266,6 +426,20 @@ def _chrome_pass(conn, answers: dict, log: Log, deep: bool,
                 postings.record_run(conn, name, ok=health.ok, fetched=seen, new_rows=new,
                                     error="" if health.ok else f"blocked: {health.summary}",
                                     attempted=health.attempted, failed=health.failed)
+                # GHI NHỚ NHỮNG CẶP VỪA PHỦ. Cộng dồn chứ không ghi đè:
+                # một lượt bị dừng giữa chừng vẫn phủ được mấy cặp đầu, và
+                # phần đó không việc gì phải làm lại.
+                #
+                # Cặp nào chỉ được hỏi cửa sổ 24 giờ thì KHÔNG nằm trong đây —
+                # liếc phần mới nhất không phải là đã phủ.
+                if health.ok and vua_phu:
+                    import json as _json
+                    cu_phu, _ = da_quet(conn)
+                    prefs.put(conn, prefs.LI_DONE,
+                              _json.dumps(sorted(cu_phu | vua_phu)))
+                    prefs.put(conn, prefs.LI_LEVELS, _json.dumps(sorted(levels)))
+                    jlog.emit(SEARCH, f"đã phủ thêm {len(vua_phu - cu_phu)} lượt tìm"
+                                      f" · tổng {len(cu_phu | vua_phu)}")
                 bad = f"  ⚠ {health.summary}" if health.failed else ""
                 (jlog.ok if health.ok else jlog.warn)(
                     SEARCH, f"{name}: {seen} tin, {new} mới"
@@ -333,8 +507,57 @@ def run_scan(log: Log | None = None, chrome_sources: bool = True,
                 # slug ("Ocado" và "Ocado Group" -> ocadogroup) -> gọi HTTP hai
                 # lần cho một board và cộng đôi vào tổng "thấy".
                 for board in dict.fromkeys(boards.get(key, []))]
-        jlog.emit(SEARCH, f"bắt đầu quét — {len(todo)} nguồn API"
-                          + (" + LinkedIn qua Chrome" if chrome_sources else ""))
+        # CÔNG TẮC NGUỒN. Hai cách tìm cho ra hai loại tin khác hẳn nhau, nên
+        # có lúc chỉ muốn chạy một cái. Đọc ở đây chứ không ở chỗ gọi: lượt
+        # quét tự động và nút Chạy tay đều phải nghe cùng một công tắc.
+        from .core import prefs
+        bat_board = prefs.flag(conn, prefs.SRC_BOARD)
+        bat_li = prefs.flag(conn, prefs.SRC_LINKEDIN)
+        if not bat_board:
+            jlog.warn(SEARCH, f"board đang TẮT — bỏ qua {len(todo)} nguồn API")
+            todo = []
+        else:
+            # Từng ATS một. Công tắc to (board) và công tắc nhỏ (từng ATS) là
+            # hai tầng: tắt tầng nào cũng dừng được, và phải NÓI RA tắt cái
+            # nào — bỏ qua im lặng thì quét xong ít tin hẳn mà không ai hiểu.
+            tat = [k for k, key in prefs.SRC_ATS.items() if not prefs.flag(conn, key)]
+            if tat:
+                truoc = len(todo)
+                todo = [t for t in todo if t[0].split(":")[0] not in tat]
+                jlog.warn(SEARCH, f"tắt {', '.join(tat)} — bỏ qua"
+                                  f" {truoc - len(todo)}/{truoc} nguồn API")
+        if not bat_li:
+            # TẮT LINKEDIN = TẮT VIỆC TÌM BẰNG TỪ KHOÁ. Không phải tắt Chrome:
+            # Chrome còn là đường lấy MÔ TẢ cho tin của nguồn khác, và thư báo
+            # là một nguồn khác với công tắc riêng.
+            #
+            # Gộp hai thứ đó vào một công tắc đã có giá đo được: 107 tin thư
+            # báo nằm im không ai chấm, nhật ký ghi đúng "LinkedIn đang TẮT"
+            # mà vẫn không ai nối được với hậu quả, vì hậu quả thuộc nguồn khác.
+            jlog.warn(SEARCH, "LinkedIn đang TẮT — không gõ từ khoá lượt này"
+                              + (" · thư báo vẫn chạy trọn dây chuyền"
+                                 if prefs.flag(conn, prefs.SRC_ALERT) else ""))
+
+        # THƯ BÁO VIỆC — nguồn thứ ba. Xếp cùng nhóm với board API vì nó
+        # cũng rẻ và cũng không cần Chrome: 69 việc trong 6 giây, đo trên hộp
+        # thư thật. Không có mô tả, nên vòng đọc kỹ vẫn phải mở từng tin —
+        # nhưng nó báo nhanh hơn hẳn, và sạch về nguyên tắc.
+        if prefs.flag(conn, prefs.SRC_ALERT):
+            from .ingest import alerts
+            from .track import mail as _mail
+            dia_chi, mat_khau = _mail.account()
+            if dia_chi and mat_khau:
+                ngay = prefs.num(conn, prefs.MAIL_DAYS, 1, 365)
+                todo.append((alerts.NAME, alerts.fetch,
+                             (dia_chi, mat_khau, ngay)))
+            else:
+                jlog.warn(SEARCH, "thư báo việc: chưa nối hộp thư — bỏ qua")
+
+        # `chrome_sources` là cờ của NGƯỜI GỌI (lượt cron nhẹ, test) — tắt hẳn
+        # Chrome. Còn việc gì cần trang web thì _chrome_pass tự quyết theo
+        # từng công tắc nguồn, nên ở đây chỉ nói "có mở Chrome hay không".
+        jlog.emit(SEARCH, f"bắt đầu quét — {len(todo)} nguồn nhanh"
+                          + (" + vòng Chrome" if chrome_sources else ""))
 
         total_seen = total_new = 0
         stopped = False
@@ -352,7 +575,7 @@ def run_scan(log: Log | None = None, chrome_sources: bool = True,
             s, n = _chrome_pass(conn, answers, say, deep, manual)
             total_seen += s; total_new += n
         elif chrome_sources:
-            jlog.warn(SEARCH, "bỏ qua LinkedIn — đã xin dừng")
+            jlog.warn(SEARCH, "bỏ qua vòng Chrome — đã xin dừng")
 
         if halt.wanted(STAGE):
             stopped = True

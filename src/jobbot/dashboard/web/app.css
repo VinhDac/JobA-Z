@@ -318,13 +318,6 @@ button.primary:hover{background:var(--acc-2)}
 .risk{display:block;font-size:11px;margin-top:5px;color:var(--mute)}
 .risk.risky{color:var(--warn)}
 
-/* ---------------- projects ---------------- */
-.card.proj{padding:14px 17px}
-.ptitle{margin-top:6px;font-size:13px;color:var(--dim)}
-.num{margin-top:7px;font-size:12.5px;color:var(--acc);font-weight:600}
-.card.onepage h3:first-child{margin-top:0}
-.card.onepage p{font-size:13px;color:var(--dim)}
-
 /* ---------------- settings ---------------- */
 .srow{display:flex;gap:12px;padding:8px 0;font-size:13px;border-top:1px solid var(--line);
   color:var(--dim)}
@@ -591,7 +584,11 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 
 /* ---------------- nhật ký ---------------- */
 .journal{font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
-.jline{display:flex;gap:9px;padding:2.5px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.jline{display:flex;gap:9px;padding:2.5px 0 2.5px 7px;
+  border-bottom:1px solid rgba(255,255,255,.03);
+  /* Vạch trái TRONG SUỐT sẵn ở mọi dòng: dòng mới nhất chỉ tô màu nó lên,
+     nên không dòng nào bị đẩy ngang lúc dấu chuyển sang dòng khác. */
+  border-left:2px solid transparent}
 .jtime{color:var(--mute);flex:none;font-variant-numeric:tabular-nums}
 .jstream{color:var(--dim);flex:none;min-width:52px}
 .jtext{color:var(--ink);min-width:0;overflow-wrap:anywhere}
@@ -599,6 +596,33 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .jline.warn  .jtext{color:var(--warn)}
 .jline.error .jtext{color:var(--bad)}
 .jline.info  .jtext{color:var(--dim)}
+
+/* DÒNG MỚI NHẤT — dòng mới luôn chèn vào ĐỈNH (live.js: insertBefore
+   firstChild), nên "mới nhất" đúng bằng :first-child. Thuần CSS, không có
+   class nào để JS quên gỡ, và không có cách nào dấu lệch khỏi dòng thật.
+
+   Đánh dấu bằng NỀN + VẠCH TRÁI, KHÔNG bằng màu chữ: màu chữ ở đây đã mang
+   nghĩa khác rồi (ok / warn / error). Tô đỏ dòng mới nhất là nói dối về mức
+   độ, mà mức độ mới là thứ người dùng cần đọc trước tiên. Nên vạch trái lấy
+   luôn màu của MỨC — vừa chỉ ra dòng mới, vừa không giẫm lên nghĩa cũ. */
+.journal .jline:first-child{background:rgba(255,255,255,.062);
+  border-left-color:var(--mute);border-radius:0 3px 3px 0}
+.journal .jline.ok:first-child   {border-left-color:var(--acc)}
+.journal .jline.warn:first-child {border-left-color:var(--warn)}
+.journal .jline.error:first-child{border-left-color:var(--bad)}
+/* Giờ và chữ sáng lên một nấc. Với dòng `info` đây là khác biệt duy nhất
+   thấy được — dim -> ink là SÁNG HƠN, không phải mức khác. */
+.journal .jline:first-child .jtime{color:var(--dim)}
+.journal .jline.info:first-child .jtext{color:var(--ink)}
+
+/* Loé một cái lúc vừa tới. Mắt bắt CHUYỂN ĐỘNG nhanh hơn bắt màu, và nhật ký
+   chạy nhanh thì đó là thứ duy nhất nói "vừa có dòng mới" mà không phải đọc
+   giờ. Ngắn thôi: 0.5s, rồi về đúng nền nghỉ ở trên. */
+.journal .jline:first-child{animation:jnew .5s ease-out}
+@keyframes jnew{from{background:rgba(255,255,255,.17)}}
+@media (prefers-reduced-motion:reduce){
+  .journal .jline:first-child{animation:none}
+}
 
 /* ---------------- tiến độ ---------------- */
 .progress{display:flex;flex-direction:column;gap:11px}
@@ -668,10 +692,9 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .drow .mbtn{align-self:flex-start}
 
 .alerts{display:flex;flex-direction:column;gap:6px;margin-bottom:11px}
-.alert{display:flex;flex-direction:column;gap:1px;padding:7px 10px;border-radius:7px;
-  background:var(--warn-bg);border-left:2px solid var(--warn)}
-.alert b{font-size:12px;color:var(--warn)}
-.alert span{font-size:11px;color:var(--dim);overflow-wrap:anywhere}
+/* .alert ĐÃ XOÁ: không view nào dùng class đó, và cái tên thì chặn mất huy
+   hiệu nguồn `<i class='src alert'>` — đúng lỗi .board đã dính hôm qua. Lớp
+   chết mà giữ lại thì nó chỉ còn một tác dụng: chiếm tên. */
 
 
 .kgroup{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
@@ -803,8 +826,11 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
   font-size:10.5px;color:var(--dim);border:1px solid var(--line);
   border-radius:5px;padding:1.5px 6px;white-space:nowrap}
 .src b{font-weight:600}
-.src.chrome{color:#8FA9C9;border-color:rgba(143,169,201,.3)}
-.src.api{color:var(--acc);border-color:rgba(85,201,141,.3)}
+.src.linkedin{color:#8FA9C9;border-color:rgba(143,169,201,.3)}
+/* Thư báo việc — màu hổ phách, khác hẳn hai nguồn kia. Nó là nguồn NHANH
+   NHẤT (LinkedIn gửi trong vài giờ), nên đáng có màu riêng để liếc là thấy. */
+.src.alert{color:#D8A15E;border-color:rgba(216,161,94,.3)}
+.src.board{color:var(--acc);border-color:rgba(85,201,141,.3)}
 .src.agency{color:var(--warn);border-color:rgba(216,161,94,.3)}
 
 /* Đường sang TIN GỐC ở trang chi tiết. Mỗi nơi đăng một nút; nút nói rõ tên
@@ -884,6 +910,18 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .pager .muted{font-size:11.5px;color:var(--mute)}
 .vchip.off{opacity:.35}
 
+/* Công tắc nguồn trong tấm Điều chỉnh. Màu theo đúng huy hiệu trên dòng việc
+   — cùng một thứ thì phải cùng một màu, không thì phải học hai lần. */
+.srcrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.srcbtn{width:auto;padding:6px 13px;font-family:ui-monospace,Menlo,monospace;
+  font-size:11.5px}
+.srcbtn.board{color:var(--acc);border-color:rgba(85,201,141,.35)}
+.srcbtn.linkedin{color:#8FA9C9;border-color:rgba(143,169,201,.35)}
+.srcbtn.alert{color:#D8A15E;border-color:rgba(216,161,94,.35)}
+/* TẮT thì phải nhìn ra ngay là đang tắt: mờ đi VÀ mất màu, vì chỉ mờ thôi
+   dễ đọc nhầm thành "nút chưa bấm được". */
+.srcbtn.off{opacity:.4;color:var(--mute);border-color:var(--line)}
+
 /* ---------------- menu Cài đặt (tấm phủ, không phải tab) ---------------- */
 .mbtn.gear{font-size:14px;line-height:1;padding:5px 10px}
 .sheet{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.5);
@@ -932,6 +970,12 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .setform .prow input[type=radio]{margin:0;accent-color:var(--acc)}
 .setform .prow b{color:var(--ink);font-weight:600}
 .setform .prow .muted{font-size:11.5px}
+/* Một dòng ATS: tick · tên · giới thiệu · SỐ THẬT. Số xuống dòng riêng, canh
+   dưới tên, để mắt so ba nguồn theo cột chứ không phải dò trong câu. */
+.setform .srcline{grid-template-columns:auto auto 1fr}
+.srcnum{grid-column:2 / -1;font-size:11px;color:var(--mute);
+  font-family:ui-monospace,Menlo,monospace}
+.setform .srcline.off b,.setform .srcline.off .muted{opacity:.45}
 .setfoot{display:flex;align-items:center;gap:11px;margin-top:15px;flex-wrap:wrap}
 .setfoot .mbtn.apply{width:auto;padding:7px 18px}
 .setfoot .applynote{margin:0;flex:1;min-width:150px}
@@ -1148,7 +1192,7 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 
 /* ---------------- Quản lí: bảng đã nộp ---------------- */
 
-.boardtop{margin-bottom:13px}
+.tracktop{margin-bottom:13px}
 .needcfg{font-size:11.5px;color:var(--warn);background:var(--warn-bg);
   border-left:2px solid var(--warn);border-radius:0 6px 6px 0;padding:6px 10px;
   display:inline-block}
@@ -1169,17 +1213,20 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .asksnip{font-size:10.5px;color:var(--mute);margin-top:2px;line-height:1.5}
 .askact{display:flex;gap:6px;align-items:center;flex:none}
 
-/* bảng */
-.board{width:100%;border-collapse:collapse;font-size:12.5px}
-.board th{text-align:left;font-size:10px;font-weight:700;letter-spacing:.07em;
+/* Bảng Quản lí. TÊN PHẢI RIÊNG: hồi còn tên `.board` nó chiếm mất một từ
+   chung, và huy hiệu nguồn `<i class='src board'>` thừa hưởng luôn
+   width:100% + font-size:12.5px của nó — huy hiệu phình thành một cái hộp
+   to bằng cả dòng. Đúng lớp lỗi .pill và .prow đã dính. */
+.trackboard{width:100%;border-collapse:collapse;font-size:12.5px}
+.trackboard th{text-align:left;font-size:10px;font-weight:700;letter-spacing:.07em;
   text-transform:uppercase;color:var(--mute);padding:0 10px 7px 0;
   border-bottom:1px solid var(--line-2)}
-.board td{padding:9px 10px 9px 0;border-bottom:1px solid var(--line);
+.trackboard td{padding:9px 10px 9px 0;border-bottom:1px solid var(--line);
   vertical-align:top}
-.board tr:hover td{background:var(--panel-2)}
+.trackboard tr:hover td{background:var(--panel-2)}
 /* xong việc rồi thì mờ đi — mắt phải rơi vào dòng còn đang chờ */
-.board tr.rejected td,.board tr.offer td{opacity:.5}
-.board tr.quiet .tev{color:var(--warn)}
+.trackboard tr.rejected td,.trackboard tr.offer td{opacity:.5}
+.trackboard tr.quiet .tev{color:var(--warn)}
 
 .tco b{font-weight:600;color:var(--ink)}
 .tco i{display:block;font-style:normal;font-size:11px;color:var(--mute);margin-top:2px}
@@ -1331,13 +1378,6 @@ body[data-run=running] .deckpill{border-color:var(--acc-2);
   padding:14px;border:1px solid var(--line);border-radius:var(--round);
   background:var(--bg)}
 .edufield.bbody{grid-column:1 / -1}
-/* Khối do máy chèn vào CV. Dấu để Ở ĐÂY, KHÔNG để trong cv_text — bản CV đó
-   gửi cho nhà tuyển dụng, không mang chú thích nội bộ nào. */
-.blockrow.machine{border-color:var(--warn);position:relative}
-.maybadge{position:absolute;top:-9px;left:13px;font-size:10px;font-weight:700;
-  letter-spacing:.06em;text-transform:uppercase;color:var(--warn);
-  background:var(--bg);border:1px solid var(--warn);border-radius:20px;
-  padding:1px 8px;cursor:help}
 .edufield.bbody .txt{min-height:88px;line-height:1.55;resize:vertical}
 @media (max-width:900px){.blockrow{grid-template-columns:1fr 30px}
   .edufield.bmeta{grid-column:1 / -2}}

@@ -13,6 +13,7 @@ bấm vào server. Cả bốn đều là lỗi một dòng, và một smoke test
 """
 
 import sys, tempfile, threading, urllib.error, urllib.request
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
@@ -87,7 +88,7 @@ def seeded(path: Path):
     return conn
 
 
-ROUTES = ["/", "/search", "/projects", "/cv", "/profile",
+ROUTES = ["/", "/search", "/cv", "/profile",
           "/profile/muc_tieu", "/profile/import", "/profile/health",
           "/settings", "/api/profile", "/api/state"]
 
@@ -133,6 +134,15 @@ with tempfile.TemporaryDirectory() as tmp:
     # dựng lại khối này để kiểm qua HTTP.
 
     print("\n[POST không được sập]")
+    def _post_raw(path, data=b""):
+        """POST và trả về THÂN phản hồi — post() chỉ trả mã."""
+        req = urllib.request.Request(base.rstrip("/") + path, data=data)
+        try:
+            with urllib.request.urlopen(req, timeout=25) as r:
+                return r.read().decode()
+        except urllib.error.HTTPError as e:
+            return e.read().decode()
+
     def post(path, data=b""):
         try:
             req = urllib.request.Request(base.rstrip("/") + path, data=data)
@@ -196,14 +206,29 @@ with tempfile.TemporaryDirectory() as tmp:
     import os as _osr, shutil as _shr, tempfile as _tfr
     _rtmp = _tfr.mkdtemp()
     _cu_home, _cu_data = _osr.environ.get("HOME"), _osr.environ.get("JOBBOT_DATA_DIR")
+    _cu_root = _osr.environ.get("JOBBOT_ROOT")
     _osr.environ["HOME"] = _rtmp
     _osr.environ["JOBBOT_DATA_DIR"] = _rtmp
+    # JOBBOT_ROOT — thiếu dòng này, bài test đã XOÁ config/config.toml THẬT
+    # của Vin ở MỌI lần chạy suốt ngày 12/09, và nuốt mất app password Gmail
+    # anh vừa dán vào. `reset.USER_FILES` là đường dẫn tương đối so với GỐC
+    # REPO, mà gốc repo hồi đó là hằng số tính từ vị trí tệp nguồn: đổi HOME
+    # và JOBBOT_DATA_DIR chỉ dời được data/, không dời nổi config/.
+    (Path(_rtmp) / "config").mkdir(exist_ok=True)
+    _osr.environ["JOBBOT_ROOT"] = _rtmp
     try:
         import importlib
         from jobbot.core import db as _dbr, paths as _pr
         importlib.reload(_pr)
         from jobbot.core import reset as _rs
         importlib.reload(_rs)
+        # CHỐT: không bao giờ chạy đường phá hoại trỏ vào repo thật. Cùng một
+        # luật với chốt "test đang trỏ vào DB THẬT" — và chốt này có vì đã
+        # mất một app password thật.
+        assert str(_pr.project_root()).startswith(_rtmp), \
+            f"test reset đang trỏ vào REPO THẬT: {_pr.project_root()}"
+        assert str(_rs.backup_dir()).startswith(_rtmp), \
+            f"sao lưu test đang ghi ra chỗ THẬT: {_rs.backup_dir()}"
         _cr = _dbr.connect(Path(_rtmp) / "jobbot.db")
         _dbr.migrate(_cr)
         _cr.execute("INSERT INTO pref(key,value) VALUES('x','1')")
@@ -226,38 +251,33 @@ with tempfile.TemporaryDirectory() as tmp:
               oct(Path(_kq["backup"]).stat().st_mode)[-3:] == "600")
         check("schema giữ nguyên, không phải dựng lại",
               _cr.execute("PRAGMA user_version").fetchone()[0] > 0)
-        # SẢN PHẨM CỦA MÁY phải đi hết: đề bài trong bảng project, và cả khối
-        # project mà máy đã chèn vào cv_text. Người dùng chỉ nhập CV vào lúc
-        # đầu — thứ máy đẻ ra sau đó không được sống sót qua "làm lại từ đầu".
-        _cr.execute("INSERT INTO project(question, state, made_at)"
-                    " VALUES('máy đẻ ra', 'xong', 't')")
+        # CV của người dùng cũng phải đi hết. "Làm lại từ đầu" mà chừa lại
+        # hồ sơ thì lần chạy sau vẫn đứng trên dữ liệu cũ.
         from jobbot.profile import store as _st2
-        _st2.save(_cr, {"cv_text": "SELECTED PROJECTS\nMáy Đẻ Ra — x\n"}, "t")
+        _st2.save(_cr, {"cv_text": "SELECTED PROJECTS\nTự Viết — y\n"}, "t")
         _cr.commit()
         _rs.run(_cr)
         _dbr.migrate(_cr)
-        check("reset xoá sạch đề bài máy đẻ",
-              _cr.execute("SELECT COUNT(*) FROM project").fetchone()[0] == 0)
-        check("và xoá cả khối project máy chèn vào CV",
+        check("reset xoá cả CV trong hồ sơ",
               not str(_st2.load(_cr).get("cv_text") or "").strip())
-        # DẤU để phân biệt project máy đẻ. Không có nó thì khối nằm trong CV
-        # y hệt project tự viết — đã xảy ra thật, phải so hai phiên bản liền
-        # nhau mới truy ra được "Alpha Research" là của máy.
-        check("bảng project có chỗ ghi tên khối đã chèn vào CV",
-              "cv_title" in [r[1] for r in _cr.execute("PRAGMA table_info(project)")])
+        # PERSONAL PROJECT ĐÃ BỎ HẲN. Máy không nghĩ đề bài nữa, nên không còn
+        # "khối máy đẻ" để mà đánh dấu — và bảng chứa chúng phải biến mất chứ
+        # không nằm lại rỗng. Một bảng chết còn sống trong lược đồ là thứ
+        # người sau sẽ tưởng còn dùng.
+        check("bảng project đã bị bỏ khỏi lược đồ",
+              not [r for r in _cr.execute(
+                  "SELECT name FROM sqlite_master WHERE type='table'"
+                  " AND name='project'")])
         from jobbot.dashboard.views.profile import _o_khoi as _ok2
         from jobbot.profile.schema import all_questions as _aq2
-        _cvp = "SELECTED PROJECTS\nMáy Đẻ Ra — x\nTự Viết — y\n"
-        _h2 = _ok2(_aq2()["project_blocks"], {"cv_text": _cvp},
-                   {"may_de": ["Máy Đẻ Ra"]})
-        check("khối máy đẻ được đánh dấu", _h2.count("maybadge") == 1)
-        check("khối tự viết thì KHÔNG", _h2.count("blockrow machine") == 1
-              and _h2.count("class=blockrow") == 1)
-        # Dấu KHÔNG được nằm trong CV — bản đó gửi cho nhà tuyển dụng.
-        check("dấu không dính vào cv_text", "jobbot" not in _cvp)
+        _h2 = _ok2(_aq2()["project_blocks"],
+                   {"cv_text": "SELECTED PROJECTS\nTự Viết — y\n"}, {})
+        check("mọi khối project giờ là của người dùng — không dấu máy đẻ",
+              "maybadge" not in _h2 and "blockrow machine" not in _h2)
         _cr.close()
     finally:
-        for _k, _v in (("HOME", _cu_home), ("JOBBOT_DATA_DIR", _cu_data)):
+        for _k, _v in (("HOME", _cu_home), ("JOBBOT_DATA_DIR", _cu_data),
+                       ("JOBBOT_ROOT", _cu_root)):
             if _v is None:
                 _osr.environ.pop(_k, None)
             else:
@@ -395,7 +415,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # Trình nghe [data-post] nằm ở `document`. Một nút gắn stopPropagation là
     # nút chết: bấm không làm gì, không báo lỗi, không có dấu vết. Đã xảy ra
     # với nút Nộp ở tab Search.
-    for page in ("/search", "/cv", "/track", "/projects"):
+    for page in ("/search", "/cv", "/track"):
         _s, body = get(page)
         if _s != 200:
             continue
@@ -417,7 +437,7 @@ with tempfile.TemporaryDirectory() as tmp:
         _known |= set(_re.findall(r'"([^"]+)"', _grp))
     _known |= set(_re.findall(r'path\.startswith\("([^"]+)"\)', _server))
     _wired = set()
-    for page in ("/search", "/cv", "/track", "/projects", "/"):
+    for page in ("/search", "/cv", "/track", "/"):
         _s, body = get(page)
         if _s != 200:
             continue
@@ -489,8 +509,8 @@ with tempfile.TemporaryDirectory() as tmp:
     # /cv/draft (thiếu `self.`). Mọi route POST phải được gọi ít nhất một lần.
     check("GET /cv/draft với id lạ -> 404, không sập",
           get("/cv/draft?id=999999")[0] == 404)
-    check("POST /cv/draft rỗng -> không sập",
-          post_form("/cv/draft", "id=0&head=&line=") in (200, 303))
+    check("POST /cv/draft cũng đã bỏ -> 404",
+          post_form("/cv/draft", "id=0&head=&line=") == 404)
 
     print("\n[CV: mọi bản sẽ gửi, xem trước khi gửi]")
     _s, body = get("/cv")
@@ -513,57 +533,27 @@ with tempfile.TemporaryDirectory() as tmp:
               [len(v["jobs"]) for v in data["versions"]]
               == sorted((len(v["jobs"]) for v in data["versions"]), reverse=True))
 
-    print("\n[Projects: ba nút phải thật sự làm gì đó]")
-    # Cả bốn đường này mới có. Không test qua HTTP thì lỗi kiểu "quên định
-    # nghĩa hàm" chỉ lộ ra lúc người dùng bấm — đúng bốn lần đã xảy ra.
-    status, body = get("/projects")
-    check("/projects vẽ được lưới khoảng trống", "KHOẢNG TRỐNG" in body.upper())
-    check("/projects vẽ được kho", ">Kho<" in body or "KHO" in body.upper())
-    check("ít tin thì lưới nói thẳng là chưa đo được, không vẽ ô rỗng",
-          "chưa có tin nào được chấm điểm" in body)
-
-    # Máy chủ chạy CÙNG tiến trình với bài test, nên hạ ngưỡng ở đây là hạ
-    # luôn bên trong nó. Sáu tin mẫu không đủ MIN_DEMAND thật (15 tin), mà
-    # dựng đủ 15 tin chỉ để thấy một cái nút là đắt hơn giá trị nó kiểm.
-    from jobbot.projects import inventory as inv2
-    real_min = inv2.MIN_DEMAND
-    inv2.MIN_DEMAND = 1
-    _s, body = get("/projects")
-    check("mỗi ô trống có một nút Dựng", "data-post='/api/project/build'" in body)
-    check("số nút Dựng đúng bằng số ô còn trống",
-          body.count("data-post='/api/project/build'") == body.count("gaprow open"))
-
-    check("POST /api/project/build thiếu kỹ năng -> 400",
-          post_form("/api/project/build", "arg=") == 400)
-
-    from jobbot.projects.brief import Brief as B2
+    print("\n[personal project ĐÃ BỎ — không được để lại đường cụt]")
+    # Bỏ một tính năng mà quên gỡ đường dẫn thì tab cũ trả 500, còn nút cũ
+    # trong trình duyệt đã mở sẵn vẫn bấm được. Xoá là phải xoá HẾT lối vào.
+    for _duong in ("/projects",):
+        check(f"GET {_duong} -> 404, không phải 500", get(_duong)[0] == 404)
+    for _api in ("/api/project/build", "/api/project/state"):
+        check(f"POST {_api} -> 404", post_form(_api, "arg=x") == 404)
+    check("GET /cv/draft cũng đi theo", get("/cv/draft?id=1")[0] == 404)
+    # Tab Projects phải biến khỏi thanh điều hướng, không chỉ khỏi router.
+    check("không còn tab Projects trên thanh bên",
+          ">Projects<" not in get("/cv")[1])
+    # Hai thứ KHÔNG chết theo, vì chúng chưa bao giờ thuộc tính năng đó.
+    from jobbot.scoring.market import demand as _dm
+    from jobbot.scoring.vocab import INDUSTRY as _ind
     conn2 = db.connect(Path(tmp) / "jobbot.db")
-    made = inv2.add(conn2, B2(question="Does a cost model change a backtest?",
-                              dataset_url="https://x/y.csv",
-                              method=["a" * 30] * 3, measure="Sharpe, measured daily",
-                              days=2, skills=["backtesting"],
-                              deliverable="one notebook"), ["hedge fund"])
+    check("phép đếm thị trường sống tiếp ở scoring/", isinstance(_dm(conn2), Counter))
     conn2.close()
-
-    _s, body = get("/projects")
-    check("đề bài vừa cất hiện trong kho", "Does a cost model change" in body)
-    check("kho có nút đổi trạng thái", "data-post='/api/project/state'" in body)
-    check("ô được đề bài đó nhận làm thì hiện ◐, KHÔNG hiện ✓",
-          f"◐ đề bài #{made}" in body and f"✓ #{made}" not in body)
-    check("và ô đó không còn mời dựng thêm lần nữa",
-          "data-post='/api/project/build' data-arg='backtesting'" not in body)
-    check("làm XONG rồi mới thành dấu ✓",
-          post_form("/api/project/state", f"arg={made}:xong") == 200
-          and f"✓ #{made}" in get("/projects")[1])
-    inv2.MIN_DEMAND = real_min
-
-    check("POST /api/project/state đổi được trạng thái",
-          post_form("/api/project/state", f"arg={made}:dang_lam") == 200)
-    conn2 = db.connect(Path(tmp) / "jobbot.db")
-    check("trạng thái mới thực sự vào cơ sở dữ liệu",
-          inv2.all(conn2)[0]["state"] == inv2.DANG_LAM)
-    check("POST /api/project/state với id rác -> 400",
-          post_form("/api/project/state", "arg=xyz:dang_lam") == 400)
+    check("bộ từ ngành sống tiếp ở vocab/", len(_ind) == 7)
+    # Tab CV là chỗ DUY NHẤT còn dùng phép đếm đó. Nó phải mở được, vì đường
+    # import vừa đổi nhà — gãy ở đây thì cả tab CV trắng.
+    check("tab CV vẫn mở được sau khi phép đếm đổi nhà", get("/cv")[0] == 200)
 
     print("\n[tấm phủ KHÔNG được chắn cả trang khi đang đóng]")
     # LỖI THẬT, và là loại tệ nhất: cả app không bấm được gì.
@@ -674,12 +664,82 @@ with tempfile.TemporaryDirectory() as tmp:
     # lồng nguyên một trang trong trang.
     check("/settings trả MẢNH html, không phải cả trang",
           panel.lstrip().startswith("<div") and "<!doctype" not in panel.lower())
-    # BA TAB. Trước đây một cột dài 782px trong hộp cao 660px — phần "Làm lại
-    # từ đầu" nằm dưới nếp gấp, phải cuộn mới thấy mà không ai biết là cuộn
-    # được. Chia theo VIỆC: đổi được / chỉ đọc / phá huỷ.
-    check("Cài đặt chia ba tab", panel.count("data-stab=") == 3)
-    check("và ba khối nội dung tương ứng", panel.count("data-pane=") == 3)
+    # CHIA TAB. Trước đây một cột dài 782px trong hộp cao 660px — phần "Làm
+    # lại từ đầu" nằm dưới nếp gấp, phải cuộn mới thấy mà không ai biết là
+    # cuộn được. Chia theo VIỆC: chạy / nguồn / chỉ đọc / phá huỷ.
+    check("mỗi tab có đúng một khối nội dung",
+          panel.count("data-stab=") == panel.count("data-pane=") > 3)
     check("chỉ một tab mở sẵn", panel.count("stpane on") == 1)
+
+    # TAB NGUỒN — bật/tắt từng ATS. "API" là ba nhà cung cấp, không phải 34
+    # board công ty: giới thiệu từng công ty thì vô nghĩa, còn ba ATS thì khác
+    # nhau thật (cách trả dữ liệu, loại công ty, tỉ lệ dùng được).
+    check("có tab Nguồn", "data-stab='nguon'" in panel and ">Nguồn<" in panel)
+    for _ats in ("greenhouse", "lever", "ashby"):
+        check(f"có công tắc cho {_ats}", f"name=ats value='{_ats}'" in panel)
+    # Giới thiệu bằng SỐ THẬT của chính kho này, không bằng tính từ: "hiện
+    # đại", "phổ biến" thì không ai chọn được gì.
+    check("có công tắc cho thư báo việc", "name=ats value='alert'" in panel)
+    check("mỗi nguồn kèm số thật, không chỉ lời khen",
+          panel.count("class=srcnum") == 4 and "tin về · giữ" in panel,
+          str(panel.count("class=srcnum")))
+    # Thư báo không phải ATS: không có board nào để đếm, nên đừng ghi
+    # "0 board" — một con số 0 vô nghĩa đọc ra như đang hỏng.
+    _dong_alert = panel.split("value='alert'")[1].split("</label>")[0]
+    check("thư báo KHÔNG ghi '0 board'", "0 board" not in _dong_alert)
+    # MỖI FORM CHỈ SỬA PHẦN CỦA NÓ. Nhiều form cùng gửi về /settings; đọc mù
+    # thì form Nguồn (không mang ô nhịp quét) ghi mặc định 60 đè lên số cũ.
+    check("mỗi form khai rõ mình là phần nào",
+          panel.count("name=phan") == panel.count("<form class=setform"))
+
+    # CHỐT EMAIL: hộp thư quét phải ĐÚNG hộp thư khai trong hồ sơ. Thử thật
+    # qua HTTP, không chỉ đọc mã nguồn.
+    _ma_sai, _than_sai = (post("/api/mail/setup",
+                               b"address=nham@x.y&password=abcdefghijklmnop"),
+                          _post_raw("/api/mail/setup",
+                                    b"address=nham@x.y&password=abcdefghijklmnop"))
+    check("nối hộp thư KHÁC hồ sơ thì bị từ chối", _ma_sai == 400, str(_ma_sai))
+    check("và nói rõ cả hai địa chỉ",
+          "nham@x.y" in _than_sai and PROFILE["email"] in _than_sai, _than_sai[:90])
+    check("kèm cách sửa", "cho khớp" in _than_sai)
+
+    # TAB GMAIL — cấu hình hộp thư về đúng chỗ cấu hình.
+    check("có tab Gmail", "data-stab='gmail'" in panel and ">Gmail<" in panel)
+    # Nút "Nối hộp thư…" bên Quản lí phải mở ĐÚNG tab Gmail. Chỉ đường nửa
+    # vời — mở Cài đặt rồi bỏ người ta ở tab Chạy — còn khó chịu hơn không chỉ.
+    check("openSheet nhận tên tab", "function openSheet(url, kind, tab)" in _js)
+    # Bấm tab NGAY KHI nội dung về, không hẹn giờ: nạp bằng fetch thì đặt
+    # setTimeout là đoán xem mạng nhanh hay chậm, và trên máy chậm thì lúc
+    # hẹn giờ nổ cái nút còn chưa tồn tại.
+    _mo = _js.split("function openSheet")[1].split("function closeSheet")[0]
+    # BỎ chú thích trước khi kiểm: chính chú thích giải thích vì sao KHÔNG
+    # dùng setTimeout lại chứa chữ "setTimeout", và bài test đọc nhầm lời
+    # giải thích thành đoạn mã nó đang cấm.
+    _ma = "\n".join(l for l in _mo.split("\n") if not l.strip().startswith("//"))
+    check("nhảy tab trong .then, không phải setTimeout",
+          "nut.click()" in _ma and "setTimeout" not in _ma, "")
+    check("và ô đặt số ngày đọc lại thư", "name=mail_days" in panel)
+    from jobbot.core import prefs as _pf2
+    _c2 = db.connect()
+    post("/settings", b"phan=gmail&mail_days=45")
+    check("lưu được số ngày", _pf2.num(_c2, _pf2.MAIL_DAYS, 1, 365) == 45,
+          str(_pf2.num(_c2, _pf2.MAIL_DAYS, 1, 365)))
+    check("và KHÔNG đụng tới nhịp quét",
+          _pf2.num(_c2, _pf2.SCAN_EVERY, 5, 1440) != 0)
+    post("/settings", b"phan=gmail&mail_days=30")
+    _c2.close()
+
+    _c2 = db.connect()
+    _pf2.put(_c2, _pf2.SCAN_EVERY, "45")
+    post("/settings", b"phan=nguon&ats=greenhouse&ats=lever")
+    check("lưu tab Nguồn: tắt ashby", not _pf2.flag(_c2, _pf2.SRC_ATS["ashby"]))
+    check("và giữ nguyên greenhouse", _pf2.flag(_c2, _pf2.SRC_ATS["greenhouse"]))
+    check("KHÔNG đụng tới nhịp quét của tab Chạy",
+          _pf2.num(_c2, _pf2.SCAN_EVERY, 5, 1440) == 45,
+          str(_pf2.num(_c2, _pf2.SCAN_EVERY, 5, 1440)))
+    post("/settings", b"phan=nguon&ats=greenhouse&ats=lever&ats=ashby")
+    check("bật lại được", _pf2.flag(_c2, _pf2.SRC_ATS["ashby"]))
+    _c2.close()
 
     # Ba núm — và ĐÚNG ba. Trang cũ có 18 dòng mà chỉ 2 dòng là setting thật.
     for name in ("every", "from", "to"):
@@ -787,24 +847,93 @@ with tempfile.TemporaryDirectory() as tmp:
     # vừa bấm Dừng giữa chừng tưởng bấm vào là làm lại từ đầu.
     from jobbot.dashboard import live as _lv
     from jobbot.core.postings import HAVE_DESC as _HD
+    # Nút CHỈ NÓI VỀ CHROME. Board API xong trong 22 giây và chạy mọi lượt —
+    # không có trạng thái gì để kể; thứ mất nửa tiếng và dở dang được là
+    # LinkedIn.
     _trong = db.connect(Path(tmp) / "nut-trong.db")
-    check("kho rỗng -> nút mời BẮT ĐẦU",
-          _lv.search_stage(_trong)["run_label"] == "Bắt đầu",
+    check("chưa có gì -> nút mời CHẠY",
+          _lv.search_stage(_trong)["run_label"] == "Chạy",
           _lv.search_stage(_trong)["run_label"])
+    # Và nói thẳng vì sao chưa quét được, thay vì mời một việc sẽ bị từ chối.
+    check("hồ sơ rỗng -> nói rõ thiếu chức danh",
+          "chưa khai chức danh" in _lv.search_stage(_trong)["run_note"],
+          _lv.search_stage(_trong)["run_note"])
     _trong.close()
 
     _nut = seeded(Path(tmp) / "nut.db")
-    # Có tin rồi nhưng LinkedIn chưa chạy lần nào: không phải "Bắt đầu" (kho
-    # không rỗng), càng không phải "Cập nhật" (hỏi cửa sổ 24 giờ thì bỏ sót
-    # sạch những gì LinkedIn đang có).
-    check("có tin nhưng LinkedIn chưa chạy -> QUÉT ĐẦY",
-          _lv.search_stage(_nut)["run_label"] == "Quét đầy",
+    # Kho có tin (board đã về) nhưng LinkedIn chưa quét trọn lượt nào -> vẫn
+    # là CHẠY. "Cập nhật" ở đây là sai: hỏi cửa sổ 24 giờ thì bỏ sót sạch
+    # những gì LinkedIn đang có.
+    check("board đã về nhưng LinkedIn chưa quét -> vẫn CHẠY",
+          _lv.search_stage(_nut)["run_label"] == "Chạy",
           _lv.search_stage(_nut)["run_label"])
-    from jobbot.core import postings as _po
+
+    import json as _js3
+    from jobbot.core import postings as _po, prefs as _pf3
+    from jobbot.scan_runner import _cap as _capf
+    from jobbot.profile import store as _ps3
     _po.record_run(_nut, "linkedin", ok=True, fetched=1, new_rows=0)
-    check("LinkedIn đã chạy xong, không còn việc dở -> CẬP NHẬT",
+    # Có dòng chạy thôi CHƯA đủ: lượt đó có thể bị dừng giữa chừng, mới đi
+    # được vài cặp đầu. Trí nhớ là DANH SÁCH CẶP, không phải một cái cờ.
+    check("có dòng chạy nhưng chưa phủ cặp nào -> vẫn CHẠY",
+          _lv.search_stage(_nut)["run_label"] == "Chạy",
+          _lv.search_stage(_nut)["run_label"])
+
+    def _phu_het(conn):
+        """Đánh dấu MỌI cặp của lưới hiện tại là đã quét đầy."""
+        cap, muc = _capf(_ps3.load(conn))
+        _pf3.put(conn, _pf3.LI_DONE,
+                 _js3.dumps(sorted(f"{q}|{p}" for q, p in cap)))
+        _pf3.put(conn, _pf3.LI_LEVELS, _js3.dumps(sorted(muc)))
+
+    _phu_het(_nut)
+    check("phủ hết lưới, không còn việc dở -> CẬP NHẬT",
           _lv.search_stage(_nut)["run_label"] == "Cập nhật",
           _lv.search_stage(_nut)["run_label"])
+    check("và Cập nhật chỉ hỏi cửa sổ 24 giờ",
+          "24 giờ" in _lv.search_stage(_nut)["run_note"])
+
+    # THÊM chức danh -> chỉ MẤY CẶP MỚI là chưa phủ. Không bắt cả lưới quét
+    # lại: đó đúng là "chạy đi chạy lại một thứ".
+    _ps3.save(_nut, {"job_titles": "Quantitative Analyst\nData Scientist\n"
+                                   "Machine Learning Engineer"}, "thêm chức danh")
+    from jobbot.scan_runner import scan_mode as _sm
+    _st_them = _lv.search_stage(_nut)
+    check("thêm chức danh -> quay về CHẠY", _st_them["run_label"] == "Chạy",
+          _st_them["run_label"])
+    check("nhưng CHỈ quét đầy mấy lượt mới, không quét lại cả lưới",
+          _sm(_nut)["todo"] == 1, str(_sm(_nut)["todo"]))
+    check("và nói rõ phần còn lại chỉ hỏi tin mới",
+          "phần còn lại chỉ hỏi tin mới" in _st_them["run_note"],
+          _st_them["run_note"])
+
+    # BỎ BỚT chức danh -> KHÔNG có gì mới để tìm -> đừng quét lại cái gì cả.
+    # Đây là chỗ luật cũ (vân tay cả lưới) sai: nó bắt quét lại từ đầu.
+    _phu_het(_nut)
+    _ps3.save(_nut, {"job_titles": "Quantitative Analyst"}, "bỏ bớt chức danh")
+    check("bỏ bớt chức danh -> vẫn CẬP NHẬT, không quét lại",
+          _lv.search_stage(_nut)["run_label"] == "Cập nhật",
+          _lv.search_stage(_nut)["run_label"])
+
+    # Sửa thứ KHÔNG đụng câu hỏi gửi LinkedIn thì đừng bắt quét lại.
+    _ps3.save(_nut, {"phone": "+44 7000 000000"}, "đổi số điện thoại")
+    check("đổi số điện thoại -> vẫn CẬP NHẬT",
+          _lv.search_stage(_nut)["run_label"] == "Cập nhật",
+          _lv.search_stage(_nut)["run_label"])
+
+    # THU HẸP cấp bậc không đẻ ra tin mới -> giữ nguyên phủ.
+    _ps3.save(_nut, {"seniority": ["grad"]}, "thu hẹp cấp bậc")
+    check("thu hẹp cấp bậc -> vẫn CẬP NHẬT",
+          _lv.search_stage(_nut)["run_label"] == "Cập nhật",
+          _lv.search_stage(_nut)["run_label"])
+    # NỚI RỘNG thì f_E đổi cho MỌI cặp -> phải hỏi đầy lại.
+    _ps3.save(_nut, {"seniority": ["grad", "mid", "senior"]}, "nới cấp bậc")
+    check("nới rộng cấp bậc -> quay về CHẠY",
+          _lv.search_stage(_nut)["run_label"] == "Chạy",
+          _lv.search_stage(_nut)["run_label"])
+    _ps3.save(_nut, {"seniority": ["grad", "junior"],
+                     "job_titles": "Quantitative Analyst\nData Scientist"}, "trả lại")
+    _phu_het(_nut)
     # Một tin LinkedIn chưa có mô tả = vòng đọc kỹ còn dở dang. Ghi bằng
     # ĐƯỜNG THẬT của app (save_batch) chứ không INSERT tay: bảng posting có
     # cột bắt buộc mà chỉ đường thật mới điền đủ, và test đi đường riêng thì
@@ -821,11 +950,49 @@ with tempfile.TemporaryDirectory() as tmp:
     check("còn tin chưa đọc kỹ -> nút mời TIẾP TỤC",
           _st["run_label"] == "Tiếp tục", _st["run_label"])
     check("và nói rõ còn bao nhiêu tin dở", "1 tin chưa đọc kỹ" in _st["run_note"])
+
+    # HÀNG ĐỢI THEO NGUỒN, KHÔNG PHẢI MỘT RỔ. Tin dở ở đây là của nguồn
+    # `linkedin`; tắt nguồn đó thì hàng đợi của nó không phải việc của lượt
+    # này, nên nút không được mời "Tiếp tục" — bấm vào sẽ không đọc tin nào.
+    _pf3.set_flag(_nut, _pf3.SRC_LINKEDIN, False)
+    _st_tat = _lv.search_stage(_nut)
+    check("tắt LinkedIn -> hàng đợi CỦA NÓ không còn mời Tiếp tục",
+          _st_tat["run_label"] != "Tiếp tục", _st_tat["run_label"])
+    check("và nói rõ lượt tới chỉ còn nguồn nào",
+          "LinkedIn đang tắt" in _st_tat["run_note"], _st_tat["run_note"])
+    check("KHÔNG còn đòi bật LinkedIn để đọc tin nguồn khác",
+          "cần bật LinkedIn" not in _st_tat["run_note"], _st_tat["run_note"])
+
+    # Nhưng tin của THƯ BÁO là nguồn KHÁC, công tắc KHÁC. LinkedIn tắt thì nó
+    # vẫn phải đi trọn dây chuyền: "2 cách khác nhau phải làm 2 nguồn khác
+    # nhau, đừng gộp chung". Trước đây cả vòng đọc kỹ nằm sau công tắc
+    # LinkedIn, nên tắt nó là 107 tin thư báo đứng im không ai chấm.
+    postings.save_batch(_nut, "alert", [
+        Posting(source_id="8", title="Quant", company="Y", location="London",
+                url="https://x/8", description="")])
+    _nut.execute("UPDATE posting SET kept = 1 WHERE source = 'alert'")
+    _nut.commit()
+    _st_thu = _lv.search_stage(_nut)
+    check("LinkedIn tắt mà thư báo còn tin dở -> VẪN mời Tiếp tục",
+          _st_thu["run_label"] == "Tiếp tục", _st_thu["run_label"])
+    check("và chỉ đếm tin của nguồn đang bật, không đếm cả rổ",
+          "1 tin chưa đọc kỹ" in _st_thu["run_note"], _st_thu["run_note"])
+    _pf3.set_flag(_nut, _pf3.SRC_ALERT, False)
+    check("tắt luôn thư báo -> không còn hàng đợi nào để mời",
+          _lv.search_stage(_nut)["run_label"] != "Tiếp tục")
+    _pf3.set_flag(_nut, _pf3.SRC_ALERT, True)
+    _nut.execute("DELETE FROM posting WHERE source = 'alert'")
+    _nut.execute("DELETE FROM raw_posting WHERE source = 'alert'")
+    _nut.commit()
+    _pf3.set_flag(_nut, _pf3.SRC_LINKEDIN, True)
+    check("bật lại thì mời Tiếp tục như cũ",
+          _lv.search_stage(_nut)["run_label"] == "Tiếp tục")
     # Đọc xong tin đó thì lời mời phải đổi lại — nếu không, nút đứng ở
     # "Tiếp tục" vĩnh viễn và chữ trên nút thành lời nói dối.
     _nut.execute("UPDATE posting SET description = ? WHERE source='linkedin'",
                  ("x" * (_HD + 1),))
     _nut.commit()
+    _phu_het(_nut)
     check("đọc kỹ xong thì quay về CẬP NHẬT",
           _lv.search_stage(_nut)["run_label"] == "Cập nhật",
           _lv.search_stage(_nut)["run_label"])
@@ -920,6 +1087,60 @@ with tempfile.TemporaryDirectory() as tmp:
     check("nâng sàn thì tập kết quả chỉ co lại",
           _cao <= _vua <= _het, f"{_cao} <= {_vua} <= {_het}")
 
+    # CÔNG TẮC NGUỒN. Hai cách tìm cho ra hai loại tin khác hẳn nhau — board
+    # xong trong 22 giây, LinkedIn mất nửa tiếng — nên có lúc chỉ chạy một cái.
+    _, _adj = get("/adjust/search")
+    check("tấm Điều chỉnh có hai công tắc nguồn",
+          "data-arg='board'" in _adj and "data-arg='linkedin'" in _adj)
+    check("công tắc nằm NGOÀI form lưới sàng — bấm không phán lại 5.000 tin",
+          _adj.index("srcrow") < _adj.index("<form class=sieve"))
+    _bat = lambda arg: __import__("json").loads(
+        _post_raw("/api/source", f"arg={arg}".encode()))
+    check("có đủ BA công tắc nguồn",
+          all(f"data-arg='{k}'" in _adj for k in ("board", "linkedin", "alert")))
+    _tat = _bat("board")
+    check("tắt được một nguồn", _tat["ok"] and _tat["on"] is False)
+    check("nút bấm lại được ngay, không bị khoá", _tat.get("again") is True)
+    check("và tấm Điều chỉnh hiện ra là đang tắt",
+          "srcbtn board off" in get("/adjust/search")[1])
+    # TẮT NỐT CÁI CUỐI = quét mà không lấy ở đâu cả. Đường đó không được là
+    # đường bấm nhầm một cái là vào.
+    #
+    # Luật phải đếm CẢ BA nguồn còn lại. Bản cũ chỉ biết hai nguồn nên khi có
+    # nguồn thứ ba, nó cho tắt sạch mà vẫn tưởng còn.
+    # Đặt trạng thái RÕ RÀNG trước khi thử: một bài test bên trên đã lưu tab
+    # Nguồn không tick "alert", nên không đoán được cái nào đang bật.
+    _adj2 = get("/adjust/search")[1]
+    for _k in ("linkedin", "alert"):
+        if f"srcbtn {_k} off" in _adj2:
+            _bat(_k)                      # bật lên cho chắc
+    _bat("linkedin")                      # giờ chỉ còn alert
+    _cuoi = _bat("alert")
+    check("còn đúng một nguồn thì KHÔNG cho tắt nốt", _cuoi["ok"] is False,
+          str(_cuoi))
+    check("và nói rõ vì sao", "ít nhất một nguồn" in _cuoi["note"])
+    _bat("linkedin")
+    _bat("board")
+    check("bật lại được", "srcbtn board off" not in get("/adjust/search")[1])
+    check("nguồn lạ thì từ chối", post("/api/source", b"arg=bia") == 400)
+
+    # HUY HIỆU KHÔNG ĐƯỢC ĐỤNG TÊN LỚP CSS KHÁC.
+    #
+    # LỖI THẬT: đổi `api` -> `board` xong, `<i class='src board'>` thừa hưởng
+    # `.board{width:100%;font-size:12.5px}` của BẢNG Quản lí — huy hiệu phình
+    # thành một cái hộp to bằng cả dòng. Cùng lớp lỗi .pill và .prow đã dính.
+    # Kiểm bằng CSS thật, không bằng mắt: lỗi này không làm hỏng test nào,
+    # chỉ nhìn mới thấy.
+    _css = (Path(__file__).resolve().parent.parent
+            / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
+    from jobbot.dashboard.views.search import FOUND_BY as _FB
+    _dung = [k for k in _FB
+             if _re2.search(r"(?m)^\.%s\b[^,{]*\{" % _re2.escape(k), _css)]
+    check("tên huy hiệu không trùng lớp CSS nào khác", not _dung, str(_dung))
+    # Bộ kiểm tự chứng minh nó bắt được.
+    check("và bộ kiểm này thật sự bắt được",
+          bool(_re2.search(r"(?m)^\.trackboard\b[^,{]*\{", _css)))
+
     # NƠI CHỐN — chữ trên nút lấy từ ô "Where you're based", không đóng cứng.
     check("có hàng lọc theo nơi", "name=loc" in _f0 or "loc=" in _f0)
     check("nút 'Gần tôi' nói rõ gần ĐÂU", "Gần tôi ·" in _f0, "")
@@ -939,13 +1160,13 @@ with tempfile.TemporaryDirectory() as tmp:
     check("và 'cả nước' rộng hơn 'gần tôi'",
           _n2(get("/search?loc=home")[1]) >= _n2(_gan))
 
-    # TAG NGUỒN — Vin nhìn thấy badge api/chrome trên từng dòng rồi, nên lọc
+    # TAG NGUỒN — Vin nhìn thấy badge board/linkedin trên từng dòng rồi, nên lọc
     # theo chính hai badge đó là thứ tiếp theo người ta thò tay tìm.
-    check("có tag lọc theo nguồn", ">api<" in _f0 and ">chrome<" in _f0)
-    _, _fc = get("/search?found=chrome")
-    check("lọc chrome thì mọi dòng đều mang badge chrome",
-          _fc.count("class='src chrome'") >= _fc.count("class='jrow"),
-          f"{_fc.count(chr(39)+'src chrome'+chr(39))} badge / "
+    check("có tag lọc theo nguồn", ">board<" in _f0 and ">linkedin<" in _f0)
+    _, _fc = get("/search?found=linkedin")
+    check("lọc linkedin thì mọi dòng đều mang badge linkedin",
+          _fc.count("class='src linkedin'") >= _fc.count("class='jrow"),
+          f"{_fc.count(chr(39)+'src linkedin'+chr(39))} badge / "
           f"{_fc.count(chr(39)+'jrow')} dòng")
 
     # MỘT nút thay cho hai: "Can't tell" và "Not scorable" là cùng một chồng.
@@ -1047,7 +1268,7 @@ with tempfile.TemporaryDirectory() as tmp:
                        "https://www.linkedin.com/jobs/view/9/")
     check("hai nguồn -> hai đường", len(_hai) == 2, str(_hai))
     check("board công ty đứng TRƯỚC LinkedIn — đó là chỗ nộp thẳng",
-          [l["kind"] for l in _hai] == ["api", "chrome"])
+          [l["kind"] for l in _hai] == ["board", "linkedin"])
     check("nói rõ tên miền sắp đi tới",
           _hai[1]["host"] == "www.linkedin.com", _hai[1]["host"])
     check("trùng url thì không hiện hai lần",
@@ -1110,7 +1331,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # Cửa sổ app không có khung: traffic lights đè lên trang. Có thanh tiêu đề
     # THẬT thì mọi trang tự được chừa — trước đây mỗi trang tự nhớ, và trang
     # Home nhớ sai (chừa 16px trong khi cần 38px) nên ô nội dung chui lên đó.
-    for _pg4 in ("/", "/search", "/cv", "/track", "/profile", "/projects"):
+    for _pg4 in ("/", "/search", "/cv", "/track", "/profile"):
         _, _b4 = get(_pg4)
         check(f"{_pg4} có thanh tiêu đề", "class=titlebar" in _b4)
     check("thanh tiêu đề cao đúng --top", "z-index:40;height:var(--top)" in _cssb)
@@ -1141,7 +1362,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check("và ô tin gần nhất", "data-lastmsg" in _srch)
     # Một trang chỉ được nói trạng thái chung MỘT lần. live.js ghi vào MỌI
     # [data-state], nên hai ô là hai dòng chữ y hệt nhau nằm hai đầu màn.
-    for _pg3 in ("/", "/search", "/cv", "/track", "/profile", "/projects"):
+    for _pg3 in ("/", "/search", "/cv", "/track", "/profile"):
         _, _b3 = get(_pg3)
         check(f"{_pg3} chỉ có một ô trạng thái", _b3.count("data-state") == 1)
     # live.js đổ vào từ dòng SSE — không luồn tham số qua chục hàm render.
@@ -1255,6 +1476,47 @@ with tempfile.TemporaryDirectory() as tmp:
           not (Path(__file__).resolve().parent.parent
                / "src/jobbot/dashboard/plot.py").exists())
 
+    print("\n[nhật ký: dòng mới nhất phải NHÌN RA NGAY]")
+    # "cái message mới nhất cho highlight nổi bật cho dễ nhận biết"
+    #
+    # Dấu là THUẦN CSS (:first-child), không có class nào để JS gắn — nên
+    # không có cách nào dấu đứng lại ở dòng cũ khi dòng mới tới. Nhưng nó
+    # dựa vào MỘT ràng buộc: live.js chèn dòng mới vào ĐỈNH. Ai đổi sang
+    # chèn xuống đáy là dấu lặng lẽ trỏ vào dòng CŨ NHẤT, mà giao diện vẫn
+    # trông bình thường. Nên chốt cả hai đầu ở đây.
+    _css_j = (Path(__file__).resolve().parent.parent
+              / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
+    _js_j = (Path(__file__).resolve().parent.parent
+             / "src/jobbot/dashboard/web/live.js").read_text(encoding="utf-8")
+    check("dòng mới chèn vào ĐỈNH — nền tảng của cả luật đánh dấu",
+          "insertBefore(row, box.firstChild)" in _js_j)
+    check("chỉ MỘT chỗ đẻ ra .jline, nên không có thứ tự ngược nào khác",
+          sum(1 for _f in (Path(__file__).resolve().parent.parent
+                           / "src/jobbot/dashboard").rglob("*")
+              if _f.is_file() and _f.suffix in (".js", ".py")
+              and "'jline" in _f.read_text(encoding="utf-8")) == 1)
+    check("dòng mới nhất có dấu riêng", ".journal .jline:first-child{" in _css_j)
+    check("dấu bằng NỀN, không phải màu chữ",
+          "background:rgba(255,255,255,.062)" in _css_j)
+    check("và có vạch trái", "border-left-color:var(--mute)" in _css_j)
+    # Vạch trái ăn theo MỨC. Nếu dấu mới nhất đè lên màu mức thì người dùng
+    # mất thứ cần đọc trước tiên — dòng này là hỏng hay chỉ là tin thường.
+    _khit = "".join(_css_j.split())      # bỏ khoảng trắng căn lề trong CSS
+    for _m, _mau in (("ok", "--acc"), ("warn", "--warn"), ("error", "--bad")):
+        check(f"vạch trái giữ đúng màu mức {_m}",
+              f".journal.jline.{_m}:first-child{{border-left-color:var({_mau})}}"
+              in _khit)
+    check("KHÔNG đổi màu chữ của ok/warn/error — mức độ không được nói dối",
+          not any(f".journal .jline.{_m}:first-child .jtext{{color" in _css_j
+                  for _m in ("ok", "warn", "error")))
+    # Mọi dòng có sẵn vạch trong suốt -> dấu chuyển sang dòng khác thì không
+    # dòng nào bị đẩy ngang một nấc.
+    check("mọi dòng chừa sẵn chỗ cho vạch, không dòng nào nhảy ngang",
+          "border-left:2px solid transparent" in _css_j)
+    check("loé một cái lúc vừa tới", "@keyframes jnew" in _css_j)
+    check("nhưng tôn trọng máy đã tắt hiệu ứng",
+          "prefers-reduced-motion" in _css_j)
+
     print("\n[Search: ba ô — danh sách · lưới lọc · nhật ký dẹt]")
     from jobbot.dashboard.views.runtime import _rows_needed
     check("đếm hàng: nhật ký dưới đáy nên không có ô 'Đang chạy' hàng 1",
@@ -1307,9 +1569,9 @@ with tempfile.TemporaryDirectory() as tmp:
 
     # Badge nguồn — thứ nói cách nào tìm ra tin nào.
     check("mỗi dòng có badge nguồn",
-          "class='src api'" in search_html or "class='src chrome'" in search_html)
+          "class='src board'" in search_html or "class='src linkedin'" in search_html)
     check("badge ghi rõ chữ chrome / api",
-          ">api<" in search_html or ">chrome<" in search_html)
+          ">board<" in search_html or ">linkedin<" in search_html)
 
     print("\n[Search: đổi cách xem KHÔNG cần Áp dụng]")
     _, dropped = get("/search?show=dropped")
@@ -1353,7 +1615,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # MỌI trang trong thanh bên. Đã sập trắng vì một tham số thừa ở chỗ gọi
     # (`mail.account(conn)` sau khi hàm bỏ tham số) — 906 bài test xanh mà
     # trang /track chết, vì không bài nào mở nó.
-    for page in ("/", "/search", "/track", "/projects", "/cv", "/profile",
+    for page in ("/", "/search", "/track", "/cv", "/profile",
                  "/settings"):
         code, body = get(page)
         check(f"{page} mở được", code == 200, f"HTTP {code}")
@@ -1363,7 +1625,7 @@ with tempfile.TemporaryDirectory() as tmp:
     _links = set()
     # Không tìm thấy link nào nghĩa là bài test này KHÔNG kiểm gì —
     # tệ hơn không có, vì nó vẫn xanh.
-    for _page in ("/", "/search", "/track", "/projects", "/cv", "/profile"):
+    for _page in ("/", "/search", "/track", "/cv", "/profile"):
         _s3, _b3 = get(_page)
         if _s3 != 200:
             continue
@@ -1503,10 +1765,14 @@ check("form có trình nghe submit riêng", "form[data-post]" in _js)
 # Form Cài đặt là trường hợp riêng, không được nuốt mọi form khác.
 check("trình nghe Cài đặt vẫn chỉ nhận đúng /settings",
       "!== '/settings'" in _js)
-_track = (Path(__file__).resolve().parent.parent
-          / "src/jobbot/dashboard/views/track.py").read_text(encoding="utf-8")
+# Form nối hộp thư đã chuyển sang Cài đặt · Gmail. Nút Nối phải là submit
+# của form, không phải một [data-post] riêng: trình nghe [data-post] gán
+# textContent lên thứ nó bắt được, mà ở đây nó bắt được cả cái form.
+_setsrc = (Path(__file__).resolve().parent.parent
+           / "src/jobbot/dashboard/views/settings.py").read_text(encoding="utf-8")
+_form_noi = _setsrc.split("data-post='/api/mail/setup'")[1].split("</form>")[0]
 check("nút Nối là type=submit, không phải data-post riêng",
-      "type=submit" in _track)
+      "type=submit" in _form_noi)
 
 print(f"\n{ok} ok, {fail} fail")
 sys.exit(1 if fail else 0)

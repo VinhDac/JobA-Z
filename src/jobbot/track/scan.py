@@ -40,13 +40,23 @@ def store(conn: sqlite3.Connection, msg: dict, kind: str,
     return True
 
 
-def run(conn: sqlite3.Connection, days: int = mail.SINCE_DAYS) -> dict:
+def _so_ngay(conn: sqlite3.Connection) -> int:
+    """Đọc lại bao nhiêu ngày thư — người dùng chỉnh ở Cài đặt · Gmail."""
+    from ..core import prefs
+    return prefs.num(conn, prefs.MAIL_DAYS, 1, 365)
+
+
+def run(conn: sqlite3.Connection, days: int | None = None) -> dict:
     """Một lượt quét. Trả về số đo, không trả về chữ."""
     address, password = mail.account()
     if not address or not password:
-        jlog.warn(SEARCH, "chưa cấu hình hộp thư — xem config/config.toml")
-        return {"ok": False, "why": "chưa cấu hình"}
+        jlog.warn(SEARCH, "chưa nối hộp thư — mở Cài đặt · Gmail để nối")
+        return {"ok": False, "why": "chưa nối hộp thư"}
 
+    # Số ngày do NGƯỜI DÙNG đặt, đọc lúc chạy chứ không đóng cứng vào chữ ký
+    # hàm: đóng cứng thì đổi trong Cài đặt xong vẫn phải mở lại app mới ăn.
+    if days is None:
+        days = _so_ngay(conn)
     jlog.progress(SEARCH, f"đọc thư {days} ngày")
     try:
         messages = mail.fetch(address, password, since_days=days)

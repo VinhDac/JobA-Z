@@ -24,7 +24,7 @@ from . import upload
 from .views import cv as cvview
 from .views import cvhealth, importcv
 from .filters import JobFilter
-from .views import (cvlist, home, jobs, profile, projects, search,
+from .views import (cvlist, home, jobs, profile, search,
                     settings, track)
 
 HOST = "127.0.0.1"          # chỉ máy này truy cập được. Không mở ra mạng.
@@ -210,20 +210,6 @@ class Handler(BaseHTTPRequestHandler):
                           status=status, ctype="application/json; charset=utf-8")
 
     @staticmethod
-    def _add_project(text: str, block: str) -> str:
-        """Chèn khối vào ĐÚNG mục SELECTED PROJECTS, không nối vào đuôi tệp.
-
-        Nối vào đuôi thì cv/blocks.parse() xếp nó vào mục cuối cùng của CV —
-        thường là TECHNICAL SKILLS — và khối project thành một dòng kỹ năng.
-        """
-        import re
-        head = re.search(r"^(SELECTED PROJECTS|PROJECTS)\s*$", text, re.M)
-        if not head:
-            return text + "\n\nSELECTED PROJECTS\n" + block
-        at = head.end() + 1
-        return text[:at] + block + "\n" + text[at:]
-
-
     def _start_apply(self, row: dict, pdf) -> None:
         """Mở trang nộp và điền phần chứng minh được, ở NỀN.
 
@@ -370,33 +356,6 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return f"{STAGES.get(stage, stage)} chưa nối nút Chạy"
 
-    def _resume_build(self, skill: str) -> None:
-        """Chạy bảy chặng cho một kỹ năng, ở NỀN.
-
-        Nghiên cứu, hỏi LLM, tải bộ dữ liệu về kiểm — tính bằng phút. Chạy
-        trong lúc vẽ trang là trình duyệt đứng hình, đúng cái lỗi của trang
-        /projects/<nhóm> cũ.
-        """
-        def _run():
-            from ..projects import make
-            conn = db.connect()
-            try:
-                # tab_factory=None: KHÔNG mở Chrome từ một cú bấm nút. Chặng
-                # đọc trang công ty bị bỏ qua, pipeline vẫn chạy bằng JD.
-                # Bật trình duyệt vì một cú bấm là hành vi người dùng không
-                # đoán trước được — Chrome là việc của vòng quét.
-                make.build(conn, skill, live.cv_projects(conn))
-            except Exception as exc:            # noqa: BLE001
-                journal.log.error(journal.PROJECT,
-                                  f"{skill}: dựng hỏng — "
-                                  f"{type(exc).__name__}: {exc}")
-            finally:
-                journal.log.done(journal.PROJECT)
-                conn.close()
-
-        threading.Thread(target=_run, daemon=True,
-                         name=f"project-{skill}").start()
-
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
@@ -423,17 +382,6 @@ class Handler(BaseHTTPRequestHandler):
                 found = live.job_detail(conn, parts[1])
                 if not found:
                     return self._404()
-                if len(parts) == 3 and parts[2] == "project":
-                    import json as _json
-                    from ..cv.build import wanted_skills
-                    from ..profile import store as pstore
-                    from ..projects.page import build as build_page, health
-                    answers = pstore.load(conn)
-                    explain = (_json.loads(found["score_json"])
-                               if found.get("score_json") else None)
-                    doc = build_page(answers, found["title"], found["company"],
-                                     wanted_skills(explain, found["jd"]))
-                    return self._html(projects.render_page(found, doc, health(doc)))
                 if len(parts) == 3 and parts[2] == "cv":
                     import json as _json
                     from ..cv.build import build as build_cv
@@ -445,11 +393,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self._html(jobs.render_detail(found))
             finally:
                 conn.close()
-
-        # /projects/<key> ĐÃ BỎ cùng widget. Nó chạy CẢ BẢY CHẶNG pipeline
-        # ngay trong lúc vẽ trang — nghiên cứu, hỏi LLM, tải bộ dữ liệu về kiểm
-        # — rồi vứt kết quả đi. Dựng lại thì việc nặng phải nằm ở vòng nền và
-        # đề bài phải được LƯU, không phải sinh lại mỗi lần mở trang.
 
         if path == "/search":
             conn = db.connect()
@@ -463,32 +406,17 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
 
-        if path == "/cv/draft":
-            # Mảnh HTML cho tấm phủ: mấy dòng CV đề xuất từ result.json của
-            # repo. ĐỀ XUẤT, không tự dán — Vin đọc và sửa rồi mới đồng ý.
-            conn = db.connect()
-            try:
-                from ..projects import inventory, tocv
-                want = (query.get("id") or ["0"])[0]
-                row = next((r for r in inventory.all(conn)
-                            if str(r["id"]) == want), None)
-                if row is None:
-                    return self._404()
-                return self._html(cvlist.draft(row, tocv.facts(row["link"]),
-                                               tocv.lines(row, tocv.facts(row["link"])),
-                                               tocv.title(row, tocv.facts(row["link"]))))
-            finally:
-                conn.close()
-
         if path == "/track":
             conn = db.connect()
             try:
+                from ..core import prefs
                 from ..track import board, mail, scan
                 return self._html(track.render(
                     rows=board.all(conn), asks=scan.proposals(conn),
                     counts=board.counts(conn),
                     mail_ready=all(mail.account()),
-                    mail_address=mail.account()[0]))
+                    mail_address=mail.account()[0],
+                    mail_days=prefs.num(conn, prefs.MAIL_DAYS, 1, 365)))
             finally:
                 conn.close()
 
@@ -509,13 +437,6 @@ class Handler(BaseHTTPRequestHandler):
                 data = live.cv_versions(conn)
                 data["blocks"] = live.cv_blocks(conn)
                 return self._html(cvlist.render(**data))
-            finally:
-                conn.close()
-
-        if path == "/projects":
-            conn = db.connect()
-            try:
-                return self._html(projects.render(**live.project_board(conn)))
             finally:
                 conn.close()
 
@@ -591,11 +512,7 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     label = "Save and review profile"
                 from ..profile import titles as tvocab
-                kho = {"titles": tvocab.cached(conn),
-                       # Khối nào trong CV là do máy chèn — để mục Personal
-                       # project đánh dấu, đừng để lẫn với project tự viết.
-                       "may_de": [r[0] for r in conn.execute(
-                           "SELECT cv_title FROM project WHERE cv_title <> ''")]}
+                kho = {"titles": tvocab.cached(conn)}
                 return self._html(profile.render_section(
                     section, answers, done, label, thieu, kho))
 
@@ -627,6 +544,23 @@ class Handler(BaseHTTPRequestHandler):
             conn = db.connect()
             try:
                 from ..core import prefs
+                # MỖI FORM CHỈ SỬA PHẦN CỦA NÓ. Tấm Cài đặt có nhiều form gửi
+                # về cùng một đường; đọc mù thì form Nguồn (không mang ô nhịp
+                # quét) sẽ ghi mặc định 60 phút đè lên con số người dùng đặt.
+                phan = form.get("phan", ["chay"])[0]
+                if phan == "gmail":
+                    prefs.put(conn, prefs.MAIL_DAYS,
+                              form.get("mail_days", ["30"])[0])
+                    journal.log.emit(journal.SYSTEM, "đổi số ngày đọc lại thư")
+                    return self._html(settings.render(**live.settings(conn)))
+                if phan == "nguon":
+                    bat = set(form.get("ats", []))
+                    for ats, key in prefs.SRC_ATS.items():
+                        prefs.set_flag(conn, key, ats in bat)
+                    prefs.set_flag(conn, prefs.SRC_ALERT, "alert" in bat)
+                    journal.log.emit(journal.SYSTEM,
+                                     "nguồn API: " + (", ".join(sorted(bat)) or "TẮT HẾT"))
+                    return self._html(settings.render(**live.settings(conn)))
                 prefs.put(conn, prefs.SCAN_EVERY, form.get("every", ["60"])[0])
                 prefs.put(conn, prefs.HOURS_FROM, form.get("from", ["8"])[0])
                 prefs.put(conn, prefs.HOURS_TO, form.get("to", ["22"])[0])
@@ -685,29 +619,6 @@ class Handler(BaseHTTPRequestHandler):
             threading.Thread(target=_rejudge, daemon=True, name="rejudge").start()
             return self._redirect("/search")
 
-        if path == "/api/project/build":
-            # Bảy chặng: đọc JD, hỏi LLM, tải bộ dữ liệu về kiểm. Tính bằng
-            # phút — chạy nền, trả lời ngay, tiến độ xem ở nhật ký.
-            skill = form.get("arg", [""])[0].strip()
-            if not skill:
-                return self._json({"ok": False}, status=400)
-
-            self._resume_build(skill)
-            return self._json({"ok": True, "note": "đang dựng…"})
-
-        if path == "/api/project/state":
-            raw_arg = form.get("arg", [""])[0]
-            pid, _, state = raw_arg.partition(":")
-            conn = db.connect()
-            try:
-                from ..projects import inventory
-                inventory.set_state(conn, int(pid or 0), state)
-            except ValueError:
-                return self._json({"ok": False}, status=400)
-            finally:
-                conn.close()
-            return self._json({"ok": True, "reload": True})
-
         if path in ("/api/stage/start", "/api/stage/stop"):
             # HAI route cho MỌI khúc, không phải mỗi tab một route. Tên khúc
             # là tham số — thêm một chức năng mới thì không phải thêm đường.
@@ -751,6 +662,46 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
             self._start_apply(dict(row), pdf)
             return self._json({"ok": True, "note": "đang mở form…"})
+
+        if path == "/api/source":
+            # BẬT/TẮT một nguồn. Nút tự mang trạng thái mới về, nên không phải
+            # nạp lại cả trang — tấm phủ Điều chỉnh vẫn mở, bấm tiếp được.
+            from ..core import prefs
+            which = form.get("arg", [""])[0].strip()
+            # Bảng, không phải mấy nhánh if: thêm nguồn thứ tư thì sửa một
+            # dòng, và luật "phải còn ít nhất một nguồn" tự đúng theo.
+            KHOA = {"board": prefs.SRC_BOARD, "linkedin": prefs.SRC_LINKEDIN,
+                    "alert": prefs.SRC_ALERT}
+            khoa = KHOA.get(which)
+            if khoa is None:
+                return self._json({"ok": False, "note": "nguồn lạ"}, status=400)
+            conn = db.connect()
+            try:
+                dang = prefs.flag(conn, khoa)
+                # TẮT NỐT CÁI CUỐI = quét mà không lấy ở đâu cả. Đường đó
+                # không được là đường bấm nhầm một cái là vào.
+                #
+                # Đếm mấy nguồn CÒN LẠI chứ không so với đúng một nguồn kia:
+                # bản cũ chỉ biết hai nguồn, thêm nguồn thứ ba là nó cho tắt
+                # sạch mà vẫn tưởng còn.
+                con_lai = [k for k in KHOA.values()
+                           if k != khoa and prefs.flag(conn, k)]
+                if dang and not con_lai:
+                    return self._json({"ok": False, "again": True,
+                                       "note": "phải bật ít nhất một nguồn"})
+                prefs.set_flag(conn, khoa, not dang)
+            finally:
+                conn.close()
+            bat = not dang
+            journal.log.emit(journal.SEARCH,
+                             f"nguồn {which}: {'BẬT' if bat else 'TẮT'}")
+            # Chữ mới cho nút phải mang cả KÝ HIỆU, không thì bấm một cái là
+            # nút rụng mất dấu ◆/⌕ trong khi nút kia vẫn còn. Lấy ký hiệu từ
+            # đúng chỗ đang giữ nó, không gõ lại lần thứ ba.
+            from .views.jobs import NGUON_DAU
+            return self._json({"ok": True, "again": True, "on": bat,
+                               "note": f"{NGUON_DAU.get(which, '')} {which}"
+                                       f" · {'bật' if bat else 'tắt'}"})
 
         if path == "/api/keep":
             # GIỮ LẠI một tin máy đã loại — hoặc bỏ giữ. Một nút, hai chiều.
@@ -865,6 +816,25 @@ class Handler(BaseHTTPRequestHandler):
             # đi đăng nhập — trước đây vòng kiểm bỏ dấu cách còn vòng đăng
             # nhập thì không, hai đường nhìn vào hai chuỗi khác nhau.
             secret = form.get("password", [""])[0].strip().replace(" ", "")
+            # CHỐT: hộp thư quét phải ĐÚNG hộp thư khai trong hồ sơ.
+            #
+            # Địa chỉ trong hồ sơ là địa chỉ in lên CV và điền vào form nộp —
+            # tức là chỗ nhà tuyển dụng bấm Trả lời. Nối nhầm một hộp thư
+            # khác thì app quét một nơi mà thư về một nơi: bảng Quản lí báo
+            # "đang chờ" mãi cho những đơn đã có hồi âm, và không có dấu hiệu
+            # nào cho thấy sai — đúng kiểu hỏng im lặng tệ nhất.
+            conn_ho_so = db.connect()
+            try:
+                trong_ho_so = (store.load(conn_ho_so).get("email") or "").strip()
+            finally:
+                conn_ho_so.close()
+            if trong_ho_so and address.lower() != trong_ho_so.lower():
+                return self._json(
+                    {"ok": False,
+                     "note": f"hộp thư này ({address}) khác địa chỉ trong hồ sơ "
+                             f"({trong_ho_so}) — thư trả lời sẽ về hồ sơ, không "
+                             f"về đây. Sửa một trong hai cho khớp."},
+                    status=400)
             if not address:
                 return self._json({"ok": False, "note": "thiếu địa chỉ"},
                                   status=400)
@@ -938,18 +908,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "reload": True, "wipe_local": True,
                                "note": f"đã sao lưu vào {ket['backup']}"})
 
-        if path == "/api/mail/forget":
-            # Việc XOÁ phải nói rõ là xoá. Bản cũ xoá ngay khi nhận một POST
-            # rỗng — và một bài thử ném rác vào mọi route đã xoá mất app
-            # password thật, 12 lần liền, không ai biết cho tới khi quét thư
-            # báo "chưa cấu hình". Đường phá hoại không được là đường mặc định.
-            from ..core import config as cfg
-            if form.get("arg", [""])[0].strip() != "xoa":
-                return self._json({"ok": False, "note": "cần xác nhận"},
-                                  status=400)
-            cfg.write_value("mail", "password", "")
-            journal.log.warn(journal.SEARCH, "đã xoá app password khỏi config")
-            return self._json({"ok": True, "reload": True})
+        # /api/mail/forget ĐÃ BỎ. Nối hộp thư là việc làm MỘT LẦN, và chỉ có
+        # MỘT đường xoá: "Làm lại từ đầu". Hai đường phá hoại cho cùng một
+        # thứ nghĩa là hai chỗ có thể bấm nhầm — mà app password này đã mất
+        # ba lần trong một ngày.
+        #
+        # Không mất gì: dán mật khẩu mới thì /api/mail/setup ghi đè lên, nên
+        # đổi mật khẩu vẫn làm được mà không cần đường xoá riêng.
 
         if path == "/api/track/mail/scan":
             def _mail():
@@ -1061,35 +1026,6 @@ class Handler(BaseHTTPRequestHandler):
                     journal.log.ok(journal.SCORE,
                                    f"CV: khối «{title[:40]}» — "
                                    + (f"{len(body)} câu" if body else "đã xoá"))
-            finally:
-                conn.close()
-            return self._redirect("/cv")
-
-        if path == "/cv/draft":
-            # Ghi vào CV GỐC. Đây là chữ của Vin sau khi sửa, không phải chữ máy.
-            conn = db.connect()
-            try:
-                from ..projects import inventory
-                pid = form.get("id", ["0"])[0]
-                head = form.get("head", [""])[0].strip()
-                body = [l.strip() for l in form.get("line", []) if l.strip()]
-                if head and body:
-                    answers = store.load(conn)
-                    text = (answers.get("cv_text") or "").rstrip()
-                    # KHÔNG thêm "· ": CV này không dùng gạch đầu dòng, và
-                    # cv/blocks.py bóc theo đúng định dạng của nó.
-                    block = head + "\n" + "\n".join(body)
-                    store.save(conn, {"cv_text": self._add_project(text, block)},
-                               note=f"project #{pid} vào CV")
-                    # GHI LẠI TÊN KHỐI. Chèn xong thì trong cv_text nó không
-                    # khác gì project người dùng tự viết; không ghi lại thì
-                    # sau này không cách nào chỉ ra "cái này máy đẻ ra".
-                    conn.execute("UPDATE project SET cv_title = ? WHERE id = ?",
-                                 (head.split(" — ")[0].strip(), pid))
-                    conn.commit()
-                    live._CV_CACHE.clear(); live._BLOCK_CACHE.clear()
-                    journal.log.ok(journal.PROJECT,
-                                   f"project #{pid}: đã thêm vào CV gốc")
             finally:
                 conn.close()
             return self._redirect("/cv")

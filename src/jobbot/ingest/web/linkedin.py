@@ -187,8 +187,14 @@ def signed_in(tab) -> bool:
 
 
 def read_deep(tab, items: list[Posting], skip: frozenset[str] = frozenset(),
-              worth=None, pace: str = "thuong", stop=None) -> Health:
+              worth=None, pace: str = "thuong", stop=None,
+              ten: str = NAME) -> Health:
     """Mở từng tin lấy MÔ TẢ. Tách khỏi fetch() vì đây là VIỆC RIÊNG.
+
+    `ten` là tên NGUỒN đang được đọc, chỉ dùng để ghi nhật ký. Trang thì vẫn
+    là trang LinkedIn, nhưng tin tới từ đâu là chuyện khác: đọc 106 tin của
+    thư báo mà nhật ký ghi "linkedin: 106 tin" thì người dùng tưởng vòng quét
+    LinkedIn đang chạy trong khi họ vừa tắt nó đi.
 
     Ba lượt quét cần ba việc khác nhau, và trước khi tách thì cả ba đều phải
     đi qua vòng tìm 30 phút:
@@ -229,7 +235,7 @@ def read_deep(tab, items: list[Posting], skip: frozenset[str] = frozenset(),
                       f" · bỏ qua {truoc - len(fresh)} tin lưới sàng sẽ loại")
 
     health = Health(attempted=len(fresh), failed=0)
-    jlog.emit(SEARCH, f"linkedin: {len(items)} tin trong tay"
+    jlog.emit(SEARCH, f"{ten}: {len(items)} tin trong tay"
                       + (f", {len(items) - len(fresh)} đã đọc từ trước"
                          f" -> chỉ đọc kỹ {len(fresh)}" if skip else
                          f", đọc kỹ cả {len(fresh)}"))
@@ -280,6 +286,7 @@ def fetch(tab, queries: list[str], location: str = "United Kingdom",
           levels: list[str] | None = None, pages: int = 3,
           deep: bool = True, skip: frozenset[str] = frozenset(),
           worth=None, pace: str = "thuong", recent: int = 0,
+          covered: frozenset[str] = frozenset(), done_out=None,
           stop=None) -> list[Posting]:
     """Tìm rồi đọc kỹ tin LinkedIn.
 
@@ -322,7 +329,13 @@ def fetch(tab, queries: list[str], location: str = "United Kingdom",
         # hiện "Operations Analyst · " — một dấu chấm giữa treo lơ lửng, người
         # đọc tưởng chữ bị cắt mất.
         o_dau = place or "toàn cầu"
-        jlog.progress(SEARCH, f"tìm LinkedIn · {query} · {o_dau}",
+        # CẶP NÀY ĐÃ HỎI ĐẦY BAO GIỜ CHƯA. Chưa thì hỏi đầy; rồi thì chỉ hỏi
+        # tin mới. Hai kiểu chạy được trong CÙNG một lượt, nên thêm một chức
+        # danh không bắt cả lưới quét lại — chỉ mấy cặp mới là quét đầy.
+        khoa = f"{query}|{place}"
+        cua_so = 0 if khoa not in covered else recent
+        jlog.progress(SEARCH, f"tìm LinkedIn · {query} · {o_dau}"
+                              + ("" if cua_so else " · quét đầy"),
                       step, len(pairs))
         truoc, so_trang = len(found), 0
         try:
@@ -330,7 +343,7 @@ def fetch(tab, queries: list[str], location: str = "United Kingdom",
                 url = GUEST.format(q=urllib.parse.quote(query),
                                    loc=urllib.parse.quote(place),
                                    exp=urllib.parse.quote(exp), start=page * PER_PAGE,
-                                   tpr=f"&f_TPR=r{recent}" if recent else "")
+                                   tpr=f"&f_TPR=r{cua_so}" if cua_so else "")
                 open_page(tab, url, timeout=30)
                 rows = grab(tab, LIST_JS)
                 if not rows:
@@ -359,10 +372,16 @@ def fetch(tab, queries: list[str], location: str = "United Kingdom",
         # lượt quét 19:22 là 31 phút chạy mà nhật ký để lại đúng một dòng ở
         # đầu. Người dùng ngồi nhìn một thanh tiến độ nhích, không biết máy
         # đang gõ chức danh nào, ở đâu, được gì.
+        # Cặp này vừa được hỏi ĐẦY và chạy trọn -> ghi nhận đã phủ. Chỉ ghi
+        # khi cua_so == 0: một lượt hỏi cửa sổ 24 giờ không phủ được cặp nào,
+        # nó chỉ liếc phần mới nhất.
+        if done_out is not None and not cua_so:
+            done_out.add(khoa)
         con = jlog.remaining(SEARCH)
         jlog.emit(SEARCH,
                   f"tìm · {query} · {o_dau} — {len(found) - truoc} tin mới"
                   f" / {so_trang} trang · kho {len(found)}"
+                  f"{'' if cua_so else ' · đã phủ'}"
                   f"{f' · còn {con}' if con else ''}")
 
     if not deep or dut:
