@@ -309,6 +309,24 @@ MIGRATIONS: list[str] = [
     DROP INDEX IF EXISTS project_state;
     DROP TABLE IF EXISTS project;
     """,
+    # 19 — BẢN CV ĐÃ DỰNG, cất lại. Trước đây tab CV dựng ngay lúc vẽ trang:
+    # đo được 5,3 giây cho 364 tin, mỗi lần mở tab. Người vừa search xong chưa
+    # tới bước làm CV, mà vẫn phải chờ 5 giây để xem thứ mình chưa yêu cầu.
+    #
+    # ĐÚNG MỘT DÒNG (CHECK id = 1). Không giữ lịch sử: "trước" trong bản so
+    # sánh before/after là CV GỐC của Vin, không phải lần dựng trước — giữ
+    # lịch sử ở đây là giữ thứ không ai đọc.
+    #
+    # `stamp` là dấu cũ-mới: chữ CV + luật viết + luật chấm + tập tin. Nút
+    # Chạy đọc nó để biết nên ghi "Chạy", "Cập nhật" hay "Dựng lại".
+    """
+    CREATE TABLE cv_build (
+        id       INTEGER PRIMARY KEY CHECK (id = 1),
+        made_at  TEXT NOT NULL,
+        stamp    TEXT NOT NULL,
+        payload  TEXT NOT NULL
+    );
+    """,
 ]
 
 

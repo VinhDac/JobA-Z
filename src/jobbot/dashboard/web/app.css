@@ -1124,25 +1124,71 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
      `.lead` chứ không phải `.h1sub`: dòng "Built for … — the system selects
      and orders" là ghi chú CHO VIN, không phải cho nhà tuyển dụng, và nó
      đứng ngay đầu tờ CV. */
-  .side, nav, .topbar, .sheet, .back, .lead, .cvaudit, .note, .chiprow,
-  .mbtn, button, [data-journal], [data-progress], .tnote { display:none !important }
+  /* `.statusbar` ĐÃ TỪNG LỌT: nó in đè lên dòng cuối mục Technical Skills, và
+     nó mang đường dẫn tệp trên máy ("PDF: /Users/davi/…") ra một tờ giấy gửi
+     cho nhà tuyển dụng. Thấy được bằng cách in thật rồi mở ảnh ra nhìn.
+     `.cvaudit` bọc cả bản chấm điểm — giải trình là chuyện giữa app và Vin. */
+  .side, nav, .topbar, .titlebar, .sheet, .back, .lead, .cvaudit, .note,
+  .chiprow, .statusbar, .mbtn, button, [data-journal], [data-progress],
+  .tnote { display:none !important }
 
-  main, .flow, .wrap { margin:0 !important; padding:0 !important;
+  /* KHUNG APP không được in. `main.flow` mang viền 1px + bo góc 8px — trên
+     màn hình đó là cái thẻ, trên giấy nó là một hộp vẽ quanh tờ CV. Reset
+     margin/padding thôi là chưa đủ, phải reset cả viền. */
+  /* POSITION:STATIC — đây mới là gốc. `main` là `position:fixed` với
+     `left:var(--main-l)` = 226px (chừa chỗ cho thanh bên). Khi IN, phần tử
+     fixed được Chrome đặt theo HỘP TRANG và `left` không còn ghi đè được nữa
+     — thử ép `left:0 !important` cả bằng CSS lẫn bằng style inline đều không
+     nhúc nhích. Trả nó về dòng chảy thường thì `left/top/right` hết tác dụng
+     và tờ CV bắt đầu từ mép lề giấy, đúng chỗ của nó. */
+  main, .flow, .wrap { position:static !important;
+    margin:0 !important; padding:0 !important;
     max-width:none !important; overflow:visible !important;
-    inset:auto !important; left:0 !important; width:auto !important }
+    inset:auto !important; width:auto !important; height:auto !important;
+    border:none !important; border-radius:0 !important;
+    box-shadow:none !important; background:#fff !important }
+  .inner { padding:0 !important; margin:0 !important; max-width:none !important }
   h1 { display:none }
 
+  /* PHÔNG NHÚNG ĐƯỢC. Phông hệ thống macOS (.SF NS) không nhúng được vào
+     PDF, nên Chrome vẽ từng chữ thành GLYPH TAY (Type3 + CharProcs). Đo trên
+     bản in thật: 34 phông Type3, 0 phông TrueType/Type0. Trình bóc chữ tốt
+     vẫn đọc được, trình xoàng cho ra "D a c  V in h  N g u y e n" — đúng
+     nguyên nhân hỏng parse mà Greenhouse liệt kê trong tài liệu của họ.
+     Georgia/Times là phông nhúng được, và có mặt trên mọi máy. */
+  .cvpaper, .cvpaper * { font-family:Georgia,"Times New Roman",serif !important }
   .cvpaper { background:#fff !important; border:none !important;
-    border-radius:0 !important; padding:0 !important; box-shadow:none !important }
-  .cvhead { border-bottom:1px solid #ccc !important; margin-bottom:10pt;
+    border-radius:0 !important; padding:0 !important; margin:0 !important;
+    max-width:none !important; width:auto !important;
+    box-shadow:none !important }
+
+  /* MÀU IN — ĐẶT MẶC ĐỊNH ĐEN TRƯỚC, rồi mới làm nhạt vài chỗ phụ.
+     Bản cũ làm NGƯỢC: nó liệt kê từng lớp cần tô đen, nên lớp nào không có
+     trong danh sách thì giữ nguyên màu của giao diện TỐI. Đo trên bản in
+     thật: `.cvskill` ở 192/255 và mấy `<b>` ở 212/255 — gần trắng trên giấy
+     trắng, cả mục TECHNICAL SKILLS coi như vô hình.
+     Mặc định đen thì thêm phần tử mới vẫn đọc được, và quên một dòng CSS
+     không còn nghĩa là mất một mục trên CV. */
+  /* GỠ HẾT DẤU CHẤM BÀI. Tờ giấy gửi đi không mang bút đỏ, và nó phải in
+     bản SAU kể cả khi Vin đang để nút ở "Trước khi sửa" — thứ gửi đi là bản
+     đã sửa, không phải bản nháp đang xem. */
+  .ctip, .cno, .ctruoc { display:none !important }
+  .csau { display:inline !important }
+  .cvpaper.cham li { border-left:none !important; padding-left:0 !important;
+    margin-left:0 !important; background:none !important }
+  .gtoggle, .gsum { display:none !important }
+
+  .cvpaper, .cvpaper * { color:#111 !important }
+  .cvpaper b, .cvpaper strong { color:#000 !important }
+  .cvmeta, .cvsum, .cvskill { color:#333 !important }
+  .cvskill b { color:#000 !important }
+
+  .cvhead { border-bottom:1px solid #bbb !important; margin-bottom:10pt;
     padding-bottom:8pt }
-  .cvline { color:#333 !important }
-  .cvline:first-child { color:#000 !important; font-size:19pt }
-  .cvsec { color:#000 !important; border-bottom:1px solid #ddd;
+  .cvline:first-child { color:#000 !important; font-size:19pt;
+    letter-spacing:-.2pt }
+  .cvsec { color:#000 !important; border-bottom:1px solid #ccc;
     padding-bottom:2pt; margin:12pt 0 6pt }
-  .cvrole b { color:#000 !important }
-  .cvmeta, .cvsum { color:#444 !important }
-  .cvpaper li { color:#111 !important }
 
   /* Đừng để một mục bị cắt đôi qua hai trang giấy */
   .cvrole, .cvpaper ul, .cvsec { break-inside:avoid; page-break-inside:avoid }
@@ -1416,3 +1462,119 @@ body[data-run=running] .sdot{background:var(--acc);animation:beat 1.1s ease-in-o
 body[data-run=paused] .sdot{background:var(--warn)}
 .smsg{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   text-align:right;color:var(--mute)}
+
+/* ---------------- bản chấm điểm CV ---------------- */
+/* Tên lớp bắt đầu bằng `g` (giải trình) — đã kiểm không đụng lớp nào đang có.
+   Đụng tên là lớp lỗi đã cắn ba lần: .pill, .prow, .board, .alert. */
+.gsum{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.gstat{display:flex;flex-direction:column;gap:2px;padding:8px 13px;
+  background:var(--panel);border:1px solid var(--line);border-radius:9px;
+  font-size:11.5px;color:var(--mute)}
+.gstat b{font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* MỘT CÂU = một khối. Số thứ tự bên trái để nói chuyện được về nó ("câu 3"). */
+.gcau{display:flex;gap:11px;padding:11px 0;
+  border-bottom:1px solid rgba(255,255,255,.05)}
+.gcau:last-child{border-bottom:0}
+.gnum{flex:none;width:22px;height:22px;border-radius:50%;
+  display:grid;place-items:center;font-size:11px;font-weight:700;
+  color:var(--mute);background:var(--panel);border:1px solid var(--line)}
+.gbody{min-width:0;flex:1}
+/* Câu SAU — thứ sẽ tới tay nhà tuyển dụng, nên nó sáng nhất trong khối. */
+.gtext{color:var(--ink);line-height:1.55;overflow-wrap:anywhere}
+.gcau.review .gnum{color:var(--warn);border-color:var(--warn)}
+.gnote{margin-top:4px;font-size:11.5px;color:var(--warn)}
+.ghits{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+
+/* TRƯỚC -> SAU. Gạch ngang bản cũ, xanh bản mới: mắt đọc ra ngay cái nào là
+   cái nào mà không cần nhãn chữ. */
+.gsua,.gyeu{margin-top:7px;padding:8px 11px;border-radius:8px;
+  background:rgba(255,255,255,.03);font-size:12px}
+.gsua>b,.gyeu>b{display:block;font-size:10.5px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--mute);margin-bottom:5px}
+.gstep{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
+.gstep:last-child{margin-bottom:0}
+.gold{color:var(--mute);text-decoration:line-through;
+  text-decoration-color:var(--bad);overflow-wrap:anywhere}
+.gnew{color:var(--acc);overflow-wrap:anywhere}
+.gwhy{color:var(--dim);font-size:11.5px;font-style:italic}
+.gyeu ul{margin:0;padding-left:17px;color:var(--dim);line-height:1.6}
+.gyeu b{display:inline;font-size:12px;text-transform:none;letter-spacing:0;
+  color:var(--warn)}
+
+/* ---------------- dòng "Bản sẽ gửi" ---------------- */
+/* Con số CHỐT của cả dòng là tỉ lệ phủ. Vẽ thành thanh vì 28 dòng thì mắt
+   quét hình nhanh hơn đọc số — và ba màu là ba HÀNH ĐỘNG khác nhau, không
+   phải ba sắc thái trang trí. */
+.vjob{color:var(--dim);font-weight:400;margin-left:7px}
+.vline{display:flex;align-items:center;gap:9px;margin-top:5px;
+  font-size:12px;color:var(--dim)}
+.vfrac b{color:var(--ink);font-variant-numeric:tabular-nums}
+.vbarc{flex:none;width:56px;height:5px;border-radius:3px;
+  background:var(--line);overflow:hidden}
+.vbarc i{display:block;height:100%;border-radius:3px}
+.vbarc.ok  i{background:var(--acc)}      /* gửi được */
+.vbarc.mid i{background:var(--warn)}     /* gửi được nhưng yếu */
+.vbarc.low i{background:var(--bad)}      /* viết thêm đã rồi hẵng gửi */
+
+/* ---------------- chấm bài NGAY TRÊN tờ CV ---------------- */
+/* Bút đỏ nằm trên bài, không nằm ở phụ lục. Dấu là CSS thuần nên bản in vẫn
+   là tờ giấy sạch — @media print gỡ hết (xem cuối tệp). */
+.cvpaper.cham li{position:relative;padding-left:11px;margin-left:-11px;
+  border-left:2px solid transparent;border-radius:0 3px 3px 0;
+  transition:background .12s ease}
+.cvpaper.cham li.dsua {border-left-color:var(--acc)}
+.cvpaper.cham li.dhong{border-left-color:var(--warn)}
+/* Vừa sửa vừa hổng: ưu tiên CAM, vì cam là việc NGƯỜI phải làm, xanh chỉ là
+   việc máy đã làm xong. Dấu phải trỏ vào việc còn lại. */
+.cvpaper.cham li.dsua.dhong{border-left-color:var(--warn)}
+.cvpaper.cham li.dxem {border-left-color:var(--bad)}
+.cvpaper.cham li:hover{background:rgba(255,255,255,.05)}
+.cjump{color:inherit;text-decoration:none;display:block}
+.ctruoc{display:none}
+/* Số câu — chỉ hiện lúc rê chuột, để tờ giấy lúc đọc bình thường vẫn sạch */
+.cno{position:absolute;left:-26px;top:2px;width:17px;height:17px;
+  border-radius:50%;display:grid;place-items:center;font-size:10px;
+  font-weight:700;color:var(--mute);background:var(--panel);
+  border:1px solid var(--line);opacity:0;transition:opacity .12s ease}
+.cvpaper.cham li:hover .cno{opacity:1}
+/* Mách nước lúc rê chuột: một câu, đủ để quyết có cần bấm vào không */
+.ctip{position:absolute;left:11px;top:100%;z-index:5;display:none;
+  max-width:520px;padding:5px 10px;border-radius:7px;font-size:11.5px;
+  color:var(--ink);background:var(--panel-2);border:1px solid var(--line);
+  box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.cvpaper.cham li:hover .ctip{display:block}
+
+/* NÚT TRƯỚC/SAU — checkbox ẩn, không JavaScript. Đổi một cái nhãn thì không
+   đáng gọi thêm một trình nghe, và không JS thì nó không bao giờ hỏng. */
+.gtoggle{display:flex;align-items:center;gap:11px;margin:9px 0 4px}
+.gtoggle label{cursor:pointer;padding:5px 13px;border-radius:20px;
+  border:1px solid var(--line);background:var(--panel);font-size:12px;
+  font-weight:600;color:var(--ink);user-select:none}
+.gtoggle label:hover{border-color:var(--acc-2)}
+.gt2{display:none}
+.gswitch:checked ~ label .gt1{display:none}
+.gswitch:checked ~ label .gt2{display:inline}
+/* Bật "trước" -> tờ CV hiện chữ GỐC, và dấu xanh tắt đi: lúc này đang nhìn
+   bản chưa sửa, để nguyên dấu "đã sửa" là nói dối về thứ đang hiện. */
+.gswitch:checked ~ .cvpaper.cham .csau{display:none}
+.gswitch:checked ~ .cvpaper.cham .ctruoc{display:inline}
+.gswitch:checked ~ .cvpaper.cham li.dsua:not(.dhong){border-left-color:var(--mute)}
+
+/* Khối chi tiết: số câu là LINK NGƯỢC lên bài */
+.gdoi{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:2px}
+.glab{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--mute);margin-right:2px}
+a.gnum{text-decoration:none;cursor:pointer}
+a.gnum:hover{color:var(--acc);border-color:var(--acc)}
+.ksua{color:var(--acc)} .khong{color:var(--warn)}
+
+/* Con số trên nút lọc — bấm vào còn bao nhiêu tin. Không có số thì nút lọc
+   là lời mời mù: người dùng bấm để BIẾT nó lọc ra gì, và nếu nó lọc ra y
+   nguyên thì họ vừa mất một cú bấm để học rằng nút đó vô dụng. */
+.vchip b,.lvlstep b{margin-left:6px;font-weight:600;font-size:10.5px;
+  color:var(--mute);font-variant-numeric:tabular-nums}
+.vchip.on b,.lvlstep.on b{color:inherit;opacity:.75}
+/* Lọc ra 0 tin: mờ đi, vẫn bấm được. Giấu hẳn thì người dùng không biết là
+   có lựa chọn đó và tưởng app thiếu tính năng. */
+.vchip.nil{opacity:.4}

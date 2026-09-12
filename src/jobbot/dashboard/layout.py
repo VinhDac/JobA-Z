@@ -71,7 +71,7 @@ def deck(stage: str, name: str, state: str, metrics: list,
         act    việc phải làm      -> xanh lá (màu hành động của cả app)
         stock  kho đang giữ       -> xanh dương (tin nền, đọc để biết)
         new    vừa về, cần xem    -> cam (thời sự)
-        view   chỉ là bộ lọc      -> xám (không phải dữ liệu)
+        view   số nền / bộ lọc    -> xám (đọc để biết, không phải việc)
 
     Và một luật đè lên tất cả: SỐ 0 THÌ KHÔNG SÁNG. "0 mới" mà vẫn rực cam là
     nói dối — thanh chỉ được sáng lên khi thật sự có chuyện.

@@ -157,7 +157,19 @@ _TAIL = r"(?:s|es|ed|ing|ings|ation|ations|isation|isations|ization|izations)?"
 
 
 def _alias_pattern(alias: str) -> re.Pattern:
-    return re.compile(r"\b" + re.escape(alias) + _TAIL + r"\b")
+    """Ranh giới bằng (?<!\\w) / (?!\\w), KHÔNG bằng \\b.
+
+    `\\b` là ranh giới GIỮA ký tự từ và không-từ, nên nó không bao giờ thành
+    thật ở sau một alias kết thúc bằng ký tự không-từ: mẫu `\\bc\\+\\+\\b` không
+    khớp nổi chuỗi "c++ and python", vì hai bên chỗ đó đều là không-từ.
+
+    Đo trên kho thật: 208 tin đòi C++ và CV của Vin CÓ C++ — máy chưa bao giờ
+    nhìn thấy một tin nào trong số đó. Cùng lỗi với c#, kdb+, ci/cd.
+
+    (?<!\\w) và (?!\\w) nói đúng thứ mình muốn: "không có ký tự từ dính liền".
+    Với alias thường ("python") nó cho kết quả y hệt \\b.
+    """
+    return re.compile(r"(?<!\w)" + re.escape(alias) + _TAIL + r"(?!\w)")
 
 
 _ALIAS_RE: dict[str, tuple[re.Pattern, str]] = {

@@ -84,6 +84,73 @@ check("và nói rõ vì sao", "your call" in why)
 check("bỏ chữ nút bấm dính đầu câu",
       rules.clean("Demo MetaTrader's backtester only measures edge").startswith("MetaTrader"))
 
+print("\n[sửa câu: chỉ cắt và xếp lại chữ của Vin]")
+from jobbot.cv import rewrite as _rw
+# LƯỢC CHỦ NGỮ — quy ước CV. Không thêm sự thật nào.
+for _t, _mong in (
+    ("I designed and built every layer.", "Designed and built every layer."),
+    ("I classified the market on two axes.", "Classified the market on two axes."),
+    ("I rebuilt it without free parameters.", "Rebuilt it without free parameters."),
+    ("I wrote the operating manual.", "Wrote the operating manual."),
+):
+    _ra, _da = _rw.sua(_t)
+    check(f"lược 'I' -> {_mong[:34]}", _ra == _mong)
+check("và nói rõ vì sao, bằng tiếng người",
+      "lược chủ ngữ" in _rw.sua("I built it and shipped it.")[1][0].vi_sao)
+
+# CHỖ NGUY: trợ động từ. "I was optimising" -> "Was optimising" là sai ngữ pháp.
+# Luật đuôi -ed / bất-quy-tắc tự loại chúng — test để nó không bị nới ra sau này.
+for _t in ("I was optimising for peak profit.", "I had no capital left.",
+           "My own capital ran out.", "I could not reproduce it.",
+           "I am a quantitative developer."):
+    check(f"KHÔNG đụng trợ động từ: {_t[:30]}", _rw.sua(_t)[0] == _t)
+# Giữa câu thì không sửa: đổi giữa câu là đổi cấu trúc, không còn là cắt chữ.
+check("KHÔNG sửa ngôi thứ nhất ở GIỮA câu",
+      _rw.sua("One signal has many configurations, so I chose on average.")[0]
+      == "One signal has many configurations, so I chose on average.")
+
+check("hoa chữ đầu câu bị thường",
+      _rw.sua("the whole pipeline turned into something you can run.")[0]
+      .startswith("The whole"))
+check("câu đã đúng thì KHÔNG sinh phép nào",
+      _rw.sua("Built two systems in Python.")[1] == [])
+
+# MỌI TỪ phải có sẵn trong câu gốc — đây là luật gốc, ở dạng nhỏ nhất.
+for _t in ("I designed and built every layer of two systems in MQL5.",
+           "the whole pipeline turned into something you can run.",
+           "I validated on two separate occurrences."):
+    _ra, _ = _rw.sua(_t)
+    check(f"không thêm từ nào: {_t[:28]}",
+          not (set(_ra.lower().split()) - set(_t.lower().split())))
+
+print("\n[điểm yếu: máy CHỈ RA, người tự viết]")
+# Nửa này máy không được làm thay: câu thiếu số đo thì thứ thiếu là MỘT CON SỐ
+# THẬT, chỉ Vin biết. Máy bịa vào là đẻ ra câu Vin không đỡ được lúc phỏng vấn.
+# MỘT CÂU CV LÀ MỘT TRONG HAI THỨ, đòi hai chuẩn khác nhau. Đo trên hồ sơ
+# thật: 12/16 câu là KIẾN THỨC. Đòi số đo ở cả 16 thì 12 dấu là báo động giả —
+# mà dấu nào dòng nào cũng có thì nó thành cái nền, và người dùng học được
+# rằng đừng nhìn dấu nữa.
+check("KHOE VIỆC mà thiếu số -> bắt",
+      "khong_so" in {y.ma for y in _rw.diem_yeu("Built some models.", [], set())})
+check("KIẾN THỨC thì KHÔNG đòi số — không có số nào để mà thêm",
+      "khong_so" not in {y.ma for y in _rw.diem_yeu(
+          "A random train/test split leaks, because adjacent dates correlate.",
+          [], set())})
+check("và KHÔNG còn chê câu kiến thức vì không mở bằng động từ",
+      "khong_dong_tu" not in {y.ma for y in _rw.diem_yeu(
+          "A random train/test split leaks.", [], set())})
+check("khoe việc CÓ số thì không báo bừa",
+      "khong_so" not in {y.ma for y in _rw.diem_yeu(
+          "Built 17 models across five years of data.", [], set())})
+check("bắt câu quá dài", "qua_dai" in {y.ma for y in _rw.diem_yeu(
+      "Built " + "x" * 210, [], set())})
+check("bắt câu không chạm yêu cầu nào của tin",
+      "khong_tra_loi" in {y.ma for y in _rw.diem_yeu(
+          "Built models in Python.", ["python"], {"c++"})})
+check("mỗi điểm yếu phải kèm VIỆC LÀM ĐƯỢC, không phải lời khuyên chung",
+      all(y.lam_gi and len(y.lam_gi) > 20
+          for y in _rw.diem_yeu("Built some models.", [], set())))
+
 print("\n[dựng CV]")
 JD_ML = {"requirements": [{"text": "Strong Python and PyTorch for deep learning", "met": True,
                            "must": True, "evidence": ""}]}
@@ -105,10 +172,36 @@ check("hai JD khác nhau -> thứ tự khác nhau",
       [l.text for s in risk.sections for l in s.lines])
 
 all_text = " ".join(l.text for s in ml.sections for l in s.lines)
-check("KHÔNG bịa: mọi câu đều có trong CV gốc",
-      all(line.strip()[:40] in CV.replace("\n", " ") for s in ml.sections
-          for l in s.lines if s.kind in ("experience", "project")
-          for line in [l.text]))
+# LUẬT GỐC CỦA CẢ TẦNG CV, và đây là chỗ canh nó. Máy được CẮT và XẾP LẠI chữ
+# của Vin; máy KHÔNG được thêm chữ nào Vin chưa viết.
+#
+# Test cũ đòi câu in ra phải nằm NGUYÊN VĂN trong CV gốc. Chặt, nhưng chặt sai
+# chỗ: nó cấm luôn cả việc bỏ chữ "I" ở đầu câu — một phép không thêm gì cả.
+# Bản này đòi thứ mạnh hơn: mọi TỪ trên bản in ra phải có mặt trong câu gốc.
+# Bỏ từ thì được, thêm một từ là vỡ test.
+_goc_all = CV.replace("\n", " ")
+_bia = []
+for _s in ml.sections:
+    if _s.kind not in ("experience", "project"):
+        continue
+    for _l in _s.lines:
+        _goc = _l.goc or _l.text
+        if _goc.strip()[:40] not in _goc_all:
+            _bia.append(("câu gốc không có trong CV", _goc[:60]))
+            continue
+        _them = set(_l.text.lower().split()) - set(_goc.lower().split())
+        # Chữ đầu câu được hoa lên -> 'the' thành 'The'; so bằng chữ thường
+        # rồi thì phép đó không đẻ ra từ mới, nên mọi từ dư đều là bịa thật.
+        if _them:
+            _bia.append((f"thêm từ {sorted(_them)}", _l.text[:60]))
+check("KHÔNG bịa: mọi TỪ in ra đều có trong câu Vin viết — " + str(_bia[:2]),
+      not _bia)
+# Và mọi câu đã sửa phải để lại dấu vết — sửa mà không ghi lại thì không có
+# "trước" nào để so, và bản so sánh before/after thành lời nói một chiều.
+check("câu nào bị sửa thì có ghi lại phép và lý do",
+      all(l.sua and all(x.vi_sao for x in l.sua)
+          for s in ml.sections for l in s.lines
+          if s.kind in ("experience", "project") and l.goc and l.goc != l.text))
 check("không đưa thất bại lên CV", "mistake was mine" not in all_text)
 check("không đưa ý kiến lên CV", "means nothing" not in all_text)
 
@@ -211,6 +304,69 @@ _lst = (Path(__file__).resolve().parent.parent
 # esc() là để chữ hiện an toàn trong HTML; nó KHÔNG làm dấu & hết cắt tham số.
 check("dùng quote() cho tham số URL", "quote(b['title']" in _lst)
 check("ký tự & được mã hoá", _q("Research & Development", safe="") == "Research%20%26%20Development")
+
+print("\n[KHOẢNG TRỐNG: khối kinh nghiệm không bao giờ bị bỏ cả khối]")
+# Lọc khối theo "có trúng thứ tin này đòi không" đúng với PROJECT (tự chọn,
+# bỏ không để lại dấu vết) nhưng SAI với KINH NGHIỆM: nó đục một lỗ trên dòng
+# thời gian. Đo trên kho thật: 6/12 bản CV đầu bảng rơi mất hẳn khối
+# "WorldQuant, Jan–Sep 2025" — bản gửi đi tự khai khoảng trống 9 tháng.
+# Khảo sát HBS/Accenture 2021: gần một nửa nhà tuyển dụng tự loại CV có
+# khoảng trống quá 6 tháng. Một khối ít liên quan chỉ tốn ba dòng giấy.
+_moi_viec = [b.title for b in parse(CV) if b.kind == "experience"]
+for _cv_thu, _ten in ((ml, "JD deep learning"), (risk, "JD risk")):
+    _ra = [x.title for x in _cv_thu.sections if x.kind == "experience"]
+    check(f"{_ten}: giữ đủ mọi khối kinh nghiệm ({len(_ra)}/{len(_moi_viec)})",
+          len(_ra) == len(_moi_viec))
+# Một JD chẳng dính gì tới khối nào cũng KHÔNG được làm rơi khối nào.
+_la = build(PROFILE, None, "we sell industrial adhesives to the marine sector")
+check("JD hoàn toàn lạc đề cũng không đục khoảng trống",
+      len([x for x in _la.sections if x.kind == "experience"]) == len(_moi_viec))
+
+print("\n[chấm bài NGAY TRÊN tờ CV]")
+# Bản trước vẽ tờ CV rồi liệt kê lại từng câu ở dưới — cùng một câu hiện hai
+# lần, người đọc phải tự ghép "câu 3 ở dưới" với câu nào ở trên.
+from jobbot.cv.render import paper as _pp, dem_lai as _dl
+from jobbot.cv.report import head as _hd, chi_tiet as _ct
+from jobbot.cv.build import dang_ke as _dk
+import re as _re2
+
+_dl(); _to = _pp(ml, cham=True)
+_dl(); _to_sach = _pp(ml)
+check("không chấm -> tờ CV trơn như cũ", "cjump" not in _to_sach
+      and "cvpaper" in _to_sach and "cham" not in _to_sach)
+check("chấm -> mỗi câu có neo riêng", _re2.search(r"id='cau1'", _to))
+check("và có dấu theo LOẠI VIỆC, không phải màu trang trí",
+      "dsua" in _to or "dhong" in _to)
+check("có mách nước lúc rê chuột", "class=ctip" in _to)
+check("có chữ GỐC sẵn trong DOM để nút Trước/Sau bật tắt", "class=ctruoc" in _to)
+
+# MỖI CÂU MỘT CHỖ. Câu chỉ được nằm trên tờ giấy; phần dưới nói thứ tờ giấy
+# không nói được (tin đòi gì, vì sao sửa), KHÔNG chép lại toàn văn câu.
+_dl(); _to2 = _pp(ml, cham=True); _duoi = _ct(ml)
+_cau_dai = [l.text for s2 in ml.sections for l in s2.lines
+            if s2.kind in ("experience", "project") and len(l.text) > 40]
+if _cau_dai:
+    _c0 = _cau_dai[0][:40]
+    check("câu KHÔNG bị chép lại ở phần chi tiết", _c0 not in _duoi)
+
+# LINK CHẾT. Bút đỏ trên bài và khối chi tiết phải hỏi CÙNG một câu hỏi; hỏi
+# ở hai chỗ thì chúng trôi khỏi nhau và bấm vào không nhảy đi đâu — im lặng.
+_di = set(_re2.findall(r"href='#(ct\d+)'", _to2))
+_den = set(_re2.findall(r"id='(ct\d+)'", _duoi))
+check("mọi dấu bấm được đều CÓ ĐÍCH — " + str(sorted(_di - _den)), _di <= _den)
+check("và mọi khối chi tiết đều có chỗ bấm trên bài", _den <= _di)
+check("chỉ câu CÓ GÌ ĐỂ NÓI mới thành link — một chỗ quyết",
+      _dk.__module__ == "jobbot.cv.build")
+
+# NÚT TRƯỚC/SAU dùng bộ chọn anh-em, nên checkbox phải CÙNG CẤP với tờ CV.
+# Nhét vào trong một <div> thì nó là cháu, và cái nút im lặng không làm gì.
+_h = _hd(ml)
+check("checkbox Trước/Sau đứng NGOÀI mọi <div> của phần đầu",
+      _h.index("id=cvtruoc") < _h.index("<div class=gtoggle>"))
+check("phần chấm điểm bọc .cvaudit nên không in ra giấy",
+      "<div class=cvaudit>" in _h)
+check("nhưng nút Trước/Sau đứng ngoài bọc đó",
+      _h.index("id=cvtruoc") < _h.index("<div class=cvaudit>"))
 
 print(f"\n{ok} ok, {fail} fail")
 sys.exit(1 if fail else 0)

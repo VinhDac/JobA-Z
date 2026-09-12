@@ -49,6 +49,38 @@ def _ago(stamp: str) -> str:
     return f"{int(seconds // 86400)} days ago"
 
 
+def dem_chip(conn: sqlite3.Connection, flt) -> dict:
+    """Mỗi lựa chọn lọc ra BAO NHIÊU TIN, tính theo bộ lọc ĐANG bật.
+
+    Vì sao cần: đo trên kho thật, chip "Gần tôi" cho ra 411 tin — đúng bằng
+    "Mọi nơi". Bấm vào không đổi gì cả. "Cả nước" ra 407/411, "Chủ trực tiếp"
+    ra đúng con số mặc định. Ba nút bấm vào thấy y nguyên, và người dùng thôi
+    tin cả hàng nút.
+
+    Sửa bằng cách GHI SỐ RA, không phải xoá nút: con số nói thẳng bấm vào
+    được gì, và nó nói đúng theo dữ liệu HÔM NAY — hôm khác kho khác thì con
+    số tự đổi, không cần ai đi sửa lại danh sách nút.
+
+    Đếm THEO NGỮ CẢNH (chồng lên bộ lọc đang bật), vì đó mới là câu người dùng
+    hỏi: "đang lọc thế này, bấm thêm cái kia thì còn mấy tin".
+
+    Giá: 26 lượt COUNT, đo được 107ms trên kho 5.166 tin.
+    """
+    from .filters import BAND, CHANCE, DAYS, FOUND, LOC, SHOW, VIA, JobFilter
+    nha, gan = noi_toi(conn)
+    ra: dict = {}
+    for khoa, bang in (("chance", CHANCE), ("band", BAND), ("loc", LOC),
+                       ("found", FOUND), ("via", VIA), ("days", DAYS),
+                       ("show", SHOW)):
+        for val, _ in bang:
+            doi = flt.pairs(**{khoa: val, "page": ""})
+            moi = JobFilter.from_query({k: [v] for k, v in doi if v != ""})
+            w, args = moi.where(nha=nha, near=gan)
+            ra[f"{khoa}:{val}"] = int(conn.execute(
+                f"SELECT COUNT(*) FROM posting{w}", args).fetchone()[0])
+    return ra
+
+
 def sieve(conn: sqlite3.Connection) -> dict:
     """Lưới GIỮ/BỎ — đúng ba thứ mà ingest/filter.judge() thật sự dùng.
 
@@ -424,12 +456,29 @@ def health(conn: sqlite3.Connection) -> dict:
     }
 # ---------------------------------------------------------------- projects
 
+def cv_nut(conn: sqlite3.Connection) -> dict:
+    """Ba núm của tầng CV, đã đổi sang con số build() dùng được.
+
+    MỘT chỗ dịch từ "tên núm" sang "con số". Dịch ở hai chỗ thì có ngày tấm
+    Điều chỉnh hiện 'dày' mà bộ dựng chạy 'thường', và không ai lần ra được.
+    """
+    from ..core import prefs
+    giong = prefs.get(conn, prefs.CV_GIONG) or "cv"
+    khoa = prefs.get(conn, prefs.CV_KHOA) or "thuong"
+    bo_cuc = prefs.get(conn, prefs.CV_BO_CUC) or "thuong"
+    return {"giong": giong if giong in prefs.GIONG else "cv",
+            "khoa": prefs.KHOA.get(khoa, prefs.KHOA["thuong"]),
+            "dong": prefs.BO_CUC.get(bo_cuc, prefs.BO_CUC["thuong"]),
+            "ten": {"giong": giong, "khoa": khoa, "bo_cuc": bo_cuc}}
+
+
 def _cv_key(conn: sqlite3.Connection, cv_text: str) -> tuple:
     from ..core import versions
     row = conn.execute(
         "SELECT COUNT(*), COALESCE(MAX(id), 0) FROM posting"
         " WHERE kept = 1 AND realism IN ('likely','possible')").fetchone()
-    return (hash(cv_text), versions.SCORE_RULES, row[0], row[1])
+    return (hash(cv_text), versions.SCORE_RULES, row[0], row[1],
+            tuple(sorted(cv_nut(conn)["ten"].items())))
 
 
 # ---------------------------------------------------------------------- CV
@@ -456,6 +505,10 @@ def cv_versions(conn: sqlite3.Connection) -> dict:
     key = _cv_key(conn, answers.get("cv_text") or "")
     if _CV_CACHE.get("key") == key:
         return _CV_CACHE["value"]
+    # BA NÚM của tấm Điều chỉnh. Đọc MỘT LẦN ở đây rồi truyền xuống: để
+    # build() tự đọc DB thì nó hết thuần, và 364 lần dựng là 1.092 lượt đọc
+    # prefs cho ba giá trị không đổi.
+    num = cv_nut(conn)
 
     rows = conn.execute(
         "SELECT id, title, company, score, realism, description, score_json"
@@ -465,7 +518,7 @@ def cv_versions(conn: sqlite3.Connection) -> dict:
     groups: dict[tuple, dict] = {}
     for row in rows:
         explain = _json.loads(row["score_json"]) if row["score_json"] else None
-        cv = build_cv(answers, explain, row["description"] or "")
+        cv = build_cv(answers, explain, row["description"] or "", num)
         # Khoá gộp là ĐÚNG NHỮNG CÂU sẽ in ra. Gộp theo kỹ năng JD đòi thì hụt:
         # đo được 85 bộ kỹ năng khác nhau mà chỉ ra 29 bản.
         sig = tuple(line.text for section in cv.sections for line in section.lines)
@@ -485,6 +538,15 @@ def cv_versions(conn: sqlite3.Connection) -> dict:
     out = []
     for sig, slot in sorted(groups.items(), key=lambda kv: -len(kv[1]["jobs"])):
         cv = slot["cv"]
+        # PHỦ PHẢI TÍNH TRÊN MỘT TIN, KHÔNG TRÊN CẢ NHÓM. `slot["wanted"]` là
+        # HỢP của mọi tin trong nhóm: bản gộp 168 tin ra 33 kỹ năng, mà không
+        # tin nào hỏi 33 thứ — nên tỉ lệ "13/33" đo KÍCH THƯỚC NHÓM chứ không
+        # đo chất lượng CV, và bản gộp nhiều tin luôn trông tệ hơn bản gộp ít.
+        #
+        # `slot["cv"]` là bản của tin ĐIỂM CAO NHẤT trong nhóm (rows xếp theo
+        # score DESC, nhóm được tạo ở lần gặp đầu). Con số của riêng nó là con
+        # số thật: đúng những thứ MỘT tin hỏi, và đúng phần CV trả lời được.
+        dau = max(slot["jobs"], key=lambda j: j["score"] or 0)
         out.append({
             "jobs": slot["jobs"],
             "lines": len(sig),
@@ -493,6 +555,11 @@ def cv_versions(conn: sqlite3.Connection) -> dict:
             "wanted": sorted(slot["wanted"]),
             "missing": sorted(slot["missing"]),
             "top": [j["company"] for j in slot["jobs"][:3]],
+            # --- con số của TIN ĐẦU ĐÀN, để dòng nói được điều gì thật ---
+            "best": dau,
+            "hoi": len(cv.wanted),          # tin đó hỏi mấy thứ
+            "tra_loi": len(cv.covered),     # CV nói được mấy thứ trong đó
+            "cam": sorted(cv.missing),      # và câm về những thứ nào
         })
 
     value = {"versions": out, "jobs": len(rows), "core": len(core),
@@ -569,6 +636,16 @@ def search_stage(conn: sqlite3.Connection) -> dict:
                " FROM posting WHERE kept = 1 AND via_agency = 0")
     worth = one("SELECT COUNT(*) FROM posting WHERE kept = 1"
                 " AND realism IN ('likely','possible')")
+    # HÀNG ĐỢI THẬT: tin đáng nộp, điểm cao, mà CHƯA NỘP. Đây là con số duy
+    # nhất trên thanh trả lời được "tối nay tôi làm gì".
+    #
+    # Thanh cũ có bốn số mà không số nào hành động được: "363 giữ" và "364
+    # đáng nộp" gần trùng nhau (hai cách đếm cùng một chồng), "0 mới" luôn là
+    # 0 trừ đúng lúc vừa quét xong, "50 đang hiện" là cỡ trang.
+    hang_doi = one("SELECT COUNT(*) FROM posting WHERE kept = 1"
+                   " AND realism IN ('likely','possible') AND score >= 80"
+                   " AND id NOT IN (SELECT posting_id FROM application)")
+    da_nop = one("SELECT COUNT(*) FROM application")
     last = conn.execute(
         "SELECT at FROM audit WHERE kind = 'scan_started'"
         " ORDER BY id DESC LIMIT 1").fetchone()
@@ -613,6 +690,7 @@ def search_stage(conn: sqlite3.Connection) -> dict:
     from ..ingest.filter import NOI
     nha, gan = noi_toi(conn)
     return {"kept": kept, "worth": worth, "fresh": fresh, "state": state,
+            "hang_doi": hang_doi, "da_nop": da_nop,
             "run_label": kieu["label"], "run_note": kieu["note"],
             "gan": gan, "vung": NOI[nha]["ten"]}
 

@@ -32,7 +32,10 @@ from .paths import db_path
 SYSTEM = "system"
 SEARCH = "search"
 SCORE = "score"
-STREAMS = (SYSTEM, SEARCH, SCORE)
+# Tab CV có thời gian chạy thật kể từ khi nó có nút Chạy riêng: dựng bản
+# cho 364 tin mất 5 giây, và người dùng phải đọc được nó đang làm gì.
+CV = "cv"
+STREAMS = (SYSTEM, SEARCH, SCORE, CV)
 
 INFO, OK, WARN, ERROR = "info", "ok", "warn", "error"
 

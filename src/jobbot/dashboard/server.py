@@ -354,6 +354,32 @@ class Handler(BaseHTTPRequestHandler):
             threading.Thread(target=runner.scan_once, daemon=True,
                              name="scan-manual").start()
             return None
+
+        if stage == "cv":
+            # Dựng bản CV cho 364 tin mất 5,3 giây — quá lâu để chạy trong
+            # lúc trả lời HTTP, nên ở NỀN, tiến độ xem ở nhật ký luồng cv.
+            conn = db.connect()
+            try:
+                answers = store.load(conn)
+                if not (answers.get("cv_text") or "").strip():
+                    return "hồ sơ chưa có CV — nhập CV ở tab Profile trước"
+            finally:
+                conn.close()
+
+            def _dung_cv():
+                from ..cv import batch
+                conn2 = db.connect()
+                try:
+                    batch.run(conn2)
+                except Exception as exc:            # noqa: BLE001
+                    journal.log.error(journal.CV,
+                                      f"dựng hỏng — {type(exc).__name__}: {exc}")
+                finally:
+                    journal.log.done(journal.CV)
+                    conn2.close()
+
+            threading.Thread(target=_dung_cv, daemon=True, name="cv-build").start()
+            return None
         return f"{STAGES.get(stage, stage)} chưa nối nút Chạy"
 
     def do_GET(self):
@@ -402,7 +428,8 @@ class Handler(BaseHTTPRequestHandler):
                     jobs=live.jobs(conn, flt), flt=flt,
                     counts=live.job_counts(conn, flt),
                     sieve=live.sieve(conn),
-                    stage=live.search_stage(conn)))
+                    stage=live.search_stage(conn),
+                    dem=live.dem_chip(conn, flt)))
             finally:
                 conn.close()
 
@@ -434,9 +461,21 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/cv":
             conn = db.connect()
             try:
-                data = live.cv_versions(conn)
-                data["blocks"] = live.cv_blocks(conn)
-                return self._html(cvlist.render(**data))
+                # ĐỌC BẢN ĐÃ LƯU, không dựng ở đây. Dựng lúc vẽ trang là bắt
+                # người vừa search xong chờ 5,3 giây để xem một thứ họ chưa
+                # yêu cầu làm. Bấm thì mới chạy — xem cv/batch.py.
+                from ..cv import batch
+                luu = batch.saved(conn) or {}
+                return self._html(cvlist.render(
+                    versions=luu.get("versions") or [],
+                    jobs=luu.get("jobs") or 0,
+                    gaps=luu.get("gaps") or [],
+                    core=luu.get("core") or 0,
+                    # KHỐI thì vẽ ngay, không chờ nút: đó là chữ Vin vừa gõ,
+                    # và nó chỉ tốn một lần đọc hồ sơ.
+                    blocks=live.cv_blocks(conn),
+                    stage=batch.stage(conn),
+                    q=(query.get("q") or [""])[0].strip()[:80]))
             finally:
                 conn.close()
 
@@ -451,6 +490,8 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 if stage == "search":
                     return self._html(search.adjust(live.sieve(conn)))
+                if stage == "cv":
+                    return self._html(cvlist.adjust(live.cv_nut(conn)))
                 return self._html(
                     f"<div class=sheethead>Điều chỉnh · {STAGES[stage]}</div>"
                     "<div class=sheetwait>chưa có gì để chỉnh ở khúc này</div>")
@@ -618,6 +659,26 @@ class Handler(BaseHTTPRequestHandler):
             # đứng hình, mà nhật ký hiện tiến độ rồi nên không cần chờ.
             threading.Thread(target=_rejudge, daemon=True, name="rejudge").start()
             return self._redirect("/search")
+
+        if path == "/api/cv/num":
+            # BA NÚM của tầng CV. Bấm là lưu ngay, KHÔNG tự dựng lại: dựng mất
+            # 5 giây và người vừa xoay thử chưa chắc muốn trả giá đó. Nút Chạy
+            # tự đổi thành "Cập nhật" — xem cv/batch.stage.
+            from ..core import prefs
+            ma, _, gia = form.get("arg", [""])[0].partition(":")
+            KHOA = {"giong": (prefs.CV_GIONG, prefs.GIONG),
+                    "khoa": (prefs.CV_KHOA, prefs.KHOA),
+                    "bo_cuc": (prefs.CV_BO_CUC, prefs.BO_CUC)}
+            if ma not in KHOA or gia not in KHOA[ma][1]:
+                return self._json({"ok": False, "note": "núm lạ"}, status=400)
+            conn = db.connect()
+            try:
+                prefs.put(conn, KHOA[ma][0], gia)
+                live._CV_CACHE.clear()
+                journal.log.emit(journal.CV, f"núm {ma} -> {gia}")
+            finally:
+                conn.close()
+            return self._json({"ok": True, "reload": True})
 
         if path in ("/api/stage/start", "/api/stage/stop"):
             # HAI route cho MỌI khúc, không phải mỗi tab một route. Tên khúc
@@ -932,37 +993,6 @@ class Handler(BaseHTTPRequestHandler):
             threading.Thread(target=_mail, daemon=True, name="mail").start()
             return self._json({"ok": True, "note": "đang đọc…"})
 
-        if path == "/cv/pdf/all":
-            # MỘT bản cho MỖI BẢN CV, không phải mỗi tin: 117 tin nhưng chỉ 41
-            # bản khác nhau, in đủ 117 là 76 tệp trùng nội dung.
-            base = f"http://127.0.0.1:{self.server.server_address[1]}"
-
-            def _print_all():
-                from ..cv.pdf import render_many
-                conn = db.connect()
-                try:
-                    plan = live.cv_pdf_plan(conn)
-                    root = Path(db.db_path()).parent / "cv"
-                    jobs = [(f"{base}/jobs/{item['best']['id']}/cv", item["file"])
-                            for item in plan]
-                    journal.log.emit(journal.SCORE,
-                                     f"in {len(jobs)} bản CV ra PDF — vào {root}")
-                    made = render_many(jobs, on_done=lambda i, n, _p:
-                                       journal.log.progress(journal.SCORE,
-                                                            "in PDF", i, n))
-                    journal.log.ok(journal.SCORE,
-                                   f"xong {len(made)}/{len(jobs)} bản · {root}")
-                except Exception as exc:            # noqa: BLE001
-                    journal.log.error(journal.SCORE,
-                                      f"in hàng loạt hỏng — "
-                                      f"{type(exc).__name__}: {exc}")
-                finally:
-                    journal.log.done(journal.SCORE)
-                    conn.close()
-
-            threading.Thread(target=_print_all, daemon=True, name="pdf-all").start()
-            return self._json({"ok": True, "note": "đang in…"})
-
         if path == "/cv/pdf":
             # In NỀN: mở Chrome headless, tải trang, in, tắt — tính bằng giây.
             # Làm trong lúc vẽ trang là trình duyệt đứng hình.
@@ -984,18 +1014,25 @@ class Handler(BaseHTTPRequestHandler):
                     out = live.cv_pdf_for(conn, int(job))
                     if row is None or out is None:
                         return
-                    journal.log.progress(journal.SCORE, f"in PDF — {row['title'][:40]}")
+                    journal.log.progress(journal.CV, f"in PDF — {row['title'][:40]}")
                     render(f"{base}/jobs/{job}/cv", out)
-                    journal.log.ok(journal.SCORE, f"PDF: {out}")
+                    # GIAO TẬN TAY. In xong mà chỉ ghi đường dẫn vào nhật ký
+                    # thì người dùng phải đi mò trong data/cv — đó không phải
+                    # "tải về". Chép sang Downloads rồi mở Finder trỏ vào nó.
+                    from ..cv.pdf import tai_ve
+                    ve = tai_ve(out)
+                    journal.log.ok(journal.CV,
+                                   f"PDF đã tải về: {ve}" if ve
+                                   else f"PDF: {out} (không chép được sang Downloads)")
                 except Exception as exc:            # noqa: BLE001
-                    journal.log.error(journal.SCORE,
+                    journal.log.error(journal.CV,
                                       f"in PDF hỏng — {type(exc).__name__}: {exc}")
                 finally:
-                    journal.log.done(journal.SCORE)
+                    journal.log.done(journal.CV)
                     conn.close()
 
             threading.Thread(target=_print, daemon=True, name=f"pdf-{job}").start()
-            return self._json({"ok": True, "note": "đang in…"})
+            return self._json({"ok": True, "note": "đang in… sẽ hiện trong Finder"})
 
         if path == "/cv/block":
             # Ghi thẳng vào cv_text — MỘT nguồn sự thật. write_block chỉ đụng

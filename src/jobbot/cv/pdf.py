@@ -20,6 +20,7 @@ import threading
 from pathlib import Path
 
 from ..browser import cdp, chrome
+from ..core.journal import CV, log as jlog
 
 PORT = chrome.PDF_PORT   # cổng RIÊNG, profile RIÊNG — xem chrome.PROFILE
 
@@ -42,8 +43,83 @@ def slug(text: str) -> str:
     return keep[:60] or "cv"
 
 
+# --- KIỂM CHẤT LƯỢNG NGAY TRƯỚC KHI IN ---------------------------------
+#
+# Ba lỗi dưới đây đều ĐÃ XẢY RA THẬT, và đều chỉ lộ ra khi in một tờ rồi mở
+# ảnh lên nhìn — test HTML không bắt được cái nào:
+#
+#   rác app    thanh trạng thái in đè lên dòng cuối, mang cả đường dẫn tệp
+#              trên máy ("PDF: /Users/davi/…") ra tờ giấy gửi nhà tuyển dụng;
+#              tiêu đề cửa sổ in thành dòng đầu tiên
+#   chữ nhợt   luật màu in liệt kê từng lớp cần tô đen, nên lớp nào quên thì
+#              giữ màu giao diện TỐI — đo được .cvskill ở 192/255, tức là cả
+#              mục TECHNICAL SKILLS gần như vô hình trên giấy trắng
+#   lệch lề    `main` là position:fixed left:226px (chừa chỗ thanh bên); khi
+#              in, Chrome đặt phần tử fixed theo hộp trang và left không ghi
+#              đè được — tờ CV bị đẩy vào giữa, phí một phần tư mặt giấy
+#
+# Nên kiểm NGAY TRÊN TRANG SẮP IN, không kiểm trên chuỗi HTML. Không chặn in
+# — vẫn ra tệp, nhưng nói thẳng tờ giấy đang hỏng chỗ nào.
+SANG_NHAT = 90          # 0 = đen. Chữ nhạt hơn ngần này thì in ra đọc không rõ.
+
+_SOI = r"""(() => {
+  const den = c => { const m = c.match(/\d+/g); return m ? (+m[0] + +m[1] + +m[2]) / 3 : 255 };
+  const to = document.querySelector('.cvpaper');
+  if (!to) return JSON.stringify(['không tìm thấy tờ CV (.cvpaper) trên trang']);
+  const loi = [];
+
+  // 1. RÁC APP: phần tử có chữ, đang hiện, mà KHÔNG nằm trong tờ CV.
+  for (const e of document.querySelectorAll('body *')) {
+    if (to.contains(e) || e.contains(to)) continue;
+    if (e.children.length || !e.textContent.trim()) continue;
+    const r = e.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) continue;
+    if (getComputedStyle(e).visibility === 'hidden') continue;
+    loi.push('rác app in ra: ' + (e.className || e.tagName) + ' «'
+             + e.textContent.trim().slice(0, 40) + '»');
+    if (loi.length > 4) break;
+  }
+
+  // 2. CHỮ NHỢT trong chính tờ CV.
+  let nhat = 0, ai = '';
+  for (const e of to.querySelectorAll('*')) {
+    if (e.children.length || !e.textContent.trim()) continue;
+    const v = den(getComputedStyle(e).color);
+    if (v > nhat) { nhat = v; ai = (e.className || e.tagName) + ' «'
+                                  + e.textContent.trim().slice(0, 30) + '»' }
+  }
+  if (nhat > SANG_NHAT) loi.push('chữ quá nhợt (' + Math.round(nhat) + '/255): ' + ai);
+
+  // 3. LỆCH LỀ: tờ CV phải bắt đầu ở mép trái và dùng gần hết bề ngang.
+  const p = to.getBoundingClientRect(), W = document.documentElement.clientWidth;
+  if (p.left > 8) loi.push('tờ CV lệch vào ' + Math.round(p.left) + 'px — phí lề trái');
+  if (p.width < W * 0.9) loi.push('tờ CV chỉ rộng ' + Math.round(p.width / W * 100) + '% mặt giấy');
+  return JSON.stringify(loi);
+})()"""
+
+
+def kiem(tab) -> list[str]:
+    """Soi TRANG SẮP IN. Trả về danh sách chỗ hỏng, rỗng là sạch.
+
+    CHÍNH CỔNG NÀY HỎNG THÌ PHẢI KÊU. Bản đầu dùng `_SOI % SANG_NHAT` để nhét
+    ngưỡng vào, mà chuỗi JS có ký tự `%` thật ('% mặt giấy') — Python ném
+    ValueError, `except` nuốt mất, và cổng báo "sạch" ở mọi lượt in. Một cổng
+    kiểm im lặng báo sạch khi chính nó gãy thì tệ hơn là không có cổng nào.
+    """
+    import json
+    tab.call("Emulation.setEmulatedMedia", {"media": "print"})
+    js = _SOI.replace("SANG_NHAT", str(SANG_NHAT))
+    try:
+        return json.loads(tab.eval(js)) or []
+    except Exception as exc:            # noqa: BLE001
+        return [f"KHÔNG SOI ĐƯỢC tờ in ({type(exc).__name__}: {exc}) — "
+                f"không ai kiểm tờ giấy này"]
+
+
 def _print_one(tab, url: str, out: Path, timeout: float) -> Path:
     tab.go(url, wait_for=".cvpaper", timeout=timeout)
+    for loi in kiem(tab):
+        jlog.warn(CV, f"tờ CV in ra có vấn đề — {loi}")
     reply = tab.call("Page.printToPDF", PAPER, timeout=timeout)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(base64.b64decode(reply["data"]))
@@ -91,3 +167,51 @@ def _render_all(jobs, timeout, on_done):
             if started is not None:
                 chrome.shutdown(port=PORT)
     return [m for m in made if m]
+
+
+# --- GIAO TỆP TẬN TAY ---------------------------------------------------
+
+def tai_ve(src: Path) -> Path | None:
+    """Chép bản vừa in sang ~/Downloads rồi mở Finder trỏ vào nó.
+
+    VÌ SAO KHÔNG DÙNG LINK TẢI. Vỏ app là WKWebView (xem app.py), mà WKWebView
+    KHÔNG tự tải tệp: không có WKDownloadDelegate thì `Content-Disposition:
+    attachment` không xảy ra chuyện gì cả — bấm nút, im lặng, không có tệp,
+    không có lỗi. Kiểm bằng cách đọc app.py: ở đó chỉ khai delegate cho hộp
+    chọn tệp và cho cửa sổ mới.
+
+    Mà đây là app CHẠY TRÊN MÁY MÌNH: tệp đã nằm sẵn trên đĩa rồi. Thứ còn
+    thiếu chỉ là đưa nó ra chỗ người ta tìm được. Nên chép sang Downloads và
+    mở Finder — làm được ngay, chạy đúng ở cả hai vỏ, không phải viết delegate
+    PyObjC nào.
+
+    BẢN GỐC Ở LẠI `data/cv/`: vòng nộp đơn tìm tệp đính kèm ở đó
+    (live.cv_pdf_for). Chuyển hẳn đi là làm chết đường nộp.
+    """
+    import shutil
+    import subprocess
+    if not src.exists():
+        return None
+    dest_dir = Path.home() / "Downloads"
+    if not dest_dir.is_dir():
+        return None
+    dest = dest_dir / src.name
+    # Trùng tên thì thêm số, KHÔNG đè: bản cũ có thể đang mở, hoặc đã gửi đi
+    # rồi và người ta còn cần đối chiếu.
+    if dest.exists():
+        for i in range(2, 100):
+            thu = dest_dir / f"{src.stem}-{i}{src.suffix}"
+            if not thu.exists():
+                dest = thu
+                break
+    shutil.copy2(src, dest)
+    try:
+        # -R: hiện Finder và CHỌN SẴN tệp, không chỉ mở thư mục. Người dùng
+        # thấy ngay tệp nào vừa ra, kéo thẳng vào ô đính kèm của đơn.
+        subprocess.run(["open", "-R", str(dest)], check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        pass                      # không mở được Finder thì tệp vẫn nằm đó
+    return dest
+

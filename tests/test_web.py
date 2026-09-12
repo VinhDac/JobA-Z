@@ -462,7 +462,7 @@ with tempfile.TemporaryDirectory() as tmp:
             _wired |= set(_re.findall(r"data-post='([^']+)'", _html))
             _wired |= set(_re.findall(r'data-post="([^"]+)"', _html))
 
-    check("có nút data-post để mà kiểm", len(_wired) >= 8, str(sorted(_wired)))
+    check("có nút data-post để mà kiểm", len(_wired) >= 7, str(sorted(_wired)))
     for _target in sorted(_wired):
         check(f"route {_target} có thật", _target in _known)
 
@@ -480,12 +480,164 @@ with tempfile.TemporaryDirectory() as tmp:
     check("không cắt đôi một mục qua hai trang", "break-inside:avoid" in rule)
 
     check("POST /cv/pdf thiếu id -> 400", post_form("/cv/pdf", "arg=") == 400)
+
+    # BẤM THÌ MỚI CHẠY. Tab CV không còn dựng lúc vẽ trang, nên muốn kiểm ô
+    # "Bản sẽ gửi" thì phải dựng trước — y như người dùng bấm Chạy.
+    check("chưa bấm Chạy -> tab CV nói rõ là chưa dựng, không vẽ ô rỗng",
+          "Chưa dựng bản CV nào" in get("/cv")[1])
+    from jobbot.cv import batch as _bt
+    _cvc = db.connect(Path(tmp) / "jobbot.db")
+    _bt.run(_cvc)
+    _cvc.close()
     _s, body = get("/cv")
-    check("có nút in hàng loạt", "data-post='/cv/pdf/all'" in body)
-    # MỘT tệp mỗi BẢN, không phải mỗi tin: 117 tin nhưng chỉ ~41 bản khác nhau,
-    # in đủ 117 là đẻ ra 76 tệp trùng nội dung.
-    check("in theo BẢN, không theo tin",
-          "In tất cả" in body and " bản ra PDF" in body)
+    check("dựng xong thì ô hiện bản", "class=cvrow" in body)
+    # IN HÀNG LOẠT ĐÃ BỎ. Câu hỏi thật ở ô này không phải "in cho tôi 28 tệp",
+    # mà là "gửi cho công ty này thì dùng bản nào" — nên chỗ đó là ô TÌM.
+    # Mỗi bản vẫn in riêng được bằng nút PDF trên từng dòng.
+    check("không còn nút in hàng loạt", "/cv/pdf/all" not in body)
+    check("POST /cv/pdf/all đã bỏ hẳn, không để lại đường cụt",
+          post_form("/cv/pdf/all", "") == 404)
+    check("có ô tìm trong bản đã dựng", "name=q" in body and "class=jfind" in body)
+    check("in từng bản vẫn còn", "data-post='/cv/pdf'" in body)
+
+    # TỜ GIẤY GỬI ĐI CHỈ ĐƯỢC CÓ TỜ CV. Kiểm bằng cách in thật rồi mở ảnh ra
+    # nhìn: thanh trạng thái in ĐÈ lên dòng cuối mục Technical Skills, và nó
+    # mang đường dẫn tệp trên máy ("PDF: /Users/davi/…") ra một tài liệu gửi
+    # cho nhà tuyển dụng.
+    _cssp = get("/static/app.css")[1]
+    _in = _cssp[_cssp.index("@media print"):]
+    _an = _in[:_in.index("}", _in.index("display:none"))]
+    for _lop in (".statusbar", ".cvaudit", ".side", ".mbtn", ".titlebar"):
+        check(f"khi in, ẩn {_lop}", _lop in _an)
+    # PHÔNG NHÚNG ĐƯỢC. Phông hệ thống macOS (.SF NS) không nhúng vào PDF được
+    # nên Chrome vẽ từng chữ thành GLYPH TAY: đo trên bản in thật 34 phông
+    # Type3 + CharProcs, 0 phông TrueType. Trình bóc chữ xoàng cho ra
+    # "D a c  V in h  N g u y e n" — đúng nguyên nhân hỏng parse mà Greenhouse
+    # liệt kê. Đổi sang Georgia/Times: Type3 34 -> 0, và PDF nhẹ 217 -> 132 KB.
+    check("tờ CV in bằng phông NHÚNG ĐƯỢC, không phải phông hệ thống",
+          'font-family:Georgia,"Times New Roman",serif' in _in)
+    # `main` là position:fixed left:226px (chừa chỗ thanh bên). Khi in, Chrome
+    # đặt phần tử fixed theo HỘP TRANG và `left` không ghi đè được — ép cả
+    # bằng CSS lẫn style inline đều không nhúc nhích. Phải trả về dòng chảy.
+    check("khi in, main trả về position:static — không thì tờ CV lệch 226px",
+          "position:static !important" in _in)
+    # MÀU IN đặt mặc định ĐEN rồi mới làm nhạt vài chỗ. Luật cũ liệt kê từng
+    # lớp cần tô đen, nên lớp nào quên thì giữ màu giao diện TỐI: đo được
+    # .cvskill ở 192/255, cả mục TECHNICAL SKILLS gần như vô hình.
+    check("màu in mặc định là ĐEN cho mọi thứ trong tờ CV",
+          ".cvpaper, .cvpaper * { color:#111 !important }" in _in)
+
+    # CỔNG KIỂM lúc in. Nó soi chính trang sắp in, nên bắt được thứ test HTML
+    # không bắt được: rác app lọt ra giấy, chữ nhợt, tờ CV lệch lề.
+    from jobbot.cv import pdf as _pdfm
+    for _dau in ("rác app in ra", "chữ quá nhợt", "lệch vào"):
+        check(f"cổng kiểm có soi «{_dau}»", _dau in _pdfm._SOI)
+    check("ngưỡng nhợt được đặt tên, không gõ số trong JS",
+          "SANG_NHAT" in _pdfm._SOI and isinstance(_pdfm.SANG_NHAT, int))
+    # CHÍNH CỔNG HỎNG THÌ PHẢI KÊU. Bản đầu nuốt ValueError rồi báo "sạch" ở
+    # mọi lượt in — một cổng im lặng báo sạch khi nó gãy thì tệ hơn không có.
+    class _TabHong:
+        def call(self, *a, **k): pass
+        def eval(self, *a, **k): raise RuntimeError("gãy")
+    _ra = _pdfm.kiem(_TabHong())
+    check("cổng kiểm gãy -> KÊU LÊN, không báo sạch",
+          _ra and "KHÔNG SOI ĐƯỢC" in _ra[0], str(_ra))
+    # Bản chấm điểm phải nằm TRONG .cvaudit. Luật ẩn đã có sẵn từ lâu nhưng
+    # không chỗ nào GẮN lớp đó, nên nó là một luật không canh gì cả.
+    from jobbot.cv.build import TailoredCV as _TC2
+    from jobbot.cv import report as _rp2
+    check("phần chi tiết nằm trong .cvaudit nên không lọt vào PDF",
+          _rp2.chi_tiet(_TC2(header=[], summary="", sections=[], dropped=[],
+                             wanted=[], covered=[], missing=[]))
+          .startswith("<div class=cvaudit>"))
+
+    # NÚT PDF PHẢI GIAO TỆP TẬN TAY. Vỏ app là WKWebView, mà WKWebView KHÔNG
+    # tự tải tệp — không có delegate thì Content-Disposition im lặng không làm
+    # gì. Nên chép sang Downloads rồi mở Finder.
+    from jobbot.cv.pdf import tai_ve as _tv
+    import tempfile as _tf9, pathlib as _pl9, os as _os9
+    _that_home = _os9.environ.get("HOME")
+    with _tf9.TemporaryDirectory() as _h9:
+        _os9.environ["HOME"] = _h9
+        try:
+            (_pl9.Path(_h9) / "Downloads").mkdir()
+            _src = _pl9.Path(_h9) / "a.pdf"
+            _src.write_bytes(b"%PDF-1.4 x")
+            _d1 = _tv(_src)
+            check("chép được sang Downloads", _d1 and _d1.exists()
+                  and _d1.parent.name == "Downloads")
+            _d2 = _tv(_src)
+            # Trùng tên thì thêm số: bản cũ có thể đã gửi đi và còn cần đối chiếu.
+            check("in lần hai KHÔNG đè lên bản cũ", _d2 != _d1 and _d1.exists())
+            check("tệp không có thật -> trả None, không nổ",
+                  _tv(_pl9.Path(_h9) / "khong-co.pdf") is None)
+        finally:
+            if _that_home is None:
+                _os9.environ.pop("HOME", None)
+            else:
+                _os9.environ["HOME"] = _that_home
+
+    # Ô TÌM phải THẬT SỰ LỌC, không chỉ vẽ ra cho đẹp.
+    from jobbot.dashboard.views import cvlist as _cvl
+    _gia_ver = [
+        {"jobs": [{"id": 1, "company": "Man Group", "title": "Quant", "score": 90}],
+         "only": ["a"], "missing": [], "lines": 1,
+         "hoi": 6, "tra_loi": 4, "cam": ["derivatives"]},
+        {"jobs": [{"id": 2, "company": "Citadel", "title": "Data Scientist",
+                   "score": 80}], "only": ["b"], "missing": [], "lines": 1,
+         "hoi": 7, "tra_loi": 1, "cam": ["cloud", "nlp"]},
+    ]
+    _gia_data = {"versions": _gia_ver, "jobs": 2, "gaps": [], "core": 0}
+    _co = _cvl._list(_gia_data, "man group")
+    check("tìm theo tên công ty -> chỉ còn bản khớp",
+          "Man Group" in _co and "Citadel" not in _co)
+    check("và nói rõ lọc còn mấy bản trên tổng", "1</b>/2 bản" in _co)
+    _ct = _cvl._list(_gia_data, "data scientist")
+    check("tìm theo CHỨC DANH cũng được", "Citadel" in _ct and "Man Group" not in _ct)
+    check("không khớp gì -> nói thẳng, không trả danh sách rỗng",
+          "không bản nào gửi cho" in _cvl._list(_gia_data, "zzzz"))
+    check("ô tìm vẫn còn khi không khớp — để sửa chữ ngay tại chỗ",
+          "class=jfind" in _cvl._list(_gia_data, "zzzz"))
+    # SỐ HIỆU BẢN phải giữ nguyên khi lọc: "#2" lúc tìm mà là "#1" lúc không
+    # tìm thì không nói chuyện được về một bản cụ thể.
+    check("số hiệu bản giữ nguyên khi lọc", ">#2<" in _ct)
+    check("không tìm thì hiện đủ cả hai",
+          "Man Group" in _cvl._list(_gia_data) and "Citadel" in _cvl._list(_gia_data))
+
+    # DÒNG PHẢI NÓI ĐƯỢC ĐIỀU GÌ THẬT. Bản cũ in ra 4 câu tiếng Anh RIÊNG của
+    # bản đó — chữ chính Vin viết, đọc lại không nắm thêm gì, mà nhân 28 dòng
+    # thì không ai đọc nổi.
+    _ca = _cvl._list(_gia_data)
+    check("dòng KHÔNG còn đổ nguyên câu CV ra danh sách", "cvonly" not in _ca)
+    check("dòng dẫn bằng TIN, không dẫn bằng tài liệu",
+          "Man Group" in _ca and "Quant" in _ca)
+    check("có tỉ lệ phủ của chính tin đó", "4/6" in _ca and "1/7" in _ca)
+    check("và vẽ thành thanh để quét được 28 dòng", "vbarc" in _ca)
+    # BA MỨC = BA HÀNH ĐỘNG: gửi được / yếu / viết thêm đã. Một màu cho tất cả
+    # thì thanh chỉ là trang trí.
+    check("phủ cao -> mức ok", "vbarc ok" in _ca)
+    check("phủ thấp -> mức low", "vbarc low" in _ca)
+    # Hai con số là HAI câu hỏi khác nhau; gộp chữ thì người đọc trừ 6−4=2 rồi
+    # tưởng máy đếm sai khi danh sách chỉ có 1 mục.
+    check("nói rõ 'hồ sơ chưa có câu nào về', không phải 'bản này thiếu'",
+          "hồ sơ chưa có câu nào về" in _ca)
+    _nhom2 = [{"jobs": [{"id": 5, "company": "A", "title": "X", "score": 90},
+                        {"id": 6, "company": "B", "title": "Y", "score": 70}],
+               "only": [], "missing": [], "lines": 0,
+               "hoi": 4, "tra_loi": 2, "cam": []}]
+    check("nhóm >1 tin -> nói rõ bản dùng chung cho mấy tin",
+          "dùng chung cho" in _cvl._list({"versions": _nhom2, "jobs": 2,
+                                          "gaps": [], "core": 0}))
+    check("nhóm 1 tin -> KHÔNG ghi 'dùng chung', đó là nói thừa",
+          "dùng chung cho" not in _ca)
+    # Dòng phải mở đúng tin người ta vừa gõ tên, không mở một tin khác cùng bản.
+    _hai = [{"jobs": [{"id": 9, "company": "Low Co", "title": "X", "score": 99},
+                      {"id": 7, "company": "Man Group", "title": "Y", "score": 10}],
+             "only": [], "missing": [], "lines": 0,
+             "hoi": 4, "tra_loi": 2, "cam": []}]
+    check("đang tìm thì dòng trỏ tới ĐÚNG tin khớp, không phải tin điểm cao nhất",
+          "/jobs/7/cv" in _cvl._list({"versions": _hai, "jobs": 2, "gaps": [],
+                                      "core": 0}, "man group"))
     check("POST /cv/pdf id không phải số -> 400",
           post_form("/cv/pdf", "arg=abc") == 400)
 
@@ -554,6 +706,100 @@ with tempfile.TemporaryDirectory() as tmp:
     # Tab CV là chỗ DUY NHẤT còn dùng phép đếm đó. Nó phải mở được, vì đường
     # import vừa đổi nhà — gãy ở đây thì cả tab CV trắng.
     check("tab CV vẫn mở được sau khi phép đếm đổi nhà", get("/cv")[0] == 200)
+
+    print("\n[tab CV: bấm thì mới chạy, và ba núm phải thật sự xoay]")
+    from jobbot.core import prefs as _pfc
+    check("/adjust/cv có ba núm thật", all(
+        f"data-arg='{_m}:" in get("/adjust/cv")[1]
+        for _m in ("giong", "khoa", "bo_cuc")))
+    check("núm nói rõ nó KHÔNG nhồi từ khoá",
+          "không thêm từ nào" in get("/adjust/cv")[1])
+    for _a, _ma in (("khoa:day", "khoa"), ("giong:nguyen", "giong"),
+                    ("bo_cuc:gon", "bo_cuc")):
+        check(f"POST núm {_a} -> lưu được", post_form("/api/cv/num", f"arg={_a}") == 200)
+    check("giá trị lạ -> 400, không lưu bừa",
+          post_form("/api/cv/num", "arg=khoa:xxx") == 400)
+    check("tên núm lạ -> 400", post_form("/api/cv/num", "arg=lung:tung") == 400)
+
+    _cvn = db.connect(Path(tmp) / "jobbot.db")
+    # XOAY NÚM THÌ NÚT PHẢI ĐỔI. Núm mà không đổi được nút là núm trang trí:
+    # người dùng bấm, không thấy gì khác, rồi không tin cả bảng núm nữa.
+    _st_num = _bt.stage(_cvn)
+    check("xoay núm -> nút thành Cập nhật", _st_num["label"] == "Cập nhật",
+          _st_num["label"])
+    check("và nói rõ CÁI GÌ vừa đổi",
+          "xoay núm" in _st_num["note"], _st_num["note"])
+    # GIỌNG VĂN phải đổi được chữ in ra thật, không chỉ đổi một dòng trong DB.
+    from jobbot.cv.build import build as _bcv
+    from jobbot.profile import store as _stc
+    from jobbot.dashboard import live as _lvc
+    _ans = _stc.load(_cvn)
+    _row = _cvn.execute("SELECT description, score_json FROM posting"
+                        " WHERE kept = 1 LIMIT 1").fetchone()
+    import json as _jsonc
+    _ex = _jsonc.loads(_row["score_json"]) if _row and _row["score_json"] else None
+    _jd = (_row["description"] if _row else "") or ""
+    _nguyen = _bcv(_ans, _ex, _jd, {"giong": "nguyen", "khoa": 3.0, "dong": 3})
+    _luoc = _bcv(_ans, _ex, _jd, {"giong": "cv", "khoa": 3.0, "dong": 3})
+    check("giọng 'nguyên' thì KHÔNG lược chủ ngữ",
+          not any(l.sua and any(x.phep == "chu_ngu" for x in l.sua)
+                  for s2 in _nguyen.sections for l in s2.lines))
+    # BỐ CỤC phải đổi được SỐ DÒNG THẬT. Đo thẳng trên _pick với một khối
+    # nhiều câu: hồ sơ mẫu của test chỉ có 1 câu mỗi khối, nên dựng cả CV thì
+    # 'gọn' và 'đầy' ra y hệt và test không chứng minh được gì.
+    from jobbot.cv.build import _pick as _pk
+    from jobbot.cv.blocks import Block as _Blk
+    _kh = _Blk(kind="experience", title="X", meta="",
+               lines=[f"Built system number {_i} with Python and SQL daily."
+                      for _i in range(6)])
+    for _n in (1, 3, 5):
+        check(f"bố cục {_n} dòng -> đúng {_n} dòng",
+              len(_pk(_kh, set(), {}, _n, num={"dong": _n})) == _n)
+    _cvn.close()
+    for _a in ("khoa:thuong", "giong:cv", "bo_cuc:thuong"):
+        post_form("/api/cv/num", f"arg={_a}")
+
+    print("\n[bản chấm điểm: máy phải GIẢI TRÌNH, không chỉ quyết]")
+    # Luật cấm câu kể thất bại lên CV từ đầu, nhưng bộ dựng chưa bao giờ tra —
+    # 3 câu bị cấm đi ra ngoài trên MỌI bản. Không ai thấy vì không có bản
+    # giải trình nào để mà đọc.
+    _s, _bcv_html = get("/jobs/1/cv")
+    if _s == 200:
+        from jobbot.cv import rules as _rl
+        _cvr = db.connect(Path(tmp) / "jobbot.db")
+        _r1 = _cvr.execute("SELECT description, score_json FROM posting"
+                           " WHERE id = 1").fetchone()
+        _cv1 = _bcv(_stc.load(_cvr),
+                    _jsonc.loads(_r1["score_json"]) if _r1["score_json"] else None,
+                    _r1["description"] or "")
+        _lot = [l.text for s2 in _cv1.sections
+                if s2.kind in ("experience", "project")
+                for l in s2.lines
+                if _rl.sentence_ok(l.goc or l.text, l.hits)[0] == "drop"]
+        check("KHÔNG còn câu bị luật cấm lọt ra bản CV", not _lot, str(_lot[:1]))
+        _cvr.close()
+        check("bản chấm điểm có mục trước/sau", "ĐÃ SỬA" in _bcv_html.upper()
+              or "gsua" in _bcv_html)
+        check("nói ra máy chỉ cắt chữ, không viết thêm",
+              "cắt và xếp lại" in _bcv_html)
+    # HAI NHÓM BỎ phải tách, vì hai nhóm cần hai hành động khác nhau: câu bị
+    # luật cấm thì sửa chữ cũng vô ích, câu yếu hơn thì không phải sửa gì.
+    from jobbot.cv.build import TailoredCV as _TCV
+    from jobbot.cv import report as _rp
+    _gia = _TCV(header=[], summary="", sections=[],
+                dropped=[("A failure sentence.",
+                          "outcome failure — belongs on the project page, not the CV"),
+                         ("A fine sentence.",
+                          "weaker than what this posting asks for")],
+                wanted=["python"], covered=[], missing=["c++"])
+    _rh = _rp.chi_tiet(_gia)
+    check("nhóm 'luật không cho lên CV' hiện riêng",
+          "Luật không cho lên CV (1)" in _rh)
+    check("nhóm 'để dành cho tin khác' hiện riêng",
+          "Để dành cho tin khác (1)" in _rh)
+    check("lý do dịch sang tiếng Việt, không để nguyên tiếng Anh",
+          "kể thất bại" in _rh and "outcome failure" not in _rh)
+    check("nói ra chỗ hồ sơ CÂM", "hồ sơ câm" in _rh and "c++" in _rh)
 
     print("\n[tấm phủ KHÔNG được chắn cả trang khi đang đóng]")
     # LỖI THẬT, và là loại tệ nhất: cả app không bấm được gì.
@@ -1071,7 +1317,9 @@ with tempfile.TemporaryDirectory() as tmp:
 
     # TÔ ĐẦY TỚI NẤC ĐANG CHỌN — đó là thứ làm nó đọc ra một cái thang.
     _, _f1 = get("/search?chance=possible")
-    _nac = _re2.findall(r"<a class='(lvlstep[^']*)'[^>]*>([^<]*)</a>", _f1)[:4]
+    # `.*?` chứ không phải `[^<]*`: nút giờ mang thêm <b>số tin</b> bên trong,
+    # và ý của test này là kiểm LỚP CSS chứ không phải chữ bên trong nút.
+    _nac = _re2.findall(r"<a class='(lvlstep[^']*)'[^>]*>(.*?)</a>", _f1)[:4]
     check("nấc đã qua được tô", [c for c, _ in _nac] ==
           ["lvlstep on", "lvlstep on", "lvlstep on now", "lvlstep"], str(_nac))
     check("đúng một nấc là nấc đang chọn",
@@ -1182,13 +1430,20 @@ with tempfile.TemporaryDirectory() as tmp:
     # THANH KHÚC nói về KHO, chip nói về KHUNG NHÌN — đừng trộn. Trộn thì gõ
     # tìm "quant" xong thanh báo "64 giữ · 91 đáng nộp", trong khi đáng nộp là
     # tập con của giữ: 91 > 64 là con số không thể tồn tại.
-    _giu = lambda h: _re.search(r"class='metric stock[^']*'><b>([0-9,]+)</b>giữ", h)
     import re as _re
-    check("thanh khúc giữ nguyên số KHO khi đang tìm",
-          _giu(_s1) and _giu(_s0) and _giu(_s1).group(1) == _giu(_s0).group(1),
-          f"{_giu(_s1) and _giu(_s1).group(1)} vs {_giu(_s0) and _giu(_s0).group(1)}")
-    check("còn 'đang hiện' thì ĐI THEO khung nhìn",
-          "class='metric view" in _s1)
+    _giu = lambda h: _re.search(
+        r"class='metric stock[^']*'><b>([0-9,]+)</b>đáng nộp", h)
+    check("thanh khúc giữ nguyên số KHO khi đang tìm — "
+          f"{_giu(_s1) and _giu(_s1).group(1)} vs {_giu(_s0) and _giu(_s0).group(1)}",
+          bool(_giu(_s1) and _giu(_s0) and _giu(_s1).group(1) == _giu(_s0).group(1)))
+    # MỖI SỐ PHẢI HÀNH ĐỘNG ĐƯỢC. Thanh cũ có "363 giữ" cạnh "364 đáng nộp" —
+    # hai cách đếm cùng một chồng, gần trùng nhau nên không nói thêm gì; và
+    # "50 đang hiện" chỉ là cỡ trang, danh sách ngay dưới đã nói rồi.
+    check("bỏ số 'đang hiện' — đó là cỡ trang, không phải tin tức",
+          "đang hiện" not in _s0)
+    check("có hàng đợi THẬT: điểm cao mà chưa nộp", "nên nộp" in _s0)
+    check("và số đó mang vai HÀNH ĐỘNG (xanh), không phải số nền",
+          _re.search(r"class='metric act[^']*'><b>[0-9,]+</b>nên nộp", _s0))
 
     # Con số trên chip phải ĐI THEO chữ tìm, không thì nó nói dối.
     import re as _re

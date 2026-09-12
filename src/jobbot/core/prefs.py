@@ -72,9 +72,40 @@ LI_LEVELS = "li_levels"
 # lời cho đơn nộp tháng trước, mà không phải lôi cả hộp thư về.
 MAIL_DAYS = "mail_days"
 
+# --- BA NÚM CỦA TẦNG CV -------------------------------------------------
+#
+# Ba núm, không hơn. Mỗi núm phải trả lời được "xoay nó thì bản CV đổi thế
+# nào" bằng một câu — núm nào không trả lời được thì nó là núm trang trí, và
+# núm trang trí làm người dùng mất tin vào cả bảng.
+#
+# Cả ba đều xoay SỐ ĐÃ CÓ SẴN trong cv/rules.py, không đẻ khái niệm mới.
+
+# GIỌNG VĂN. "cv" = lược chủ ngữ ngôi thứ nhất (quy ước CV); "nguyen" = giữ
+# đúng chữ Vin viết. Mặc định "cv": đo trên hồ sơ thật, 6/26 câu mở đầu bằng
+# "I/My/We", và hai chữ đầu là chỗ đắt nhất của một dòng CV.
+CV_GIONG = "cv_giong"
+GIONG = {"cv": "lược chủ ngữ — Built…, Designed…",
+         "nguyen": "giữ nguyên chữ bạn viết — I built…, I designed…"}
+
+# ĐỘ DÀY TỪ KHOÁ. Đây là trọng số cho "câu này trúng thứ tin đòi" trong
+# rules.sentence_weight. Dày lên thì máy ưu tiên câu trúng từ khoá; nhẹ đi
+# thì nó ưu tiên câu mạnh về nội dung dù không trúng từ nào.
+#
+# KHÔNG phải nút "nhồi từ khoá": máy không thêm từ nào vào CV. Nó chỉ đổi
+# THỨ TỰ ƯU TIÊN giữa mấy câu Vin đã viết.
+CV_KHOA = "cv_khoa"
+KHOA = {"nhe": 1.5, "thuong": 3.0, "day": 5.0}
+
+# BỐ CỤC — mấy dòng mỗi khối. Trần một mặt giấy: gọn thì đọc nhanh nhưng nói
+# được ít, đầy thì ngược lại.
+CV_BO_CUC = "cv_bo_cuc"
+BO_CUC = {"gon": 2, "thuong": 3, "day": 4}
+
+
 DEFAULTS = {AUTORUN: "0", SCAN_EVERY: "60",
             HOURS_FROM: "8", HOURS_TO: "22", PACE: "thuong",
             SRC_BOARD: "1", SRC_LINKEDIN: "1", SRC_ALERT: "1", LI_DONE: "", LI_LEVELS: "", MAIL_DAYS: "30",
+            CV_GIONG: "cv", CV_KHOA: "thuong", CV_BO_CUC: "thuong",
             **{k: "1" for k in SRC_ATS.values()}}
 
 

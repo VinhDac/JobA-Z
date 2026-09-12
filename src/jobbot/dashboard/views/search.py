@@ -42,11 +42,28 @@ CHANCE_TEXT = {"likely": ("đáng nộp", "ok"),
 
 # ---------------------------------------------------------------- danh sách
 
-def _chips(name: str, options, current: str, flt) -> str:
+def _so(dem: dict, name: str, value: str) -> str:
+    """Con số trên một nút lọc — bấm vào còn bao nhiêu tin.
+
+    Không có số thì nút lọc là một lời mời mù: người dùng bấm để BIẾT nó lọc
+    ra gì, và nếu nó lọc ra y nguyên (đo được: "Cả nước" 407 trên 411) thì họ
+    vừa mất một cú bấm để học rằng nút đó vô dụng. Ghi số ra thì họ biết
+    trước, và biết đúng theo dữ liệu HÔM NAY.
+    """
+    if not dem:
+        return ""
+    n = dem.get(f"{name}:{value}")
+    return f"<b>{n:,}</b>" if n is not None else ""
+
+
+def _chips(name: str, options, current: str, flt, dem: dict | None = None) -> str:
     """Một hàng nút XEM. Bấm là đổi ngay — không đi qua nút Áp dụng."""
+    dem = dem or {}
     return "".join(
-        f"<a class='vchip{' on' if value == current else ''}'"
-        f" href='{esc(flt.url(**{name: value}))}'>{esc(label)}</a>"
+        f"<a class='vchip{' on' if value == current else ''}"
+        f"{' nil' if dem.get(f'{name}:{value}') == 0 else ''}'"
+        f" href='{esc(flt.url(**{name: value}))}'>{esc(label)}"
+        f"{_so(dem, name, value)}</a>"
         for value, label in options)
 
 
@@ -150,7 +167,8 @@ def _tim(flt) -> str:
             f"{xoa}</form>")
 
 
-def _thang(key: str, ten: str, options, current: str, flt) -> str:
+def _thang(key: str, ten: str, options, current: str, flt,
+           dem: dict | None = None) -> str:
     """THANG MỨC ĐỘ — mấy nấc liền nhau, tô đầy tới nấc đang chọn.
 
     Vì sao không để mấy nút rời như cũ: "Đáng nộp / Có thể / Khó" CÓ THỨ TỰ,
@@ -165,13 +183,14 @@ def _thang(key: str, ten: str, options, current: str, flt) -> str:
     tai = muc.index(current) if current in muc else 0
     nac = "".join(
         f"<a class='lvlstep{' on' if i <= tai else ''}{' now' if i == tai else ''}'"
-        f" href='{esc(flt.url(**{key: value, 'raw': ''}))}'>{esc(label)}</a>"
+        f" href='{esc(flt.url(**{key: value, 'raw': ''}))}'>{esc(label)}"
+        f"{_so(dem or {}, key, value)}</a>"
         for i, (value, label) in enumerate(options))
     return (f"<span class=lvl><span class=lvlname>{esc(ten)}</span>"
             f"<span class=lvltrack>{nac}</span></span>")
 
 
-def _noi(flt, gan: str, vung: str) -> str:
+def _noi(flt, gan: str, vung: str, dem: dict | None = None) -> str:
     """Chip NƠI CHỐN — chữ lấy từ ô "Where you're based".
 
     Nơi ở không quyết định việc nào HỢP LỆ: cắt theo London là mất 71 việc UK
@@ -185,11 +204,12 @@ def _noi(flt, gan: str, vung: str) -> str:
     ten = {"near": f"Gần tôi · {gan}" if gan else "", "home": f"Cả {vung}"}
     chon = [(v, ten.get(v) or nhan) for v, nhan in LOC
             if not (v == "near" and not gan)]
-    return "<span class=vlabel>Nơi</span>" + _chips("loc", chon, flt.loc, flt)
+    return ("<span class=vlabel>Nơi</span>"
+            + _chips("loc", chon, flt.loc, flt, dem))
 
 
 def _list(jobs: list[dict], flt, counts: dict,
-          gan: str = "", vung: str = "UK") -> str:
+          gan: str = "", vung: str = "UK", dem: dict | None = None) -> str:
     # MỘT nút thay cho hai. "Can't tell" nằm hàng cơ hội, "Not scorable" nằm
     # hàng điểm — mà đo trên kho thật thì chúng là cùng một chồng tin (185 tin
     # thiếu cả hai, 0 tin chỉ thiếu một). Cùng một nguyên nhân: vòng đọc kỹ
@@ -216,16 +236,16 @@ def _list(jobs: list[dict], flt, counts: dict,
                           flt.show, flt),
                    "<span class=vlabel>Xếp theo</span>"
                    + _chips("sort", SORT, flt.sort, flt))
-            + hang(_thang("chance", "Cơ hội", CHANCE, flt.chance, flt)
-                   + _thang("band", "Điểm", BAND, flt.band, flt),
+            + hang(_thang("chance", "Cơ hội", CHANCE, flt.chance, flt, dem)
+                   + _thang("band", "Điểm", BAND, flt.band, flt, dem),
                    chua)
             # NƠI ở đầu trái — đó là câu hỏi chính về một tin. Bên phải là
             # XUẤT XỨ: ai đăng (môi giới hay chủ) và mình tìm ra bằng cách
             # nào. Không đẻ thêm hàng thứ tư: một hàng có đúng một đầu thì
             # nửa màn hình lại bỏ trống, đúng thứ vừa sửa hôm qua.
-            + hang(_noi(flt, gan, vung),
-                   _chips("via", VIA, flt.via, flt)
-                   + _chips("found", FOUND, flt.found, flt)))
+            + hang(_noi(flt, gan, vung, dem),
+                   _chips("via", VIA, flt.via, flt, dem)
+                   + _chips("found", FOUND, flt.found, flt, dem)))
     if not jobs:
         # Nói rõ không ra CÁI GÌ, và cho đường quay lại. "không có tin nào
         # khớp" khi đang gõ dở một chữ đọc ra như kho rỗng.
@@ -371,7 +391,7 @@ def adjust(sieve: dict) -> str:
 # ---------------------------------------------------------------- trang
 
 def render(*, jobs: list[dict], flt, counts: dict, sieve: dict,
-           stage: dict | None = None) -> str:
+           stage: dict | None = None, dem: dict | None = None) -> str:
     info = stage or {}
     return runtime.render(
         title="Search", active="/search", stream="search",
@@ -385,10 +405,15 @@ def render(*, jobs: list[dict], flt, counts: dict, sieve: dict,
             # "giữ" đọc từ stage chứ KHÔNG từ counts: counts đi theo ô tìm và
             # các chip, mà thanh này nói về KHO chứ không về khung nhìn. Số
             # của khung nhìn đã có rồi — đó là "đang hiện" ở cuối hàng.
-            [(f"{info.get('kept', 0):,}", "giữ", "stock"),
-             (f"{info.get('worth', 0):,}", "đáng nộp", "act"),
-             (f"{info.get('fresh', 0):,}", "mới", "new"),
-             (len(jobs), "đang hiện", "view")],
+            # MỖI SỐ PHẢI TRẢ LỜI "tối nay tôi làm gì". Thanh cũ có bốn số
+            # mà không số nào làm được: "363 giữ" và "364 đáng nộp" là hai
+            # cách đếm cùng một chồng nên gần trùng nhau, "0 mới" luôn là 0
+            # trừ đúng lúc vừa quét xong, "50 đang hiện" là cỡ trang — danh
+            # sách ngay dưới đã nói rồi.
+            [(f"{info.get('hang_doi', 0):,}", "nên nộp", "act"),
+             (f"{info.get('worth', 0):,}", "đáng nộp", "stock"),
+             (f"{info.get('fresh', 0):,}", "vừa về", "new"),
+             (f"{info.get('da_nop', 0):,}", "đã nộp", "view")],
             adjust="/adjust/search",
             run=info.get("run_label", "Chạy"),
             run_note=info.get("run_note", "")),
@@ -397,7 +422,7 @@ def render(*, jobs: list[dict], flt, counts: dict, sieve: dict,
         cols=1, journal="bottom",
         panels=[
             runtime.panel("Việc tìm được",
-                          _list(jobs, flt, counts,
+                          _list(jobs, flt, counts, dem=dem,
                                 gan=info.get("gan", ""),
                                 vung=info.get("vung", "UK")), span=1),
         ],

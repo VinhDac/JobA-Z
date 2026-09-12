@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 
 from ..ingest.base import norm
 from ..scoring.vocab import alias_hits
-from . import rules
+from . import rewrite, rules
 from .blocks import Block, parse, sentences
 
 
@@ -34,6 +34,23 @@ class Line:
     weight: float = 0.0
     hits: list[str] = field(default_factory=list)   # kỹ năng JD đòi mà câu này trúng
     review: str = ""                                # giữ nhưng cần Vin xem lại
+    # BẢN SO SÁNH sống ở đây. `goc` là câu Vin viết, `text` là câu sẽ in ra —
+    # khác nhau thì `sua` nói rõ phép nào đã áp và vì sao. Không giữ `goc` thì
+    # không có "trước" nào để mà so, và người dùng phải tin lời máy.
+    goc: str = ""
+    sua: list = field(default_factory=list)         # [rewrite.Sua]
+    yeu: list = field(default_factory=list)         # [rewrite.Yeu] — máy chỉ, Vin sửa
+
+
+def dang_ke(line: Line) -> bool:
+    """Câu này có gì để GIẢI TRÌNH không.
+
+    MỘT chỗ quyết. Bút đỏ trên bài và khối chi tiết ở dưới phải hỏi CÙNG một
+    câu hỏi: hỏi ở hai chỗ thì chúng trôi khỏi nhau, và dấu bấm được trên bài
+    trỏ xuống một cái neo không tồn tại — bấm vào không nhảy đi đâu cả, im
+    lặng. Đã xảy ra với câu 6 và 7.
+    """
+    return bool(line.sua or line.yeu or line.review or line.hits)
 
 
 @dataclass
@@ -75,7 +92,8 @@ def wanted_skills(explain: dict | None, jd_text: str = "") -> set[str]:
     return out
 
 
-def build(profile: dict, explain: dict | None, jd_text: str = "") -> TailoredCV:
+def build(profile: dict, explain: dict | None, jd_text: str = "",
+          num: dict | None = None) -> TailoredCV:
     from ..scoring.score import build_index, _matches
 
     blocks = parse(profile.get("cv_text") or "")
@@ -110,17 +128,43 @@ def build(profile: dict, explain: dict | None, jd_text: str = "") -> TailoredCV:
     # nó cắt mất "self-funded, across 17 instruments" và "I never budgeted the
     # time a proof would take" — quy mô và vết xước không nằm trong từ vựng.
     sections: list[Section] = []
+    # Câu bị LUẬT cấm, kèm lý do thật. Gom ở đây chứ không suy ra sau: suy ra
+    # thì mọi câu vắng mặt đều nhận chung một lý do "yếu hơn thứ tin này hỏi",
+    # và đó là lý do SAI cho câu bị cấm — nó không yếu, nó không thuộc CV.
+    bi_cam: list[tuple[str, str]] = []
     for kind, cap in (("experience", rules.BUDGET["experience"]),
                       ("project", rules.BUDGET["project"])):
         chosen = [b for b in blocks if b.kind == kind and set(b.tags) & wanted]
         chosen.sort(key=lambda b: -len(set(b.tags) & wanted))
+        # KINH NGHIỆM KHÔNG BAO GIỜ BỊ BỎ CẢ KHỐI — chỉ project mới được bỏ.
+        #
+        # Lọc khối theo "có trúng thứ tin này đòi không" là đúng với project
+        # (project là tự chọn, bỏ một cái không để lại dấu vết). Với KINH
+        # NGHIỆM thì nó đục một lỗ trên dòng thời gian: đo trên kho thật, 6/12
+        # bản CV đầu bảng rơi mất hẳn khối "Research Consultant — WorldQuant,
+        # Jan–Sep 2025", tức là bản gửi đi tự khai một khoảng trống 9 tháng.
+        #
+        # Khoảng trống đắt hơn nhiều so với một dòng kém liên quan: khảo sát
+        # HBS/Accenture 2021 (8.000 lao động, 2.250 lãnh đạo tuyển dụng, có cả
+        # UK) ghi nhận gần một nửa nhà tuyển dụng tự loại CV có khoảng trống
+        # quá 6 tháng. Khối ít liên quan chỉ tốn ba dòng giấy.
+        #
+        # Vẫn XẾP theo độ liên quan: khối trúng nhiều đứng trước. Chỉ khác ở
+        # chỗ khối không trúng gì thì xuống cuối, không biến mất.
+        if kind == "experience":
+            con_lai = [b for b in blocks if b.kind == kind and b not in chosen]
+            con_lai.sort(key=lambda b: -len(b.tags))
+            chosen = chosen + con_lai
         if not chosen:
             # Không khối nào hợp — 9/117 tin rơi vào đây. CV rỗng thì không
             # gửi được, nên lấy khối mạnh nhất và để nguyên sự thật đó hiện ra.
             chosen = sorted((b for b in blocks if b.kind == kind),
                             key=lambda b: -len(b.tags))[:1]
         for block in chosen[:cap]:
-            lines = _pick(block, wanted, answers, rules.BUDGET["exp_bullets"])
+            lines = _pick(block, wanted, answers,
+                          int((num or {}).get("dong")
+                              or rules.BUDGET["exp_bullets"]),
+                          bo=bi_cam, num=num)
             if lines:
                 sections.append(Section(kind, block.title, block.meta, lines))
 
@@ -142,10 +186,19 @@ def build(profile: dict, explain: dict | None, jd_text: str = "") -> TailoredCV:
     have |= skills_in(profile.get("skills_strong", "") + " "
                       + profile.get("skills_weak", ""))
 
+    # BỎ VÌ SAO — hai lý do khác hẳn nhau, và người dùng cần đọc ra được:
+    #   bị CẤM   luật không cho lên CV (kể thất bại, ý kiến) -> sửa câu cũng vô ích
+    #   YẾU HƠN  hợp lệ, nhưng tin này hỏi thứ khác          -> tin khác sẽ dùng
     shown = {l.text for s in sections for l in s.lines}
-    dropped = [(rules.clean(t), "weaker than what this posting asks for")
-               for b in blocks if b.kind in ("experience", "project")
-               for t in sentences(b) if rules.clean(t) not in shown and _worth(t)]
+    goc_hien = {l.goc or l.text for s in sections for l in s.lines}
+    cam_text = {t for t, _ in bi_cam}
+    dropped = list(dict.fromkeys(bi_cam))
+    dropped += [(rules.clean(t), "weaker than what this posting asks for")
+                for b in blocks if b.kind in ("experience", "project")
+                for t in sentences(b)
+                if rules.clean(t) not in shown
+                and rules.clean(t) not in goc_hien
+                and rules.clean(t) not in cam_text and _worth(t)]
 
     return TailoredCV(header, summary, sections, dropped, sorted(wanted),
                       sorted({s for v in answers.values() for s in v} & wanted),
@@ -169,16 +222,42 @@ def _real_missing(explain: dict | None, wanted: set[str], have: set[str]) -> set
     return missing
 
 
-def _pick(block: Block, wanted: set[str], answers: dict, cap: int) -> list[Line]:
-    """Câu trong một khối: trả lời được đứng trước, rác bị bỏ hẳn."""
+def _pick(block: Block, wanted: set[str], answers: dict, cap: int,
+          bo: list | None = None, num: dict | None = None) -> list[Line]:
+    """Câu trong một khối: trả lời được đứng trước, câu bị CẤM bỏ hẳn.
+
+    HỎI `rules.sentence_ok` — trước đây KHÔNG hỏi, và đó là lỗ thật. Luật cấm
+    câu kể thất bại và câu ý kiến lên CV, `cvhealth` báo đúng, nhưng bộ dựng
+    này chưa bao giờ tra nên chúng vẫn đi ra ngoài. Đo trên hồ sơ thật ngày
+    12/09: bản gửi Man Group mang 3 câu bị cấm, gồm cả "drawdown ran roughly
+    30% deeper than the model predicted".
+
+    Ba mảnh — luật, bộ chấm từng dòng, bộ dựng — nằm rời nhau thì luật chỉ là
+    lời nói. Chỗ này là chỗ nối.
+    """
+    num = num or {}
+    khoa = float(num.get("khoa", 3.0))
+    giong = str(num.get("giong", "cv"))
     kept: list[Line] = []
     for raw in sentences(block):
-        text = rules.clean(raw)
-        if not _worth(text):
+        goc = rules.clean(raw)
+        if not _worth(goc):
             continue                      # "·", "Sep 2025" — rác bóc từ PDF
-        hits = sorted(set(answers.get(raw, [])) | set(answers.get(text, [])))
-        kept.append(Line(text, rules.sentence_weight(text, wanted, sorted(skills_in(text))),
-                         hits))
+        tags = sorted(skills_in(goc))
+        phan, ly_do = rules.sentence_ok(goc, tags)
+        if phan == "drop":
+            if bo is not None:
+                bo.append((goc, ly_do))
+            continue
+        # SỬA bằng chính chữ của Vin — xem cv/rewrite.py. Sửa SAU khi phán để
+        # luật vẫn đọc đúng câu Vin viết, không đọc bản máy vừa chỉnh.
+        text, da_sua = rewrite.sua(goc, giong)
+        hits = sorted(set(answers.get(raw, [])) | set(answers.get(goc, [])))
+        kept.append(Line(
+            text, rules.sentence_weight(text, wanted, tags, khoa), hits,
+            review=ly_do if phan == "review" else "",
+            goc=goc, sua=da_sua,
+            yeu=rewrite.diem_yeu(text, tags, wanted)))
     # Trả lời được xếp trước; trong cùng nhóm thì theo trọng số cũ.
     kept.sort(key=lambda l: (-len(l.hits), -l.weight))
     return kept[:cap]

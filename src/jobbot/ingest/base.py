@@ -30,7 +30,15 @@ def get_json(url: str, headers: dict[str, str] | None = None) -> Any:
 
 _TAG = re.compile(r"<[^>]+>")
 _WS = re.compile(r"\s+")
-_PUNCT = re.compile(r"[^a-z0-9 ]+")
+# GIỮ LẠI `+ # /` — chúng là MỘT PHẦN CỦA TÊN, không phải dấu câu.
+#
+# Bỏ chúng thì "C++" thành "c", và alias `c++` trong vocab không bao giờ khớp
+# được nữa. Đo trên kho thật: 208 tin đòi C++, mà CV của Vin CÓ C++ — máy
+# không bao giờ nhìn thấy. Cùng lỗi: ci/cd (19 tin), c# (9), kdb+ (3).
+#
+# Chỉ ba ký tự này, không mở rộng thêm: chúng là hậu tố tên công nghệ. Giữ cả
+# dấu chấm thì "python." và "python" thành hai thứ khác nhau.
+_PUNCT = re.compile(r"[^a-z0-9+#/ ]+")
 
 # Đuôi công ty — bỏ đi để "Monzo Bank Ltd" và "Monzo Bank" gộp được vào nhau.
 _SUFFIX = re.compile(

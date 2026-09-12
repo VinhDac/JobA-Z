@@ -76,10 +76,20 @@ check("không có năm -> None", _years_needed("Strong Python") is None)
 print("\n[bằng chứng mạnh / yếu]")
 index = build_index(PROFILE)
 labels = [e.where for e in index]
-check("kỹ năng mạnh đứng trước từ khoá", labels.index("your strong skills") < labels.index(
-    "a keyword you set (not proof)"))
-check("từ khoá bị đánh dấu là yếu",
-      not next(e for e in index if "keyword" in e.where).strong)
+# Ô TÌM VIỆC KHÔNG PHẢI BẰNG CHỨNG. Nhãn của chính nó tự khai "(not proof)",
+# nhưng nó vẫn nằm trong chỉ số nên một dòng yêu cầu tính là ĐẠT nhờ chữ Vin
+# gõ vào ô TÌM VIỆC. Đo trên kho thật: 249 dòng ở 153/472 tin đạt kiểu đó.
+# "Tôi muốn tìm việc có Kafka" không phải bằng chứng tôi biết Kafka.
+check("ô TỪ KHOÁ TÌM VIỆC không được vào chỉ số bằng chứng",
+      not any("keyword" in l for l in labels))
+check("ô 'muốn chuyển sang' cũng không",
+      not any("want to move into" in l for l in labels))
+check("nhưng kỹ năng mạnh thì CÓ", "your strong skills" in labels)
+# Kỹ năng ĐANG HỌC thì KHÁC ô từ khoá: nó là lời khai về chính mình, chỉ là
+# lời khai yếu. Giữ lại, đánh dấu yếu — không vứt như ô tìm việc.
+_hoc = build_index({**PROFILE, "skills_weak": "rust"})
+check("kỹ năng đang học vẫn được giữ, ở mức YẾU",
+      any("still learning" in e.where and not e.strong for e in _hoc))
 
 print("\n[chấm điểm]")
 result = score_job("Graduate Quantitative Analyst", JD, PROFILE)
@@ -167,6 +177,26 @@ from jobbot.cv.build import skills_in as _skills_in
 _probe = "Excellent communication, Excel, backtesting and scalable pipelines"
 check("cv.skills_in và scoring dùng chung một luật",
       _skills_in(_probe) == set(_hits(_probe)))
+
+print("\n[tên có dấu: C++ · ci/cd · kdb+ — ĐÃ TỪNG mất hẳn]")
+# HAI lỗi chồng nhau làm 208 tin đòi C++ không bao giờ khớp, dù CV CÓ C++:
+#   norm() bỏ mọi ký tự không phải chữ-số  -> "C++" thành "c"
+#   mẫu alias kết bằng \\b                  -> sau dấu '+' không bao giờ có
+#                                             ranh giới từ, nên kể cả giữ được
+#                                             dấu + thì vẫn không khớp
+from jobbot.ingest.base import norm as _nm
+from jobbot.scoring.vocab import alias_hits as _ah
+check("norm giữ dấu + trong C++", "c++" in _nm("Strong C++ and Python"))
+check("norm giữ dấu / trong CI/CD", "ci/cd" in _nm("CI/CD pipelines"))
+check("khớp được C++", "c++" in _ah(_nm("Strong C++ and Python")))
+check("khớp được ci/cd", "ci/cd" in _ah(_nm("CI/CD and Docker")))
+check("C++ ở cuối câu cũng khớp", "c++" in _ah(_nm("experience with C++")))
+# Nới ranh giới KHÔNG được đẻ ra khớp bừa — đây là lớp lỗi 'excel' trong
+# 'excellent' đã cắn một lần rồi.
+check("'abc' KHÔNG ra c++", "c++" not in _ah(_nm("abc company")))
+check("'arc welding' KHÔNG ra r", "r" not in _ah(_nm("arc welding")))
+check("'excellent' vẫn KHÔNG ra excel", "excel" not in _ah(_nm("excellent communication")))
+check("'scalable' vẫn KHÔNG ra scala", "scala" not in _ah(_nm("highly scalable")))
 
 print("\n[danh sách KHÔNG có dấu gạch đầu dòng — LinkedIn]")
 # Lỗi thật: LinkedIn trả JD qua innerText, <li> mất sạch dấu '·'. Bộ tách nhận

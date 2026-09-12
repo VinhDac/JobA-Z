@@ -92,10 +92,19 @@ def sentence_ok(text: str, tags: list[str] | None = None) -> tuple[str, str]:
     return "keep", ""
 
 
-def sentence_weight(text: str, wanted: set[str], tags: list[str]) -> float:
-    """Câu này đáng lên CV đến mức nào, cho JD đang xét."""
+def sentence_weight(text: str, wanted: set[str], tags: list[str],
+                    khoa: float = 3.0) -> float:
+    """Câu này đáng lên CV đến mức nào, cho JD đang xét.
+
+    `khoa` là trọng số của "trúng thứ tin đòi" — núm "độ dày từ khoá" ở tấm
+    Điều chỉnh xoay đúng số này. Dày lên thì máy ưu tiên câu trúng từ khoá;
+    nhẹ đi thì ưu tiên câu mạnh về nội dung dù không trúng từ nào.
+
+    Nó KHÔNG nhồi từ khoá vào CV: máy không thêm từ nào. Nó chỉ đổi THỨ TỰ
+    ƯU TIÊN giữa mấy câu Vin đã viết.
+    """
     score = 0.0
-    score += 3.0 * len(wanted & set(tags))        # trúng thứ JD đòi
+    score += khoa * len(wanted & set(tags))       # trúng thứ JD đòi
     score += 1.0 * len(tags)                      # có nội dung kỹ thuật
     if ACTION_VERB.match(text.strip()):
         score += 1.5                              # mở đầu bằng động từ hành động

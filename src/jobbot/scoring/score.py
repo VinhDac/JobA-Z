@@ -88,9 +88,18 @@ def build_index(answers: dict) -> list[Evidence]:
         ("your education", "education", True),
         ("your certifications", "certifications", True),
         ("skills you're still learning", "skills_weak", False),
-        ("a keyword you set (not proof)", "search_keywords", False),
-        ("tech you want to move into (not proof)", "stack_want", False),
     ]
+    # BỎ `search_keywords` VÀ `stack_want` KHỎI BẰNG CHỨNG.
+    #
+    # Nhãn của chính chúng đã tự khai "(not proof)" — rồi vẫn được nạp vào chỉ
+    # số bằng chứng, nên một dòng yêu cầu vẫn tính là ĐẠT nhờ chữ Vin gõ vào ô
+    # TÌM VIỆC. Đo trên kho thật: 249 dòng yêu cầu ở 153/472 tin đạt kiểu đó.
+    #
+    # "Tôi muốn tìm việc có Kafka" không phải bằng chứng tôi biết Kafka. Để
+    # chúng trong chỉ số thì mọi con số phủ đều thổi lên, và bảng "hồ sơ còn
+    # hụt gì" — thứ nói cho Vin biết phải VIẾT gì — chỉ ra chỗ hụt giả.
+    #
+    # Điểm sẽ TỤT sau khi sửa. Đó là điểm thật.
     for label, key, strong in fields:
         value = answers.get(key)
         if not value:
