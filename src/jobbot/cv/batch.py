@@ -169,6 +169,15 @@ def run(conn: sqlite3.Connection, log=None) -> dict:
     from ..dashboard import live
     live.quen()            # buộc dựng thật, không lấy bản trong bộ nhớ
     data = live.cv_versions(conn)
+    # THANG HỤT VÀ BẢN NHÁP ĐI CÙNG BẢN DỰNG, không tính lại lúc vẽ trang.
+    #
+    # Trước đây chúng tính mỗi lần mở trang, và tab CV thành hai cái đồng hồ
+    # chỉ hai giờ khác nhau: sửa một khối xong thì ô "Viết gì để hết hụt" đổi
+    # ngay, còn ô "Bản sẽ gửi" vẫn là bản cũ. Xoá bản thì ô kia vẫn đầy, tức
+    # "xoá hết" không xoá hết. Cùng một đầu vào, cùng một lượt đo, cùng một
+    # lúc hết hạn.
+    data["hut"] = live.cv_hut(conn)
+    data["nhap"] = live.cv_nhap(conn, data["hut"].get("buoc"))
     dau = stamp(conn, cv_text)
     save(conn, data, dau)
 

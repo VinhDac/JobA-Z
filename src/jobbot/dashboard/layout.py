@@ -137,6 +137,39 @@ def deck(stage: str, name: str, state: str, metrics: list,
         f"</div></div>")
 
 
+# Nhãn cho nút Back, suy từ ĐƯỜNG đã đi. Không gõ cứng ở từng trang: một
+# trang có ba lối vào thì gõ cứng là hai lối nói dối.
+# Xếp từ RIÊNG tới CHUNG: "/jobs/7/cv" là BẢN CV, không phải trang tin —
+# khớp "/jobs/" trước thì nút ghi "← tin này" trong khi nó về bản CV.
+_TEN_DUONG = (("/cv/soan", "Soạn khối"), ("/cv", "Bản CV"),
+              ("/search", "Search"), ("/track", "Quản lí"),
+              ("/profile", "Hồ sơ"), ("/jobs/", "tin này"))
+
+
+def duong_ve(tu: str, mac_dinh: str = "/cv") -> tuple:
+    """(đường, nhãn) cho nút Back. `tu` = trang người dùng vừa rời.
+
+    BACK PHẢI VỀ TRANG VỪA RỜI, không về một đích gõ cứng. Trang xem bản CV
+    vào được từ tab CV và từ trang chi tiết tin; gõ cứng một đích thì một
+    trong hai lối đi vào ngõ cụt — bấm Back xong lạc sang chỗ chưa từng đứng.
+
+    Đường đi nằm trên URL (`?tu=`), không dựa vào lịch sử trình duyệt: mở
+    thẳng một địa chỉ, hay mở tab mới, thì lịch sử trống mà nút vẫn phải đúng.
+
+    CHỈ NHẬN ĐƯỜNG TRONG NHÀ. `tu` đi từ URL vào thẳng thuộc tính href, nên
+    một giá trị như "//ke-xau" hay "https://…" biến nút Back thành cửa ra
+    ngoài. Không bắt đầu bằng "/" hoặc bắt đầu bằng "//" thì vứt.
+    """
+    duong = (tu or "").strip()
+    if not duong.startswith("/") or duong.startswith("//"):
+        duong = mac_dinh
+    goc = duong.split("?")[0]
+    if goc.startswith("/jobs/") and goc.endswith("/cv"):
+        return duong, "Bản CV"
+    ten = next((t for d, t in _TEN_DUONG if goc.startswith(d)), "quay lại")
+    return duong, ten
+
+
 def page(title: str, body: str, active: str = "",
          flow: bool = True, bar: str = "", setup: str = "") -> str:
     """flow=True  trang cuộn như cũ — dành cho trang CHƯA chuyển sang widget

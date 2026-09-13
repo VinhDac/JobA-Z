@@ -14,23 +14,31 @@ cùng một câu hiện hai lần, người đọc phải tự ghép "câu 3 ở
 from __future__ import annotations
 
 from html import escape as esc
+from urllib.parse import quote
 
 from ...cv.build import TailoredCV
 from ...cv.build import bench
 from ...cv.render import dem_lai, paper
 from ...cv.report import chi_tiet, head
-from ..layout import h1, page
+from ..layout import duong_ve, h1, page
 
 
-def render(job: dict, cv: TailoredCV, profile: dict | None = None) -> str:
+def render(job: dict, cv: TailoredCV, profile: dict | None = None,
+           tu: str = "") -> str:
     dem_lai()          # số câu đếm lại từ 1 cho mỗi tờ
     du_bi = bench(profile or {}, cv) if profile else []
+    ve, ten = duong_ve(tu, "/cv")
+    # XEM TIN là một CHUYẾN ĐI KHÁC, nên nó là một nút riêng — và nó mang theo
+    # đường về đây, để Back ở trang tin quay lại đúng bản CV này chứ không
+    # rơi về danh sách.
+    xem = (f"/jobs/{esc(job['id'])}?tu="
+           + quote(f"/jobs/{job['id']}/cv?tu={tu or '/cv'}", safe=""))
     return page(
         f"CV — {job['title']}",
-        f"<a class=back href='/jobs/{esc(job['id'])}'>← {esc(job['title'])}</a>"
+        f"<a class=back href='{esc(ve)}'>← {esc(ten)}</a>"
         + h1("Bản CV cho tin này",
              f"Dựng cho {job['company']} — {job['title']}.")
-        + head(cv)
+        + head(cv, xem)
         + paper(cv, cham=True, du_bi=du_bi, job=str(job['id']))
         + chi_tiet(cv),
         active="/jobs",

@@ -12,8 +12,9 @@ CHỈ VẼ.
 from __future__ import annotations
 
 from html import escape as esc
+from urllib.parse import quote
 
-from ..layout import card, empty, h1, page, score_bar
+from ..layout import card, duong_ve, empty, h1, page, score_bar
 
 CHANCE_BADGE = {"likely": ("worth applying", "ok"),
                 "possible": ("maybe", ""),
@@ -110,7 +111,7 @@ def _mo_tin_goc(job: dict) -> str:
     return card(f"<div class=jlinks>{nut}</div>", "jlinkcard")
 
 
-def render_detail(job: dict) -> str:
+def render_detail(job: dict, tu: str = "") -> str:
     reqs = "".join(
         f"<li class='{'met' if r['met'] else ('unk' if r['met'] is None else 'miss')}'>"
         f"<b>{esc(r['text'])}</b>"
@@ -120,7 +121,8 @@ def render_detail(job: dict) -> str:
     proj = job.get("project")
     return page(
         job["title"],
-        f"<a class=back href='/search'>← Jobs</a>"
+        f"<a class=back href='{esc(duong_ve(tu, '/search')[0])}'>"
+        f"← {esc(duong_ve(tu, '/search')[1])}</a>"
         + h1(job["title"], f"{job['company']} · {job['location']} · {job['salary']}")
         + f"<div class=jmeta>{_score(job)}"
           f"<span class=spacer></span><span class=muted>{esc(job['posted'])}</span></div>"
@@ -132,7 +134,8 @@ def render_detail(job: dict) -> str:
            else empty("Could not read any requirements from this posting. "
                       "Read it yourself — the system will not guess."))
         + "<h2>Tailored CV</h2>"
-        + card(f"<a class=ghost href='/jobs/{esc(job['id'])}/cv'>"
+        + card(f"<a class=ghost href='/jobs/{esc(job['id'])}/cv"
+               f"?tu={quote(tu or '/search', safe='')}'>"
                "Build a CV for this posting →</a>"
                "<div class=muted style='margin-top:6px'>Selects and orders lines from your "
                "own profile against what this posting asks for. Writes nothing new.</div>")

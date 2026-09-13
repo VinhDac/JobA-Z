@@ -90,7 +90,10 @@ def _row(index: int, ver: dict, q: str = "") -> str:
         gap = f"<div class=cvgap>hồ sơ chưa có câu nào về: {chip}</div>"
 
     return (
-        f"<a class=cvrow href='/jobs/{best['id']}/cv'>"
+        # MANG THEO ĐƯỜNG VỀ. Trang xem bản CV vào được từ đây và từ trang
+        # chi tiết tin; không mang theo thì nút Back phải gõ cứng một đích, và
+        # một trong hai lối đi vào ngõ cụt.
+        f"<a class=cvrow href='/jobs/{best['id']}/cv?tu=/cv'>"
         f"<div class=cvn>#{index}</div>"
         f"<div class=cvmain>"
         f"<div class=cvwho><b>{esc(best['company'])}</b>"
@@ -164,7 +167,7 @@ def _list(data: dict, q: str = "") -> str:
 def render(*, versions: list[dict], jobs: int, gaps: list[str],
            core: int = 0, blocks: list[dict] | None = None,
            stage: dict | None = None, q: str = "",
-           gap: dict | None = None) -> str:
+           gap: dict | None = None, nhap: dict | None = None) -> str:
     """Tab CV. KHỐI là nguyên liệu của Vin; BẢN SẼ GỬI là thứ máy dựng ra.
 
     Hai ô đó khác hẳn nhau về quyền sở hữu, nên chỉ ô bên phải chờ nút Chạy:
@@ -200,14 +203,14 @@ def render(*, versions: list[dict], jobs: int, gaps: list[str],
                       "— bấm Chạy là dựng lại")),
         note=note,
         cols=2, columns="minmax(360px, 1fr) 1.6fr",
-        rows_tpl="minmax(260px, auto) 1fr 140px", journal_at=(1, 3),
+        rows_tpl="1fr 140px", journal_at=(1, 2),
         panels=[
-            # HỤT đứng TRÊN kho khối: nó nói việc phải làm, kho khối nói
-            # thứ đang có. Việc phải làm đọc trước.
-            runtime.panel("Viết gì để hết hụt", hut(gap or {}), at=(1, 1)),
-            runtime.panel("Khối nguyên liệu", _blocks(blocks), at=(1, 2)),
+            # KHO KHỐI ĐÃ RỜI KHỎI ĐÂY. Nó có nhà riêng ở màn Sửa khối, nơi
+            # bấm vào một khối là soạn được luôn. Ở đây nó chỉ để nhìn — mà
+            # tab này trả lời hai câu khác: *tối nay viết gì* và *gửi bản nào*.
+            runtime.panel("Viết gì để hết hụt", hut(gap or {}, nhap), at=(1, 1)),
             runtime.panel("Bản sẽ gửi", _list(data, q) if versions
-                          else _chua_dung(info), rows=3, at=(2, 1)),
+                          else _chua_dung(info), rows=2, at=(2, 1)),
         ],
     )
 
@@ -227,47 +230,6 @@ def _chua_dung(info: dict) -> str:
         "dựng một bản riêng — kèm bản so sánh trước/sau và lý do từng câu "
         "được chọn hay bị bỏ."
         f"<br><span class=muted>{ly_do}</span></div>")
-
-
-# --------------------------------------------------------- kho khối
-
-KIND_TAG = {"experience": "việc", "project": "project"}
-
-
-def _blocks(blocks: list[dict]) -> str:
-    """Kho nguyên liệu, xếp theo VỚI TỚI BAO NHIÊU TIN.
-
-    Cột đó là cả câu chuyện: khối 0 tin lên CV vì có ô trống phải lấp, không
-    vì nó chứng minh được gì.
-
-    Bấm một khối là sang màn SOẠN (/cv/soan) — ô này chỉ để nhìn.
-    """
-    rows = ""
-    for b in blocks:
-        skills = "".join(f"<span class=sk>{esc(s)}</span>" for s in b["skills"][:5])
-        dead = " dead" if b["reach"] == 0 else ""
-        rows += (
-            # quote(), KHÔNG phải esc(): esc() là để CHỮ hiện an toàn trong
-            # HTML, còn đây là THAM SỐ URL. Tiêu đề "Research & Development"
-            # thoát HTML thành "Research &amp; Development" — dấu & vẫn cắt
-            # tham số, và trang mở ra một khối khác hoặc khối rỗng.
-            f"<a class='blk{dead}'"
-            f" href='/cv/soan?khoi={quote(b['title'], safe='')}'>"
-            f"<div class=blkmain>"
-            f"<div class=blkhead><b>{esc(b['title'][:44])}</b>"
-            f"<span class=blkkind>{esc(KIND_TAG.get(b['kind'], b['kind']))}</span></div>"
-            f"<div class=blktags>{skills or '<span class=muted>không kỹ năng nào</span>'}</div>"
-            f"</div>"
-            f"<div class=blkreach><b>{b['reach']}</b><span>tin</span>"
-            f"<i>{len(b['lines'])} câu</i></div></a>")
-
-    return (
-        f"<div class=gapnote>Xếp theo <b>số tin khối đó với tới</b>. "
-        f"Khối <b>0 tin</b> đang chiếm chỗ chứ không chứng minh gì.</div>"
-        f"<div class=blklist>{rows}</div>"
-        f"<div class=blkfoot>"
-        f"<a class='mbtn apply' href='/cv/soan?moi=1'>+ Khối mới</a>"
-        f"</div>")
 
 
 # ------------------------------------------------------ tấm Điều chỉnh ⚟
@@ -347,6 +309,21 @@ def adjust(num: dict | None = None) -> str:
 # viết ra" — máy không biết điều đó và chưa bao giờ đo nó; nó chỉ đo được là
 # mấy dòng yêu cầu này không gọi tên sản phẩm nào. Khẳng định thay người dùng
 # là đúng cái bệnh cả app này tránh.
+def _nhap_dong(d: dict | None) -> str:
+    """Bản nháp của một dòng hụt — hoặc lý do không có, nói thẳng."""
+    if d is None:
+        return ""                         # công tắc đang tắt
+    if d.get("nhap"):
+        return (f"<span class=hnhap>{esc(d['nhap'])}"
+                f"<i>chữ {esc(d['cong_ty'][:24])} · bấm để điền số rồi lưu</i>"
+                f"</span>")
+    if not d.get("nen_co"):
+        return ("<span class='hnhap tho'>không tin nào đòi nó bằng một dòng "
+                "TẢ VIỆC — viết từ đầu bằng chữ của bạn</span>")
+    return ("<span class='hnhap tho'>máy không rút gọn được dòng nào của họ "
+            "thành hình câu CV — viết từ đầu, dùng dòng của họ làm đề bài</span>")
+
+
 VIEC = {"viet": ("VIẾT", "viet",
                  "mấy dòng đòi nó không gọi tên sản phẩm nào — diễn đạt lại "
                  "bằng chữ của bạn được, nếu bạn đã làm. Một buổi tối."),
@@ -354,7 +331,7 @@ VIEC = {"viet": ("VIẾT", "viet",
                 "gọi đích danh tên sản phẩm — không câu nào viết thay được")}
 
 
-def hut(d: dict) -> str:
+def hut(d: dict, nhap: dict | None = None) -> str:
     """Viết thêm câu về cái gì thì bao nhiêu TIN HẾT HỤT.
 
     Khối trả lời câu hỏi duy nhất của tab này: *tối nay tôi viết gì?*
@@ -367,10 +344,16 @@ def hut(d: dict) -> str:
     cùng mở một tin thì cộng riêng lẻ là đếm tin đó ba lần.
     """
     buoc = d.get("buoc") or []
+    _np = nhap or {}
     tong, nen = d.get("tin") or 0, d.get("nen") or 0
     if not buoc or not tong:
-        return ("<div class=empty-box>Chưa đo được chỗ hụt — cần tin đã chấm "
-                "điểm. Chạy Search trước.</div>")
+        # THANG HỤT ĐI CÙNG BẢN DỰNG. Chưa bấm Chạy thì chưa có số đo nào —
+        # nói đúng việc phải làm, đừng đổ cho Search khi kho tin vẫn còn đó.
+        return ("<div class=empty-box><b>Chưa đo chỗ hụt.</b><br>Bấm "
+                "<b>Chạy</b> trên thanh trên — máy đo cùng lúc với lượt dựng "
+                "bản CV, nên hai ô luôn nói về cùng một lúc.<br>"
+                "<span class=muted>chưa có tin nào đã chấm điểm thì chạy "
+                "Search trước.</span></div>")
 
     hang = []
     for b in buoc:
@@ -388,12 +371,20 @@ def hut(d: dict) -> str:
             # NÚT VIẾT chỉ trên dòng CÓ THỂ VIẾT. Dòng toàn tên sản phẩm
             # thì mời viết là mời làm một việc không làm được.
             + (f"<a class='mbtn tiny hgo'"
-               f" href='/cv/soan?ky={quote(b['ky_nang'], safe='')}'>Viết</a>"
+               f" href='/cv/soan?ky={quote(b['ky_nang'], safe='')}"
+               + (f"&nen={quote(_np.get(b['ky_nang'], {}).get('nen', ''), safe='')}"
+                  if (_np.get(b["ky_nang"]) or {}).get("nhap") else "")
+               + f"'>{'Sửa nháp' if (_np.get(b['ky_nang']) or {}).get('nhap') else 'Viết'}</a>"
                if b["dong"] - b["rieng"] > 0 else "")
             + f"<span class=hsplit>{b['dong']} dòng đòi · "
             f"<b>{viet_duoc}</b> viết được"
             + (f" · <b>{b['rieng']}</b> phải học" if b["rieng"] else "")
-            + "</span></div>")
+            + "</span>"
+            # BẢN NHÁP MÁY DỰNG SẴN, ngay trên dòng nó thuộc về. Bật công tắc
+            # mà phải đi tìm ở màn khác thì cái nút nói một đằng, màn hình nói
+            # một nẻo. Ba kết cục, cả ba đều nói ra.
+            + _nhap_dong(_np.get(b["ky_nang"]))
+            + "</div>")
 
     het = buoc[-1]["cong_don"]
     cv_ = d.get("chi_viet") or nen

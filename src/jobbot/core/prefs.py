@@ -113,9 +113,8 @@ RIENG = {"chung": "một bản dùng chung cho nhiều tin",
 # dữ liệu, đổi được mấy phần. Máy không biết người dùng đã làm gì, và câu
 # trên CV là câu họ phải đỡ được trong phòng phỏng vấn.
 #
-# KHÔNG nằm trong `cv_nut` — xem `cv/batch.stamp`. Núm này không đổi bản dựng
-# RA GÌ, nó chỉ đổi LÚC dựng; nhét vào dấu thì bật/tắt nó là mọi bản bỗng bị
-# coi là cũ, mà chúng y hệt nhau.
+# CÓ nằm trong dấu cũ-mới (`cv/batch.stamp`): nó quyết định bản dựng có kèm
+# bản nháp hay không, nên lật nó là bản đang có đã cũ thật.
 CV_TU_LO = "cv_tu_lo"
 
 

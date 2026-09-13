@@ -472,8 +472,11 @@ class Handler(BaseHTTPRequestHandler):
                     from ..cv.build import picks as _picks
                     tailored = build_cv(answers, explain, found['jd'],
                                         pick=_picks(conn, int(found['id'])))
-                    return self._html(cvview.render(found, tailored, answers))
-                return self._html(jobs.render_detail(found))
+                    return self._html(cvview.render(
+                        found, tailored, answers,
+                        (query.get("tu") or [""])[0][:200]))
+                return self._html(jobs.render_detail(
+                    found, (query.get("tu") or [""])[0][:200]))
             finally:
                 conn.close()
 
@@ -516,7 +519,8 @@ class Handler(BaseHTTPRequestHandler):
             conn = db.connect()
             try:
                 from ..cv import batch
-                d = live.cv_soan(conn, (query.get("khoi") or [""])[0],
+                d = live.cv_soan(conn, batch.saved(conn) or {},
+                                 (query.get("khoi") or [""])[0],
                                  (query.get("ky") or [""])[0].strip()[:40],
                                  (query.get("nen") or [""])[0].strip()[:400],
                                  (query.get("soan") or [""])[0].strip()[:400],
@@ -551,7 +555,14 @@ class Handler(BaseHTTPRequestHandler):
                     blocks=live.cv_blocks(conn),
                     stage=batch.stage(conn),
                     q=(query.get("q") or [""])[0].strip()[:80],
-                    gap=live.cv_hut(conn)))
+                    # ĐỌC TỪ BẢN ĐÃ DỰNG, không tính lại. Cả tab một mốc thời
+                    # gian: dựng cùng lúc, cũ cùng lúc, xoá cùng lúc.
+                    gap=luu.get("hut") or {},
+                    # Bản nháp NẰM TRONG bản dựng, nhưng chỉ HIỆN khi công tắc
+                    # đang bật. Tắt xong mà nháp cũ còn nằm đó thì công tắc
+                    # không tắt được cái gì.
+                    nhap=(luu.get("nhap") or {})
+                    if live.cv_nut(conn).get("tu_lo") else {}))
             finally:
                 conn.close()
 
@@ -797,6 +808,10 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 prefs.put(conn, khoa, val)
                 live.quen()
+                # MÁY TỰ LO thì lo luôn cả lượt này: xoay núm xong mà màn hình
+                # y nguyên cho tới khi tự đi bấm Chạy thì cái tên công tắc là
+                # lời nói suông.
+                _tu_dung(conn)
                 journal.log.emit(journal.CV, f"núm {ma} -> {val}")
             finally:
                 conn.close()

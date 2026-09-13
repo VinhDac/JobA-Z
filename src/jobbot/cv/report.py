@@ -121,7 +121,7 @@ def cho_xem(cv: TailoredCV) -> list:
     return [(k, ten[k], dem[k]) for k in thu_tu if dem[k]]
 
 
-def head(cv: TailoredCV) -> str:
+def head(cv: TailoredCV, xem_tin: str = "") -> str:
     """ĐIỂM + CHỖ CẦN XEM + nút Trước/Sau. Đứng trên cùng, trước cả tờ CV.
 
     Con số đầu tiên phải trả lời "tờ này còn việc gì" — mở ra là biết ngay có
@@ -145,11 +145,17 @@ def head(cv: TailoredCV) -> str:
                           for k, nhan, n in cho)
                 + "<span class='gleg kw'>từ khoá tin này đòi</span></div>"
                 if cho else "")
+    # XEM TIN đứng CẠNH nút Trước/Sau, không thay chỗ nút Back. Back là "về
+    # trang vừa rời"; xem tin là một chuyến đi khác. Trộn hai thứ vào một chỗ
+    # thì một trong hai luôn sai.
+    di = (f"<a class='mbtn tiny' href='{esc(xem_tin)}'>Xem tin →</a>"
+          if xem_tin else "")
     nut = ("<input type=checkbox id=cvtruoc class=gswitch hidden>"
            "<div class=gtoggle>"
            "<label for=cvtruoc><span class=gt1>Sau khi sửa</span>"
            "<span class=gt2>Trước khi sửa</span></label>"
-           "<span class=muted>bấm để xem chữ gốc bạn viết</span></div>")
+           "<span class=muted>bấm để xem chữ gốc bạn viết</span>"
+           f"{di}</div>")
     chu = ("<div class=note>Gạch chân là chỗ máy có ý kiến — bấm vào chính "
            "đoạn đó để xem cách sửa và đổi sang câu khác bạn đã viết. Máy chỉ "
            "<b>cắt và xếp lại</b> chữ của bạn; mọi từ trên bản in ra đều có "

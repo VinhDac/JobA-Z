@@ -230,7 +230,10 @@ LAM_VIEC = (
 # Danh từ TRẠNG THÁI mở đầu -> tả phẩm chất, không tả việc. Đứng trước nó
 # thường có một hai tính từ ("Solid experience…", "Detailed understanding…").
 PHAM_CHAT = re.compile(
-    r"^(?:[a-z+0-9-]+\s+){0,2}"
+    # BỐN từ đệm, không phải hai. "Strong programming and scripting skills
+    # (Python, Bash)" có bốn từ trước danh từ trạng thái, nên nó lọt qua và
+    # được đưa ra làm nền bản nháp — một dòng không có việc nào để kể.
+    r"^(?:[a-z+0-9-]+\s+){0,4}"
     r"(interest|curiosity|understanding|knowledge|awareness|familiarity|"
     r"passion|enthusiasm|exposure|appreciation|experience|experiences|"
     r"proficiency|proficient|competency|comfort|comfortable|background|"
@@ -384,14 +387,18 @@ def con_trong(cau: str) -> bool:
     return CHO_TRONG in (cau or "")
 
 
-def nen_nhap(conn: sqlite3.Connection, ky_nang: str, sau: int = 5) -> list:
+def nen_nhap(conn: sqlite3.Connection, ky_nang: str, sau: int = 12) -> list:
     """Mấy dòng yêu cầu DÙNG ĐƯỢC làm nền cho bản nháp, tin điểm cao trước.
 
     Máy KHÔNG viết câu mới — nó đưa ra chữ của NHÀ TUYỂN DỤNG, nguyên văn, để
     người dùng viết lại thành việc CHÍNH HỌ đã làm. Mọi khẳng định trên bản
     CV vẫn do người dùng đặt ra, và `qua_giong` ở dưới canh đúng chỗ đó.
     """
-    chung, _rieng = ho_hoi(conn, ky_nang, sau=40)
+    # LẤY RỘNG rồi mới cắt. Trước đây `sau=3`, mà `goi_y` chỉ dựng nổi bản
+    # nháp từ một phần nhỏ số dòng — đo trên kho thật: `nlp` có 8 dòng tả
+    # việc, 3 dòng đầu chỉ ra 1 bản nháp, lấy cả 8 thì ra 3. `equities` ra 0
+    # rồi thành 1. Cắt cụt trước khi thử là tự vứt mất bản nháp.
+    chung, _rieng = ho_hoi(conn, ky_nang, sau=60)
     return [m for m in chung if ta_viec(m["chu"])][:sau]
 
 

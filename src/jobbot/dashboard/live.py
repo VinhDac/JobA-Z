@@ -522,12 +522,14 @@ def cv_nut(conn: sqlite3.Connection) -> dict:
     """
     from ..core import prefs
     rieng = prefs.get(conn, prefs.CV_RIENG) or "rieng"
+    tu_lo = prefs.flag(conn, prefs.CV_TU_LO)
     return {"rieng": rieng if rieng in prefs.RIENG else "rieng",
-            # `tu_lo` KHÔNG có trong `ten`: nó đổi LÚC dựng, không đổi bản
-            # dựng RA GÌ. Nhét vào dấu thì lật nó là mọi bản bỗng bị coi là
-            # cũ, mà chúng y hệt nhau.
-            "tu_lo": prefs.flag(conn, prefs.CV_TU_LO),
-            "ten": {"rieng": rieng}}
+            "tu_lo": tu_lo,
+            # `tu_lo` CÓ trong dấu. Trước đây không, vì nó chỉ đổi LÚC dựng.
+            # Từ khi thang HỤT và bản nháp đi cùng bản dựng thì nó đổi cả NỘI
+            # DUNG bản dựng — bật lên mà dấu không đổi thì lật công tắc xong
+            # màn hình y nguyên, và người dùng tưởng nút hỏng.
+            "ten": {"rieng": rieng, "tu_lo": "1" if tu_lo else "0"}}
 
 
 def _cv_key(conn: sqlite3.Connection, cv_text: str) -> tuple:
@@ -861,7 +863,37 @@ def cv_blocks(conn: sqlite3.Connection) -> list[dict]:
     return out
 
 
-def cv_soan(conn: sqlite3.Connection, title: str = "", ky: str = "",
+def cv_nhap(conn: sqlite3.Connection, buoc: list) -> dict:
+    """Bản nháp dựng sẵn cho từng chỗ hụt. {} khi công tắc Máy tự lo đang tắt.
+
+    MỘT CHỖ DỰNG, hai chỗ vẽ: thang HỤT ở tab CV và màn Soạn khối. Trước đây
+    chỉ màn Soạn mới dựng, nên bật công tắc xong mà đứng ở tab CV thì không
+    thấy gì khác — cái nút nói một đằng, màn hình nói một nẻo.
+
+    Mỗi dòng có ba kết cục, và cả ba phải NÓI RA được:
+        có nháp    máy dựng được câu, chờ điền bằng chứng
+        không nền  không tin nào đòi nó bằng một dòng TẢ VIỆC
+        không dựng nổi  có dòng tả việc, nhưng cắt không đủ xa khỏi chữ của họ
+    """
+    from ..scoring.gap import goi_y, nen_nhap
+    if not cv_nut(conn).get("tu_lo"):
+        return {}
+    ra: dict = {}
+    for b in buoc or []:
+        ky = b["ky_nang"]
+        if b["dong"] - b["rieng"] <= 0:
+            continue                      # việc đi HỌC, không viết thay được
+        nen = nen_nhap(conn, ky)
+        ra[ky] = {"nen_co": len(nen), "nhap": "", "nen": "", "cong_ty": ""}
+        for m in nen:
+            g = goi_y(m["chu"], ky)
+            if g:
+                ra[ky].update(nhap=g, nen=m["chu"], cong_ty=m["cong_ty"])
+                break
+    return ra
+
+
+def cv_soan(conn: sqlite3.Connection, luu: dict, title: str = "", ky: str = "",
             nen: str = "", soan: str = "", tho: bool = False) -> dict:
     """Mọi thứ màn SOẠN KHỐI cần — đo ở đây, màn hình chỉ vẽ.
 
@@ -917,7 +949,10 @@ def cv_soan(conn: sqlite3.Connection, title: str = "", ky: str = "",
     # THANG HỤT rút gọn: soạn khối mà không biết thị trường đang thiếu gì thì
     # chỉ là sửa chính tả. Chỉ lấy dòng VIẾT ĐƯỢC — dòng "phải học" không phải
     # việc làm được trong màn này.
-    d_hut = cv_hut(conn)
+    # THANG HỤT ĐỌC TỪ BẢN ĐÃ DỰNG, không tính lại — xem cv/batch.run. Chưa
+    # dựng lần nào thì chưa có số đo nào, và màn này nói ra điều đó thay vì
+    # bịa ra một thang đo từ một mốc thời gian khác với tab CV.
+    d_hut = (luu or {}).get("hut") or {}
     hut = [b for b in (d_hut.get("buoc") or [])
            if b["dong"] - b["rieng"] > 0][:6]
 
@@ -929,15 +964,12 @@ def cv_soan(conn: sqlite3.Connection, title: str = "", ky: str = "",
     # tệ hơn: bộ chấm sẽ đếm "data pipelines" trong câu nháp là kỹ năng đã
     # đáp, và app nói dối người dùng về chính họ.
     san = []
-    if cv_nut(conn).get("tu_lo") and not ky:
+    if not ky:
+        sanh = ((luu or {}).get("nhap") or {}) if cv_nut(conn).get("tu_lo") else {}
         for b in hut:
-            for m in nen_nhap(conn, b["ky_nang"], sau=3):
-                g = goi_y(m["chu"], b["ky_nang"])
-                if g:
-                    san.append({"ky": b["ky_nang"], "them": b["them"],
-                                "nen": m["chu"], "cong_ty": m["cong_ty"],
-                                "nhap": g})
-                    break
+            d = sanh.get(b["ky_nang"]) or {}
+            if d.get("nhap"):
+                san.append({"ky": b["ky_nang"], "them": b["them"], **d})
 
     brief = None
     if ky:

@@ -350,8 +350,10 @@ check("và xoá khối cũ trước khi ghi", "was != title" in _srv3)
 
 print("\n[tiêu đề khối vào URL phải URL-encode]")
 from urllib.parse import quote as _q
+# KHO KHỐI ĐÃ RỜI khỏi tab CV sang màn Sửa khối — nó có nhà riêng ở đó, nơi
+# bấm vào một khối là soạn được luôn.
 _lst = (Path(__file__).resolve().parent.parent
-        / "src/jobbot/dashboard/views/cvlist.py").read_text(encoding="utf-8")
+        / "src/jobbot/dashboard/views/cvsoan.py").read_text(encoding="utf-8")
 # esc() là để chữ hiện an toàn trong HTML; nó KHÔNG làm dấu & hết cắt tham số.
 check("dùng quote() cho tham số URL", "quote(b['title']" in _lst)
 check("ký tự & được mã hoá", _q("Research & Development", safe="") == "Research%20%26%20Development")

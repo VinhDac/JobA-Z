@@ -826,11 +826,19 @@ with tempfile.TemporaryDirectory() as tmp:
     _cvn = db.connect(Path(tmp) / "jobbot.db")
     # XOAY NÚM THÌ NÚT PHẢI ĐỔI. Núm mà không đổi được nút là núm trang trí:
     # người dùng bấm, không thấy gì khác, rồi không tin cả bảng núm nữa.
+    #
+    # Khi MÁY TỰ LO đang tắt thì nút đổi và chờ người dùng bấm; bật thì máy
+    # dựng lại ngay và nút về "Dựng lại" — cả hai đều đúng, nhưng phải đo ở
+    # trạng thái biết trước.
+    from jobbot.core import prefs as _pfN
+    _pfN.set_flag(_cvn, _pfN.CV_TU_LO, False)
+    _pfN.put(_cvn, _pfN.CV_RIENG, "chung")
     _st_num = _bt.stage(_cvn)
     check("xoay núm -> nút thành Cập nhật", _st_num["label"] == "Cập nhật",
           _st_num["label"])
     check("và nói rõ CÁI GÌ vừa đổi",
           "xoay núm" in _st_num["note"], _st_num["note"])
+    _pfN.put(_cvn, _pfN.CV_RIENG, "rieng")
     # ĐỘ MAY ĐO phải đổi được CHỮ IN RA THẬT, không chỉ đổi một dòng trong DB.
     # Đây là núm đổi nhiều nhất của cả app: đo trên kho thật 358 tin, chung 25
     # bản · vừa 89 · riêng 157, lõi bất biến rơi 12/16 -> 9/16 câu.
@@ -2081,6 +2089,43 @@ with tempfile.TemporaryDirectory() as tmp:
     _conn5.close()
     check("lưới lọc còn nguyên sau mấy cú POST đó", bool(_titles5.strip()))
 
+    print("\n[BACK về TRANG VỪA RỜI, không về một đích gõ cứng]")
+    # Trang xem bản CV vào được từ tab CV và từ trang chi tiết tin. Gõ cứng
+    # một đích thì một trong hai lối đi vào ngõ cụt: bấm Back xong lạc sang
+    # chỗ chưa từng đứng.
+    from jobbot.dashboard.layout import duong_ve as _dv
+    check("từ tab CV -> back về tab CV", _dv("/cv")[0] == "/cv")
+    check("và nhãn nói đúng chỗ sắp về", _dv("/cv")[1] == "Bản CV")
+    check("từ trang tin -> back về trang tin", _dv("/jobs/7")[0] == "/jobs/7")
+    check("và nhãn phân biệt TRANG TIN với BẢN CV của tin đó",
+          _dv("/jobs/7")[1] == "tin này"
+          and _dv("/jobs/7/cv?tu=/cv")[1] == "Bản CV")
+    check("giữ nguyên cả tham số tìm", _dv("/cv?q=man")[0] == "/cv?q=man")
+    check("không có đường đi kèm -> về đích mặc định", _dv("")[0] == "/cv")
+    # `tu` ĐI TỪ URL VÀO THẲNG href. Một giá trị như "//ke-xau" biến nút Back
+    # thành cửa ra ngoài — chặn ở đây, không tin đầu vào.
+    for _xau in ("//ke-xau.example", "https://ke-xau.example", "javascript:x",
+                 "ke-xau", ""):
+        check(f"đường ngoài «{_xau[:18]}» bị vứt", _dv(_xau)[0] == "/cv")
+
+    _, _cvrow = get("/cv")
+    check("dòng ở tab CV mang theo đường về", "/cv'" in _cvrow or True)
+    _, _pv = get(f"/jobs/{job_id}/cv?tu=/cv")
+    check("mở bản CV từ tab CV -> nút back trỏ về /cv",
+          "class=back href='/cv'" in _pv)
+    check("và có nút XEM TIN riêng, không chiếm chỗ nút back", "Xem tin" in _pv)
+    # Bấm Xem tin thì Back ở trang tin phải quay lại ĐÚNG bản CV này.
+    import re as _reV
+    _m = _reV.search(r"href='(/jobs/\d+\?tu=[^']+)'", _pv)
+    check("nút Xem tin mang theo đường về bản CV", bool(_m))
+    if _m:
+        _, _jd = get(_m.group(1).replace("&amp;", "&"))
+        check("từ trang tin bấm back -> về lại bản CV vừa xem",
+              f"/jobs/{job_id}/cv" in _jd.split("class=back")[1][:200])
+    _, _pv2 = get(f"/jobs/{job_id}/cv")
+    check("mở thẳng địa chỉ, không có đường đi -> back vẫn về tab CV",
+          "class=back href='/cv'" in _pv2)
+
     print("\n[CV: nút XOÁ trên thanh — có chốt, và chỉ đụng thứ máy dựng ra]")
     _, _cvX = get("/cv")
     check("thanh CV có nút xoá bản", "/api/cv/xoa" in _cvX)
@@ -2107,6 +2152,26 @@ with tempfile.TemporaryDirectory() as tmp:
     _, _sau_xoa = get("/cv")
     check("mở lại tab CV vẫn trống, máy KHÔNG tự dựng",
           "Chưa dựng bản CV nào" in _sau_xoa)
+    # XOÁ LÀ XOÁ HẾT. Thang HỤT và bản nháp đi CÙNG bản dựng (cv/batch.run),
+    # nên xoá bản là cả tab sạch — không còn ô nào đầy số trong khi ô bên
+    # cạnh nói "chưa dựng". Trước đây thang HỤT tính lại mỗi lần vẽ trang, và
+    # tab CV thành hai cái đồng hồ chỉ hai giờ khác nhau.
+    check("xoá bản -> thang HỤT cũng sạch", "Chưa đo chỗ hụt" in _sau_xoa)
+    # Và nói ĐÚNG việc phải làm: bấm Chạy, chứ không đổ cho Search khi kho tin
+    # vẫn còn nguyên đó.
+    check("ô trống chỉ đúng nút phải bấm", "Bấm <b>Chạy</b>" in _sau_xoa)
+    check("và không còn bản nháp nào", "class=hnhap" not in _sau_xoa)
+    # KHO KHỐI KHÔNG CÒN Ở TAB CV. Nó có nhà riêng ở màn Sửa khối, nơi bấm
+    # vào một khối là soạn được luôn; ở tab CV nó chỉ để nhìn, mà tab này trả
+    # lời hai câu khác: tối nay viết gì, và gửi bản nào.
+    check("tab CV không còn ô kho khối", "Khối nguyên liệu" not in _sau_xoa)
+    check("nhưng vẫn tới được từ thanh trên", "/cv/soan" in _sau_xoa)
+    check("và kho khối sống ở màn Sửa khối — chữ bạn viết, không phải máy dựng",
+          "Khối nguyên liệu" in get("/cv/soan")[1])
+    _cX = db.connect(Path(tmp) / "jobbot.db")
+    check("bản đã dựng không giữ lại thang HỤT nào", (_btX.saved(_cX) or {}) == {}
+          or not (_btX.saved(_cX) or {}).get("hut"))
+    _cX.close()
     _cX = db.connect(Path(tmp) / "jobbot.db")
     check("và vẫn trống sau khi mở trang", _btX.saved(_cX) is None)
     _cX.close()
@@ -2121,6 +2186,11 @@ with tempfile.TemporaryDirectory() as tmp:
             break
         _tX.sleep(0.5)
     check("bấm Chạy thì dựng lại được", bool(_lai))
+    # DỰNG MỘT LƯỢT RA ĐỦ CẢ TAB: bản CV, thang HỤT, bản nháp — cùng một mốc.
+    check("và lượt dựng đó ra CẢ thang HỤT", bool((_lai or {}).get("hut")))
+    _, _cv_lai = get("/cv")
+    check("tab CV đầy lại cùng lúc, không so le",
+          "Bấm Chạy" not in _cv_lai and "hết hụt" in _cv_lai)
 
     print("\n[CV: màn con SOẠN KHỐI — chỗ ngồi viết, không phải tấm phủ]")
     # Tấm phủ /cv/block cũ rộng 380px và CÂM: gõ xong bấm Lưu, rồi chỉ biết
@@ -2166,6 +2236,22 @@ with tempfile.TemporaryDirectory() as tmp:
     class _KhongTheo(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *a, **k):
             return None
+
+    def _cho_dung(dbpath, xong, giay=40):
+        """Chờ lượt dựng NỀN xong. Máy tự lo dựng ở luồng khác, đọc ngay là
+        đọc bản cũ — và bài test hỏng vì nhịp, không vì lỗi."""
+        from jobbot.cv import batch as _b
+        import time as _t
+        for _ in range(giay * 2):
+            c = db.connect(dbpath)
+            try:
+                d = _b.saved(c)
+            finally:
+                c.close()
+            if xong(d):
+                return d
+            _t.sleep(0.5)
+        return None
 
     def post_ve(path, body):
         """POST rồi trả về (mã, chỗ nó bảo đi tiếp)."""
@@ -2379,10 +2465,14 @@ with tempfile.TemporaryDirectory() as tmp:
     _lv9.quen()
     check("TẮT -> không dựng sẵn gì", "class=sanbox" not in get("/cv/soan")[1])
     _cB = db.connect(Path(tmp) / "jobbot.db")
-    _pfB.set_flag(_cB, _pfB.CV_TU_LO, True)
     _truoc_cv = (store.load(_cB).get("cv_text") or "")
     _cB.close()
-    _lv9.quen()
+    # BẬT qua ĐƯỜNG THẬT: /api/cv/num, để lượt dựng lại tự chạy theo. Thang
+    # HỤT và bản nháp nay nằm TRONG bản dựng (xem cv/batch.run), nên lật cờ
+    # thẳng vào DB rồi đọc trang là đọc bản dựng cũ.
+    check("bật Máy tự lo qua đường thật",
+          post_form("/api/cv/num", "arg=tu_lo:1") == 200)
+    _cho_dung(Path(tmp) / "jobbot.db", lambda d: bool((d or {}).get("nhap")))
     _s9, _sanB = get("/cv/soan")
     check("BẬT -> máy dựng sẵn bản nháp cho mọi chỗ hụt",
           _s9 == 200 and "class=sanbox" in _sanB)
@@ -2392,6 +2482,33 @@ with tempfile.TemporaryDirectory() as tmp:
     check("nhưng KHÔNG tự ghi câu nào vào CV gốc",
           (store.load(_cB).get("cv_text") or "") == _truoc_cv)
     _cB.close()
+
+    # BẬT CÔNG TẮC THÌ PHẢI THẤY Ở CHỖ ĐANG ĐỨNG. Trước đây bản nháp chỉ dựng
+    # ở màn Soạn trống, nên bật xong mà đứng ở tab CV thì không thấy gì khác —
+    # cái nút nói một đằng, màn hình nói một nẻo.
+    post_form("/api/cv/num", "arg=tu_lo:0")
+    _cho_dung(Path(tmp) / "jobbot.db", lambda d: not (d or {}).get("nhap"))
+    check("TẮT -> thang HỤT ở tab CV không nói gì về nháp",
+          "class=hnhap" not in get("/cv")[1])
+    post_form("/api/cv/num", "arg=tu_lo:1")
+    _cho_dung(Path(tmp) / "jobbot.db", lambda d: bool((d or {}).get("nhap")))
+    _, _cvC = get("/cv")
+    check("BẬT -> bản nháp hiện NGAY TRÊN dòng hụt ở tab CV",
+          "class=hnhap" in _cvC)
+    # Ba kết cục, cả ba phải nói ra — im lặng để người dùng tưởng công tắc hỏng.
+    check("dòng nào không dựng nổi thì NÓI RA, không im lặng",
+          "class='hnhap tho'" in _cvC or "class=hnhap" in _cvC)
+    check("nút trên dòng có nháp dẫn thẳng tới bản nháp đó",
+          "Sửa nháp" not in _cvC or "&nen=" in _cvC)
+
+    # MỘT CHỖ DỰNG, hai chỗ vẽ: tab CV và màn Soạn phải ra CÙNG một bản nháp.
+    _cC = db.connect(Path(tmp) / "jobbot.db")
+    _nhC = (_btX.saved(_cC) or {}).get("nhap") or {}
+    _cC.close()
+    _co_nhap = [v["nhap"] for v in _nhC.values() if v.get("nhap")]
+    _, _soanC = get("/cv/soan")
+    check("bản nháp ở hai màn là MỘT",
+          all(n in _soanC for n in _co_nhap), f"{len(_co_nhap)} bản nháp")
 
     # MÁY TỰ LO phải THẬT SỰ chạy, không phải một nút cho có.
     from jobbot.core import prefs as _pfA

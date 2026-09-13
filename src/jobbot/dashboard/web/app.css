@@ -1903,3 +1903,13 @@ a.mbtn.apply{color:var(--acc)}
    nhịp chỉ là hai lần bấm. */
 .mbtn.kill.armed{background:var(--bad);color:#1A0E0D;border-color:var(--bad);
   font-weight:700}
+
+/* BẢN NHÁP máy dựng sẵn, nằm ngay trên dòng hụt nó thuộc về (tab CV). */
+.hnhap{grid-column:2 / -1;display:block;font-size:11.5px;color:var(--ink);
+  line-height:1.55;margin-top:5px;padding:6px 10px;border-radius:7px;
+  background:var(--acc-bg);border-left:2px solid var(--acc)}
+.hnhap i{display:block;font-style:normal;font-size:10px;color:var(--mute);
+  margin-top:3px}
+/* Không dựng nổi thì NÓI RA, đừng im lặng — im lặng để người dùng tưởng
+   công tắc hỏng. */
+.hnhap.tho{color:var(--mute);background:transparent;border-left-color:var(--line)}
