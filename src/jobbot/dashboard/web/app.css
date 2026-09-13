@@ -2367,3 +2367,6 @@ tr.sxong{opacity:.55}
 .testkq.ok b{color:var(--acc)}
 .testkq.xau b{color:var(--warn)}
 .testkq span{font-size:11.5px;color:var(--mute);line-height:1.55}
+/* Dòng phụ dưới nhãn ô nhập — chỗ nói cái mà nhãn một dòng không nói hết. */
+.srowphu{display:block;font-style:normal;font-size:9.5px;color:var(--mute);
+  margin-top:2px}

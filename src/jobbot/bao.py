@@ -229,6 +229,82 @@ def tra_loi(conn: sqlite3.Connection, lenh: str, tham: str) -> str:
     return "Không hiểu lệnh. Gõ /giupdo để xem danh sách."
 
 
+# --- LƯU CẤU HÌNH, VÀ KIỂM NGAY LÚC LƯU ----------------------------------
+
+def dang_token(t: str) -> bool:
+    """Token BotFather có dạng `<số>:<chuỗi>`. Kiểm HÌNH DẠNG, không kiểm sống.
+
+    Bắt được lỗi dán thiếu/dán nhầm mà không phải đi ra mạng. Token đúng hình
+    dạng vẫn có thể đã bị thu hồi — cái đó chỉ `getMe` biết.
+    """
+    d, co, r = str(t or "").strip().partition(":")
+    return bool(co and d.isdigit() and len(d) >= 6 and len(r) >= 20)
+
+
+def dang_chat(x: str) -> bool:
+    """Mã chat là SỐ NGUYÊN (nhóm thì âm). KHÔNG phải số điện thoại.
+
+    Đây là chỗ người dùng hay sai nhất, và sai kiểu im lặng: dán số điện
+    thoại vào thì Telegram trả "chat not found", một câu chẳng gợi ý gì.
+    """
+    return str(x or "").strip().lstrip("-").isdigit()
+
+
+def luu(tok: str = "") -> tuple:
+    """Lưu token, kiểm token, VÀ TỰ TÌM MÃ CHAT — một nút, một lần bấm.
+
+    Bản trước bắt người dùng đi ba bước: Lưu token → Tìm chat → Test. Mà
+    bước giữa không hỏi họ điều gì cả: mã chat là thứ máy đọc được từ chính
+    Telegram, hỏi người dùng là hỏi một câu họ không có cách nào biết. Một
+    thao tác không mang thông tin mới thì nó là thao tác thừa.
+
+    Nên giờ: dán token, bấm Lưu. Máy tự hỏi Telegram xem bot tên gì và đã có
+    ai nhắn chưa. Tìm thấy thì xong; không thấy thì báo, VÀ GỌI ĐÚNG TÊN BOT
+    ra — người dùng hay có vài con bot, "nhắn cho bot của bạn" thì họ nhắn
+    nhầm con.
+    """
+    from .core import config as cfg
+
+    if tok:
+        if not dang_token(tok):
+            return False, ("Token không đúng dạng. Token của @BotFather trông "
+                           "như <b>7123456789:AAH…</b> — dán trọn cả dòng, "
+                           "gồm cả phần số trước dấu hai chấm.")
+        cfg.write_value(tele.MUC, "token", tok)
+
+    me, loi = tele.goi("getMe", {})
+    if loi:
+        return False, f"Telegram từ chối token: {loi}"
+    ten = ((me or {}).get("result") or {}).get("username", "")
+    nhan_bot = f"<b>@{tele.thoat(ten)}</b>" if ten else "bot"
+
+    # TÌM MÃ CHAT. Gọi goi() chứ không gọi nhan(): nhan() nuốt lý do, nên
+    # token chết cũng ra "chưa thấy tin nào" — chỉ sai đường còn tệ hơn im.
+    ra, loi = tele.goi("getUpdates", {"offset": 0, "timeout": 0})
+    if loi:
+        return False, f"Token sống ({nhan_bot}) nhưng không hỏi được tin: {loi}"
+    ai = [str((((u.get("message") or {}).get("chat")) or {}).get("id", ""))
+          for u in (ra or {}).get("result") or []]
+    ai = [x for x in ai if x and dang_chat(x)]
+
+    if ai:
+        cfg.write_value(tele.MUC, "chat_id", ai[-1])
+        jlog.ok(SYSTEM, f"Telegram đã nối — {nhan_bot}")
+        return True, (f"Xong. Token sống, bot là {nhan_bot}, và đã tìm ra "
+                      f"chat của bạn. Bấm <b>Test</b> để nhận tin thử.")
+
+    # Không thấy tin nào. Nếu đã có mã chat từ lần trước thì vẫn coi là xong —
+    # Telegram xoá tin cũ sau khi giao, nên "không còn tin" là chuyện bình
+    # thường của một bot đã dùng rồi.
+    if dang_chat(tele.cau_hinh().get("chat_id", "")):
+        return True, (f"Token sống, bot là {nhan_bot}, và mã chat đã có sẵn "
+                      f"từ trước. Bấm <b>Test</b> để thử.")
+
+    return False, (f"Token sống, bot là {nhan_bot} — nhưng chưa ai nhắn cho "
+                   f"nó. Mở Telegram, tìm đúng {nhan_bot}, nhắn <b>/start</b>, "
+                   f"rồi bấm <b>Lưu</b> lại.")
+
+
 # --- NÚT TEST -------------------------------------------------------------
 
 def tin_thu(conn: sqlite3.Connection) -> str:

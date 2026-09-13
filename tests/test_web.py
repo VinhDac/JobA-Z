@@ -2233,8 +2233,18 @@ with tempfile.TemporaryDirectory() as tmp:
     _prefs.put(_ct, _prefs.BAO_MUC, _tl.TAT)
     # LÝ DO HỎNG phải dịch sang tiếng người. "không gửi được" là câu người
     # dùng đã tự biết rồi — nút Test tồn tại để nói hỏng Ở ĐÂU.
-    check("chưa có token -> nói rõ lấy token ở đâu",
-          "@BotFather" in _tl.goi("getMe", {})[1])
+    # KHÔNG PHỤ THUỘC CẤU HÌNH THẬT. Bài cũ gọi thẳng goi() nên nó xanh hay
+    # đỏ tuỳ người chạy máy đã nối Telegram hay chưa — một bài test đổi kết
+    # quả theo máy thì nó không kiểm cái gì cả.
+    _cu = _tl.cau_hinh
+    try:
+        _tl.cau_hinh = lambda: {}
+        check("chưa có token -> nói rõ lấy token ở đâu",
+              "@BotFather" in _tl.goi("getMe", {})[1])
+        check("và không hề ra mạng khi chưa có token",
+              _tl.goi("getMe", {})[0] is None)
+    finally:
+        _tl.cau_hinh = _cu
     _okt, _lyd = _bao.thu(_ct)
     check("chưa nối thì Test trả về THẤT BẠI", not _okt)
     check("và câu báo chỉ đúng việc phải làm",
@@ -2268,6 +2278,47 @@ with tempfile.TemporaryDirectory() as tmp:
           "fd.append(e.submitter.name" in _js2)
     check("không đè ghi chú khi máy chủ đã trả kết quả thật",
           "querySelector('.testkq')) return" in _js2)
+
+    print("\n[CHẶN NGAY LÚC LƯU — đừng để cất giá trị sai rồi mới báo]")
+    # SỐ ĐIỆN THOẠI KHÔNG PHẢI MÃ CHAT. Đây là lỗi người dùng thật đã mắc:
+    # nhãn "Số chat của bạn" đọc ra như số điện thoại, dán vào thì Telegram
+    # trả "chat not found" — một câu chẳng gợi ý gì.
+    check("số điện thoại KHÔNG phải mã chat", not _bao.dang_chat("+447511787706"))
+    check("mã chat là số nguyên", _bao.dang_chat("123456789"))
+    check("nhóm thì âm, vẫn hợp lệ", _bao.dang_chat("-1001234567"))
+    check("chuỗi rỗng không hợp lệ", not _bao.dang_chat(""))
+    check("token đúng dạng <số>:<chuỗi>",
+          _bao.dang_token("7123456789:AAH" + "x" * 32))
+    check("dán thiếu phần trước dấu hai chấm -> chặn",
+          not _bao.dang_token("AAH" + "x" * 32))
+    check("dán cụt đuôi -> chặn", not _bao.dang_token("7123456789:AAH"))
+    # BỎ HẲN Ô MÃ CHAT. Mã chat là thứ máy đọc được từ chính Telegram — hỏi
+    # người dùng là hỏi một câu họ không có cách nào biết, và chính cái ô đó
+    # đã dẫn thẳng tới việc dán số điện thoại vào.
+    _sn = _setm.render(every=60, hours=(8, 22), status=[])
+    check("không còn ô nhập mã chat", "name=chat_id" not in _sn)
+    check("và không còn nút Tìm chat riêng", "name=tim" not in _sn)
+    # ĐẾM TRONG TAB THÔNG BÁO, không đếm cả tấm: mấy tab khác cũng có nút Lưu.
+    _pane = _sn.split("data-pane='bao'>")[1].split("<div class='stpane")[0]
+    # Đếm đúng cái NÚT, không đếm chữ "Lưu" trong câu hướng dẫn — câu đó
+    # cũng có <b>Lưu</b>, và dò ">Lưu<" thì bắt luôn cả nó.
+    check("tab Thông báo chỉ còn MỘT nút Lưu cho phần Telegram",
+          _pane.count("name=test") == 1
+          and _pane.count("type=submit>Lưu</button>") == 2)
+    check("hướng dẫn đủ bốn bước", all(f"{i}." in _sn for i in (1, 2, 3, 4)))
+    check("bước Lưu nói rõ máy tự lo phần còn lại",
+          "máy tự tìm nốt" in _sn)
+    # "Đã lưu" KHÁC "đúng": token bị thu hồi thì config vẫn đủ hai chuỗi.
+    _snoi = _setm.render(every=60, hours=(8, 22), status=[], tele_noi=True,
+                         tele_token="…BASU", tele_chat="123")
+    check("đã lưu thì KHÔNG dám nói là chạy tốt", "chưa chắc" in _snoi)
+    check("mà mời bấm Test để biết chắc", "để biết chắc" in _snoi)
+    # Băng kết quả báo CẢ BA việc (lưu · tìm · test) nên tiêu đề phải nói chung.
+    _sbang = _setm.render(every=60, hours=(8, 22), status=[],
+                          tin_test=(True, "Đã lưu <b>mã chat</b>."))
+    check("tiêu đề băng nói chung, không nói «gửi»", "Được rồi" in _sbang)
+    check("và KHÔNG escape hai lần — thẻ <b> phải là thẻ, không phải chữ",
+          "Đã lưu <b>mã chat</b>." in _sbang and "&lt;b&gt;" not in _sbang)
 
     print("\n[MÀU HỆ THỐNG — đổi được, và không màu nào đọc không nổi]")
     from jobbot.dashboard import mau as _mau

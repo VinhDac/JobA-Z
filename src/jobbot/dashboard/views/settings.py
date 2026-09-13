@@ -236,19 +236,24 @@ def _thong_bao(noi: bool, token_che: str, chat: str, bat: dict,
     """
     from ...core import prefs, tele
 
+    # "ĐÃ NỐI" ở đây chỉ nghĩa là CÓ ĐỦ HAI CHUỖI trong config, không phải
+    # chúng đúng. Token bị thu hồi thì dòng này vẫn xanh — nên nó phải mời
+    # bấm Test chứ không được nói "chạy tốt".
+    buoc = ("1. Trên Telegram nhắn <b>@BotFather</b> → <b>/newbot</b>. Nó trả "
+            "về một token dạng <b>7123456789:AAH…</b> — copy TRỌN cả dòng.<br>"
+            "2. Mở con bot vừa tạo, nhắn cho nó <b>/start</b>.<br>"
+            "3. Dán token vào ô dưới rồi bấm <b>Lưu</b> — máy tự tìm nốt "
+            "phần còn lại.<br>"
+            "4. Bấm <b>Test</b>: một tin thử sẽ về điện thoại bạn.")
     if noi:
-        dau = (f"<div class=safe>Bot đã nối · token <b>{esc(token_che)}</b> · "
-               f"chat <b>{esc(chat)}</b>. Nhắn <b>/giupdo</b> cho bot để xem "
-               f"danh sách lệnh. Dán token mới vào ô dưới để đổi.</div>")
+        dau = (f"<div class=safe>Đã nối · token <b>{esc(token_che)}</b> — "
+               f"nhưng <i>đã lưu</i> chưa chắc là <i>đúng</i> (token bị thu "
+               f"hồi thì dòng này vẫn xanh). Bấm <b>Test</b> để biết chắc."
+               f"<br><br>{buoc}</div>")
     else:
         dau = ("<div class=safe><b>Chưa nối.</b> Máy treo ở nhà thì thông báo "
                "của macOS không ai thấy — Telegram là đường duy nhất không "
-               "phải mở cổng router.<br><br>"
-               "1. Trên Telegram nhắn <b>@BotFather</b> → <b>/newbot</b> → "
-               "nó cho bạn một token.<br>"
-               "2. Dán token vào đây và Lưu.<br>"
-               "3. Nhắn một câu bất kỳ cho bot vừa tạo, rồi bấm "
-               "<b>Tìm chat</b> — app tự đọc ra số chat của bạn.</div>")
+               f"phải mở cổng router.<br><br>{buoc}</div>")
 
     form = (
         "<form class=setform method=post action='/settings'>"
@@ -256,12 +261,12 @@ def _thong_bao(noi: bool, token_che: str, chat: str, bat: dict,
         "<label class=srow><span>Token của bot</span>"
         "<input class=stext type=password name=token autocomplete=off"
         " placeholder='dán token từ @BotFather'></label>"
-        "<label class=srow><span>Số chat của bạn</span>"
-        f"<input class=stext type=text name=chat_id value='{esc(chat)}'"
-        " autocomplete=off placeholder='để trống rồi bấm Tìm chat'></label>"
+        # KHÔNG CÓ Ô MÃ CHAT. Mã chat là thứ máy đọc được từ chính Telegram,
+        # hỏi người dùng là hỏi một câu họ không có cách nào biết — và cái ô
+        # đó đã dẫn thẳng tới việc dán số điện thoại vào. Một ô không mang
+        # thông tin mới thì nó là một chỗ để sai.
         "<div class=setfoot>"
         "<button class='mbtn apply' type=submit>Lưu</button>"
-        "<button class=mbtn type=submit name=tim value=1>Tìm chat</button>"
         # NÚT TEST gửi THẬT một tin. Kiểm từng khúc rồi kết luận "chắc là
         # chạy" là đúng kiểu tự lừa app này tránh — cả chuỗi token → số chat
         # → mạng → Telegram chỉ chứng minh được bằng cách đi hết một vòng.
@@ -277,9 +282,16 @@ def _thong_bao(noi: bool, token_che: str, chat: str, bat: dict,
     # "không gửi được" — câu đó họ tự biết rồi.
     if tin_test:
         was_ok, cau = tin_test
+        # KHÔNG esc() Ở ĐÂY: câu này do bao.py soạn, và nó đã tự thoát mọi
+        # mảnh lấy từ Telegram bằng tele.thoat() trước khi ghép. Escape thêm
+        # lần nữa thì <b> hiện nguyên thành chữ — người dùng đọc ra "&lt;b&gt;"
+        # giữa câu hướng dẫn.
+        #
+        # Tiêu đề NÓI CHUNG, vì cùng cái băng này báo cả ba việc: lưu, tìm
+        # mã chat, và gửi tin thử. Ghi "Gửi được" cho một lượt Lưu là sai.
         form = (f"<div class='testkq {'ok' if was_ok else 'xau'}'>"
-                f"<b>{'✅ Gửi được' if was_ok else '⚠️ Chưa gửi được'}</b>"
-                f"<span>{esc(cau)}</span></div>") + form
+                f"<b>{'✅ Được rồi' if was_ok else '⚠️ Chưa được'}</b>"
+                f"<span>{cau}</span></div>") + form
 
     # --- bốn loại báo
     hang = ""

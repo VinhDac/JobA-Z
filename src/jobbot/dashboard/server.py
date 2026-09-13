@@ -776,41 +776,14 @@ class Handler(BaseHTTPRequestHandler):
                                                       mo="gmail"))
                 if phan == "telegram":
                     # TOKEN VÀO config.toml, KHÔNG vào DB: cùng chỗ với app
-                    # password Gmail (chmod 600, đã gitignore). Để trống thì
-                    # giữ token cũ — người dùng chỉ sửa số chat thì không
-                    # phải dán lại token.
-                    from ..core import config as _cfg, tele as _tele
-                    tok = form.get("token", [""])[0].strip()
-                    if tok:
-                        _cfg.write_value("telegram", "token", tok)
-                    chat = form.get("chat_id", [""])[0].strip()
-                    if form.get("tim"):
-                        # TÌM CHAT: đọc một lượt getUpdates rồi lấy số chat
-                        # của tin gần nhất. Người dùng khỏi phải đi tra bằng
-                        # một bot thứ ba nào đó.
-                        ds, _ = _tele.nhan(0)
-                        ai = [str((((u.get("message") or {}).get("chat")) or {})
-                                  .get("id", "")) for u in ds]
-                        ai = [x for x in ai if x]
-                        if ai:
-                            chat = ai[-1]
-                            journal.log.ok(journal.SYSTEM,
-                                           f"tìm thấy chat Telegram {chat}")
-                        else:
-                            journal.log.warn(
-                                journal.SYSTEM,
-                                "chưa thấy tin nào — nhắn một câu cho bot rồi "
-                                "bấm Tìm chat lại")
-                    if chat:
-                        _cfg.write_value("telegram", "chat_id", chat)
-                    if tok or chat:
-                        journal.log.ok(journal.SYSTEM, "đã lưu cấu hình Telegram")
-                    # TEST chạy SAU khi lưu, không trước: người dùng dán
-                    # token rồi bấm thẳng Test là chuyện thường, và test bằng
-                    # token cũ thì nó báo sai về cái vừa dán.
-                    kq = ()
+                    # password Gmail (chmod 600, đã gitignore). Kiểm ngay lúc
+                    # lưu — xem bao.luu().
+                    from .. import bao as _bao
+                    kq = _bao.luu(form.get("token", [""])[0].strip())
                     if form.get("test"):
-                        from .. import bao as _bao
+                        # TEST chạy SAU khi lưu: người dùng dán token rồi bấm
+                        # thẳng Test là chuyện thường, và test bằng token cũ
+                        # thì nó báo sai về cái vừa dán.
                         kq = _bao.thu(conn)
                     return self._html(settings.render(
                         **live.settings(conn), tin_test=kq, mo="bao"))
