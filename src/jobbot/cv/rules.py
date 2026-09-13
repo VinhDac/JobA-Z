@@ -182,16 +182,17 @@ def clean(text: str) -> str:
     return re.sub(r"\s*·?\s*(Demo|Live|code|Live walkthrough)\s*$", "", out).strip()
 
 
-def sentence_ok(text: str, tags: list[str] | None = None,
-                giu: set | None = None) -> tuple[str, str]:
+def sentence_ok(text: str, tags: list[str] | None = None) -> tuple[str, str]:
     """Câu này lên CV được không: keep | review | drop, kèm lý do.
 
     `review` = giữ lại nhưng đánh dấu để Vin tự quyết. Dùng khi câu vừa có
     bằng chứng cứng (số liệu, kỹ năng) vừa có chữ dễ gây hiểu lầm — vứt cả câu
     thì mất luôn con số, mà im lặng giữ thì giấu rủi ro.
     """
-    # `giu` = mấy luật NGƯỜI DÙNG ĐÃ TẮT. Luật vẫn đúng trong đa số trường
-    # hợp, nhưng nó không biết hoàn cảnh — nên người dùng phải lật được.
+    # BA CÔNG TẮC LẬT LUẬT ĐÃ BỎ. Chúng bắt người dùng học ba luật trước khi
+    # dùng được app, mà cả ba đều đúng trong đa số trường hợp và đều có số đo
+    # hậu thuẫn. Bản chấm điểm (report.py) vẫn nói rõ câu nào bị bỏ vì sao,
+    # nên người dùng không mất thông tin — chỉ mất ba cái nút.
     # TỰ TÍNH `tags` NẾU KHÔNG ĐƯỢC TRUYỀN. Trước đây thiếu tham số nghĩa là
     # "câu này không có kỹ năng nào", nên CÙNG MỘT CÂU ra hai phán quyết tuỳ
     # người gọi có nhớ truyền hay không: "A random train/test split leaks…"
@@ -200,18 +201,17 @@ def sentence_ok(text: str, tags: list[str] | None = None,
     if tags is None:
         from .build import skills_in
         tags = sorted(skills_in(text))
-    giu = giu or set()
-    if ke_that_bai(text) and "that_bai" not in giu:
+    if ke_that_bai(text):
         return "drop", "outcome failure — belongs on the project page, not the CV"
     if len(text) < 30:
         return "drop", "too short to carry evidence"
     # KHÔNG XOÁ, HỎI. Xem lời chú ở `khong_ke_viec`: ý kiến và kiến thức cùng
     # hình dạng, mà kiến thức là thứ mạnh nhất của một CV kỹ thuật.
-    if khong_ke_viec(text, tags) and "y_kien" not in giu:
+    if khong_ke_viec(text, tags):
         return "review", ("không kể việc bạn LÀM, không có số đo, không nhắc "
                           "kỹ năng nào — đây là kiến thức đáng giá hay chỉ là "
                           "một câu hay? bạn quyết")
-    if RISKY.search(text) and "rui_ro" not in giu:
+    if RISKY.search(text):
         strong = bool(HAS_NUMBER.search(text)) or len(tags or []) >= 2
         if strong:
             return "review", "has hard evidence but wording may read badly — your call"

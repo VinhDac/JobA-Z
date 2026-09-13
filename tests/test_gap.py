@@ -80,7 +80,8 @@ check("kho rỗng -> trả về 0, không nổ", _r["tin"] == 0 and _r["buoc"] =
 _e.close()
 
 print("\n[viết một câu mới: máy dọn chỗ, NGƯỜI viết]")
-from jobbot.scoring.gap import ho_hoi, nen_nhap, qua_giong, ta_viec
+from jobbot.scoring.gap import (CHO_TRONG, con_trong, goi_y, ho_hoi,
+                                nen_nhap, qua_giong, qua_khu, ta_viec)
 from jobbot.dashboard.views import cvsoan as _cs
 
 _c2 = sqlite3.connect(":memory:"); _c2.row_factory = sqlite3.Row
@@ -148,6 +149,36 @@ check("câu thật của mình -> qua",
 check("viết dài thêm ra KHÔNG làm loãng phép đo",
       qua_giong(_ne + " across every desk and region we cover", _ne) == 1.0)
 
+# GỢI Ý: máy đổi dòng của họ sang HÌNH câu CV — không nghĩ ra khẳng định nào.
+check("động từ sai khiến -> quá khứ", qua_khu("build") == "built"
+      and qua_khu("improve") == "improved" and qua_khu("apply") == "applied")
+check("danh động từ cũng chia được", qua_khu("maintaining") == "maintained"
+      and qua_khu("developing") == "developed")
+_gy = goi_y("Build and maintain data pipelines, ensuring data quality and "
+            "consistency across multiple sources", "data pipeline")
+check("gợi ý ra hình câu CV, cắt phần thừa của người viết tin",
+      _gy.startswith("Built and maintained data pipelines"))
+check("cả hai động từ cùng sang quá khứ, không nửa nọ nửa kia",
+      "and maintaining" not in _gy and "and maintain " not in _gy)
+check("và chừa CHỖ TRỐNG cho bằng chứng", CHO_TRONG in _gy)
+# KHÔNG ĐƯỢC CẮT MẤT TÊN KỸ NĂNG: câu không nhắc nó thì lấp không được chỗ
+# hụt nào, mà lấp chỗ hụt là toàn bộ lý do người dùng ngồi đây.
+check("gợi ý vẫn nhắc kỹ năng đang nhắm", "data pipeline" in _gy.lower())
+# Gợi ý phải qua được CHÍNH chốt chặn của lượt Lưu. Đo trên kho thật: cắt nhẹ
+# thì 12/19 dòng ra đúng dòng của họ chia ở thì quá khứ — máy gợi ý ra thứ
+# chính nó sẽ từ chối. Thà im lặng.
+check("gợi ý tự nó qua được chốt chặn", qua_giong(_gy, _ne) < 0.6)
+check("cắt không đủ xa thì IM LẶNG, không gợi ý bừa",
+      goi_y("Research and develop predictive alpha signals across global "
+            "equity markets", "equities") == "")
+check("dòng tả phẩm chất thì không có gợi ý",
+      goi_y("Interest in statistics and data visualisation", "visualisation") == "")
+
+# Chỗ trống còn nguyên = chưa viết xong.
+check("còn chỗ trống -> chưa cho lưu", con_trong(_gy))
+check("điền xong thì qua",
+      not con_trong("Built data pipelines that cut a 40-minute job to 90s."))
+
 # VIẾT MỘT CÂU MỚI VÀ SỬA KHỐI LÀ MỘT VIỆC. Cả hai ghi vào cùng `cv_text`,
 # nên chúng dùng chung một màn (/cv/soan) — không phải một tấm phủ riêng đọc
 # yêu cầu ở chỗ này rồi gõ ở chỗ khác.
@@ -209,13 +240,22 @@ check("KHÔNG có nút nào 'máy viết hộ'",
 _fm = _cs._form(None, [], "data pipeline")
 # Ô soạn CÓ NỀN: chữ rơi vào ô phải được gắn nhãn là của ai, ngay tại chỗ.
 _d4 = {"ky": "data pipeline", "chung": [], "rieng": [], "nen": []}
-_fn = _cs._viet(_d4, "Khối A", _ne, "", _kh3)
+_fn = _cs._viet(_d4, "Khối A", _ne, "", _kh3, _ne)
 check("nền rơi đúng vào ô soạn", _ne in _fn)
 check("và ghi rõ đây CHƯA phải câu của bạn",
       "chữ của nhà tuyển dụng" in _fn and "chưa phải câu của bạn" in _fn)
 check("nền đi theo form để lượt Lưu so lại được",
       "name=nen value=" in _fn)
-_fl = _cs._viet(_d4, "Khối A", _ne, "Câu này vẫn gần như nguyên văn", _kh3)
+_fl = _cs._viet(_d4, "Khối A", _ne, "Câu này vẫn gần như nguyên văn", _kh3, _ne)
+# Có gợi ý thì ô mở ra là GỢI Ý, và có đường lật về nguyên văn dòng của họ.
+_fg = _cs._viet(_d4, "Khối A", _ne, "", _kh3, _gy, _gy)
+check("có gợi ý thì ô mở ra đã là gợi ý", _gy in _fg)
+check("và nói rõ ___ là chỗ điền bằng chứng", "để bạn điền bằng chứng" in _fg)
+check("có đường lật về nguyên văn dòng của họ", "tho=1" in _fg)
+_ft = _cs._viet(_d4, "Khối A", _ne, "", _kh3, _ne, _gy, True)
+check("lật về nguyên văn thì có đường quay lại gợi ý", "Gợi ý câu CV" in _ft)
+check("dòng không rút gọn được thì nói thẳng, không để nút chết",
+      "không rút gọn được" in _cs._viet(_d4, "Khối A", _ne, "", _kh3, _ne))
 check("bị từ chối thì lời từ chối đứng NGAY TRÊN ô, chữ vừa gõ còn nguyên",
       "Câu này vẫn gần như nguyên văn" in _fl and _ne in _fl)
 check("ô soạn để trống — không câu mẫu nào nằm sẵn trong ô",

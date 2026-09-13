@@ -511,85 +511,23 @@ def cv_hut(conn: sqlite3.Connection) -> dict:
 
 
 def cv_nut(conn: sqlite3.Connection) -> dict:
-    """Mấy núm của tầng CV, đã đổi sang thứ build() dùng được.
+    """Hai núm của tầng CV, đã đổi sang thứ build() dùng được.
 
     MỘT chỗ dịch từ "tên núm" sang "giá trị". Dịch ở hai chỗ thì có ngày tấm
     Điều chỉnh hiện một đằng mà bộ dựng chạy một nẻo.
+
+    BẢY NÚM ĐÃ BỎ — xem lời chú ở core/prefs.py. Mấy luật chúng lật giờ chạy
+    cố định theo mặc định đã đo, và bản chấm điểm vẫn nói rõ câu nào bị bỏ vì
+    sao. Người dùng mất bảy cái nút, không mất một thông tin nào.
     """
     from ..core import prefs
-    giong = prefs.get(conn, prefs.CV_GIONG) or "cv"
-    bo_cuc = prefs.get(conn, prefs.CV_BO_CUC) or "thuong"
-    giu = {ma for ma, khoa in (("that_bai", prefs.CV_GIU_THAT_BAI),
-                               ("y_kien", prefs.CV_GIU_Y_KIEN),
-                               ("rui_ro", prefs.CV_GIU_RUI_RO))
-           if prefs.flag(conn, khoa)}
-    return {"giong": giong if giong in prefs.GIONG else "cv",
-            "dong": prefs.BO_CUC.get(bo_cuc, prefs.BO_CUC["thuong"]),
-            "giu": giu,
-            "giu_muc": prefs.flag(conn, prefs.CV_GIU_MUC),
-            "moi_khoi_viec": prefs.flag(conn, prefs.CV_MOI_KHOI_VIEC),
-            "ten": {"giong": giong, "bo_cuc": bo_cuc,
-                    "that_bai": prefs.flag(conn, prefs.CV_GIU_THAT_BAI),
-                    "y_kien": prefs.flag(conn, prefs.CV_GIU_Y_KIEN),
-                    "rui_ro": prefs.flag(conn, prefs.CV_GIU_RUI_RO),
-                    "giu_muc": prefs.flag(conn, prefs.CV_GIU_MUC),
-                    "moi_khoi_viec": prefs.flag(conn, prefs.CV_MOI_KHOI_VIEC)}}
-
-
-def cv_gia(conn: sqlite3.Connection) -> dict:
-    """MỖI CÔNG TẮC ĐANG TỐN GÌ — đo bằng cách CHẠY THẬT luật, không đếm khớp.
-
-    Đếm số câu KHỚP mẫu là sai, và tôi đã sai đúng chỗ đó: luật `RISKY` gặp
-    câu có bằng chứng cứng thì chỉ đánh dấu "xem lại" chứ KHÔNG bỏ. Panel ghi
-    "đang bỏ 1 câu" trong khi câu đó vẫn nằm trên CV — lật công tắc đổi 0/40
-    bản. Một con số sai trên tấm Điều chỉnh còn tệ hơn không có số.
-
-    Nên đo bằng phép trừ: chạy `sentence_ok` với luật BẬT và với luật TẮT, rồi
-    xem câu nào đổi phán quyết. Đó đúng là thứ công tắc sẽ làm.
-    """
-    from ..cv import rules
-    from ..cv.blocks import parse as parse_cv, sentences as cau_cua
-    from ..cv.build import skills_in
-    from ..profile import store as pstore
-
-    txt = str(pstore.load(conn).get("cv_text") or "")
-    cau = [rules.clean(x) for b in parse_cv(txt)
-           if b.kind in ("experience", "project") for x in cau_cua(b)]
-    cau = [t for t in cau if len(t) >= 12]
-
-    ra: dict = {}
-    for ma in ("that_bai", "y_kien", "rui_ro"):
-        bo = xem = 0
-        vi_du: list = []
-        for t in cau:
-            tags = sorted(skills_in(t))
-            cu_, _ = rules.sentence_ok(t, tags)              # luật BẬT
-            moi_, _ = rules.sentence_ok(t, tags, {ma})       # luật TẮT
-            if cu_ == moi_:
-                continue
-            if cu_ == "drop":
-                bo += 1
-            elif cu_ == "review":
-                xem += 1
-            # VÍ DỤ LẤY TỪ CHÍNH HỒ SƠ ĐANG MỞ, không gõ cứng.
-            #
-            # Tấm Điều chỉnh từng trích thẳng câu của một người ("«drawdown
-            # ran 30% deeper than predicted»"). Hồ sơ khác mở lên thì đó là
-            # câu của người lạ — người dùng không nhận ra, và cái panel biến
-            # thành tờ quảng cáo thay vì bản mô tả hồ sơ của họ.
-            if len(vi_du) < 2:
-                vi_du.append(t[:110])
-        ra[ma] = {"bo": bo, "xem": xem, "vi_du": vi_du}
-
-    # DÙNG CHUNG LUẬT VỚI BỘ DỰNG. Chỗ này từng tra `rules.DROP_SKILL_GROUPS`
-    # — một tập đã bị làm rỗng khi luật đổi sang xét NỘI DUNG. Kết quả: tấm
-    # Điều chỉnh báo "không bỏ mục nào" trong khi bộ dựng vẫn bỏ thật. Hai
-    # tầng đọc hai luật khác nhau về cùng một việc.
-    # TÊN MỤC THẬT đang bị bỏ, không phải một cặp tên gõ cứng.
-    muc = sorted(b.title for b in parse_cv(txt) if b.kind == "skill"
-                 and rules.bo_muc_ky_nang(b.title, " ".join(b.lines)))
-    return {**ra, "muc": muc,
-            "khoi_viec": sum(1 for b in parse_cv(txt) if b.kind == "experience")}
+    rieng = prefs.get(conn, prefs.CV_RIENG) or "rieng"
+    return {"rieng": rieng if rieng in prefs.RIENG else "rieng",
+            # `tu_lo` KHÔNG có trong `ten`: nó đổi LÚC dựng, không đổi bản
+            # dựng RA GÌ. Nhét vào dấu thì lật nó là mọi bản bỗng bị coi là
+            # cũ, mà chúng y hệt nhau.
+            "tu_lo": prefs.flag(conn, prefs.CV_TU_LO),
+            "ten": {"rieng": rieng}}
 
 
 def _cv_key(conn: sqlite3.Connection, cv_text: str) -> tuple:
@@ -924,7 +862,7 @@ def cv_blocks(conn: sqlite3.Connection) -> list[dict]:
 
 
 def cv_soan(conn: sqlite3.Connection, title: str = "", ky: str = "",
-            nen: str = "") -> dict:
+            nen: str = "", soan: str = "", tho: bool = False) -> dict:
     """Mọi thứ màn SOẠN KHỐI cần — đo ở đây, màn hình chỉ vẽ.
 
     Màn soạn khác tấm phủ cũ ở đúng một chỗ, và đó là lý do nó tồn tại: nó
@@ -943,11 +881,18 @@ def cv_soan(conn: sqlite3.Connection, title: str = "", ky: str = "",
     `ky` = ĐANG NHẮM kỹ năng nào. Nó mở thêm phần BRIEF: nguyên văn mấy dòng
     yêu cầu thật đang đòi thứ đó, và mấy dòng DÙNG ĐƯỢC LÀM NỀN bản nháp.
 
-    `nen` = dòng yêu cầu người dùng đã chọn làm nền — nó rơi thẳng vào ô soạn.
-    Đây là chỗ duy nhất máy đặt sẵn chữ vào ô, và chữ đó là của NHÀ TUYỂN
-    DỤNG, nguyên văn, có ghi rõ nguồn. Máy vẫn không viết câu nào: người dùng
-    phải viết lại thành việc chính họ đã làm, và `gap.qua_giong` canh đúng chỗ
-    đó lúc Lưu.
+    `nen` = dòng yêu cầu người dùng đã chọn. Nó là MỐC SO SÁNH của lượt Lưu,
+    và không đổi khi người dùng gõ — tách khỏi `soan` chính vì thế: trộn hai
+    thứ làm một thì sửa vài chữ rồi Lưu hụt một lần là mốc trôi theo, và lần
+    sau chép nguyên văn cũng lọt.
+
+    `soan` = chữ ĐANG nằm trong ô. Mặc định là GỢI Ý (`gap.goi_y`) nếu dòng
+    đó rút gọn được thành hình câu CV, không thì là nguyên văn dòng của họ.
+    `tho=True` ép lấy nguyên văn — nút "dùng nguyên văn dòng của họ".
+
+    Máy vẫn KHÔNG viết khẳng định nào: gợi ý chỉ là dòng của họ đã cắt phần
+    thừa, chia sang thì quá khứ, và chừa `___` cho bằng chứng — thứ duy nhất
+    người dùng mới có. `gap.con_trong` không cho lưu khi `___` còn nguyên.
 
     VÌ SAO BRIEF Ở ĐÂY chứ không phải một tấm phủ riêng: viết một câu mới CHÍNH
     LÀ sửa một khối — cùng một phép ghi vào `cv_text`, cùng một chỗ ngồi. Tách
@@ -956,18 +901,16 @@ def cv_soan(conn: sqlite3.Connection, title: str = "", ky: str = "",
     """
     from ..cv import rules
     from ..cv.build import skills_in
-    from ..scoring.gap import ho_hoi, nen_nhap
+    from ..scoring.gap import goi_y, ho_hoi, nen_nhap
     from ..scoring.market import demand as thi_truong
 
     khoi = cv_blocks(conn)
     chon = next((b for b in khoi if b["title"] == title), None) if title else None
     can = nho(conn, "can", lambda: thi_truong(conn))
-    giu = cv_nut(conn)["giu"]
-
     cau = []
     for line in (chon or {}).get("lines", []):
         tags = sorted(skills_in(line))
-        phan, vi_sao = rules.sentence_ok(line, tags, giu)
+        phan, vi_sao = rules.sentence_ok(line, tags)
         cau.append({"chu": line, "tags": tags, "phan": phan, "vi_sao": vi_sao,
                     "reach": sum(can.get(t, 0) for t in tags)})
 
@@ -977,6 +920,24 @@ def cv_soan(conn: sqlite3.Connection, title: str = "", ky: str = "",
     d_hut = cv_hut(conn)
     hut = [b for b in (d_hut.get("buoc") or [])
            if b["dong"] - b["rieng"] > 0][:6]
+
+    # MÁY TỰ LO — dựng sẵn bản nháp cho MỌI chỗ hụt, không đợi bấm từng cái.
+    #
+    # Không cất xuống đĩa. Bản nháp là thứ SUY RA ĐƯỢC từ dòng yêu cầu, nên
+    # cất nó đi chỉ đẻ ra một kho thứ hai phải ngồi giữ cho khớp — mà khớp với
+    # chính thứ tính lại được trong một phần giây. Và cất vào `cv_text` thì
+    # tệ hơn: bộ chấm sẽ đếm "data pipelines" trong câu nháp là kỹ năng đã
+    # đáp, và app nói dối người dùng về chính họ.
+    san = []
+    if cv_nut(conn).get("tu_lo") and not ky:
+        for b in hut:
+            for m in nen_nhap(conn, b["ky_nang"], sau=3):
+                g = goi_y(m["chu"], b["ky_nang"])
+                if g:
+                    san.append({"ky": b["ky_nang"], "them": b["them"],
+                                "nen": m["chu"], "cong_ty": m["cong_ty"],
+                                "nhap": g})
+                    break
 
     brief = None
     if ky:
@@ -988,8 +949,12 @@ def cv_soan(conn: sqlite3.Connection, title: str = "", ky: str = "",
         # lên CV. Một gợi ý không đổi theo đầu vào thì không phải gợi ý.
         brief = {"ky": ky, "chung": chung, "rieng": rieng,
                  "nen": nen_nhap(conn, ky)}
+    # Ô soạn: gợi ý nếu có, không thì nguyên văn. `soan` do người dùng gõ dở
+    # (lượt Lưu vừa bị chặn) thì thắng tất — không được vứt chữ của họ.
+    gy = goi_y(nen, ky) if nen else ""
     return {"khoi": khoi, "chon": chon, "cau": cau, "hut": hut, "brief": brief,
-            "nen": nen,
+            "nen": nen, "goi_y": gy, "tho": tho, "san": san,
+            "soan": soan or ("" if not nen else (nen if tho or not gy else gy)),
             # Độ phủ HÔM NAY, không phải delta của lần lưu vừa rồi. Delta nằm
             # ở nhật ký, nơi nó có dấu thời gian và không hoá thành lời nói dối
             # sau một lần bấm F5.

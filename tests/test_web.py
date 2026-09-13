@@ -728,40 +728,42 @@ with tempfile.TemporaryDirectory() as tmp:
     # import vừa đổi nhà — gãy ở đây thì cả tab CV trắng.
     check("tab CV vẫn mở được sau khi phép đếm đổi nhà", get("/cv")[0] == 200)
 
-    print("\n[tab CV: bấm thì mới chạy, và ba núm phải thật sự xoay]")
+    print("\n[tab CV: HAI núm, và cả hai phải thật sự xoay]")
     from jobbot.core import prefs as _pfc
     _adj = get("/adjust/cv")[1]
-    # NÚM "độ dày từ khoá" ĐÃ BỎ: đo trên 60 tin, xoay sang "dày" đổi ĐÚNG 0
-    # bản. Và nó dựa trên "keyword density" — thứ không nhà cung cấp ATS nào
-    # công bố công thức. Một núm không đổi được gì làm mất tin vào cả bảng.
-    check("bỏ núm 'độ dày từ khoá' — đo được nó đổi 0/60 bản",
-          "khoa:" not in _adj and "Độ dày từ khoá" not in _adj)
-    check("giữ hai núm ĐO ĐƯỢC là đổi thật (60/60 bản)",
-          "giong:" in _adj and "bo_cuc:" in _adj)
-    # CÔNG TẮC = quyết định máy đang TỰ LÀM THAY, và mỗi cái kèm con số.
-    for _m in ("that_bai", "y_kien", "rui_ro", "giu_muc", "moi_khoi_viec"):
-        check(f"có công tắc {_m}", f"data-arg='{_m}:" in _adj)
-    # CON SỐ PHẢI ĐO BẰNG PHÉP TRỪ, không phải đếm khớp mẫu. Tôi đã sai đúng
-    # chỗ đó: luật RISKY gặp câu có bằng chứng cứng thì chỉ đánh dấu "xem lại"
-    # chứ không bỏ, nên "đang bỏ 1 câu" là nói dối — lật công tắc đổi 0/40 bản.
-    # Mỗi công tắc phải kèm tình trạng HÔM NAY của chính hồ sơ này. Hồ sơ mẫu
-    # của test không có câu nào dính luật, nên nó phải NÓI RA điều đó — im
-    # lặng để người dùng tự bấm thử rồi không thấy khác là cách chắc chắn
-    # nhất làm họ thôi tin cả bảng.
-    import re as _reA
-    _now = _reA.findall(r"class=swnow>(.*?)</span>", _adj)
-    check(f"mỗi công tắc kèm tình trạng thật ({len(_now)} dòng)", len(_now) == 5)
-    check("và không dòng nào để trống", all(x.strip() for x in _now))
-    check("phân biệt BỎ với chỉ ĐÁNH DẤU — hai thứ khác nhau",
-          "xem lại" in _adj or "không có câu nào dính luật" in _adj
-          or "đang bỏ" in _adj)
-    # TẤM ĐIỀU CHỈNH KHÔNG ĐƯỢC GÕ CỨNG CÂU CỦA AI. Bản trước trích thẳng
-    # câu trong CV của một người vào phần giải thích; hồ sơ khác mở lên thì đó
-    # là câu của người lạ, và panel thành tờ quảng cáo chứ không phải bản mô
-    # tả hồ sơ của người đang đọc. Ví dụ phải lấy từ hồ sơ ĐANG MỞ.
+    # BẢY NÚM ĐÃ BỎ — xem lời chú ở core/prefs.py. Người dùng cần đúng hai câu
+    # trả lời: bản riêng cho từng tin tới mức nào, và máy có tự lo hay không.
+    # Mọi núm khác đều bắt họ học luật của máy trước khi dùng được máy.
+    for _bo in ("khoa:", "giong:", "bo_cuc:", "that_bai:", "y_kien:",
+                "rui_ro:", "giu_muc:", "moi_khoi_viec:"):
+        check(f"bỏ núm {_bo[:-1]}", f"data-arg='{_bo}" not in _adj)
+    check("tấm Điều chỉnh chỉ còn HAI núm",
+          _adj.count("data-post='/api/cv/num'") == 4)   # 3 mức may đo + 1 tự lo
+
+    # ĐỘ MAY ĐO — núm đổi thật nhiều nhất. Đo trên kho thật (358 tin):
+    # chung 25 bản · vừa 89 · riêng 157, lõi bất biến rơi 12/16 -> 9/16 câu.
+    for _r in ("chung", "vua", "rieng"):
+        check(f"có mức may đo {_r}", f"rieng:{_r}" in _adj)
+    # KHÔNG gõ cứng số bản vào nhãn: nó khác theo từng hồ sơ và từng kho tin.
+    check("nhãn nói VIỆC nó làm, không gõ cứng số bản của một kho khác",
+          "đưa mục kỹ năng tin này hỏi lên trước" in _adj
+          and "bản/120 tin" not in _adj)
+    check("có công tắc MÁY TỰ LO", "data-arg='tu_lo:" in _adj)
+    check("lý do nằm trong thẻ gấp, không đổ thẳng ra",
+          "<details class=swwhy>" in _adj)
+    check("chữ không chạm viền tấm phủ", "class=adjbox" in _adj)
+    # LUẬT BỎ CÂU vẫn chạy — chỉ là không còn nút để lật. Người dùng mất nút,
+    # không mất thông tin: bản chấm điểm vẫn nói rõ câu nào bị bỏ vì sao.
+    from jobbot.cv.rules import sentence_ok as _sok
+    check("luật bỏ câu kể thất bại vẫn chạy dù không còn nút",
+          _sok("The drawdown ran 30% deeper than the model predicted here.")[0]
+          == "drop")
+
+    # TẤM ĐIỀU CHỈNH KHÔNG ĐƯỢC GÕ CỨNG CÂU CỦA AI. Bản trước trích thẳng câu
+    # trong CV của một người vào phần giải thích; hồ sơ khác mở lên thì đó là
+    # câu của người lạ, và panel thành tờ quảng cáo chứ không phải bản mô tả
+    # hồ sơ của người đang đọc.
     import pathlib as _plG
-    # Bỏ CHÚ THÍCH trước khi soi — lời chú giải thích vì sao không gõ cứng có
-    # nhắc lại chính mấy câu đó, và bắt lời chú của mình là test vô dụng.
     _cvl_src = "\n".join(
         l.split("#")[0] for l in
         (_plG.Path(__file__).resolve().parent.parent
@@ -770,26 +772,13 @@ with tempfile.TemporaryDirectory() as tmp:
     for _cau in ("Self-funded", "drawdown ran", "Profit on its own",
                  "WorldQuant", "Compute · Method"):
         check(f"panel KHÔNG gõ cứng «{_cau[:22]}»", _cau not in _cvl_src)
-    check("ví dụ được lấy từ hồ sơ đang mở", "vi_du" in _cvl_src)
-    # Và tầng dữ liệu phải TRẢ VỀ câu thật, không chỉ con số.
-    from jobbot.dashboard import live as _lvg
-    _cg = db.connect(Path(tmp) / "jobbot.db")
-    from jobbot.profile import store as _stg
-    _cvtext_mau = (_stg.load(_cg).get("cv_text") or "").replace("\n", " ")
-    _gia = _lvg.cv_gia(_cg)
-    _cg.close()
-    check("cv_gia trả về VÍ DỤ THẬT cho từng luật",
-          all("vi_du" in (_gia.get(k) or {})
-              for k in ("that_bai", "y_kien", "rui_ro")))
-    check("mọi ví dụ đều là câu CÓ TRONG hồ sơ, không phải câu máy bịa",
-          all(v[:28] in _cvtext_mau
-              for k in ("that_bai", "y_kien", "rui_ro")
-              for v in ((_gia.get(k) or {}).get("vi_du") or [])))
-    for _a in ("giong:nguyen", "bo_cuc:gon", "rui_ro:1", "moi_khoi_viec:0"):
-        check(f"POST {_a} -> lưu được", post_form("/api/cv/num", f"arg={_a}") == 200)
-    check("núm đã bỏ -> 400", post_form("/api/cv/num", "arg=khoa:day") == 400)
-    check("công tắc nhận sai giá trị -> 400",
-          post_form("/api/cv/num", "arg=rui_ro:xx") == 400)
+
+    check("POST rieng:chung -> lưu được",
+          post_form("/api/cv/num", "arg=rieng:chung") == 200)
+    check("POST tu_lo:1 -> lưu được", post_form("/api/cv/num", "arg=tu_lo:1") == 200)
+    check("núm đã bỏ -> 400", post_form("/api/cv/num", "arg=giong:nguyen") == 400)
+    check("núm nhận sai giá trị -> 400",
+          post_form("/api/cv/num", "arg=rieng:xx") == 400)
     check("giá trị lạ -> 400, không lưu bừa",
           post_form("/api/cv/num", "arg=khoa:xxx") == 400)
     # ĐỔI CÂU: máy chỉ nhận câu, không nhận chữ tự do — và id tin phải là số.
@@ -808,35 +797,30 @@ with tempfile.TemporaryDirectory() as tmp:
           _st_num["label"])
     check("và nói rõ CÁI GÌ vừa đổi",
           "xoay núm" in _st_num["note"], _st_num["note"])
-    # GIỌNG VĂN phải đổi được chữ in ra thật, không chỉ đổi một dòng trong DB.
+    # ĐỘ MAY ĐO phải đổi được CHỮ IN RA THẬT, không chỉ đổi một dòng trong DB.
+    # Đây là núm đổi nhiều nhất của cả app: đo trên kho thật 358 tin, chung 25
+    # bản · vừa 89 · riêng 157, lõi bất biến rơi 12/16 -> 9/16 câu.
     from jobbot.cv.build import build as _bcv
     from jobbot.profile import store as _stc
-    from jobbot.dashboard import live as _lvc
     _ans = _stc.load(_cvn)
     _row = _cvn.execute("SELECT description, score_json FROM posting"
                         " WHERE kept = 1 LIMIT 1").fetchone()
     import json as _jsonc
     _ex = _jsonc.loads(_row["score_json"]) if _row and _row["score_json"] else None
     _jd = (_row["description"] if _row else "") or ""
-    _nguyen = _bcv(_ans, _ex, _jd, {"giong": "nguyen", "khoa": 3.0, "dong": 3})
-    _luoc = _bcv(_ans, _ex, _jd, {"giong": "cv", "khoa": 3.0, "dong": 3})
-    check("giọng 'nguyên' thì KHÔNG lược chủ ngữ",
-          not any(l.sua and any(x.phep == "chu_ngu" for x in l.sua)
-                  for s2 in _nguyen.sections for l in s2.lines))
-    # BỐ CỤC phải đổi được SỐ DÒNG THẬT. Đo thẳng trên _pick với một khối
-    # nhiều câu: hồ sơ mẫu của test chỉ có 1 câu mỗi khối, nên dựng cả CV thì
-    # 'gọn' và 'đầy' ra y hệt và test không chứng minh được gì.
-    from jobbot.cv.build import _pick as _pk
-    from jobbot.cv.blocks import Block as _Blk
-    _kh = _Blk(kind="experience", title="X", meta="",
-               lines=[f"Built system number {_i} with Python and SQL daily."
-                      for _i in range(6)])
-    for _n in (1, 3, 5):
-        check(f"bố cục {_n} dòng -> đúng {_n} dòng",
-              len(_pk(_kh, set(), {}, _n, num={"dong": _n})) == _n)
+    def _ky_cua(cv):
+        return [l.text for s2 in cv.sections if s2.kind == "skill" for l in s2.lines]
+    _chung = _ky_cua(_bcv(_ans, _ex, _jd, {"rieng": "chung"}))
+    _rieng = _ky_cua(_bcv(_ans, _ex, _jd, {"rieng": "rieng"}))
+    # KHÔNG ĐƯỢC MẤT MỘT CHỮ NÀO — đây là CV gửi nhà tuyển dụng.
+    import re as _reB
+    check("xếp lại KHÔNG mất chữ nào của mục kỹ năng",
+          sorted(_reB.findall(r"\w+", " ".join(_chung)))
+          == sorted(_reB.findall(r"\w+", " ".join(_rieng))))
+    check("và KHÔNG mất mục nào", len(_chung) == len(_rieng))
     _cvn.close()
-    for _a in ("giong:cv", "bo_cuc:thuong", "rui_ro:0", "moi_khoi_viec:1"):
-        post_form("/api/cv/num", f"arg={_a}")
+    post_form("/api/cv/num", "arg=rieng:rieng")
+    post_form("/api/cv/num", "arg=tu_lo:0")
 
     print("\n[bản chấm điểm: máy phải GIẢI TRÌNH, không chỉ quyết]")
     # Luật cấm câu kể thất bại lên CV từ đầu, nhưng bộ dựng chưa bao giờ tra —
@@ -2202,7 +2186,10 @@ with tempfile.TemporaryDirectory() as tmp:
     # Thang hụt dán nhãn VIẾT khi phần lớn dòng must KHÔNG gọi đích danh tên
     # sản phẩm — tức diễn đạt lại bằng chữ mình được. Nói vậy rồi mà chỉ đưa ra
     # một ô trống thì cái nhãn là lời hứa suông.
-    _nen7 = "Improve research frameworks and data pipelines"
+    # Dòng THẬT trong kho của Vin. Phải đủ dài để cắt được phần thừa mà vẫn
+    # giữ tên kỹ năng — dòng ngắn quá thì `goi_y` im lặng, và đó là hành vi
+    # đúng: cắt không đủ xa thì gợi ý chỉ là dòng của họ chia ở thì quá khứ.
+    _nen7 = "Improve research frameworks, data pipelines, and model performance"
     # GHÉP THÊM một dòng must, KHÔNG ghi đè cả score_json: bản chấm còn mấy
     # khoá khác mà trang chi tiết tin đọc tới, xoá sạch là route đó sập.
     _cn7 = db.connect(Path(tmp) / "jobbot.db")
@@ -2226,13 +2213,46 @@ with tempfile.TemporaryDirectory() as tmp:
     _mo = ("/cv/soan?khoi=" + urllib.parse.quote(_ten7, safe="")
            + "&ky=data%20pipeline&nen=" + urllib.parse.quote(_nen7, safe=""))
     _, _co_nen = get(_mo)
-    check("mở ra thì nền nằm sẵn trong ô", _nen7 in _co_nen)
-    check("và ghi rõ đó là chữ của NHÀ TUYỂN DỤNG, chưa phải câu của bạn",
-          "chữ của nhà tuyển dụng" in _co_nen)
     check("bước 1 đã xong thì gập lại, đổi được", "Đổi dòng" in _co_nen)
+    check("dòng đã chọn hiện nguyên văn ở bước 1", _nen7 in _co_nen)
+    # Dòng nào KHÔNG rút gọn được thì ô mở ra là nguyên văn, và phải nói rõ
+    # đó là chữ của ai — người dùng quay lại sau mười phút vẫn phải nhận ra.
+    _, _tho7 = get(_mo + "&tho=1")
+    check("dùng nguyên văn thì ghi rõ đó là chữ của NHÀ TUYỂN DỤNG",
+          "chữ của nhà tuyển dụng" in _tho7)
     # Cột trái là "viết vào ĐÂU"; bấm một khối không được vứt mất "viết CÁI GÌ".
     check("bấm khối khác vẫn giữ nguyên đích và nền",
           "ky=data%20pipeline&nen=Improve" in _co_nen.replace("&amp;", "&"))
+
+    # GỢI Ý: ô mở ra đã có hình câu CV, người dùng chỉ điền chỗ trống.
+    from jobbot.scoring.gap import goi_y as _gy9, CHO_TRONG as _CT9
+    _gs = _gy9(_nen7, "data pipeline")
+    check("dòng nền này rút gọn được thành hình câu CV", bool(_gs), _nen7)
+    _, _co_gy = get(_mo)
+    check("ô soạn mở ra đã là GỢI Ý, không phải nguyên văn dòng của họ",
+          _gs in _co_gy)
+    check("và chừa chỗ trống cho bằng chứng", _CT9 in _co_gy)
+    check("có đường lật về nguyên văn dòng của họ", "tho=1" in _co_gy)
+    _, _co_tho = get(_mo + "&tho=1")
+    check("lật về thì ô là nguyên văn, và có đường quay lại gợi ý",
+          _nen7 in _co_tho and "Gợi ý câu CV" in _co_tho)
+
+    # Chỗ trống còn nguyên = chưa viết xong. Lưu nguyên gợi ý là lưu một câu
+    # RỖNG BẰNG CHỨNG — tệ hơn cả chép dòng của họ.
+    _ma, _ve = post_ve("/cv/block",
+                       "them=1&title=" + urllib.parse.quote(_ten7, safe="")
+                       + "&ky=data+pipeline&nen="
+                       + urllib.parse.quote(_nen7, safe="")
+                       + "&line=" + urllib.parse.quote(_gs, safe=""))
+    check("lưu nguyên gợi ý, chưa điền chỗ trống -> KHÔNG cho qua",
+          _ma == 303 and "loi=" in _ve, f"{_ma} {_ve}")
+    _, _sau_ct = get(_ve)
+    check("và nói rõ chỗ trống là chỗ của BẰNG CHỨNG",
+          "chỗ của BẰNG CHỨNG" in _sau_ct)
+    # MỐC SO SÁNH không được trôi theo bản sửa: trôi thì lần sau chép nguyên
+    # văn cũng lọt.
+    check("mốc so sánh vẫn là dòng GỐC của họ, không phải bản vừa gõ",
+          "nen=" + urllib.parse.quote(_nen7, safe="") in _ve)
 
     # CHỐT CHẶN: lưu nguyên chữ của họ thì không cho qua, và chữ vừa gõ còn nguyên.
     _ma, _ve = post_ve("/cv/block",
@@ -2272,6 +2292,67 @@ with tempfile.TemporaryDirectory() as tmp:
             if len(l.strip()) > 40 and l.strip() not in _sau7]
     check("câu cũ trong khối KHÔNG bị nuốt mất", not _mat, str(_mat[:1]))
     check("lưu xong thì BỎ nền đi, không mời lưu nhầm lần nữa", "nen=" not in _ve)
+
+    # MÁY TỰ LO, việc thứ HAI: dựng sẵn bản nháp cho MỌI chỗ hụt, không đợi
+    # bấm từng cái. KHÔNG tự ghi vào CV — câu nháp nằm trong cv_text thì bộ
+    # chấm đếm luôn nó là kỹ năng đã đáp, và app nói dối người dùng về chính
+    # họ. Người dùng điền con số rồi bấm, từng câu một.
+    from jobbot.core import prefs as _pfB
+    _cB = db.connect(Path(tmp) / "jobbot.db")
+    _pfB.set_flag(_cB, _pfB.CV_TU_LO, False)
+    _cB.close()
+    _lv9.quen()
+    check("TẮT -> không dựng sẵn gì", "class=sanbox" not in get("/cv/soan")[1])
+    _cB = db.connect(Path(tmp) / "jobbot.db")
+    _pfB.set_flag(_cB, _pfB.CV_TU_LO, True)
+    _truoc_cv = (store.load(_cB).get("cv_text") or "")
+    _cB.close()
+    _lv9.quen()
+    _s9, _sanB = get("/cv/soan")
+    check("BẬT -> máy dựng sẵn bản nháp cho mọi chỗ hụt",
+          _s9 == 200 and "class=sanbox" in _sanB)
+    check("mỗi bản nháp chừa chỗ trống cho bằng chứng", "___" in _sanB)
+    check("và bấm được để vào điền", "class=sanone" in _sanB and "&nen=" in _sanB)
+    _cB = db.connect(Path(tmp) / "jobbot.db")
+    check("nhưng KHÔNG tự ghi câu nào vào CV gốc",
+          (store.load(_cB).get("cv_text") or "") == _truoc_cv)
+    _cB.close()
+
+    # MÁY TỰ LO phải THẬT SỰ chạy, không phải một nút cho có.
+    from jobbot.core import prefs as _pfA
+    _cA = db.connect(Path(tmp) / "jobbot.db")
+    _pfA.set_flag(_cA, _pfA.CV_TU_LO, True)
+    _cA.close()
+    from jobbot.cv import batch as _btA
+    _cA = db.connect(Path(tmp) / "jobbot.db")
+    _truocA = (_btA.saved(_cA) or {}).get("stamp")
+    _cA.close()
+    post_ve("/cv/block", "them=1&title=" + urllib.parse.quote(_ten7, safe="")
+            + "&line=Shipped+a+nightly+check+across+17+feeds+in+under+90+seconds.")
+    import time as _tA
+    for _ in range(60):                       # dựng chạy nền, chờ tối đa 30s
+        _cA = db.connect(Path(tmp) / "jobbot.db")
+        _sauA = (_btA.saved(_cA) or {}).get("stamp")
+        _cA.close()
+        if _sauA and _sauA != _truocA:
+            break
+        _tA.sleep(0.5)
+    check("bật MÁY TỰ LO -> sửa khối xong máy dựng lại thật",
+          bool(_sauA) and _sauA != _truocA, f"{_truocA} -> {_sauA}")
+    # TẮT rồi CHỜ luồng nền xong hẳn. Không chờ thì thư mục tạm bị xoá trong
+    # lúc luồng còn mở DB, và cả file test đổ vỡ vì một lỗi không liên quan.
+    _pfA.set_flag(db.connect(Path(tmp) / "jobbot.db"), _pfA.CV_TU_LO, False)
+    from jobbot.dashboard.server import _DANG_DUNG as _lockA
+    with _lockA:
+        pass
+    # Núm NHỊP không được làm mọi bản bỗng bị coi là cũ: nó không đổi bản dựng
+    # ra gì, chỉ đổi LÚC dựng.
+    _cA = db.connect(Path(tmp) / "jobbot.db")
+    _dauA = _btA.stamp(_cA, store.load(_cA).get("cv_text") or "")
+    _pfA.set_flag(_cA, _pfA.CV_TU_LO, False)
+    check("lật núm nhịp KHÔNG làm bản đang có bị coi là cũ",
+          _btA.stamp(_cA, store.load(_cA).get("cv_text") or "") == _dauA)
+    _cA.close()
 
     # LƯU XONG BRIEF PHẢI CÒN ĐÓ: người ta thường viết hai câu về cùng chỗ hụt.
     _ma, _ve = post_ve("/cv/block", "kind=project&title=Thu+Nghiem+2&was=&ky=sql"

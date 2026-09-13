@@ -88,6 +88,41 @@ def _looks_like_role(line: str) -> bool:
         "the", "a", "an", "and", "but", "so", "then", "every", "one", "no", "it"}
 
 
+def mo_khoi_project(line: str, truoc: str | None) -> bool:
+    """Dòng này có mở một khối project MỚI không.
+
+    MỘT LUẬT, MỘT CHỖ — và đây là chỗ nó suýt giết dữ liệu. Trước đây `parse`
+    và `_bounds` mỗi bên tự đoán một kiểu: `parse` nhận cả tên trần một dòng,
+    còn `_bounds` chỉ dừng ở dòng có " — ". Hậu quả: lưu một project thì mọi
+    project BÊN DƯỚI nó trong cùng mục bị xoá sạch, vì `_bounds` không thấy
+    ranh giới nên nuốt tới cuối tệp.
+
+    Tên project: NGẮN, hoa đầu, KHÔNG kết thúc như một câu. Có dấu gạch thì
+    chính nó đánh dấu ranh giới; không có gạch thì phải chặt hơn vì tiêu đề
+    và một dòng nội dung trông giống hệt nhau — đòi cả dòng không kết thúc
+    như một câu, và phải đứng sau chỗ câu trước đã hết.
+
+    VÀ KHÔNG ĐƯỢC MỞ ĐẦU BẰNG ĐỘNG TỪ HÀNH ĐỘNG. "Improved research
+    frameworks — cut runtime to 90 s." có đủ mọi dấu hiệu của một tiêu đề, mà
+    nó là một CÂU. Tên project không bắt đầu bằng "Built", "Improved",
+    "Designed" — đó là câu kể việc. Đây là vế cứu được dòng người dùng vừa
+    viết khỏi bị đọc thành tên khối.
+    """
+    from . import rules                       # nạp muộn: rules đọc ngược build
+    head = re.split(r"\s+[—–]\s+", line, maxsplit=1)[0]
+    co_gach = head != line
+    if not (len(head) <= 70 and head[:1].isupper()):
+        return False
+    if head.endswith((".", ",", ";", ":")):
+        return False
+    if rules.mo_bang_hanh_dong(head):
+        return False
+    if co_gach:
+        return True
+    sau_cau = truoc is None or truoc.endswith((".", "!", "?"))
+    return not line.endswith((".", ",", ";", ":")) and sau_cau
+
+
 def parse(cv_text: str) -> list[Block]:
     lines = [l.rstrip() for l in (cv_text or "").splitlines()]
     blocks: list[Block] = []
@@ -136,35 +171,7 @@ def parse(cv_text: str) -> list[Block]:
         # --- kinh nghiệm / project: dòng chức danh mở khối mới ---
         if section in ("experience", "project"):
             if section == "project":
-                # TÊN PROJECT MỞ KHỐI MỚI — nhận bằng HÌNH DẠNG DÒNG, không
-                # bắt buộc phải có dấu gạch ngang.
-                #
-                # Luật cũ đòi dòng phải chứa " — ". Thử năm kiểu viết thường
-                # gặp: bốn kiểu hỏng, KỂ CẢ kiểu tên trần một dòng, và hai
-                # project liền nhau dính thành một khối. Đó là luật viết cho
-                # đúng một cách trình bày.
-                #
-                # Tên project: NGẮN, hoa đầu, và KHÔNG kết thúc như một câu.
-                # Thêm một vế nữa để khỏi bắt nhầm dòng nội dung không có dấu
-                # chấm: nó phải đứng ngay sau tiêu đề mục, hoặc sau một dòng
-                # đã kết thúc bằng dấu câu.
-                head = re.split(r"\s+[—–]\s+", line, maxsplit=1)[0]
-                co_gach = head != line
-                sau_cau = (_truoc is None
-                           or _truoc.endswith((".", "!", "?")))
-                # CÓ DẤU GẠCH thì chính nó đã đánh dấu ranh giới tiêu đề —
-                # 'Quant Trading Studio — the whole pipeline you can run.' là
-                # tên project cộng mô tả, và mô tả kết thúc bằng dấu chấm là
-                # chuyện thường. Xét dấu chấm trên phần ĐẦU, không trên cả dòng.
-                #
-                # KHÔNG CÓ GẠCH thì phải chặt hơn, vì lúc đó tiêu đề và một
-                # dòng nội dung trông giống hệt nhau: đòi cả dòng không kết
-                # thúc như một câu, và nó phải đứng sau chỗ câu trước đã hết.
-                sach = not head.endswith((".", ",", ";", ":"))
-                starts_new = (len(head) <= 70 and head[:1].isupper() and sach
-                              and (co_gach
-                                   or (not line.endswith((".", ",", ";", ":"))
-                                       and sau_cau)))
+                starts_new = mo_khoi_project(line, _truoc)
             else:
                 starts_new = _looks_like_role(line) and (
                     current is None or len(current.lines) > 0)
@@ -261,6 +268,7 @@ def _bounds(lines: list[str], title: str) -> tuple[int, int] | None:
     if start is None:
         return None
     stop = len(lines)
+    truoc = lines[start].strip()
     for i in range(start + 1, len(lines)):
         line = lines[i].strip()
         if not line:
@@ -268,13 +276,40 @@ def _bounds(lines: list[str], title: str) -> tuple[int, int] | None:
         if SECTION.match(line):                       # sang mục khác
             stop = i
             break
-        # Dòng tiêu đề của khối kế tiếp: có " — " và đủ ngắn.
-        head_part = re.split(r"\s+[—–]\s+", line, maxsplit=1)[0]
-        if (re.search(r"\s+[—–]\s+", line) and len(head_part) < 60
-                and head_part[:1].isupper()):
+        # Ranh giới khối kế tiếp — DÙNG CHUNG luật với parse(). Đoán riêng
+        # một kiểu ở đây là chỗ đã nuốt mất mọi project bên dưới.
+        if mo_khoi_project(line, truoc) or _looks_like_role(line):
             stop = i
             break
+        truoc = line
     return start, stop
+
+
+# Dấu kết CÂU. Một dòng thân khối thiếu nó thì `parse` không phân biệt được
+# nó với một TIÊU ĐỀ project — xem `_cau_tron`.
+_KET = (".", "!", "?", ":", ";")
+
+
+def _cau_tron(chu: str) -> str:
+    """Dòng thân khối phải KẾT NHƯ MỘT CÂU, nếu không nó bị đọc lại thành TÊN.
+
+    LỖI THẬT, mất dữ liệu. Người dùng lưu câu "Improved research frameworks,
+    data pipelines" vào khối `Quant Trading Studio`. Đọc lại, `parse` thấy một
+    dòng ngắn, viết hoa đầu, KHÔNG kết thúc như một câu, đứng sau chỗ câu
+    trước đã hết — đúng hình một tiêu đề project. Kết quả: khối bị cắt đôi,
+    đẻ ra một project rỗng mang tên chính câu đó, và câu ấy KHÔNG BAO GIỜ in
+    ra nữa. Người viết mất một câu mà không có gì báo.
+
+    Hai dòng chữ giống hệt nhau thì không luật đọc nào gỡ được. Nên gỡ ở đầu
+    GHI: thêm dấu chấm cho dòng thân còn thiếu. Dấu câu không phải một từ —
+    máy vẫn không viết thêm chữ nào của người dùng.
+
+    Dòng quá ngắn thì để nguyên: nó không phải câu, và chấm vào cũng vô nghĩa.
+    """
+    t = " ".join((chu or "").split())
+    if len(t) < 12 or t.endswith(_KET):
+        return t
+    return t + "."
 
 
 def write_block(cv_text: str, kind: str, title: str, meta: str,
@@ -285,7 +320,7 @@ def write_block(cv_text: str, kind: str, title: str, meta: str,
     bị đổi định dạng ngoài ý muốn.
     """
     lines = (cv_text or "").splitlines()
-    body = [b.strip() for b in body if b.strip()]
+    body = [_cau_tron(b) for b in body if b.strip()]
 
     # Thân rỗng = XOÁ khối. Giữ lại một khối không hợp tin nào chỉ làm bẩn CV
     # gốc; đo được: `Compress EA` hợp 0/117 tin mà vẫn nằm đó.

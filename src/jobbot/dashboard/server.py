@@ -36,6 +36,41 @@ STAGES = {"search": "Search", "cv": "CV", "track": "Quản lí"}
 DEFAULT_PORT = 8765
 
 
+# Đang có một lượt dựng lại chạy nền hay chưa. Sửa năm khối liền tay thì
+# không được xếp năm lượt dựng 5 giây chồng lên nhau — lượt cuối mới là lượt
+# đúng, bốn lượt kia chỉ đốt CPU rồi bị ghi đè.
+_DANG_DUNG = threading.Lock()
+
+
+def _tu_dung(conn) -> None:
+    """Chữ trên CV vừa đổi -> dựng lại mọi bản, NẾU người dùng đã bật.
+
+    Mặc định TẮT. Dựng mất ~5 giây; ép nó lên người vừa sửa một chữ là lấy
+    mất của họ quyền quyết định, đúng thứ tấm Điều chỉnh sinh ra để trả lại.
+    """
+    from ..core import prefs
+    if not prefs.flag(conn, prefs.CV_TU_LO):
+        return
+
+    def _chay():
+        if not _DANG_DUNG.acquire(blocking=False):
+            return                      # đã có lượt đang chạy, nó sẽ ăn cả
+        try:
+            from ..cv import batch
+            c = db.connect()
+            try:
+                batch.run(c)
+            finally:
+                c.close()
+        except Exception as exc:                    # noqa: BLE001
+            journal.log.error(journal.CV,
+                              f"tự dựng lại hỏng — {type(exc).__name__}: {exc}")
+        finally:
+            _DANG_DUNG.release()
+
+    threading.Thread(target=_chay, daemon=True, name="cv-tu-dung").start()
+
+
 def _dap_tron(conn, answers: dict) -> int:
     """Bao nhiêu TIN mà hồ sơ đáp TRỌN — mọi dòng must đều nói được.
 
@@ -483,12 +518,16 @@ class Handler(BaseHTTPRequestHandler):
                 from ..cv import batch
                 d = live.cv_soan(conn, (query.get("khoi") or [""])[0],
                                  (query.get("ky") or [""])[0].strip()[:40],
-                                 (query.get("nen") or [""])[0].strip()[:400])
+                                 (query.get("nen") or [""])[0].strip()[:400],
+                                 (query.get("soan") or [""])[0].strip()[:400],
+                                 bool(query.get("tho")))
                 return self._html(cvsoan.render(
                     khoi=d["khoi"], chon=d["chon"], cau=d["cau"], hut=d["hut"],
                     brief=d["brief"], ky=(d["brief"] or {}).get("ky", ""),
-                    nen=d["nen"], loi=(query.get("loi") or [""])[0][:200],
+                    nen=d["nen"], soan=d["soan"], gy=d["goi_y"], tho=d["tho"],
+                    loi=(query.get("loi") or [""])[0][:200],
                     ten=(query.get("khoi") or [""])[0][:120], dap=d["dap"],
+                    san=d["san"],
                     moi=bool(query.get("moi")) and d["chon"] is None,
                     stage=batch.stage(conn)))
             finally:
@@ -528,8 +567,7 @@ class Handler(BaseHTTPRequestHandler):
                 if stage == "search":
                     return self._html(search.adjust(live.sieve(conn)))
                 if stage == "cv":
-                    return self._html(cvlist.adjust(live.cv_nut(conn),
-                                                    live.cv_gia(conn)))
+                    return self._html(cvlist.adjust(live.cv_nut(conn)))
                 return self._html(
                     f"<div class=sheethead>Điều chỉnh · {STAGES[stage]}</div>"
                     "<div class=sheetwait>chưa có gì để chỉnh ở khúc này</div>")
@@ -726,13 +764,8 @@ class Handler(BaseHTTPRequestHandler):
             # NÚM nhiều mức và CÔNG TẮC bật/tắt đi chung một đường: cả hai đều
             # là "đổi một quyết định của tầng CV", và đẻ hai route cho cùng một
             # việc là đẻ hai chỗ có thể lệch nhau.
-            NHIEU = {"giong": (prefs.CV_GIONG, prefs.GIONG),
-                     "bo_cuc": (prefs.CV_BO_CUC, prefs.BO_CUC)}
-            TAT_BAT = {"that_bai": prefs.CV_GIU_THAT_BAI,
-                       "y_kien": prefs.CV_GIU_Y_KIEN,
-                       "rui_ro": prefs.CV_GIU_RUI_RO,
-                       "giu_muc": prefs.CV_GIU_MUC,
-                       "moi_khoi_viec": prefs.CV_MOI_KHOI_VIEC}
+            NHIEU = {"rieng": (prefs.CV_RIENG, prefs.RIENG)}
+            TAT_BAT = {"tu_lo": prefs.CV_TU_LO}
             if ma in NHIEU and gia in NHIEU[ma][1]:
                 khoa, val = NHIEU[ma][0], gia
             elif ma in TAT_BAT and gia in ("0", "1"):
@@ -1136,21 +1169,37 @@ class Handler(BaseHTTPRequestHandler):
                 # và người dùng phải đỡ một khẳng định họ chưa từng đưa ra.
                 # Không cho lưu, nhưng GIỮ NGUYÊN chữ họ vừa gõ để sửa tiếp.
                 if nen and not form.get("kill"):
-                    from ..scoring.gap import qua_giong
-                    xau = next((l for l in body if qua_giong(l, nen) >= 0.6), "")
+                    from ..scoring.gap import CHO_TRONG, con_trong, qua_giong
+                    xau = vi_sao = ""
+                    for l in body:
+                        if con_trong(l):
+                            xau, vi_sao = l, (
+                                f"Câu còn chỗ trống «{CHO_TRONG}» máy chừa lại. "
+                                f"Đó là chỗ của BẰNG CHỨNG, và chỉ bạn mới có: "
+                                f"bao nhiêu cái, trên bao nhiêu dữ liệu, đổi "
+                                f"được mấy phần. Điền vào rồi Lưu lại.")
+                            break
+                        if qua_giong(l, nen) >= 0.6:
+                            xau, vi_sao = l, (
+                                "Câu này vẫn gần như nguyên văn dòng của nhà "
+                                "tuyển dụng — chưa phải việc BẠN làm. Kể việc "
+                                "thật của bạn, kèm con số: bao nhiêu cái, trên "
+                                "bao nhiêu dữ liệu, đổi được mấy phần.")
+                            break
                     if xau:
+                        # MỐC SO SÁNH (`nen`) giữ nguyên là dòng gốc của họ;
+                        # chữ người dùng gõ dở đi riêng ở `soan`. Trộn hai thứ
+                        # thì mỗi lần bị chặn là mốc trôi theo bản sửa, và lần
+                        # sau chép nguyên văn cũng lọt.
                         cho = "/cv/soan?khoi=" + quote(title or was, safe="")
                         if ky:
                             cho += "&ky=" + quote(ky, safe="")
                         if form.get("moi"):
                             cho += "&moi=1"
                         return self._redirect(
-                            cho + "&nen=" + quote(xau, safe="") + "&loi="
-                            + quote("Câu này vẫn gần như nguyên văn dòng của "
-                                    "nhà tuyển dụng — chưa phải việc BẠN làm. "
-                                    "Kể việc thật của bạn, kèm con số: bao "
-                                    "nhiêu cái, trên bao nhiêu dữ liệu, đổi "
-                                    "được mấy phần.", safe=""))
+                            cho + "&nen=" + quote(nen, safe="")
+                            + "&soan=" + quote(xau, safe="")
+                            + "&loi=" + quote(vi_sao, safe=""))
                 if title and (body or form.get("kill")):
                     answers = store.load(conn)
                     text = answers.get("cv_text") or ""
@@ -1169,6 +1218,7 @@ class Handler(BaseHTTPRequestHandler):
                         title, form.get("meta", [""])[0].strip(), body)},
                         note=f"soạn khối: {title[:40]}")
                     live.quen()
+                    _tu_dung(conn)
                     sau = _dap_tron(conn, store.load(conn))
                     viec = (f"{len(body)} câu" if body else "đã xoá")
                     # IN ĐỘ PHỦ CẢ KHI KHÔNG ĐỔI. "Viết xong mà không mở khoá

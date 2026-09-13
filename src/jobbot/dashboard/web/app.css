@@ -1688,29 +1688,44 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .ht1 b{color:var(--acc)}
 
 /* Công tắc trên tấm Điều chỉnh CV — mỗi cái kèm con số nó đang tốn */
-.swrow{display:flex;gap:11px;align-items:flex-start;padding:9px 0;
-  border-bottom:1px solid rgba(255,255,255,.05)}
+/* ---------------- Tấm ĐIỀU CHỈNH · CV ----------------
+   BẢNG, không phải bài văn. Bản trước in cả lý do lẫn hai câu ví dụ thẳng ra
+   dưới từng công tắc — năm công tắc thành bốn mươi dòng chữ, và người mở tấm
+   này ra để LẬT MỘT CÔNG TẮC phải cuộn qua cả bài. */
+.adjbox{padding:0 var(--sheet-pad) var(--sheet-pad)}
+.adjrow{display:flex;align-items:center;justify-content:space-between;
+  gap:14px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)}
+.adjname b{display:block;font-size:12.5px;font-weight:600;color:var(--ink)}
+.adjname span{font-size:10.5px;color:var(--mute)}
+.adjrow .srcrow{margin-bottom:0}
+/* Tiêu đề nhóm: cái gì máy quyết, cái gì là nhịp chạy — hai câu hỏi khác nhau */
+.adjsec{font-size:10px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--mute);margin:20px 0 4px;
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.adjsec span{font-size:10px;font-weight:400;letter-spacing:0;
+  text-transform:none;color:var(--line-2)}
+
+/* MỘT CÔNG TẮC = một hàng lưới. Cột cố định nên con số của mọi dòng thẳng
+   hàng nhau — đó là thứ biến năm nút rời thành một bảng đọc được. */
+.swrow{display:grid;grid-template-columns:46px 1fr auto;gap:5px 11px;
+  align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .swrow:last-of-type{border-bottom:0}
 .swbtn{flex:none;width:46px;font-size:9.5px;font-weight:700;letter-spacing:.05em}
-.swmain{min-width:0}
-.swmain b{display:block;color:var(--ink);font-size:12.5px;font-weight:600}
-.swnow{display:block;font-size:11px;color:var(--acc);margin-top:1px}
-.swbtn.off + .swmain .swnow{color:var(--warn)}
-.swwhy{display:block;font-size:11px;color:var(--mute);line-height:1.5;margin-top:3px}
-
-/* Brief "họ hỏi gì" — nguyên văn dòng yêu cầu thật.
-   Trước ở tấm phủ xưởng viết; nay nằm trong màn soạn, ngay trên ô gõ. */
-.hgo{grid-area:plus;justify-self:end;font-size:10px;padding:3px 9px}
-.wlist{list-style:none;margin:0 0 4px;padding:0}
-.wlist li{display:flex;gap:10px;align-items:baseline;padding:5px 0;
-  border-bottom:1px solid rgba(255,255,255,.04)}
-.wlist li:last-child{border-bottom:0}
-.wq{flex:1;color:var(--dim);line-height:1.5;font-size:12px}
-.wco{flex:none;font-size:10.5px;color:var(--mute);max-width:34%;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.swten{font-size:12.5px;font-weight:600;color:var(--ink);min-width:0}
+.swnow{font-size:11px;color:var(--acc);text-align:right;white-space:nowrap}
+.swrow.off .swnow{color:var(--warn)}
+/* Lý do nằm trong thẻ GẤP, chiếm trọn hàng dưới, mặc định đóng */
+.swwhy{grid-column:2 / -1}
+.swwhy summary{font-size:10.5px;color:var(--line-2);cursor:pointer;
+  list-style:none;padding:1px 0}
+.swwhy summary::-webkit-details-marker{display:none}
+.swwhy summary::before{content:'▸ '}
+.swwhy[open] summary::before{content:'▾ '}
+.swwhy summary:hover{color:var(--mute)}
+.swbody{font-size:11px;color:var(--mute);line-height:1.55;padding:5px 0 2px}
 /* Ví dụ lấy từ chính hồ sơ đang mở — người dùng nhận ra câu của mình */
 .swvd{display:block;font-size:11.5px;color:var(--dim);font-style:italic;
-  margin-top:3px;padding-left:9px;border-left:2px solid var(--line)}
+  margin-top:5px;padding-left:9px;border-left:2px solid var(--line)}
 
 /* ---------------- CV: MÀN SOẠN KHỐI (/cv/soan) ----------------
    Màn con của tab CV. Khác tấm phủ cũ ở hai chỗ: rộng cả cửa sổ, và mỗi ô
@@ -1854,3 +1869,18 @@ a.mbtn.apply{color:var(--acc)}
 .sntwarn{font-size:11px;color:var(--warn);line-height:1.5;margin-bottom:7px}
 .sntwarn b{color:var(--warn);font-weight:600}
 .sntwarn.bad{color:var(--bad)}
+.sntwarn.ok{color:var(--acc)}
+.sntwarn.ok b{color:var(--acc)}
+.latrow{margin:-2px 0 10px}
+.latrow .muted{font-size:10.5px}
+
+/* --- MÁY TỰ LO: bản nháp dựng sẵn cho mọi chỗ hụt ---------------------- */
+.sanbox{max-width:780px}
+.sanone{display:block;text-decoration:none;border:1px solid var(--line);
+  border-radius:10px;padding:10px 13px;margin-bottom:7px;background:var(--panel)}
+.sanone:hover{border-color:var(--acc-2);background:var(--panel-2)}
+.sanky{display:block;font-size:11px;color:var(--mute);margin-bottom:4px}
+.sanky b{color:var(--acc);font-weight:700;margin:0 3px 0 7px}
+.sannhap{display:block;font-size:12.5px;color:var(--ink);line-height:1.55}
+.sanco{display:block;font-size:10.5px;color:var(--mute);margin-top:4px}
+.sanone:hover .sanco{color:var(--acc)}

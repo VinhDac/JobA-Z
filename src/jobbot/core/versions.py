@@ -25,4 +25,4 @@ SCORE_RULES = "2026-09-12.4"
 # 3 câu bị cấm đi ra ngoài trên mọi bản), + cv/rewrite.py lược chủ ngữ ngôi 1.
 # 2026-09-12.2 — dòng "Bản sẽ gửi" tính phủ trên TIN ĐẦU ĐÀN thay vì trên
 # hợp cả nhóm (hợp thì đo kích thước nhóm, không đo chất lượng CV).
-CV_RULES = "2026-09-12.2"
+CV_RULES = "2026-09-13.1"

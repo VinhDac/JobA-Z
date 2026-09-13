@@ -529,5 +529,80 @@ check("thanh đầu nói thẳng còn mấy chỗ cần xem", "chỗ cần bạn
 check("và có chú giải, không để mấy đường gạch thành câu đố",
       "glegend" in _h4 or not _ds4)
 
+print("\n[KHỨ HỒI: lưu một câu KHÔNG được nuốt mất câu nào]")
+# HAI LỖI THẬT, cả hai đều mất dữ liệu, cả hai cùng một gốc: `parse` và
+# `_bounds` mỗi bên tự đoán một kiểu "dòng nào mở khối project mới".
+from jobbot.cv.blocks import write_block as _wb2, parse as _ps2, _bounds as _bd2
+
+_cv2 = ("SELECTED PROJECTS\nQuant Trading Studio\n"
+        "the whole pipeline turned into something you can run.\n"
+        "The Number That Lied\nKeep the best of many models.\n")
+
+# LỖI 1 — `_bounds` chỉ dừng ở dòng có " — ", mà write_block ghi tên project
+# TRẦN một dòng. Nên lưu một project là xoá sạch mọi project bên dưới nó.
+check("ranh giới khối dừng đúng chỗ, không nuốt tới cuối tệp",
+      _bd2(_cv2.splitlines(), "Quant Trading Studio") == (1, 3))
+_sau2 = _wb2(_cv2, "project", "Quant Trading Studio", "",
+             ["the whole pipeline turned into something you can run."])
+check("lưu một project KHÔNG xoá project bên dưới", "The Number That Lied" in _sau2)
+check("và câu của nó còn nguyên", "Keep the best of many models." in _sau2)
+
+# LỖI 2 — câu người dùng lưu vào thân khối bị đọc lại thành TÊN KHỐI, đẻ ra
+# một project rỗng, và câu ấy KHÔNG BAO GIỜ in ra nữa. Xảy ra thật trên hồ sơ
+# của Vin với câu "Improved research frameworks, data pipelines".
+_cau2 = "Improved research frameworks, data pipelines"
+_sau2 = _wb2(_cv2, "project", "Quant Trading Studio", "",
+             ["the whole pipeline turned into something you can run.", _cau2])
+_pj2 = [b for b in _ps2(_sau2) if b.kind == "project"]
+check("câu vừa lưu nằm trong THÂN khối, không thành tên khối",
+      any(_cau2 in l for b in _pj2 for l in b.lines))
+check("và KHÔNG đẻ ra khối rỗng nào", all(b.lines for b in _pj2))
+check("số khối project giữ nguyên", len(_pj2) == 2)
+# Câu mở đầu bằng ĐỘNG TỪ HÀNH ĐỘNG không bao giờ là tên project — kể cả khi
+# nó có dấu gạch, hình dạng giống hệt một tiêu đề.
+from jobbot.cv.blocks import mo_khoi_project as _mkp
+check("câu có dấu gạch mà mở bằng động từ -> vẫn là CÂU",
+      not _mkp("Improved research frameworks — cut runtime to 90 s.", None))
+check("còn tên project thật thì vẫn nhận ra",
+      _mkp("Quant Trading Studio", None)
+      and _mkp("The Number That Lied — MSc dissertation, PyTorch.", None))
+
+print("\n[ĐỘ MAY ĐO: xếp lại chữ của mình, không thêm không bỏ]")
+# Đo trên kho thật: 98 tập yêu cầu KHÁC NHAU trên 120 tin, mà chỉ ra 19 bản
+# CV — vì mục kỹ năng, phần dày từ khoá nhất tờ giấy, được đổ ra nguyên xi
+# theo thứ tự trong hồ sơ và không bao giờ đụng tới. Xếp lại: 19 -> 46 -> 68.
+from jobbot.cv.build import _tach_mon as _tm, _xep_mon as _xm, _la_danh_sach as _lds
+
+_ky = "Python (pandas, NumPy, PyTorch), C++, SQL, MQL5, Excel."
+check("KHÔNG cắt trong ngoặc — 'Python (pandas, NumPy)' là MỘT món",
+      _tm(_ky.rstrip(".")) [0] == "Python (pandas, NumPy, PyTorch)")
+check("và tách đúng số món", len(_tm(_ky.rstrip("."))) == 5)
+
+_sql = _xm(_ky, {"sql"})
+check("món tin này hỏi nhảy lên ĐẦU dòng", _sql.startswith("SQL,"))
+# KHÔNG ĐƯỢC MẤT MỘT CHỮ NÀO. Đây là CV gửi nhà tuyển dụng.
+import re as _reX
+check("xếp lại KHÔNG mất chữ nào",
+      sorted(_reX.findall(r"\w+", _ky)) == sorted(_reX.findall(r"\w+", _sql)))
+check("dấu chấm vẫn ở cuối DÒNG, không dính món cuối", _sql.endswith("."))
+check("tin không hỏi gì thì giữ nguyên thứ tự", _xm(_ky, set()) == _ky)
+check("danh sách dưới 3 món thì không đụng", _xm("Python, SQL", {"sql"}) == "Python, SQL")
+
+# CHỐT CHẶN THẬT SỰ: dòng VĂN XUÔI không được xếp lại. Bản đầu của tôi xếp
+# mọi dòng, và mục "Compute" của hồ sơ thật là một câu văn — xếp lại là đảo
+# lộn một LẬP LUẬN thành vô nghĩa, trên tờ giấy gửi đi. 80/120 bản dính.
+_van = ("a GPU is fast at many simple operations at once, which suits deep "
+        "learning; most classical ML models run slower on one because moving "
+        "the data costs more than the speed-up.")
+check("nhận ra dòng VĂN XUÔI, không phải danh sách", not _lds(_tm(_van)))
+check("và để nguyên nó", _xm(_van, {"machine learning"}) == _van)
+check("còn danh sách thật thì nhận ra",
+      _lds(_tm("maximum drawdown, Sharpe ratio, risk limits, portfolio construction")))
+
+# BA MỨC phải ra BA KẾT QUẢ KHÁC NHAU — núm không đổi gì là núm trang trí,
+# và app này đã bỏ một núm như thế rồi (độ dày từ khoá, đổi 0/60 bản).
+from jobbot.core import prefs as _pfX
+check("ba mức may đo đều có tên", set(_pfX.RIENG) == {"chung", "vua", "rieng"})
+
 print(f"\n{ok} ok, {fail} fail")
 sys.exit(1 if fail else 0)

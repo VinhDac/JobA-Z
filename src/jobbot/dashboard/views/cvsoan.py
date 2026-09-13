@@ -125,7 +125,7 @@ def _buoc(so: int, ten: str, xong: bool, dang: bool, ruot: str) -> str:
 
 
 def _viet(d: dict, khoi: str, nen: str, loi: str, blocks: list,
-          them: int = 0) -> str:
+          soan: str = "", gy: str = "", tho: bool = False) -> str:
     """MÀN VIẾT MỘT CÂU — ba bước, đánh số, nhìn là biết đang ở đâu.
 
     Khác hẳn màn SỬA KHỐI ở dưới, và phải khác: người vào đây để viết MỘT câu
@@ -147,6 +147,7 @@ def _viet(d: dict, khoi: str, nen: str, loi: str, blocks: list,
     dich = quote(ky, safe="")
     giu_nen = f"&nen={quote(nen, safe='')}" if nen else ""
     giu_khoi = f"&khoi={quote(khoi, safe='')}" if khoi else ""
+    o = soan if soan else nen
 
     def _list(rows) -> str:
         return "".join(
@@ -203,10 +204,38 @@ def _viet(d: dict, khoi: str, nen: str, loi: str, blocks: list,
         r3 = ("<div class=empty-box>Chọn khối ở bước 2 trước — câu viết ra "
               "phải nằm trong một khối.</div>")
     else:
-        canh = (f"<div class='sntwarn bad'>{esc(loi)}</div>" if loi else
-                (f"<div class=sntwarn>Ô dưới đang là <b>chữ của nhà tuyển "
-                 f"dụng</b>, chưa phải câu của bạn. Viết lại thành việc BẠN "
-                 f"đã làm, kèm con số thật.</div>" if nen else ""))
+        # BA TRẠNG THÁI của ô, và mỗi cái cần một lời khác nhau.
+        dung_gy = bool(gy) and not tho and o == gy
+        if loi:
+            canh = f"<div class='sntwarn bad'>{esc(loi)}</div>"
+        elif dung_gy:
+            canh = ("<div class='sntwarn ok'>Đây là <b>gợi ý</b>: máy cắt phần "
+                    "thừa trong dòng của họ và chia sang thì quá khứ — hình "
+                    "của một câu CV. Nó <b>không biết bạn đã làm gì</b>, nên "
+                    "chỗ <b>___</b> để bạn điền bằng chứng thật: bao nhiêu "
+                    "cái, trên bao nhiêu dữ liệu, đổi được mấy phần.</div>")
+        elif nen:
+            canh = ("<div class=sntwarn>Ô dưới đang là <b>chữ của nhà tuyển "
+                    "dụng</b>, chưa phải câu của bạn. Viết lại thành việc BẠN "
+                    "đã làm, kèm con số thật.</div>")
+        else:
+            canh = ""
+
+        # ĐỔI QUA LẠI giữa gợi ý và nguyên văn. Là LIÊN KẾT, không JavaScript:
+        # trạng thái nằm trên URL nên Back được và lưu địa chỉ lại được.
+        lat = ""
+        if gy and nen:
+            if dung_gy:
+                lat = (f"<a class='mbtn tiny' href='/cv/soan?ky={dich}"
+                       f"{giu_khoi}{giu_nen}&tho=1'>Dùng nguyên văn dòng của "
+                       f"họ</a>")
+            else:
+                lat = (f"<a class='mbtn tiny apply' href='/cv/soan?ky={dich}"
+                       f"{giu_khoi}{giu_nen}'>↺ Gợi ý câu CV</a>")
+        elif nen:
+            lat = ("<span class=muted>dòng này không rút gọn được thành hình "
+                   "câu CV — dùng nó làm đề bài, viết câu của bạn</span>")
+
         r3 = (
             f"<form class=vietform method=post action='/cv/block'>"
             f"<input type=hidden name=them value=1>"
@@ -216,8 +245,9 @@ def _viet(d: dict, khoi: str, nen: str, loi: str, blocks: list,
             + canh
             + f"<textarea class=cvdraft name=line rows=4 id=viet"
               f" placeholder='Một câu tiếng Anh, kể việc BẠN làm. Có con số "
-              f"thật thì thêm vào — đó là thứ hồ sơ thiếu nhất.'>{esc(nen)}"
+              f"thật thì thêm vào — đó là thứ hồ sơ thiếu nhất.'>{esc(o)}"
               f"</textarea>"
+            + (f"<div class=latrow>{lat}</div>" if lat else "")
             + f"<div class=vietfoot>"
               f"<button class='mbtn apply big' type=submit>Thêm câu này vào "
               f"«{esc(khoi[:26])}»</button>"
@@ -353,7 +383,8 @@ def _form(chon: dict | None, cau: list[dict], ky: str = "",
 
 def render(*, khoi: list[dict], chon: dict | None, cau: list[dict],
            hut: list, brief: dict | None = None, ky: str = "",
-           nen: str = "", loi: str = "", ten: str = "", dap: tuple = (0, 0),
+           nen: str = "", soan: str = "", gy: str = "", tho: bool = False,
+           loi: str = "", ten: str = "", dap: tuple = (0, 0), san: list = (),
            moi: bool = False, stage: dict | None = None) -> str:
     """Màn con Soạn khối — MỘT chỗ cho mọi phép ghi vào CV gốc.
 
@@ -381,6 +412,7 @@ def render(*, khoi: list[dict], chon: dict | None, cau: list[dict],
     # đâu", không phải vứt bỏ câu trả lời của "viết cái gì".
     mang = (f"&ky={quote(ky, safe='')}" if ky else "")
     mang += (f"&nen={quote(nen, safe='')}" if nen else "")
+    mang += "&tho=1" if tho else ""
 
     # KHỐI CHƯA TỒN TẠI VẪN PHẢI RA FORM. Gọi tên một khối chưa lưu — lượt Lưu
     # vừa bị từ chối, hoặc vừa đổi tên khối — mà màn trả về "chưa chọn khối" thì
@@ -396,14 +428,15 @@ def render(*, khoi: list[dict], chon: dict | None, cau: list[dict],
     # bộ soạn 16 câu, ô cần gõ bị chôn xuống dưới hai màn hình.
     ruot = _hut(hut, dang, ky)
     if brief:
-        ruot += _viet(brief, dang or (ten if moi else ""), nen, loi, khoi)
+        ruot += _viet(brief, dang or (ten if moi else ""), nen, loi, khoi,
+                      soan, gy, tho)
         # Khối mới thì vẫn cần chỗ đặt TÊN — bước 2 không làm được việc đó.
         if moi and not dang:
             ruot += _form(None, [], ky, nen, loi, ten)
     elif chon or moi:
         ruot += _form(chon, cau, ky, nen, loi, ten)
     else:
-        ruot += _chua_chon()
+        ruot += _san(list(san)) or _chua_chon()
 
     nhan = (f"viết về {ky}" if ky else
             chon["title"][:30] if chon else
@@ -438,3 +471,33 @@ def _chua_chon() -> str:
         "<b>+ Khối mới</b>, hoặc bấm một thứ ở hàng trên để viết câu mới về "
         "nó.<br>Mỗi câu bạn gõ ở đây được chấm ngay: luật có cho nó in ra "
         "không, và bao nhiêu tin đang đòi thứ nó nhắc tới.</div>")
+
+
+def _san(rows: list) -> str:
+    """MÁY TỰ LO — bản nháp dựng sẵn cho MỌI chỗ hụt, trên một màn.
+
+    Đây là hình duy nhất của "tự động điền" mà không nói dối. Máy làm trước
+    toàn bộ phần nó làm được — tìm dòng yêu cầu tả việc, cắt phần thừa, chia
+    thì quá khứ — rồi dừng đúng ở chỗ nó không biết: CON SỐ. Người dùng điền
+    con số và bấm, từng câu một.
+
+    KHÔNG tự ghi vào CV. Câu nháp nằm trong `cv_text` thì bộ chấm đếm luôn nó
+    là kỹ năng đã đáp, và độ phủ nhảy lên mà không có gì thật đằng sau — app
+    nói dối người dùng về chính họ. Đây là lý do duy nhất, và nó đủ.
+    """
+    if not rows:
+        return ""
+    o = ""
+    for r in rows:
+        cho = (f"/cv/soan?ky={quote(r['ky'], safe='')}"
+               f"&nen={quote(r['nen'], safe='')}")
+        o += (f"<a class=sanone href='{cho}'>"
+              f"<span class=sanky>{esc(r['ky'])}<b>+{r['them']}</b>tin</span>"
+              f"<span class=sannhap>{esc(r['nhap'])}</span>"
+              f"<span class=sanco>{esc(r['cong_ty'])} · điền số rồi lưu →</span>"
+              f"</a>")
+    return (f"<div class=sanbox><div class=briefhead>Máy đã dựng sẵn "
+            f"<b>{len(rows)}</b> bản nháp<span>mỗi chỗ hụt một câu, đã cắt "
+            f"phần thừa và chia thì quá khứ. Chỗ <b>___</b> là bằng chứng — "
+            f"thứ duy nhất máy không biết. Bấm một cái để điền rồi lưu."
+            f"</span></div>{o}</div>")

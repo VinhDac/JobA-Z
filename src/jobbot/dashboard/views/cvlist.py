@@ -269,132 +269,68 @@ def _blocks(blocks: list[dict]) -> str:
 
 # ------------------------------------------------------ tấm Điều chỉnh ⚟
 
-# BA NÚM, và mỗi núm phải trả lời được "xoay nó thì bản CV đổi thế nào" bằng
-# một câu. Núm nào không trả lời được thì nó là núm trang trí — và một núm
-# trang trí làm người dùng mất tin vào cả bảng.
+# HAI NÚM, hết. Bảy núm đã bỏ — xem lời chú ở core/prefs.py.
 #
-# Cả ba xoay SỐ ĐÃ CÓ trong cv/rules.py, không đẻ khái niệm mới:
-#   giọng văn  -> bật/tắt phép lược chủ ngữ trong cv/rewrite.py
-#   từ khoá    -> trọng số "trúng thứ tin đòi" trong rules.sentence_weight
-#   bố cục     -> số dòng mỗi khối (rules.BUDGET)
-# HAI NÚM NHIỀU MỨC. Cả hai đo được là ĐỔI THẬT: giọng văn đổi 60/60 bản,
-# bố cục đổi 60/60. Núm "độ dày từ khoá" đã BỎ — đo trên 60 tin, xoay sang
-# "dày" đổi ĐÚNG 0 bản, và nó dựa trên "keyword density", thứ không nhà cung
-# cấp ATS nào công bố công thức.
+# Người dùng cần đúng hai câu trả lời: bản CV riêng cho từng tin tới mức nào,
+# và máy có tự lo phần nó lo được hay không. Mọi thứ khác từng bày ra ở đây
+# đều là bắt họ học luật của máy trước khi dùng được máy.
+
 NUM = (
-    ("giong", "Giọng văn",
-     "Câu trên CV mở đầu thế nào. Máy chỉ CẮT chữ bạn viết — không viết thêm.",
-     (("cv", "Lược chủ ngữ", "Built… · Designed… — quy ước của CV"),
-      ("nguyen", "Giữ nguyên", "I built… · I designed… — đúng giọng bạn viết"))),
-    ("bo_cuc", "Bố cục",
-     "Mấy dòng mỗi khối. Trần một mặt giấy: gọn thì đọc nhanh nhưng nói được "
-     "ít, đầy thì ngược lại.",
-     (("gon", "Gọn", "2 dòng mỗi khối"),
-      ("thuong", "Thường", "3 dòng mỗi khối"),
-      ("day", "Đầy", "4 dòng mỗi khối"))),
+    # ĐỘ MAY ĐO — núm đổi thật nhiều nhất. Đo trên kho thật (358 tin):
+    # chung 25 bản · vừa 89 · riêng 157, lõi bất biến rơi 12/16 -> 9/16 câu.
+    # Cả ba mức CHỈ XẾP LẠI chữ người dùng đã viết.
+    #
+    # KHÔNG gõ cứng con số vào nhãn: nó khác theo từng hồ sơ và từng kho tin,
+    # mà đếm lại thì tốn ba lượt dựng. Số thật hiện trên thanh sau khi dựng.
+    ("rieng", "Độ may đo", "mỗi bản riêng cho tin đó tới mức nào",
+     (("chung", "Dùng chung", "chỉ chọn câu trong khối việc và project"),
+      ("vua", "Vừa", "+ đưa mục kỹ năng tin này hỏi lên trước"),
+      ("rieng", "Riêng từng tin", "+ đưa cả món trong mục lên trước"))),
 )
 
-# CÔNG TẮC = mấy quyết định máy đang TỰ LÀM THAY. Mỗi cái kèm con số nó đang
-# tốn, đo trên chính hồ sơ này — không có số thì đó chỉ là một nút bấm thử.
-# CÔNG TẮC = mấy quyết định máy đang TỰ LÀM THAY.
-#
-# Chữ ở đây mô tả LUẬT, không trích câu của ai. Bản trước gõ cứng câu của một
-# người vào phần giải thích ("«drawdown ran 30% deeper than predicted»"); hồ
-# sơ khác mở lên thì đó là câu của người lạ, và cái panel thành tờ quảng cáo
-# chứ không phải bản mô tả hồ sơ của họ.
-#
-# Ví dụ THẬT lấy từ chính hồ sơ đang mở — xem live.cv_gia.
-CONG_TAC = (
-    ("that_bai", "Giữ câu kể thất bại",
-     "Câu kể một kết cục xấu của chính bạn. Chỗ của nó là buổi phỏng vấn, nơi "
-     "người đọc có kinh nghiệm coi sự trung thực là điểm mạnh — không phải "
-     "trước mặt người sàng 200 CV một buổi chiều."),
-    ("y_kien", "Giữ câu không kể việc bạn làm",
-     "Câu không nói bạn LÀM gì, không có số đo, không nhắc kỹ năng nào. Nó có "
-     "thể là kiến thức đáng giá, cũng có thể chỉ là một câu hay — máy không "
-     "phân biệt được nên nó đánh dấu chứ không xoá."),
-    ("rui_ro", "Giữ câu mời người đọc nghi ngờ",
-     "Câu nhắc tới tài khoản demo, vốn tự bỏ, hay công cụ AI. Chúng làm người "
-     "đọc đặt câu hỏi về quy mô thật của việc bạn làm. Câu nào có số đo cứng "
-     "thì luật chỉ đánh dấu 'xem lại' chứ không bỏ."),
-    ("giu_muc", "Giữ mục kỹ năng mềm",
-     "Mục kỹ năng mà cả dòng không có lấy một cái tên công nghệ nào — nó đang "
-     "chiếm chỗ bằng tính từ."),
-    ("moi_khoi_viec", "Giữ MỌI khối kinh nghiệm",
-     "Tắt đi thì chỉ in khối hợp với tin. Nhưng khối vắng mặt để lại một lỗ "
-     "trên dòng thời gian, và khoảng trống đắt hơn nhiều so với một khối kém "
-     "liên quan."),
-)
+# CÔNG TẮC TỰ LO — máy làm sẵn mọi phần nó làm được, không đợi bấm.
+TU_LO = (
+    "tu_lo", "Máy tự lo",
+    "Bật lên thì máy làm sẵn hai việc: dựng bản nháp cho MỌI chỗ hụt nhãn "
+    "VIẾT, và dựng lại toàn bộ bản CV ngay khi chữ trên CV đổi. Phần duy "
+    "nhất nó không tự lo được là CON SỐ — bao nhiêu cái, trên bao nhiêu dữ "
+    "liệu, đổi được mấy phần. Máy không biết bạn đã làm gì, và câu trên CV "
+    "là câu bạn phải đỡ được trong phòng phỏng vấn.")
 
 
-def adjust(num: dict, gia: dict | None = None) -> str:
-    """Tấm phủ ⚟ — mấy quyết định của tầng CV.
+def adjust(num: dict | None = None) -> str:
+    """Tấm phủ ⚟ — HAI núm của tầng CV.
 
-    Bấm là có tác dụng ngay, KHÔNG đi qua nút Áp dụng — giống công tắc nguồn ở
-    tab Search. Nhưng nó không tự dựng lại: dựng mất 5 giây, và người vừa lật
-    thử một công tắc chưa chắc muốn trả cái giá đó ngay.
-
-    MỖI CÔNG TẮC KÈM CON SỐ CỦA HÔM NAY. Đó là khác biệt giữa tấm này và một
-    bảng nút: "Giữ câu kể thất bại" thì chưa ai quyết được gì, nhưng "Giữ câu
-    kể thất bại — đang bỏ 5 câu" thì đọc xong là biết mình đang đánh đổi cái gì.
+    Bấm là có tác dụng ngay, KHÔNG đi qua nút Áp dụng — giống công tắc nguồn
+    ở tab Search.
     """
     dang = (num or {}).get("ten") or {}
-    g = gia or {}
-    def _noi(ma: str) -> str:
-        """Công tắc này đang làm gì với hồ sơ NÀY. Không đổi gì thì NÓI RA —
-        im lặng để người dùng tự bấm thử rồi không thấy khác là cách chắc
-        chắn nhất làm họ thôi tin cả bảng."""
-        d = g.get(ma) or {}
-        phan = []
-        if d.get("bo"):
-            phan.append(f"đang bỏ {d['bo']} câu")
-        if d.get("xem"):
-            phan.append(f"đánh dấu {d['xem']} câu 'xem lại' (vẫn in ra)")
-        return " · ".join(phan) or "hồ sơ này không có câu nào dính luật"
-
-    so = {ma: _noi(ma) for ma in ("that_bai", "y_kien", "rui_ro")}
-    so["giu_muc"] = (("đang bỏ mục " + " · ".join(g.get("muc") or []))
-                     if g.get("muc") else "hồ sơ không có mục nào bị bỏ")
-    so["moi_khoi_viec"] = f"{g.get('khoi_viec', 0)} khối kinh nghiệm trong hồ sơ"
-
-    khoi = []
+    khoi = ""
     for ma, ten, y_nghia, chon in NUM:
         nut = "".join(
             f"<button class='mbtn tiny{'' if dang.get(ma) == gia_tri else ' off'}'"
             f" data-post='/api/cv/num' data-arg='{esc(ma)}:{esc(gia_tri)}'"
             f" title='{esc(ghi)}'>{esc(nhan)}</button>"
             for gia_tri, nhan, ghi in chon)
-        khoi.append(
-            f"<label class=slab>{esc(ten)}<span>{esc(y_nghia)}</span></label>"
-            f"<div class=srcrow>{nut}</div>")
+        khoi += (f"<div class=adjrow><div class=adjname><b>{esc(ten)}</b>"
+                 f"<span>{esc(y_nghia)}</span></div>"
+                 f"<div class=srcrow>{nut}</div></div>")
 
-    hang = []
-    for ma, ten, y_nghia in CONG_TAC:
-        on = bool(dang.get(ma))
-        # VÍ DỤ LẤY TỪ CHÍNH HỒ SƠ ĐANG MỞ. Đây là thứ biến một dòng mô tả
-        # chung chung thành một câu nói về hồ sơ của người đang đọc: họ nhận
-        # ra ngay câu đó là câu mình viết, và quyết được luôn.
-        vd = (g.get(ma) or {}).get("vi_du") or []
-        cau_minh = "".join(f"<span class=swvd>{esc(x)}</span>" for x in vd[:2])
-        hang.append(
-            f"<div class=swrow>"
-            f"<button class='mbtn tiny swbtn{'' if on else ' off'}'"
-            f" data-post='/api/cv/num' data-arg='{esc(ma)}:{'0' if on else '1'}'>"
-            f"{'BẬT' if on else 'TẮT'}</button>"
-            f"<div class=swmain><b>{esc(ten)}</b>"
-            f"<span class=swnow>{esc(so.get(ma, ''))}</span>"
-            f"{cau_minh}"
-            f"<span class=swwhy>{esc(y_nghia)}</span></div></div>")
+    ma, ten, y_nghia = TU_LO
+    on = bool((num or {}).get("tu_lo"))
+    khoi += (f"<div class='swrow{'' if on else ' off'}'>"
+             f"<button class='mbtn tiny swbtn{'' if on else ' off'}'"
+             f" data-post='/api/cv/num' data-arg='{ma}:{'0' if on else '1'}'>"
+             f"{'BẬT' if on else 'TẮT'}</button>"
+             f"<b class=swten>{esc(ten)}</b>"
+             f"<span class=swnow>"
+             + ("nháp dựng sẵn · dựng lại ngay" if on else "bạn tự bấm")
+             + f"</span>"
+             f"<details class=swwhy><summary>vì sao</summary>"
+             f"<div class=swbody>{esc(y_nghia)}</div></details></div>")
 
     return ("<div class=sheethead>Điều chỉnh · CV</div>"
-            + "".join(khoi)
-            + "<label class=slab>Máy đang tự quyết thay bạn"
-              "<span>mỗi công tắc kèm con số nó đang tốn, đo trên chính hồ sơ "
-              "của bạn</span></label>"
-            + "".join(hang)
-            + "<div class=note>Lật công tắc xong thì nút trên thanh đổi thành "
-              "<b>Cập nhật</b> — bấm lúc nào cũng được. Máy không tự dựng lại: "
-              "dựng mất ~5 giây và đó là quyết định của bạn.</div>")
+            f"<div class=adjbox>{khoi}</div>")
 
 
 # ------------------------------------------------------------ khối HỤT

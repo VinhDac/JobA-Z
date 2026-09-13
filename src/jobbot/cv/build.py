@@ -99,6 +99,74 @@ def wanted_skills(explain: dict | None, jd_text: str = "") -> set[str]:
     return out
 
 
+# Dấu ngăn giữa các MÓN trong một dòng kỹ năng. Không cắt trong ngoặc:
+# "Python (pandas, NumPy, PyTorch)" là MỘT món, cắt ra là ra "Python (pandas"
+# và "PyTorch)" — chữ vỡ ngay trên tờ giấy gửi nhà tuyển dụng.
+_NGAN = ",;·"
+
+
+def _ky_cua_muc(block) -> set:
+    """Mục kỹ năng này nhắc tới những kỹ năng nào — kể cả trong TIÊU ĐỀ."""
+    ra = skills_in(block.title)
+    for l in block.lines:
+        ra |= skills_in(l)
+    return ra
+
+
+def _tach_mon(chu: str) -> list:
+    """Cắt một dòng kỹ năng thành từng MÓN. Đếm ngoặc, không cắt bên trong."""
+    ra, dem, cuoi = [], 0, 0
+    for i, c in enumerate(chu):
+        if c in "([":
+            dem += 1
+        elif c in ")]":
+            dem = max(0, dem - 1)
+        elif c in _NGAN and dem == 0:
+            ra.append(chu[cuoi:i])
+            cuoi = i + 1
+    ra.append(chu[cuoi:])
+    return [m.strip() for m in ra if m.strip()]
+
+
+# Món trong một DANH SÁCH thì ngắn: "SQL", "Python (pandas, NumPy)". Dài hơn
+# thế là MỆNH ĐỀ, và dòng đó là VĂN XUÔI chứ không phải danh sách.
+_MON_DAI_NHAT = 5          # số từ
+
+
+def _la_danh_sach(mon: list) -> bool:
+    """Dòng này là DANH SÁCH hay VĂN XUÔI — xếp lại được hay không.
+
+    ĐÂY LÀ CHỐT CHẶN, và tôi đã cần tới nó: bản đầu xếp lại mọi dòng kỹ năng,
+    và mục "Compute" của hồ sơ thật là một câu văn — "a GPU is fast at many
+    simple operations at once, which suits deep learning; most classical ML
+    models run slower…". Xếp lại nó là ĐẢO LỘN MỘT LẬP LUẬN thành vô nghĩa,
+    trên tờ giấy gửi nhà tuyển dụng. 80/120 bản dính.
+
+    Phân biệt bằng HÌNH DẠNG, không bằng từ vựng: món của danh sách thì ngắn
+    và không có dấu kết câu bên trong.
+    """
+    if len(mon) < 3:
+        return False
+    return all(len(m.split()) <= _MON_DAI_NHAT and "." not in m for m in mon)
+
+
+def _xep_mon(chu: str, wanted: set) -> str:
+    """Đưa món tin này hỏi lên ĐẦU dòng. Chữ y nguyên, chỉ đổi chỗ.
+
+    CHỈ đụng vào dòng là DANH SÁCH — xem `_la_danh_sach`. Giữ nguyên dấu chấm
+    cuối dòng: nó là dấu câu của DÒNG, không phải của món cuối cùng.
+    """
+    het = chu.rstrip()
+    cham = het.endswith(".")
+    mon = _tach_mon(het[:-1] if cham else het)
+    if not _la_danh_sach(mon):
+        return chu
+    # ỔN ĐỊNH: món không trúng gì giữ nguyên thứ tự cũ, chỉ món trúng nhảy lên.
+    xep = sorted(range(len(mon)), key=lambda i: (-len(skills_in(mon[i]) & wanted), i))
+    ra = ", ".join(mon[i] for i in xep)
+    return ra + ("." if cham else "")
+
+
 def asked_skills(explain: dict | None) -> set[str]:
     """Kỹ năng tin này THẬT SỰ ĐÒI — chỉ từ DÒNG YÊU CẦU, không từ cả tin.
 
@@ -179,7 +247,10 @@ def build(profile: dict, explain: dict | None, jd_text: str = "",
         #
         # Vẫn XẾP theo độ liên quan: khối trúng nhiều đứng trước. Chỉ khác ở
         # chỗ khối không trúng gì thì xuống cuối, không biến mất.
-        if kind == "experience" and (num or {}).get("moi_khoi_viec", True):
+        # LUÔN GIỮ MỌI KHỐI KINH NGHIỆM. Từng là công tắc; bỏ đi vì tắt nó
+        # luôn sai: đo được 6/12 bản rơi hẳn khối WorldQuant Jan–Sep 2025,
+        # tức bản gửi đi tự khai một lỗ 9 tháng trên dòng thời gian.
+        if kind == "experience":
             con_lai = [b for b in blocks if b.kind == kind and b not in chosen]
             con_lai.sort(key=lambda b: -len(b.tags))
             chosen = chosen + con_lai
@@ -190,8 +261,7 @@ def build(profile: dict, explain: dict | None, jd_text: str = "",
                             key=lambda b: -len(b.tags))[:1]
         for block in chosen[:cap]:
             lines = _pick(block, wanted, answers,
-                          int((num or {}).get("dong")
-                              or rules.BUDGET["exp_bullets"]),
+                          rules.BUDGET["exp_bullets"],
                           bo=bi_cam, num=num, chon=pick)
             if lines:
                 sections.append(Section(kind, block.title, block.meta, lines))
@@ -203,12 +273,33 @@ def build(profile: dict, explain: dict | None, jd_text: str = "",
     certs = [l for b in blocks if b.kind == "cert" for l in b.lines if _worth(l)]
     if certs:
         sections.append(Section("cert", "", "", [Line(l) for l in certs]))
+    # MỤC KỸ NĂNG — và đây là chỗ app từng tự trói mình chặt nhất.
+    #
+    # Đo trên kho thật: 98 tập yêu cầu KHÁC NHAU trên 120 tin, mà chỉ ra 19
+    # bản CV. 12 câu nằm trên 120/120 bản, trong đó 6 câu là mục kỹ năng —
+    # vì mục kỹ năng được đổ ra NGUYÊN XI theo thứ tự trong hồ sơ, không bao
+    # giờ đụng tới. Mà đó lại là phần dày từ khoá nhất của tờ giấy.
+    #
+    # XẾP LẠI THỨ TỰ là phép may đo TRUNG THỰC NHẤT còn lại: không thêm chữ
+    # nào, không bỏ chữ nào, chỉ đưa thứ tin này hỏi lên trước. Người sàng CV
+    # đọc dòng đầu của mỗi mục; `SQL` nằm cuối dòng thứ tư thì coi như không
+    # có. Đo được: 19 -> 46 bản khi xếp mục, -> 72 bản khi xếp cả món trong
+    # mục. Đúng luật gốc: máy CHỌN và SẮP XẾP, không viết mới.
+    muc_ky = []
     for block in blocks:
-        bo = (not (num or {}).get("giu_muc")
-              and rules.bo_muc_ky_nang(block.title, " ".join(block.lines)))
+        # Mục kỹ năng toàn tính từ, không tên công nghệ nào. Từng là công
+        # tắc; đo được giữ lại thì +0 tin, nên nó chạy cố định.
+        bo = rules.bo_muc_ky_nang(block.title, " ".join(block.lines))
         if block.kind == "skill" and not bo:
-            sections.append(Section("skill", block.title, "",
-                                    [Line(" ".join(block.lines))]))
+            muc_ky.append(block)
+    rieng = (num or {}).get("rieng") or "rieng"
+    if rieng in ("vua", "rieng"):
+        muc_ky.sort(key=lambda b: -len(_ky_cua_muc(b) & wanted))
+    for block in muc_ky:
+        chu = " ".join(block.lines)
+        if rieng == "rieng":
+            chu = _xep_mon(chu, wanted)
+        sections.append(Section("skill", block.title, "", [Line(chu)]))
 
     have: set[str] = set()
     for block in blocks:
@@ -282,21 +373,20 @@ def _pick(block: Block, wanted: set[str], answers: dict, cap: int,
     lời nói. Chỗ này là chỗ nối.
     """
     num = num or {}
-    giong = str(num.get("giong", "cv"))
     kept: list[Line] = []
     for raw in sentences(block):
         goc = rules.clean(raw)
         if not _worth(goc):
             continue                      # "·", "Sep 2025" — rác bóc từ PDF
         tags = sorted(skills_in(goc))
-        phan, ly_do = rules.sentence_ok(goc, tags, set((num or {}).get("giu") or ()))
+        phan, ly_do = rules.sentence_ok(goc, tags)
         if phan == "drop":
             if bo is not None:
                 bo.append((goc, ly_do))
             continue
         # SỬA bằng chính chữ của Vin — xem cv/rewrite.py. Sửa SAU khi phán để
         # luật vẫn đọc đúng câu Vin viết, không đọc bản máy vừa chỉnh.
-        text, da_sua = rewrite.sua(goc, giong)
+        text, da_sua = rewrite.sua(goc)
         hits = sorted(set(answers.get(raw, [])) | set(answers.get(goc, [])))
         kept.append(Line(
             text, rules.sentence_weight(text, wanted, tags), hits,
