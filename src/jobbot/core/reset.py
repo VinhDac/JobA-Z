@@ -101,8 +101,7 @@ def run(conn: sqlite3.Connection) -> dict:
     # hạn, nhưng "về trạng thái ban đầu" mà máy còn nhớ bản cũ là nói dối.
     try:
         from ..dashboard import live as _live
-        _live._CV_CACHE.clear()
-        _live._BLOCK_CACHE.clear()
+        _live.quen()
     except Exception:                                  # noqa: BLE001
         pass
 

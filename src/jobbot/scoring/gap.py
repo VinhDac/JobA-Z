@@ -14,14 +14,19 @@ cộng riêng lẻ là đếm tin đó ba lần. Nên mỗi dòng là GIÁ TRỊ
 xong các dòng phía trên — tham lam từng bước, đúng như người ta làm thật:
 viết câu thứ nhất, rồi mới hỏi câu thứ hai còn đáng không.
 
-BA NHÃN, chia bằng luật chứ không bằng phán đoán:
+HAI NHÃN, chia bằng MỘT luật đo được — không phải bằng phán đoán:
 
-    VIẾT  dòng must nói chung chung, mà hồ sơ đã có câu chạm tới khái niệm
-          -> Vin CÓ LÀM, chỉ chưa viết ra. Tốn một buổi tối.
-    HỌC   dòng must gọi ĐÍCH DANH tên sản phẩm (AWS, Docker, Tableau…)
-          -> không viết được, phải đi học. Tốn hàng tháng.
-    HỎI   chung chung mà hồ sơ im hẳn -> máy không biết Vin có làm không,
-          nên hỏi một câu thay vì đoán.
+    VIẾT  phần lớn dòng must đòi nó KHÔNG gọi tên sản phẩm nào
+          -> diễn đạt lại bằng chữ của mình được. Tốn một buổi tối.
+    HỌC   phần lớn dòng must gọi ĐÍCH DANH tên sản phẩm (AWS, Tableau…)
+          -> không câu nào viết thay được, phải đi học. Tốn hàng tháng.
+
+NHÃN VIẾT LÀ MỘT LỜI HỨA, VÀ `nen_nhap` LÀ CHỖ GIỮ LỜI. Đã nói "diễn đạt lại
+được" thì phải đưa ra được DÒNG ĐỂ DIỄN ĐẠT LẠI, không phải một ô trống. Nhãn
+HỌC thì ngược lại và đúng ra là vậy: "phải dùng Tableau" không có bản nháp nào.
+
+Nhãn KHÔNG nói "người dùng đã làm việc này" — máy không biết điều đó, và bản
+trước của lời chú này nói vậy trong khi mã chưa bao giờ đo nó.
 
 Đo trên kho thật: VIẾT trọn rổ đưa phủ must 73,5% -> 90,0% (166 -> 269 tin);
 HỌC trọn rổ chỉ lên 81,8% (+31 tin). Viết ăn đứt học hơn hai lần, và tính
@@ -145,3 +150,204 @@ def thang(conn: sqlite3.Connection, co: set, sau: int = 8) -> dict:
     return {"tin": len(tin), "nen": nen, "buoc": buoc,
             "chi_viet": tin_tron(tin, chi_viet),
             "so_viet": sum(1 for b in buoc if b["viec"] == "viet")}
+
+
+# --- XƯỞNG VIẾT: máy dọn chỗ, người viết ---------------------------------
+
+def ho_hoi(conn: sqlite3.Connection, ky_nang: str, sau: int = 8) -> list:
+    """NGUYÊN VĂN mấy dòng must đang đòi `ky_nang` mà hồ sơ chưa đáp.
+
+    In nguyên văn, KHÔNG tóm tắt: người ta viết CV trúng hơn khi đọc đúng chữ
+    nhà tuyển dụng dùng, chứ không phải khi đọc bản tóm tắt của máy. Kèm tên
+    công ty để biết đây là yêu cầu thật của một tin thật.
+
+    Chia hai nhóm vì chúng dẫn tới hai việc khác nhau: dòng gọi ĐÍCH DANH tên
+    sản phẩm thì không viết thay được, dòng nói chung chung thì viết được.
+    """
+    chung, rieng = [], []
+    # MỘT DÒNG MỘT LẦN. Nhiều tin chép chung một câu mẫu ("Understanding of
+    # data visualisation and presenting analytical findings clearly" ra hai
+    # lần từ cùng một hãng tuyển), và brief in lặp thì năm dòng đọc được rút
+    # còn ba. Giữ lần xuất hiện ĐẦU — tin điểm cao nhất, vì câu lệnh đã
+    # ORDER BY score DESC.
+    da_co: set = set()
+    for row in conn.execute(
+            "SELECT company, title, score_json FROM posting WHERE kept = 1"
+            " AND realism IN ('likely','possible') AND score_json != ''"
+            " ORDER BY score DESC"):
+        try:
+            reqs = json.loads(row["score_json"]).get("requirements", [])
+        except (TypeError, ValueError):
+            continue
+        for q in reqs:
+            if not q.get("must"):
+                continue
+            chu = q.get("text", "")
+            if ky_nang not in alias_hits(norm(chu)):
+                continue
+            dau = " ".join(norm(chu).split())
+            if dau in da_co:
+                continue
+            da_co.add(dau)
+            muc = {"cong_ty": row["company"], "tin": row["title"], "chu": chu}
+            (rieng if NAMED_TOOL.search(chu) else chung).append(muc)
+    # Dòng chung chung lên trước: đó là phần Vin viết được tối nay.
+    return (chung[:sau], rieng[:sau])
+
+
+# --- DÒNG DÙNG ĐƯỢC LÀM NỀN BẢN NHÁP ------------------------------------
+#
+# Nhãn VIẾT nói: dòng này KHÔNG gọi đích danh tên sản phẩm, nên diễn đạt lại
+# bằng chữ của mình được. Đó chính là cái nền để dựng bản nháp — và là lý do
+# nhãn HỌC thì không có bản nháp nào: "phải dùng Tableau" thì không câu nào
+# viết thay được.
+#
+# NHƯNG KHÔNG PHẢI DÒNG CHUNG CHUNG NÀO CŨNG DÙNG ĐƯỢC. Đo trên kho thật,
+# `visualisation` có 22 dòng chung chung mà 12 dòng là TẢ PHẨM CHẤT
+# ("Interest in statistics, data visualisation or modelling"). Đổi câu đó
+# sang một câu CV thì đổi thành cái gì? Không có việc nào trong đó để kể.
+#
+# Nên chỉ lấy dòng TẢ VIỆC: mở đầu bằng một động từ sai khiến ("Build and
+# maintain data pipelines…") hoặc một danh động từ ("Developing and
+# maintaining…"). Đó là dòng nói HỌ MUỐN NGƯỜI NÀY LÀM GÌ — và câu CV cũng
+# là câu kể mình đã làm gì, nên hai bên cùng một hình.
+#
+# Bảng tra do người viết, cùng bản chất với NAMED_TOOL và vocab.py — không
+# phải máy sinh, và thiếu từ thì thêm vào đây.
+LAM_VIEC = (
+    "build", "rebuild", "develop", "design", "create", "implement", "deliver",
+    "maintain", "write", "produce", "automate", "analyse", "analyze", "model",
+    "optimise", "optimize", "improve", "enhance", "manage", "own", "lead",
+    "support", "use", "apply", "conduct", "perform", "run", "translate",
+    "present", "communicate", "collaborate", "partner", "research", "explore",
+    "investigate", "monitor", "test", "validate", "clean", "process",
+    "extract", "transform", "visualise", "visualize", "report", "deploy",
+    "scale", "integrate", "migrate", "refactor", "debug", "document",
+    "contribute", "drive", "define", "evaluate", "benchmark", "tune",
+    "forecast", "backtest", "prototype", "ship", "maintain", "assist",
+)
+
+# Danh từ TRẠNG THÁI mở đầu -> tả phẩm chất, không tả việc. Đứng trước nó
+# thường có một hai tính từ ("Solid experience…", "Detailed understanding…").
+PHAM_CHAT = re.compile(
+    r"^(?:[a-z+0-9-]+\s+){0,2}"
+    r"(interest|curiosity|understanding|knowledge|awareness|familiarity|"
+    r"passion|enthusiasm|exposure|appreciation|experience|experiences|"
+    r"proficiency|proficient|competency|comfort|comfortable|background|"
+    r"degree|degrees|education|grasp|attention|ability|aptitude|mindset|"
+    r"motivations?|desire|willingness|skills?|expertise|fluency|command|"
+    r"confidence|confident|strength|acumen|literacy)\b", re.I)
+
+# Danh động từ mở đầu ("Developing and maintaining…"). Trừ mấy từ đuôi -ing
+# vốn là DANH TỪ ngành nghề, không phải việc đang làm.
+_ING_KHONG_PHAI_VIEC = re.compile(
+    r"^(engineering|marketing|accounting|banking|consulting|training|"
+    r"understanding|reporting line)\b", re.I)
+
+_MO_DAU = re.compile(
+    r"^(?:the |a |an )?(?:proven |demonstrable |strong )?(?:ability to |able to )?"
+    r"([a-z][a-z-]*)", re.I)
+
+
+def ta_viec(chu: str) -> bool:
+    """Dòng yêu cầu này có TẢ MỘT VIỆC không — tức dùng làm nền bản nháp được.
+
+    Tả việc  "Build and maintain data pipelines, ensuring data quality…"
+    Tả phẩm  "Interest in statistics, data visualisation or modelling"
+
+    Chỉ dòng tả việc mới đổi sang câu CV được: câu CV cũng là câu kể mình đã
+    LÀM gì. Đưa một dòng tả phẩm chất ra làm nền bản nháp là mời người dùng
+    viết lại chính lời tự khen của nhà tuyển dụng.
+    """
+    t = " ".join((chu or "").split())
+    if len(t) < 18 or PHAM_CHAT.match(t):
+        return False
+    m = _MO_DAU.match(t)
+    if not m:
+        return False
+    tu = m.group(1).lower()
+    if tu in LAM_VIEC:
+        return True
+    return tu.endswith("ing") and not _ING_KHONG_PHAI_VIEC.match(tu)
+
+
+def nen_nhap(conn: sqlite3.Connection, ky_nang: str, sau: int = 5) -> list:
+    """Mấy dòng yêu cầu DÙNG ĐƯỢC làm nền cho bản nháp, tin điểm cao trước.
+
+    Máy KHÔNG viết câu mới — nó đưa ra chữ của NHÀ TUYỂN DỤNG, nguyên văn, để
+    người dùng viết lại thành việc CHÍNH HỌ đã làm. Mọi khẳng định trên bản
+    CV vẫn do người dùng đặt ra, và `qua_giong` ở dưới canh đúng chỗ đó.
+    """
+    chung, _rieng = ho_hoi(conn, ky_nang, sau=40)
+    return [m for m in chung if ta_viec(m["chu"])][:sau]
+
+
+# Từ nối — không tính khi so hai câu có giống nhau không.
+_RONG = frozenset(
+    "a an the and or of to in on for with by as at from into across is are be "
+    "that this those these you your our their its it we they have has had will "
+    "would can could should may might not no than then such including include "
+    "e g eg ie etc other others more most both all any some".split())
+
+
+def _goc(w: str) -> str:
+    """Cắt đuôi biến hình, thô nhưng đủ: `maintained` và `maintain` là một từ.
+
+    Không cắt thì đổi mỗi thì của động từ đã qua được chốt chặn — mà "Built
+    and maintained data pipelines, ensuring data quality" vẫn đúng là dòng
+    của nhà tuyển dụng viết ở thì quá khứ, không phải việc người dùng kể.
+    Đo được: không cắt -> 0,57; cắt -> 0,86.
+    """
+    for duoi in ("ing", "ed", "es", "s"):
+        if len(w) > len(duoi) + 2 and w.endswith(duoi):
+            return w[:-len(duoi)]
+    return w
+
+
+def _loi(text: str) -> set:
+    return {_goc(w) for w in re.findall(r"[a-z0-9+#]+", (text or "").lower())
+            if w not in _RONG and len(w) > 1}
+
+
+def qua_giong(cau: str, nen: str) -> float:
+    """Câu người dùng vừa gõ còn GIỐNG dòng yêu cầu bao nhiêu — 0…1.
+
+    Đây là chốt chặn của cả cơ chế gợi ý. Nền bản nháp là chữ của nhà tuyển
+    dụng; lưu nguyên nó vào CV là hai cái hại cùng lúc: người sàng CV nhận ra
+    ngay chữ trong tin tuyển của chính mình, và người dùng phải đỡ một khẳng
+    định mình chưa bao giờ đưa ra.
+
+    Đo bằng phần chữ có nghĩa của DÒNG YÊU CẦU còn sót lại trong câu — không
+    phải Jaccard hai chiều: người dùng viết dài thêm ra thì Jaccard tụt xuống
+    dù họ chưa bỏ chữ nào của nhà tuyển dụng.
+    """
+    a, b = _loi(cau), _loi(nen)
+    if not b:
+        return 0.0
+    return len(a & b) / len(b)
+
+
+def gan_nhat(profile: dict, ky_nang: str, sau: int = 3) -> list:
+    """Câu Vin ĐÃ VIẾT gần với kỹ năng này nhất — để nối vào, không viết lại.
+
+    Ô trống là chỗ khó nhất. Đưa câu gần nhất của chính Vin ra thì việc còn
+    lại là nối thêm một mệnh đề, chứ không phải nghĩ từ đầu. Và nó giữ đúng
+    giọng Vin — thứ mà bất kỳ khuôn câu mẫu nào cũng phá mất.
+    """
+    from ..cv.blocks import parse, sentences
+    from ..cv.build import skills_in
+
+    # Từ cùng NHÓM với kỹ năng đang nhắm: câu nói về "backtesting" là chỗ
+    # gần nhất để nói thêm về "data pipeline".
+    ra = []
+    for b in parse(str(profile.get("cv_text") or "")):
+        if b.kind not in ("experience", "project"):
+            continue
+        for s in sentences(b):
+            ky = skills_in(s)
+            if not ky:
+                continue
+            ra.append({"khoi": b.title, "chu": s.strip(), "ky": sorted(ky),
+                       "diem": len(ky)})
+    ra.sort(key=lambda x: -x["diem"])
+    return ra[:sau]

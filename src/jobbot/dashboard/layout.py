@@ -56,7 +56,8 @@ LOGO = (
 
 
 def deck(stage: str, name: str, state: str, metrics: list,
-         adjust: str = "", run: str = "Chạy", run_note: str = "") -> str:
+         adjust: str = "", run: str = "Chạy", run_note: str = "",
+         sua: tuple = ()) -> str:
     """Thanh của MỘT khúc: tên + trạng thái · số liệu · chạy/dừng · điều chỉnh.
 
     MỘT khối cho mọi chức năng. Trước đây thanh trên cùng là của cả app —
@@ -99,6 +100,13 @@ def deck(stage: str, name: str, state: str, metrics: list,
         for v, label, kind in metrics)
     knob = (f"<button class='mbtn knob' data-settings='{esc(adjust)}'"
             f" title='Điều chỉnh {esc(name)}'>⚟</button>" if adjust else "")
+    # `sua` = (đường dẫn, nhãn, mô tả) — nút dẫn sang MÀN KHÁC của cùng khúc.
+    # Là THẺ <a>, không phải nút mở tấm phủ: tấm phủ hợp với mấy công tắc bật
+    # xong đóng lại, không hợp với chỗ ngồi soạn chữ. Màn riêng thì có địa chỉ
+    # riêng, lưu lại được, Back được, và rộng bằng cả cửa sổ.
+    khac = (f"<a class='mbtn qua' href='{esc(sua[0])}'"
+            f" title='{esc(sua[2] if len(sua) > 2 else sua[1])}'>"
+            f"{esc(sua[1])}</a>" if sua else "")
     # MỘT viên thuốc NẰM NGANG: được phép RỘNG, chỉ không được CAO. Tất cả
     # trong một viên — tên khúc, số liệu, nút. Đẩy số liệu ra ngoài thì thanh
     # vỡ thành ba tầng rời rạc, nhìn bẩn.
@@ -116,7 +124,7 @@ def deck(stage: str, name: str, state: str, metrics: list,
         f" title='{esc(run_note)}'>{esc(run)}</button>"
         f"<button class=mbtn data-post='/api/stage/stop'"
         f" data-arg='{esc(stage)}'>Dừng</button>"
-        f"{knob}</span>"
+        f"{khac}{knob}</span>"
         f"</div></div>")
 
 

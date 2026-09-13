@@ -348,8 +348,16 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (posting_id, text)
     );
     """,
+    # 21 — dọn núm "độ dày từ khoá" đã bỏ.
+    #
+    # Đo trên 60 tin: xoay sang "dày" đổi ĐÚNG 0 bản CV. Và nó dựa trên
+    # "keyword density" — thứ không nhà cung cấp ATS nào công bố công thức.
+    # Giá trị cũ nằm lại trong bảng pref thì không hại gì, nhưng người đọc
+    # sau sẽ tưởng còn dùng.
+    """
+    DELETE FROM pref WHERE key = 'cv_khoa';
+    """,
 ]
-
 
 SECRET = 0o600      # chỉ chủ máy đọc — xem _lock_down
 

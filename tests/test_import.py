@@ -81,10 +81,14 @@ print("\n[xếp hạng từng dòng]")
 cases = [
     ("Built dashboards in Python and SQL for 40 stores", "strong"),
     ("I designed and built two systems in Python: signals and risk", "strong"),
-    ("Deciding which numbers deserve to be believed is the work I want to do", "drop"),
+        # Ý KIẾN GIỜ LÀ "HỎI", KHÔNG PHẢI "XOÁ". Ý kiến và kiến thức cùng hình
+    # dạng — hiện tại đơn, không số, không hành động — mà kiến thức là thứ
+    # mạnh nhất của một CV kỹ thuật. Máy đoán sai một lần là xoá mất câu mạnh
+    # nhất, nên nó đánh dấu để người viết tự quyết.
+    ("Deciding which numbers deserve to be believed is the work I want to do", "review"),
     ("The mistake was mine: the regime split was a valid partition", "drop"),
     ("Self-funded, across 17 instruments and five years of data", "review"),
-    ("I am a hard-working and motivated team player who enjoys challenges", "thin"),
+    ("I am a hard-working and motivated team player who enjoys challenges", "review"),
 ]
 for text, want in cases:
     got = _grade(text)[0]

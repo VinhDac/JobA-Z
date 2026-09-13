@@ -12,7 +12,7 @@ bấm vào server. Cả bốn đều là lỗi một dòng, và một smoke test
     python3 tests/test_web.py
 """
 
-import sys, tempfile, threading, urllib.error, urllib.request
+import json, sys, tempfile, threading, urllib.error, urllib.request
 from collections import Counter
 from pathlib import Path
 
@@ -88,7 +88,7 @@ def seeded(path: Path):
     return conn
 
 
-ROUTES = ["/", "/search", "/cv", "/profile",
+ROUTES = ["/", "/search", "/cv", "/cv/soan", "/profile",
           "/profile/muc_tieu", "/profile/import", "/profile/health",
           "/settings", "/api/profile", "/api/state"]
 
@@ -669,7 +669,7 @@ with tempfile.TemporaryDirectory() as tmp:
     js = (Path("src/jobbot/dashboard/web/live.js")).read_text()
     check("live.js chỉ chặn form có action /settings",
           "pathname !== '/settings'" in js)
-    for url in ("/cv/block?title=", "/cv/draft?id=1"):
+    for url in ("/cv/soan?moi=1", "/cv/draft?id=1"):
         _s, frag = get(url)
         if _s != 200:
             continue
@@ -730,14 +730,66 @@ with tempfile.TemporaryDirectory() as tmp:
 
     print("\n[tab CV: bấm thì mới chạy, và ba núm phải thật sự xoay]")
     from jobbot.core import prefs as _pfc
-    check("/adjust/cv có ba núm thật", all(
-        f"data-arg='{_m}:" in get("/adjust/cv")[1]
-        for _m in ("giong", "khoa", "bo_cuc")))
-    check("núm nói rõ nó KHÔNG nhồi từ khoá",
-          "không thêm từ nào" in get("/adjust/cv")[1])
-    for _a, _ma in (("khoa:day", "khoa"), ("giong:nguyen", "giong"),
-                    ("bo_cuc:gon", "bo_cuc")):
-        check(f"POST núm {_a} -> lưu được", post_form("/api/cv/num", f"arg={_a}") == 200)
+    _adj = get("/adjust/cv")[1]
+    # NÚM "độ dày từ khoá" ĐÃ BỎ: đo trên 60 tin, xoay sang "dày" đổi ĐÚNG 0
+    # bản. Và nó dựa trên "keyword density" — thứ không nhà cung cấp ATS nào
+    # công bố công thức. Một núm không đổi được gì làm mất tin vào cả bảng.
+    check("bỏ núm 'độ dày từ khoá' — đo được nó đổi 0/60 bản",
+          "khoa:" not in _adj and "Độ dày từ khoá" not in _adj)
+    check("giữ hai núm ĐO ĐƯỢC là đổi thật (60/60 bản)",
+          "giong:" in _adj and "bo_cuc:" in _adj)
+    # CÔNG TẮC = quyết định máy đang TỰ LÀM THAY, và mỗi cái kèm con số.
+    for _m in ("that_bai", "y_kien", "rui_ro", "giu_muc", "moi_khoi_viec"):
+        check(f"có công tắc {_m}", f"data-arg='{_m}:" in _adj)
+    # CON SỐ PHẢI ĐO BẰNG PHÉP TRỪ, không phải đếm khớp mẫu. Tôi đã sai đúng
+    # chỗ đó: luật RISKY gặp câu có bằng chứng cứng thì chỉ đánh dấu "xem lại"
+    # chứ không bỏ, nên "đang bỏ 1 câu" là nói dối — lật công tắc đổi 0/40 bản.
+    # Mỗi công tắc phải kèm tình trạng HÔM NAY của chính hồ sơ này. Hồ sơ mẫu
+    # của test không có câu nào dính luật, nên nó phải NÓI RA điều đó — im
+    # lặng để người dùng tự bấm thử rồi không thấy khác là cách chắc chắn
+    # nhất làm họ thôi tin cả bảng.
+    import re as _reA
+    _now = _reA.findall(r"class=swnow>(.*?)</span>", _adj)
+    check(f"mỗi công tắc kèm tình trạng thật ({len(_now)} dòng)", len(_now) == 5)
+    check("và không dòng nào để trống", all(x.strip() for x in _now))
+    check("phân biệt BỎ với chỉ ĐÁNH DẤU — hai thứ khác nhau",
+          "xem lại" in _adj or "không có câu nào dính luật" in _adj
+          or "đang bỏ" in _adj)
+    # TẤM ĐIỀU CHỈNH KHÔNG ĐƯỢC GÕ CỨNG CÂU CỦA AI. Bản trước trích thẳng
+    # câu trong CV của một người vào phần giải thích; hồ sơ khác mở lên thì đó
+    # là câu của người lạ, và panel thành tờ quảng cáo chứ không phải bản mô
+    # tả hồ sơ của người đang đọc. Ví dụ phải lấy từ hồ sơ ĐANG MỞ.
+    import pathlib as _plG
+    # Bỏ CHÚ THÍCH trước khi soi — lời chú giải thích vì sao không gõ cứng có
+    # nhắc lại chính mấy câu đó, và bắt lời chú của mình là test vô dụng.
+    _cvl_src = "\n".join(
+        l.split("#")[0] for l in
+        (_plG.Path(__file__).resolve().parent.parent
+         / "src/jobbot/dashboard/views/cvlist.py")
+        .read_text(encoding="utf-8").splitlines())
+    for _cau in ("Self-funded", "drawdown ran", "Profit on its own",
+                 "WorldQuant", "Compute · Method"):
+        check(f"panel KHÔNG gõ cứng «{_cau[:22]}»", _cau not in _cvl_src)
+    check("ví dụ được lấy từ hồ sơ đang mở", "vi_du" in _cvl_src)
+    # Và tầng dữ liệu phải TRẢ VỀ câu thật, không chỉ con số.
+    from jobbot.dashboard import live as _lvg
+    _cg = db.connect(Path(tmp) / "jobbot.db")
+    from jobbot.profile import store as _stg
+    _cvtext_mau = (_stg.load(_cg).get("cv_text") or "").replace("\n", " ")
+    _gia = _lvg.cv_gia(_cg)
+    _cg.close()
+    check("cv_gia trả về VÍ DỤ THẬT cho từng luật",
+          all("vi_du" in (_gia.get(k) or {})
+              for k in ("that_bai", "y_kien", "rui_ro")))
+    check("mọi ví dụ đều là câu CÓ TRONG hồ sơ, không phải câu máy bịa",
+          all(v[:28] in _cvtext_mau
+              for k in ("that_bai", "y_kien", "rui_ro")
+              for v in ((_gia.get(k) or {}).get("vi_du") or [])))
+    for _a in ("giong:nguyen", "bo_cuc:gon", "rui_ro:1", "moi_khoi_viec:0"):
+        check(f"POST {_a} -> lưu được", post_form("/api/cv/num", f"arg={_a}") == 200)
+    check("núm đã bỏ -> 400", post_form("/api/cv/num", "arg=khoa:day") == 400)
+    check("công tắc nhận sai giá trị -> 400",
+          post_form("/api/cv/num", "arg=rui_ro:xx") == 400)
     check("giá trị lạ -> 400, không lưu bừa",
           post_form("/api/cv/num", "arg=khoa:xxx") == 400)
     # ĐỔI CÂU: máy chỉ nhận câu, không nhận chữ tự do — và id tin phải là số.
@@ -783,7 +835,7 @@ with tempfile.TemporaryDirectory() as tmp:
         check(f"bố cục {_n} dòng -> đúng {_n} dòng",
               len(_pk(_kh, set(), {}, _n, num={"dong": _n})) == _n)
     _cvn.close()
-    for _a in ("khoa:thuong", "giong:cv", "bo_cuc:thuong"):
+    for _a in ("giong:cv", "bo_cuc:thuong", "rui_ro:0", "moi_khoi_viec:1"):
         post_form("/api/cv/num", f"arg={_a}")
 
     print("\n[bản chấm điểm: máy phải GIẢI TRÌNH, không chỉ quyết]")
@@ -827,6 +879,42 @@ with tempfile.TemporaryDirectory() as tmp:
     check("lý do dịch sang tiếng Việt, không để nguyên tiếng Anh",
           "kể thất bại" in _rh and "outcome failure" not in _rh)
     check("nói ra chỗ hồ sơ CÂM", "hồ sơ câm" in _rh and "c++" in _rh)
+
+    print("\n[BACKEND ↔ FRONTEND: một luật, một kho nhớ, một chỗ quên]")
+    import ast as _ast5, pathlib as _pl5
+    _live_src = (_pl5.Path(__file__).resolve().parent.parent
+                 / "src/jobbot/dashboard/live.py").read_text(encoding="utf-8")
+    _all_src = "\n".join(
+        f.read_text(encoding="utf-8")
+        for f in (_pl5.Path(__file__).resolve().parent.parent / "src").rglob("*.py"))
+
+    # MỘT KHO NHỚ. Trước đây ba cache (_CV_CACHE, _BLOCK_CACHE, _HUT_CACHE)
+    # cùng dựng trên một khoá nhưng bị xoá ở BA TẬP CHỖ khác nhau: reset quên
+    # _HUT_CACHE, route xoay núm quên _BLOCK_CACHE, batch chỉ xoá _CV_CACHE.
+    # Ba thứ cùng đầu vào mà hết hạn theo ba lịch thì màn hình trộn số cũ với
+    # số mới, và không ai lần ra được.
+    # Bỏ CHÚ THÍCH trước khi soi: lời chú giải thích vì sao mấy cache đó biến
+    # mất có nhắc tên chúng, và bắt chính lời chú của mình là test vô dụng.
+    _code = "\n".join(
+        l.split("#")[0] for l in _all_src.splitlines())
+    for _c in ("_CV_CACHE", "_BLOCK_CACHE", "_HUT_CACHE"):
+        check(f"không còn cache rời {_c}", _c not in _code)
+    check("có đúng MỘT kho nhớ cho tầng CV", _all_src.count("_NHO: dict = {}") == 1)
+    check("và đúng MỘT chỗ quên", "def quen()" in _live_src)
+    # Mọi chỗ đụng tới hồ sơ/núm phải gọi quen(), không tự xoá tay.
+    check("mọi chỗ xoá đều đi qua quen()",
+          _all_src.count(".clear()") == _all_src.count("_NHO.clear()")
+          + _all_src.count("opened.clear()") + _all_src.count("vua_phu.clear()")
+          or ".quen()" in _all_src)
+
+    # MỘT LUẬT. `cv_gia` (tấm Điều chỉnh) và `build` (bộ dựng) phải hỏi CÙNG
+    # một hàm về "mục kỹ năng này có bị bỏ không". Trước đây cv_gia tra một
+    # tập hằng đã bị làm rỗng, nên panel báo "không bỏ mục nào" trong khi bộ
+    # dựng vẫn bỏ thật — hai tầng nói hai điều về cùng một việc.
+    check("tấm Điều chỉnh và bộ dựng dùng CHUNG luật bỏ mục kỹ năng",
+          _all_src.count("bo_muc_ky_nang(") >= 2)
+    check("và không còn tra bảng hằng đã chết",
+          "DROP_SKILL_GROUPS" not in _code)
 
     print("\n[tấm phủ KHÔNG được chắn cả trang khi đang đóng]")
     # LỖI THẬT, và là loại tệ nhất: cả app không bấm được gì.
@@ -1975,11 +2063,245 @@ with tempfile.TemporaryDirectory() as tmp:
     _conn5.close()
     check("lưới lọc còn nguyên sau mấy cú POST đó", bool(_titles5.strip()))
 
+    print("\n[CV: màn con SOẠN KHỐI — chỗ ngồi viết, không phải tấm phủ]")
+    # Tấm phủ /cv/block cũ rộng 380px và CÂM: gõ xong bấm Lưu, rồi chỉ biết
+    # câu vừa viết bị luật bỏ nếu tự đi dựng lại cả loạt bản mà đọc. Màn con
+    # phải thật sự khác nó, không phải cùng cái form dán sang trang khác.
+    from jobbot.dashboard import live as _lv7
+    from jobbot.dashboard.views import cvlist as _cvl7
+    _c7 = db.connect(Path(tmp) / "jobbot.db")
+    _d7 = _lv7.cv_soan(_c7, "")
+    _ten7 = _d7["khoi"][0]["title"] if _d7["khoi"] else ""
+    _c7.close()
+
+    check("thanh điều khiển tab CV có CỬA VÀO màn soạn",
+          "/cv/soan" in get("/cv")[1])
+    _s7, _soan = get("/cv/soan?khoi=" + urllib.parse.quote(_ten7, safe=""))
+    check("/cv/soan mở đúng khối được gọi tên", _s7 == 200 and _ten7[:30] in _soan)
+    check("và mọi câu của khối đó ra ô soạn",
+          _soan.count("class=cvdraft") >= len(_d7["khoi"][0]["lines"]))
+    # ĐÂY LÀ LÝ DO MÀN NÀY TỒN TẠI: mỗi câu kèm luật nói gì.
+    check("mỗi câu có dải chấm — luật nói gì về nó",
+          _soan.count("class=sntfoot") == len(_d7["khoi"][0]["lines"]))
+    check("và chấm bằng CHỮ đọc được, không phải mã luật",
+          any(x in _soan for x in ("lên CV", "xem lại", "luật bỏ")))
+    check("khối đang mở được đánh dấu trong danh sách bên trái",
+          "blk on" in _soan or "blk dead on" in _soan)
+    check("nút quay lại danh sách bản", "href='/cv'" in _soan)
+    # Thanh bên phải sáng ở CV, không phải một tab thứ sáu: đây là màn CON.
+    check("màn con vẫn thuộc tab CV trên thanh bên",
+          "navlink on' href='/cv'" in _soan.replace('"', "'"))
+
+    # KHÔNG được gọi cv_versions: đó là lượt dựng 5,3 giây, trả giá mỗi lần
+    # mở chỗ soạn. Bỏ chú thích trước khi soi — chính lời giải thích "không
+    # gọi cv_versions" cũng chứa cái tên đó.
+    _srv7 = (Path(__file__).resolve().parent.parent
+             / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
+    _route7 = _srv7.split('if path == "/cv/soan":')[1].split("if path ==")[0]
+    _route7 = "\n".join(l.split("#")[0] for l in _route7.splitlines())
+    check("màn soạn KHÔNG gọi lượt dựng 5 giây", "cv_versions" not in _route7)
+
+    # Lưu xong phải về ĐÚNG CHỖ vừa đứng, không bị hất sang danh sách bản.
+    # urlopen ĐI THEO chuyển hướng, nên phải chặn nó lại mới đọc được Location
+    # — theo xong thì mọi đường đều ra 200 và bài test không kiểm được gì.
+    class _KhongTheo(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+
+    def post_ve(path, body):
+        """POST rồi trả về (mã, chỗ nó bảo đi tiếp)."""
+        o = urllib.request.build_opener(_KhongTheo)
+        req = urllib.request.Request(base.rstrip("/") + path, data=body.encode())
+        try:
+            with o.open(req, timeout=25) as r:
+                return r.status, r.headers.get("Location", "")
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers.get("Location", "")
+
+    _ma, _ve = post_ve("/cv/block", "kind=project&title=Thu+Nghiem&was="
+                       "&line=Wrote+a+small+tool+in+Python+that+cut+the+run+to+9+minutes.")
+    check("lưu khối -> quay lại ĐÚNG khối vừa sửa, không hất sang danh sách bản",
+          _ma == 303 and _ve.startswith("/cv/soan?khoi="), f"{_ma} {_ve}")
+    _c7 = db.connect(Path(tmp) / "jobbot.db")
+    _txt7 = store.load(_c7).get("cv_text") or ""
+    check("và câu vừa gõ nằm trong CV GỐC, không phải bảng riêng",
+          "cut the run to 9 minutes" in _txt7)
+    _c7.close()
+    _s7, _lai = get("/cv/soan?khoi=Thu+Nghiem")
+    check("mở lại khối vừa lưu thì thấy câu đó", "cut the run to 9 minutes" in _lai)
+    check("và nó được chấm ngay, không phải chờ dựng lại",
+          "class=sntfoot" in _lai)
+    # Xoá khối -> vẫn về màn soạn, không rơi vào khối vừa xoá.
+    _ma, _ve = post_ve("/cv/block",
+                       "kind=project&title=Thu+Nghiem&was=Thu+Nghiem&kill=1&line=")
+    check("xoá khối -> về màn soạn, KHÔNG mở lại khối vừa xoá",
+          _ma == 303 and _ve == "/cv/soan", f"{_ma} {_ve}")
+    _c7 = db.connect(Path(tmp) / "jobbot.db")
+    check("và câu đó biến khỏi CV gốc",
+          "cut the run to 9 minutes" not in (store.load(_c7).get("cv_text") or ""))
+    _c7.close()
+
+    # Tấm phủ cũ phải BIẾN MẤT, không nằm lại làm cửa thứ hai vào cùng một việc.
+    check("tấm phủ soạn khối cũ đã bỏ", not hasattr(_cvl7, "edit"))
+    check("và /cv/block không còn trả trang", get("/cv/block?title=")[0] == 404)
+
+    print("\n[CV: VIẾT CÂU MỚI và SỬA KHỐI là MỘT việc, một màn]")
+    # Xưởng viết từng là tấm phủ riêng (/cv/viet + POST /api/cv/viet): đọc yêu
+    # cầu ở một màn, gõ ở màn khác, HAI đường ghi vào cùng một `cv_text` phải
+    # ngồi trông nhau. Nhưng viết một câu mới CHÍNH LÀ sửa một khối.
+    check("tấm phủ xưởng viết đã bỏ", not hasattr(_cvl7, "viet"))
+    check("và /cv/viet không còn trả trang", get("/cv/viet?ky=python")[0] == 404)
+    check("đường ghi thứ hai cũng bỏ — một phép ghi, một chỗ",
+          post_form("/api/cv/viet", "cau=x&khoi=y&ky=z") == 404)
+    # Nút VIẾT ở thang HỤT phải dẫn vào màn soạn, không mở tấm phủ. Kho thử
+    # có thể không đẻ ra dòng VIẾT nào (thang hụt rỗng), nên soi thẳng bộ vẽ:
+    # bài test phải kiểm cái nút, không kiểm kho tin.
+    _gia_hut = {"tin": 10, "nen": 4, "chi_viet": 7, "so_viet": 1,
+                "buoc": [{"ky_nang": "sql", "viec": "viet", "them": 3,
+                          "cong_don": 3, "dong": 5, "rieng": 0}]}
+    _hut7 = _cvl7.hut(_gia_hut)
+    check("nút Viết ở thang HỤT dẫn thẳng vào màn soạn",
+          "/cv/soan?ky=sql" in _hut7 and "/cv/viet" not in _hut7)
+    check("và là LIÊN KẾT, không phải nút mở tấm phủ",
+          "data-settings" not in _hut7)
+    check("/cv không còn đường nào trỏ vào tấm phủ cũ", "/cv/viet" not in get("/cv")[1])
+
+    _s7, _br = get("/cv/soan?ky=sql")
+    check("/cv/soan?ky= mở MÀN VIẾT ba bước",
+          _s7 == 200 and _br.count("class=buocso") == 3)
+    # Kho thử đòi `sql` toàn bằng dòng TẢ PHẨM CHẤT ("Comfortable with SQL"),
+    # nên KHÔNG có nền bản nháp nào — và đó là hành vi đúng: không có việc nào
+    # trong "Comfortable with SQL" để kể lại.
+    check("dòng tả phẩm chất KHÔNG được đưa ra làm nền",
+          "&nen=" not in _br)
+    check("nhưng vẫn đọc được, trong thẻ gấp",
+          "tả phẩm chất chứ không tả việc" in _br)
+    check("brief in nguyên văn dòng yêu cầu thật của tin", "Comfortable with SQL" in _br)
+    check("và nói rõ tin đó của công ty nào", "Man Group" in _br)
+    check("chưa chọn khối thì bước 3 chỉ về bước 2",
+          "Chọn khối ở bước 2" in _br)
+    check("luật gốc nói thẳng ra chỗ sắp gõ: máy KHÔNG viết hộ",
+          "không biết bạn đã làm gì" in _br)
+    # Thanh trên phải nói ĐỘ PHỦ HÔM NAY — con số duy nhất cho biết màn này có
+    # ích không. Delta thuộc về nhật ký, nơi nó có dấu thời gian.
+    check("thanh điều khiển nói độ phủ hôm nay", "tin hồ sơ đáp trọn" in _br)
+
+    _, _vua = get("/cv/soan?khoi=" + urllib.parse.quote(_ten7, safe="") + "&ky=sql")
+    check("chọn khối rồi thì bước 3 mở ra ô gõ",
+          "class=cvdraft" in _vua and "name=them value=1" in _vua)
+    check("nút Lưu nói rõ câu này đi vào ĐÂU", "Thêm câu này vào" in _vua)
+    check("chip kỹ năng đang nhắm được đánh dấu", "hmini on" in _vua or "ky=sql" in _vua)
+    # MÀN VIẾT KHÁC MÀN SỬA KHỐI: vào để viết MỘT câu thì không đổ 16 câu cũ ra,
+    # ô cần gõ sẽ bị chôn xuống dưới hai màn hình.
+    check("màn viết KHÔNG đổ cả khối ra", "class=sntfoot" not in _vua)
+    _, _sua = get("/cv/soan?khoi=" + urllib.parse.quote(_ten7, safe=""))
+    check("còn màn SỬA KHỐI thì có, và có dải chấm từng câu",
+          "class=sntfoot" in _sua and "class=buocso" not in _sua)
+
+    print("\n[CV: nhãn VIẾT phải giữ lời — có nền bản nháp, và có chốt chặn]")
+    # Thang hụt dán nhãn VIẾT khi phần lớn dòng must KHÔNG gọi đích danh tên
+    # sản phẩm — tức diễn đạt lại bằng chữ mình được. Nói vậy rồi mà chỉ đưa ra
+    # một ô trống thì cái nhãn là lời hứa suông.
+    _nen7 = "Improve research frameworks and data pipelines"
+    # GHÉP THÊM một dòng must, KHÔNG ghi đè cả score_json: bản chấm còn mấy
+    # khoá khác mà trang chi tiết tin đọc tới, xoá sạch là route đó sập.
+    _cn7 = db.connect(Path(tmp) / "jobbot.db")
+    for _r7 in _cn7.execute("SELECT id, score_json FROM posting"
+                            " WHERE company = 'Man Group'").fetchall():
+        _j7 = json.loads(_r7["score_json"]) if _r7["score_json"] else {}
+        # Hàng THẬT do bộ chấm đẻ ra luôn có `met`; thiếu nó là trang chi tiết
+        # tin sập — fixture phải giống hàng thật, không phải giống cái vừa đủ.
+        _j7.setdefault("requirements", []).append(
+            {"text": _nen7, "must": True, "met": False, "evidence": ""})
+        _cn7.execute("UPDATE posting SET score_json = ? WHERE id = ?",
+                     (json.dumps(_j7), _r7["id"]))
+    _cn7.commit(); _cn7.close()
+    from jobbot.dashboard import live as _lv9
+    _lv9.quen()
+    _, _nb = get("/cv/soan?ky=data%20pipeline")
+    check("dòng TẢ VIỆC được đưa ra làm nền bản nháp", _nen7 in _nb)
+    check("và bấm được — nó rơi thẳng vào ô soạn",
+          "&nen=Improve%20research%20frameworks" in _nb)
+
+    _mo = ("/cv/soan?khoi=" + urllib.parse.quote(_ten7, safe="")
+           + "&ky=data%20pipeline&nen=" + urllib.parse.quote(_nen7, safe=""))
+    _, _co_nen = get(_mo)
+    check("mở ra thì nền nằm sẵn trong ô", _nen7 in _co_nen)
+    check("và ghi rõ đó là chữ của NHÀ TUYỂN DỤNG, chưa phải câu của bạn",
+          "chữ của nhà tuyển dụng" in _co_nen)
+    check("bước 1 đã xong thì gập lại, đổi được", "Đổi dòng" in _co_nen)
+    # Cột trái là "viết vào ĐÂU"; bấm một khối không được vứt mất "viết CÁI GÌ".
+    check("bấm khối khác vẫn giữ nguyên đích và nền",
+          "ky=data%20pipeline&nen=Improve" in _co_nen.replace("&amp;", "&"))
+
+    # CHỐT CHẶN: lưu nguyên chữ của họ thì không cho qua, và chữ vừa gõ còn nguyên.
+    _ma, _ve = post_ve("/cv/block",
+                       "them=1&title=" + urllib.parse.quote(_ten7, safe="")
+                       + "&ky=data+pipeline&nen="
+                       + urllib.parse.quote(_nen7, safe="")
+                       + "&line=" + urllib.parse.quote(_nen7, safe=""))
+    check("chép nguyên dòng của nhà tuyển dụng -> KHÔNG cho lưu",
+          _ma == 303 and "loi=" in _ve, f"{_ma} {_ve}")
+    _c7 = db.connect(Path(tmp) / "jobbot.db")
+    check("và nó KHÔNG lọt vào CV gốc",
+          _nen7 not in (store.load(_c7).get("cv_text") or ""))
+    _c7.close()
+    _, _sau_loi = get(_ve)
+    check("chữ vừa gõ còn nguyên để sửa tiếp", _nen7 in _sau_loi)
+    check("và lời từ chối đứng ngay trên ô", "chưa phải việc BẠN làm" in _sau_loi)
+
+    # Viết lại thành việc của mình thì qua.
+    _that = ("Rebuilt the nightly research pipeline in Python, cutting a "
+             "40-minute reconciliation to 90 seconds across 17 feeds.")
+    _c7 = db.connect(Path(tmp) / "jobbot.db")
+    _truoc7 = (store.load(_c7).get("cv_text") or "")
+    _c7.close()
+    _ma, _ve = post_ve("/cv/block",
+                       "them=1&title=" + urllib.parse.quote(_ten7, safe="")
+                       + "&ky=data+pipeline&nen="
+                       + urllib.parse.quote(_nen7, safe="")
+                       + "&line=" + urllib.parse.quote(_that, safe=""))
+    check("viết lại thành việc của mình -> cho lưu", _ma == 303 and "loi=" not in _ve)
+    _c7 = db.connect(Path(tmp) / "jobbot.db")
+    _sau7 = (store.load(_c7).get("cv_text") or "")
+    _c7.close()
+    check("và câu đó vào CV gốc", _that in _sau7)
+    # THÊM nghĩa là THÊM: màn viết chỉ gửi đúng MỘT câu, nó không thấy mấy câu
+    # cũ nên không được phép thay chúng.
+    _mat = [l.strip() for l in _truoc7.splitlines()
+            if len(l.strip()) > 40 and l.strip() not in _sau7]
+    check("câu cũ trong khối KHÔNG bị nuốt mất", not _mat, str(_mat[:1]))
+    check("lưu xong thì BỎ nền đi, không mời lưu nhầm lần nữa", "nen=" not in _ve)
+
+    # LƯU XONG BRIEF PHẢI CÒN ĐÓ: người ta thường viết hai câu về cùng chỗ hụt.
+    _ma, _ve = post_ve("/cv/block", "kind=project&title=Thu+Nghiem+2&was=&ky=sql"
+                       "&line=Tuned+the+SQL+that+backs+the+daily+report,+cutting+it+to+9+s.")
+    check("lưu từ màn viết -> quay lại ĐÚNG khối và GIỮ brief đang mở",
+          _ma == 303 and "khoi=Thu%20Nghiem%202" in _ve and _ve.endswith("&ky=sql"),
+          f"{_ma} {_ve}")
+
+    # ĐO THẬT, KHÔNG HỨA. Trước đây phép đo "trước -> sau" chỉ có ở đường ghi
+    # của xưởng viết; đường ghi của khối thì im lặng. Nay một đường, nên nó
+    # phải mang theo phép đo — nếu không, gộp hai màn là mất một con số.
+    from jobbot.core import journal as _jn7
+    _dong7 = [e.text for e in _jn7.log.tail("cv", limit=40)]
+    check("nhật ký ghi việc vừa làm",
+          any("Thu Nghiem 2" in t for t in _dong7), " | ".join(_dong7[:3]))
+    check("và ĐO LẠI ĐỘ PHỦ, không chỉ báo đã lưu",
+          any("đáp trọn" in t and " tin" in t for t in _dong7),
+          " | ".join(_dong7[:3]))
+    # Câu viết ra mà KHÔNG mở khoá thêm tin nào cũng phải nói — im lặng ở đúng
+    # chỗ đó là để người viết tưởng câu vừa viết có ăn.
+    check("không đổi cũng nói ra, không im lặng",
+          any("vẫn đáp trọn" in t for t in _dong7) or
+          any("->" in t for t in _dong7), " | ".join(_dong7[:3]))
+    post_ve("/cv/block", "kind=project&title=Thu+Nghiem+2&was=Thu+Nghiem+2&kill=1&line=")
+
     print("\n[tab CV phải mở NHANH]")
     import time as _t5
     from jobbot.dashboard import live as _live5
     _conn6 = db.connect(Path(tmp) / "jobbot.db")
-    _live5._BLOCK_CACHE.clear()
+    _live5.quen()
     _t0 = _t5.perf_counter(); _live5.cv_blocks(_conn6); _cold = _t5.perf_counter() - _t0
     _t0 = _t5.perf_counter(); _live5.cv_blocks(_conn6); _warm = _t5.perf_counter() - _t0
     # Đo trên máy Vin: 7,8 giây MỖI LẦN gọi, và tab CV gọi nó mỗi lần mở.
@@ -2025,14 +2347,19 @@ _depth, _seen = 0, {}
 for _line in _css.splitlines():
     _m = _re2.match(r"\s*(\.[a-zA-Z][\w-]*)\s*\{(.*)$", _line)
     if _m and _depth == 0:
-        _disp = _re2.search(r"display\s*:\s*([a-z-]+)", _m.group(2))
-        if _disp:
-            _seen.setdefault(_m.group(1), set()).add(_disp.group(1))
+        # `position` cũng phải soi, không riêng `display`: nút "Sửa khối" trên
+        # thanh điều khiển từng mang lớp `.side` — trùng tên THANH BÊN, vốn
+        # position:fixed — nên nó bay ra góc trái màn hình, ngoài cả thanh
+        # chứa nó. HTML đúng, DOM đúng, chỉ có chỗ đứng là sai.
+        for _thuoc in ("display", "position"):
+            _hit = _re2.search(_thuoc + r"\s*:\s*([a-z-]+)", _m.group(2))
+            if _hit:
+                _seen.setdefault((_m.group(1), _thuoc), set()).add(_hit.group(1))
     _depth += _line.count("{") - _line.count("}")
 _clash = {k: v for k, v in _seen.items() if len(v) > 1}
 # .frow từng vừa là hàng lọc (flex) vừa là hàng phễu (grid): ô tải CV lên và
 # hàng lọc hồ sơ bị bẻ thành lưới 3 cột. .prow tương tự với thanh tiến độ.
-check("không class nào có hai kiểu display", not _clash, str(_clash))
+check("không class nào có hai kiểu display / position", not _clash, str(_clash))
 
 print("\n[nút trong form — bấm không được nuốt mất form]")
 _js = (Path(__file__).resolve().parent.parent

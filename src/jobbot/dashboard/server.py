@@ -11,7 +11,7 @@ import socket
 import threading
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from ..core import db
 from ..core import journal, scheduler as sched
@@ -24,7 +24,7 @@ from . import upload
 from .views import cv as cvview
 from .views import cvhealth, importcv
 from .filters import JobFilter
-from .views import (cvlist, home, jobs, profile, search,
+from .views import (cvlist, cvsoan, home, jobs, profile, search,
                     settings, track)
 
 HOST = "127.0.0.1"          # chỉ máy này truy cập được. Không mở ra mạng.
@@ -34,6 +34,25 @@ HOST = "127.0.0.1"          # chỉ máy này truy cập được. Không mở r
 # nói thẳng, không im lặng.
 STAGES = {"search": "Search", "cv": "CV", "track": "Quản lí"}
 DEFAULT_PORT = 8765
+
+
+def _dap_tron(conn, answers: dict) -> int:
+    """Bao nhiêu TIN mà hồ sơ đáp TRỌN — mọi dòng must đều nói được.
+
+    Đơn vị của cả tầng CV. Đếm theo LƯỢT khớp thì một kỹ năng xuất hiện 50 lần
+    trông như việc quan trọng nhất trong khi nó chỉ mở khoá thêm 19 tin; đếm
+    theo tin hết hụt thì xếp đúng thứ tự việc (xem scoring/gap.py).
+
+    Gọi HAI LẦN quanh mỗi phép ghi vào CV, để nhật ký nói được "129 -> 141"
+    bằng số đo thật chứ không phải lời hứa trước khi viết.
+    """
+    from ..scoring.gap import _tin, tin_tron
+    from ..scoring.score import build_index
+    from ..scoring.vocab import alias_hits
+    co: set = set()
+    for e in build_index(answers):
+        co |= set(alias_hits(e.normal))
+    return tin_tron(_tin(conn), co)
 
 
 def _segments(path: str) -> list[str]:
@@ -450,14 +469,28 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
 
-        if path == "/cv/block":
+        if path == "/cv/soan":
+            # MÀN CON của tab CV — chỗ soạn khối. Thay cho tấm phủ /cv/block
+            # cũ: tấm phủ rộng 380px và câm, màn này rộng cả cửa sổ và chấm
+            # từng câu. Xem views/cvsoan.py.
+            #
+            # KHÔNG gọi cv_versions ở đây. Tấm phủ cũ gọi nó chỉ để lấy danh
+            # sách kỹ năng còn câm — mà đó là lượt dựng 5,3 giây, trả giá mỗi
+            # lần mở chỗ soạn. Thang HỤT (0,6 giây, có nhớ) trả lời đúng câu
+            # đó và trả lời rõ hơn: viết về cái gì thì thêm bao nhiêu tin.
             conn = db.connect()
             try:
-                want = (query.get("title") or [""])[0]
-                blocks = live.cv_blocks(conn)
-                found = next((b for b in blocks if b["title"] == want), None)
-                gaps = live.cv_versions(conn)["gaps"]
-                return self._html(cvlist.edit(found, gaps))
+                from ..cv import batch
+                d = live.cv_soan(conn, (query.get("khoi") or [""])[0],
+                                 (query.get("ky") or [""])[0].strip()[:40],
+                                 (query.get("nen") or [""])[0].strip()[:400])
+                return self._html(cvsoan.render(
+                    khoi=d["khoi"], chon=d["chon"], cau=d["cau"], hut=d["hut"],
+                    brief=d["brief"], ky=(d["brief"] or {}).get("ky", ""),
+                    nen=d["nen"], loi=(query.get("loi") or [""])[0][:200],
+                    ten=(query.get("khoi") or [""])[0][:120], dap=d["dap"],
+                    moi=bool(query.get("moi")) and d["chon"] is None,
+                    stage=batch.stage(conn)))
             finally:
                 conn.close()
 
@@ -495,7 +528,8 @@ class Handler(BaseHTTPRequestHandler):
                 if stage == "search":
                     return self._html(search.adjust(live.sieve(conn)))
                 if stage == "cv":
-                    return self._html(cvlist.adjust(live.cv_nut(conn)))
+                    return self._html(cvlist.adjust(live.cv_nut(conn),
+                                                    live.cv_gia(conn)))
                 return self._html(
                     f"<div class=sheethead>Điều chỉnh · {STAGES[stage]}</div>"
                     "<div class=sheetwait>chưa có gì để chỉnh ở khúc này</div>")
@@ -689,16 +723,27 @@ class Handler(BaseHTTPRequestHandler):
             # tự đổi thành "Cập nhật" — xem cv/batch.stage.
             from ..core import prefs
             ma, _, gia = form.get("arg", [""])[0].partition(":")
-            KHOA = {"giong": (prefs.CV_GIONG, prefs.GIONG),
-                    "khoa": (prefs.CV_KHOA, prefs.KHOA),
-                    "bo_cuc": (prefs.CV_BO_CUC, prefs.BO_CUC)}
-            if ma not in KHOA or gia not in KHOA[ma][1]:
+            # NÚM nhiều mức và CÔNG TẮC bật/tắt đi chung một đường: cả hai đều
+            # là "đổi một quyết định của tầng CV", và đẻ hai route cho cùng một
+            # việc là đẻ hai chỗ có thể lệch nhau.
+            NHIEU = {"giong": (prefs.CV_GIONG, prefs.GIONG),
+                     "bo_cuc": (prefs.CV_BO_CUC, prefs.BO_CUC)}
+            TAT_BAT = {"that_bai": prefs.CV_GIU_THAT_BAI,
+                       "y_kien": prefs.CV_GIU_Y_KIEN,
+                       "rui_ro": prefs.CV_GIU_RUI_RO,
+                       "giu_muc": prefs.CV_GIU_MUC,
+                       "moi_khoi_viec": prefs.CV_MOI_KHOI_VIEC}
+            if ma in NHIEU and gia in NHIEU[ma][1]:
+                khoa, val = NHIEU[ma][0], gia
+            elif ma in TAT_BAT and gia in ("0", "1"):
+                khoa, val = TAT_BAT[ma], gia
+            else:
                 return self._json({"ok": False, "note": "núm lạ"}, status=400)
             conn = db.connect()
             try:
-                prefs.put(conn, KHOA[ma][0], gia)
-                live._CV_CACHE.clear()
-                journal.log.emit(journal.CV, f"núm {ma} -> {gia}")
+                prefs.put(conn, khoa, val)
+                live.quen()
+                journal.log.emit(journal.CV, f"núm {ma} -> {val}")
             finally:
                 conn.close()
             return self._json({"ok": True, "reload": True})
@@ -1058,6 +1103,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "note": "đang in… sẽ hiện trong Finder"})
 
         if path == "/cv/block":
+            # CHỈ GHI. Màn đọc là /cv/soan; đường này không còn trả trang nào.
             # Ghi thẳng vào cv_text — MỘT nguồn sự thật. write_block chỉ đụng
             # đúng khối đó, các khối khác giữ nguyên định dạng (có test khứ hồi
             # trong test_cv.py, vì đây là chỗ dễ nuốt mất khối nhất).
@@ -1066,12 +1112,52 @@ class Handler(BaseHTTPRequestHandler):
                 from ..cv.blocks import write_block
                 title = form.get("title", [""])[0].strip()
                 was = form.get("was", [""])[0].strip()
+                ky = form.get("ky", [""])[0].strip()[:40]
+                nen = form.get("nen", [""])[0].strip()[:400]
                 body = [l.strip() for l in form.get("line", []) if l.strip()]
                 if form.get("kill"):
                     body = []                      # thân rỗng = xoá khối
+                # HAI LỐI GHI, MỘT ĐƯỜNG. Màn SỬA KHỐI gửi cả thân khối; màn
+                # VIẾT MỘT CÂU chỉ gửi đúng câu mới, kèm `them=1` — nó không
+                # thấy mấy câu cũ nên không được phép thay chúng. Cả hai cùng
+                # đi qua `write_block`, cùng chốt chặn, cùng phép đo.
+                if form.get("them") and title and body:
+                    from ..cv.blocks import parse as parse_cv, sentences
+                    cu = next((b for b in parse_cv(
+                        store.load(conn).get("cv_text") or "")
+                        if b.title == title), None)
+                    if cu is not None:
+                        body = [x.strip() for x in sentences(cu) if x.strip()] + body
+                        form.setdefault("kind", [cu.kind])
+                        form.setdefault("meta", [cu.meta])
+                # CHỐT CHẶN CỦA CẢ CƠ CHẾ GỢI Ý. Nền bản nháp là chữ nguyên văn
+                # của nhà tuyển dụng; để nguyên nó rồi Lưu là hai cái hại cùng
+                # lúc — người sàng CV đọc ra chữ trong tin tuyển của chính mình,
+                # và người dùng phải đỡ một khẳng định họ chưa từng đưa ra.
+                # Không cho lưu, nhưng GIỮ NGUYÊN chữ họ vừa gõ để sửa tiếp.
+                if nen and not form.get("kill"):
+                    from ..scoring.gap import qua_giong
+                    xau = next((l for l in body if qua_giong(l, nen) >= 0.6), "")
+                    if xau:
+                        cho = "/cv/soan?khoi=" + quote(title or was, safe="")
+                        if ky:
+                            cho += "&ky=" + quote(ky, safe="")
+                        if form.get("moi"):
+                            cho += "&moi=1"
+                        return self._redirect(
+                            cho + "&nen=" + quote(xau, safe="") + "&loi="
+                            + quote("Câu này vẫn gần như nguyên văn dòng của "
+                                    "nhà tuyển dụng — chưa phải việc BẠN làm. "
+                                    "Kể việc thật của bạn, kèm con số: bao "
+                                    "nhiêu cái, trên bao nhiêu dữ liệu, đổi "
+                                    "được mấy phần.", safe=""))
                 if title and (body or form.get("kill")):
                     answers = store.load(conn)
                     text = answers.get("cv_text") or ""
+                    # ĐO TRƯỚC KHI GHI. "Hồ sơ đáp trọn 129 -> 141 tin" là số
+                    # thật đo hai lần, không phải lời hứa — và nó là câu trả
+                    # lời duy nhất cho "viết câu này có đáng không".
+                    truoc = _dap_tron(conn, answers)
                     # ĐỔI TÊN khối: xoá khối tên CŨ trước. write_block tìm theo
                     # tên MỚI, không thấy, nên chỉ thêm khối mới — CV còn CẢ
                     # HAI, và mọi bản in ra có hai mục trùng nội dung.
@@ -1082,13 +1168,34 @@ class Handler(BaseHTTPRequestHandler):
                         text, form.get("kind", ["project"])[0],
                         title, form.get("meta", [""])[0].strip(), body)},
                         note=f"soạn khối: {title[:40]}")
-                    live._CV_CACHE.clear(); live._BLOCK_CACHE.clear()
-                    journal.log.ok(journal.SCORE,
-                                   f"CV: khối «{title[:40]}» — "
-                                   + (f"{len(body)} câu" if body else "đã xoá"))
+                    live.quen()
+                    sau = _dap_tron(conn, store.load(conn))
+                    viec = (f"{len(body)} câu" if body else "đã xoá")
+                    # IN ĐỘ PHỦ CẢ KHI KHÔNG ĐỔI. "Viết xong mà không mở khoá
+                    # thêm tin nào" chính là thứ người viết cần biết ngay —
+                    # im lặng ở đúng chỗ đó là để họ tưởng câu vừa viết có ăn.
+                    doi = (f" — hồ sơ đáp trọn {truoc} -> {sau} tin"
+                           if sau != truoc else
+                           f" — hồ sơ vẫn đáp trọn {sau} tin")
+                    # LUỒNG `CV`, không phải `SCORE`. Ô nhật ký trên chính màn
+                    # soạn lọc theo stream="cv"; ghi sang luồng khác thì dòng
+                    # báo "đáp trọn 129 -> 141 tin" rơi vào chỗ người vừa bấm
+                    # Lưu không nhìn thấy — tức là đo mà không ai đọc.
+                    journal.log.ok(journal.CV,
+                                   f"khối «{title[:40]}» — {viec}{doi}")
             finally:
                 conn.close()
-            return self._redirect("/cv")
+            # VỀ ĐÚNG CHỖ VỪA ĐỨNG. Lưu xong mà bị hất sang danh sách bản CV
+            # thì sửa ba khối là ba lần đi tìm lại khối thứ tư — và dải chấm
+            # vừa tính lại cho câu vừa sửa không ai nhìn thấy. Giữ cả `ky`:
+            # brief đang mở phải còn đó, vì người ta thường viết hai câu về
+            # cùng một chỗ hụt.
+            if form.get("kill") or not title:
+                return self._redirect("/cv/soan")
+            # Lưu XONG thì bỏ nền đi: chữ của nhà tuyển dụng đã xong việc của
+            # nó, giữ lại là mời người dùng lưu nhầm nó lần nữa.
+            tiep = "/cv/soan?khoi=" + quote(title, safe="")
+            return self._redirect(tiep + ("&ky=" + quote(ky, safe="") if ky else ""))
 
         if path == "/api/pause":
             runner = sched.current()

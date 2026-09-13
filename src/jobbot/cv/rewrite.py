@@ -144,7 +144,7 @@ def diem_yeu(text: str, tags: list[str], wanted: set[str]) -> list[Yeu]:
     # Đo trên hồ sơ thật: 12/16 câu là kiến thức. Đòi số đo ở cả 16 câu thì
     # 12 dấu là báo động giả — và một dấu mà dòng nào cũng có thì nó không
     # còn là dấu, nó là nền. Người dùng học được rằng đừng nhìn dấu nữa.
-    khoe_viec = bool(rules.ACTION_VERB.match(text.strip()))
+    khoe_viec = bool(rules.mo_bang_hanh_dong(text))
     if khoe_viec and not rules.HAS_NUMBER.search(text):
         ra.append(Yeu("khong_so",
                       "khoe việc nhưng không có số đo",
@@ -209,7 +209,7 @@ def vet(text: str, tags: list, wanted: set, da_sua=()) -> list:
                       " · ".join(x.vi_sao for x in da_sua)))
 
     # 2. KHOE VIỆC MÀ THIẾU SỐ — gạch đúng cụm động từ, chỗ con số thuộc về.
-    if rules.ACTION_VERB.match(text.strip()) and not rules.HAS_NUMBER.search(text):
+    if rules.mo_bang_hanh_dong(text) and not rules.HAS_NUMBER.search(text):
         m = _MENH_DE.match(text)
         if m and m.end() > 3:
             ra.append(Vet(0, m.end(), "thieu_so",

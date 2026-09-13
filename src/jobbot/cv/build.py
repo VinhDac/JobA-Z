@@ -179,7 +179,7 @@ def build(profile: dict, explain: dict | None, jd_text: str = "",
         #
         # Vẫn XẾP theo độ liên quan: khối trúng nhiều đứng trước. Chỉ khác ở
         # chỗ khối không trúng gì thì xuống cuối, không biến mất.
-        if kind == "experience":
+        if kind == "experience" and (num or {}).get("moi_khoi_viec", True):
             con_lai = [b for b in blocks if b.kind == kind and b not in chosen]
             con_lai.sort(key=lambda b: -len(b.tags))
             chosen = chosen + con_lai
@@ -204,7 +204,9 @@ def build(profile: dict, explain: dict | None, jd_text: str = "",
     if certs:
         sections.append(Section("cert", "", "", [Line(l) for l in certs]))
     for block in blocks:
-        if block.kind == "skill" and block.title.lower() not in rules.DROP_SKILL_GROUPS:
+        bo = (not (num or {}).get("giu_muc")
+              and rules.bo_muc_ky_nang(block.title, " ".join(block.lines)))
+        if block.kind == "skill" and not bo:
             sections.append(Section("skill", block.title, "",
                                     [Line(" ".join(block.lines))]))
 
@@ -280,7 +282,6 @@ def _pick(block: Block, wanted: set[str], answers: dict, cap: int,
     lời nói. Chỗ này là chỗ nối.
     """
     num = num or {}
-    khoa = float(num.get("khoa", 3.0))
     giong = str(num.get("giong", "cv"))
     kept: list[Line] = []
     for raw in sentences(block):
@@ -288,7 +289,7 @@ def _pick(block: Block, wanted: set[str], answers: dict, cap: int,
         if not _worth(goc):
             continue                      # "·", "Sep 2025" — rác bóc từ PDF
         tags = sorted(skills_in(goc))
-        phan, ly_do = rules.sentence_ok(goc, tags)
+        phan, ly_do = rules.sentence_ok(goc, tags, set((num or {}).get("giu") or ()))
         if phan == "drop":
             if bo is not None:
                 bo.append((goc, ly_do))
@@ -298,7 +299,7 @@ def _pick(block: Block, wanted: set[str], answers: dict, cap: int,
         text, da_sua = rewrite.sua(goc, giong)
         hits = sorted(set(answers.get(raw, [])) | set(answers.get(goc, [])))
         kept.append(Line(
-            text, rules.sentence_weight(text, wanted, tags, khoa), hits,
+            text, rules.sentence_weight(text, wanted, tags), hits,
             review=ly_do if phan == "review" else "",
             goc=goc, sua=da_sua,
             yeu=rewrite.diem_yeu(text, tags, wanted),

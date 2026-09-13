@@ -101,6 +101,7 @@ def parse(cv_text: str) -> list[Block]:
             blocks.append(current)
         current = None
 
+    truoc_do = None          # dòng chữ ngay trước — xem luật mở khối project
     for raw in lines:
         line = raw.strip()
         if not line:
@@ -130,12 +131,40 @@ def parse(cv_text: str) -> list[Block]:
             current.lines.append(line)
             continue
 
+        _truoc = truoc_do
+        truoc_do = line
         # --- kinh nghiệm / project: dòng chức danh mở khối mới ---
         if section in ("experience", "project"):
             if section == "project":
+                # TÊN PROJECT MỞ KHỐI MỚI — nhận bằng HÌNH DẠNG DÒNG, không
+                # bắt buộc phải có dấu gạch ngang.
+                #
+                # Luật cũ đòi dòng phải chứa " — ". Thử năm kiểu viết thường
+                # gặp: bốn kiểu hỏng, KỂ CẢ kiểu tên trần một dòng, và hai
+                # project liền nhau dính thành một khối. Đó là luật viết cho
+                # đúng một cách trình bày.
+                #
+                # Tên project: NGẮN, hoa đầu, và KHÔNG kết thúc như một câu.
+                # Thêm một vế nữa để khỏi bắt nhầm dòng nội dung không có dấu
+                # chấm: nó phải đứng ngay sau tiêu đề mục, hoặc sau một dòng
+                # đã kết thúc bằng dấu câu.
                 head = re.split(r"\s+[—–]\s+", line, maxsplit=1)[0]
-                starts_new = (len(head) < 60 and head[:1].isupper()
-                              and re.search(r"\s+[—–]\s+", line) is not None)
+                co_gach = head != line
+                sau_cau = (_truoc is None
+                           or _truoc.endswith((".", "!", "?")))
+                # CÓ DẤU GẠCH thì chính nó đã đánh dấu ranh giới tiêu đề —
+                # 'Quant Trading Studio — the whole pipeline you can run.' là
+                # tên project cộng mô tả, và mô tả kết thúc bằng dấu chấm là
+                # chuyện thường. Xét dấu chấm trên phần ĐẦU, không trên cả dòng.
+                #
+                # KHÔNG CÓ GẠCH thì phải chặt hơn, vì lúc đó tiêu đề và một
+                # dòng nội dung trông giống hệt nhau: đòi cả dòng không kết
+                # thúc như một câu, và nó phải đứng sau chỗ câu trước đã hết.
+                sach = not head.endswith((".", ",", ";", ":"))
+                starts_new = (len(head) <= 70 and head[:1].isupper() and sach
+                              and (co_gach
+                                   or (not line.endswith((".", ",", ";", ":"))
+                                       and sau_cau)))
             else:
                 starts_new = _looks_like_role(line) and (
                     current is None or len(current.lines) > 0)
@@ -283,11 +312,17 @@ def write_block(cv_text: str, kind: str, title: str, meta: str,
         chunk = [head] + body
     elif meta.strip():
         chunk = [f"{title.strip()} — {meta.strip()}"] + body
-    elif body:
-        # 'Tên — câu đầu', các câu sau xuống dòng
-        chunk = [f"{title.strip()} — {body[0]}"] + body[1:]
     else:
-        chunk = [f"{title.strip()} — "]
+        # TÊN PROJECT ĐỨNG RIÊNG MỘT DÒNG.
+        #
+        # Bản cũ ghép 'Tên — câu đầu' vì parse() ngày đó CHỈ nhận ra tiêu đề
+        # project khi dòng có dấu " — ". Luật đó đã bỏ (nó hỏng trên 4/5 kiểu
+        # viết thường gặp), và giữ lại cách ghi này thì round-trip gãy: ghi ra
+        # 'Tên — Câu đầu.' rồi đọc lại, dòng kết thúc bằng dấu chấm nên không
+        # còn là tiêu đề, và khối mất tên.
+        #
+        # Tên riêng một dòng cũng đúng cách CV thật viết mục project.
+        chunk = [title.strip()] + body
 
     found = _bounds(lines, title)
     if found:

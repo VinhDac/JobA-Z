@@ -71,12 +71,55 @@ drop_cases = [
     "Live drawdown ran roughly 30% deeper than the model predicted",
     "The mistake was mine: the regime split was a valid partition",
     "I never budgeted the time a proof would take, and the capital ran out",
+]
+# Ý KIẾN GIỜ LÀ 'HỎI', KHÔNG PHẢI 'XOÁ'. Ý kiến và kiến thức cùng hình dạng —
+# hiện tại đơn, không số, không hành động — mà kiến thức là thứ MẠNH NHẤT của
+# một CV kỹ thuật. Máy đoán là có ngày đoán sai một trong hai, và đoán sai
+# nghĩa là xoá mất câu mạnh nhất. Nên nó đánh dấu để người viết tự quyết.
+review_cases = [
     "Profit on its own means nothing: an edge can be faked",
+    "Good code is code other people can delete",
+    "Reporting is only useful when someone acts on it",
 ]
 for text in keep_cases:
     check(f"GIỮ kiến thức: {text[:40]}…", rules.sentence_ok(text)[0] == "keep")
 for text in drop_cases:
     check(f"BỎ thất bại: {text[:40]}…", rules.sentence_ok(text)[0] == "drop")
+for text in review_cases:
+    check(f"HỎI, không xoá: {text[:38]}…", rules.sentence_ok(text)[0] == "review")
+
+# LUẬT PHẢI TỔNG QUÁT, không phải bảng tra chép từ một hồ sơ. Bản cũ là danh
+# sách cụm từ lấy thẳng từ CV của một người ("i was optimising for peak",
+# "nobody has exploited"); đo trên hai hồ sơ khác thì bắt 0/5 câu, dù cả hai
+# đều có câu kể thất bại rành rành.
+for _t in ("I honestly struggled with the first rebuild and it shipped two weeks late",
+           "My first design leaked memory under load and I had to roll it back",
+           "We missed the deadline and the pilot was rolled back"):
+    check(f"hồ sơ NGƯỜI KHÁC cũng bắt được: {_t[:34]}…",
+          rules.sentence_ok(_t)[0] == "drop")
+# Và KHÔNG bắt nhầm câu khoe việc chứa cùng chữ đó — đây là vế thứ hai của
+# luật: "prevented data leakage" và "my design leaked" cùng gốc `leak`.
+for _t in ("Prevented data leakage by splitting on regime boundaries",
+           "Reduced failed builds from 12 a week to 1",
+           "Detected and fixed a memory leak in the pricing loop"):
+    check(f"KHÔNG bắt nhầm câu khoe việc: {_t[:34]}…",
+          rules.sentence_ok(_t)[0] == "keep")
+# Vế thứ ba: THÌ. "leaked" là chuyện đã xảy ra với mình, "leaks" là sự thật
+# chung. Tác giả luật gốc đã ghi lại đúng cái bẫy này, và bản cấu trúc đầu
+# tiên của tôi giẫm lại y nguyên.
+check("câu KIẾN THỨC thì hiện tại KHÔNG bị coi là thất bại",
+      rules.sentence_ok(
+          "A random train/test split leaks, because adjacent dates are "
+          "correlated and information from the future ends up in training"
+      )[0] == "keep")
+# Và phán quyết KHÔNG được đổi theo chữ ký lời gọi.
+_c1 = rules.sentence_ok("A random train/test split leaks, because adjacent "
+                        "dates are correlated and future data leaks in")[0]
+_c2 = rules.sentence_ok("A random train/test split leaks, because adjacent "
+                        "dates are correlated and future data leaks in",
+                        ["validation"])[0]
+check("cùng một câu -> cùng một phán quyết, dù có truyền tags hay không",
+      _c1 == _c2)
 
 verdict, why = rules.sentence_ok("Self-funded, across 17 instruments and five years of data")
 check("câu nhạy cảm NHƯNG có số -> đánh dấu xem lại, không vứt", verdict == "review")
@@ -206,9 +249,17 @@ check("không đưa thất bại lên CV", "mistake was mine" not in all_text)
 check("không đưa ý kiến lên CV", "means nothing" not in all_text)
 
 skill_titles = [s.title for s in ml.sections if s.kind == "skill"]
-check("bỏ phần Compute", "Compute" not in skill_titles)
-check("bỏ phần Method", "Method" not in skill_titles)
-check("giữ phần Programming", "Programming" in skill_titles)
+# MỤC KỸ NĂNG XÉT THEO NỘI DUNG, KHÔNG THEO TÊN. Luật cũ là một tập hai tên
+# mục lấy từ CV của một người (`{"compute","method"}`); hồ sơ khác thì nó bỏ
+# sót đúng mục đáng bỏ nhất — "Soft — communication, teamwork".
+check("giữ mục CÓ kỹ năng máy nhận ra", "Programming" in skill_titles)
+from jobbot.cv.rules import bo_muc_ky_nang as _bmk
+check("bỏ mục mềm dù tên mục là gì", _bmk("Soft", "communication, teamwork"))
+check("bỏ mục sở thích", _bmk("Interests", "chess, running"))
+check("GIỮ mục công nghệ lạ máy chưa biết tên — bỏ nhầm là mất thật",
+      not _bmk("Hardware", "VHDL, oscilloscopes"))
+check("giữ mục có kỹ năng thật, bất kể tên mục",
+      not _bmk("Compute", "deep learning, machine learning"))
 
 check("có ghi lại những câu đã bỏ", len(ml.dropped) >= 4)
 check("mỗi câu bỏ đều kèm lý do", all(why for _, why in ml.dropped))

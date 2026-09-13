@@ -154,7 +154,7 @@ def run(conn: sqlite3.Connection, log=None) -> dict:
 
     jlog.emit(CV, "bắt đầu dựng bản CV — đọc từng tin, hỏi hồ sơ trả lời được gì")
     from ..dashboard import live
-    live._CV_CACHE.clear()            # buộc dựng thật, không lấy bản trong bộ nhớ
+    live.quen()            # buộc dựng thật, không lấy bản trong bộ nhớ
     data = live.cv_versions(conn)
     dau = stamp(conn, cv_text)
     save(conn, data, dau)

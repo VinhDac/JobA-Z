@@ -192,7 +192,9 @@ def render(*, versions: list[dict], jobs: int, gaps: list[str],
                   (f"{info.get('worth', 0):,}", "tin đáng nộp", "view")],
                  adjust="/adjust/cv",
                  run=info.get("label", "Chạy"),
-                 run_note=info.get("note", "")),
+                 run_note=info.get("note", ""),
+                 sua=("/cv/soan", "Sửa khối",
+                      "Mở màn soạn khối — rộng cả cửa sổ, chấm từng câu")),
         note=note,
         cols=2, columns="minmax(360px, 1fr) 1.6fr",
         rows_tpl="minmax(260px, auto) 1fr 140px", journal_at=(1, 3),
@@ -200,7 +202,7 @@ def render(*, versions: list[dict], jobs: int, gaps: list[str],
             # HỤT đứng TRÊN kho khối: nó nói việc phải làm, kho khối nói
             # thứ đang có. Việc phải làm đọc trước.
             runtime.panel("Viết gì để hết hụt", hut(gap or {}), at=(1, 1)),
-            runtime.panel("Khối nguyên liệu", _blocks(blocks, gaps), at=(1, 2)),
+            runtime.panel("Khối nguyên liệu", _blocks(blocks), at=(1, 2)),
             runtime.panel("Bản sẽ gửi", _list(data, q) if versions
                           else _chua_dung(info), rows=3, at=(2, 1)),
         ],
@@ -224,28 +226,30 @@ def _chua_dung(info: dict) -> str:
         f"<br><span class=muted>{ly_do}</span></div>")
 
 
-# ------------------------------------------------------------ soạn khối
+# --------------------------------------------------------- kho khối
 
 KIND_TAG = {"experience": "việc", "project": "project"}
 
 
-def _blocks(blocks: list[dict], gaps: list[str]) -> str:
+def _blocks(blocks: list[dict]) -> str:
     """Kho nguyên liệu, xếp theo VỚI TỚI BAO NHIÊU TIN.
 
     Cột đó là cả câu chuyện: khối 0 tin lên CV vì có ô trống phải lấp, không
     vì nó chứng minh được gì.
+
+    Bấm một khối là sang màn SOẠN (/cv/soan) — ô này chỉ để nhìn.
     """
     rows = ""
     for b in blocks:
         skills = "".join(f"<span class=sk>{esc(s)}</span>" for s in b["skills"][:5])
         dead = " dead" if b["reach"] == 0 else ""
         rows += (
-            f"<a class='blk{dead}' href='#' data-settings="
             # quote(), KHÔNG phải esc(): esc() là để CHỮ hiện an toàn trong
             # HTML, còn đây là THAM SỐ URL. Tiêu đề "Research & Development"
             # thoát HTML thành "Research &amp; Development" — dấu & vẫn cắt
             # tham số, và trang mở ra một khối khác hoặc khối rỗng.
-            f"'/cv/block?title={quote(b['title'], safe='')}'>"
+            f"<a class='blk{dead}'"
+            f" href='/cv/soan?khoi={quote(b['title'], safe='')}'>"
             f"<div class=blkmain>"
             f"<div class=blkhead><b>{esc(b['title'][:44])}</b>"
             f"<span class=blkkind>{esc(KIND_TAG.get(b['kind'], b['kind']))}</span></div>"
@@ -254,58 +258,13 @@ def _blocks(blocks: list[dict], gaps: list[str]) -> str:
             f"<div class=blkreach><b>{b['reach']}</b><span>tin</span>"
             f"<i>{len(b['lines'])} câu</i></div></a>")
 
-    aim = "".join(f"<span class=cvmiss>{esc(g)}</span>" for g in gaps[:8])
     return (
         f"<div class=gapnote>Xếp theo <b>số tin khối đó với tới</b>. "
         f"Khối <b>0 tin</b> đang chiếm chỗ chứ không chứng minh gì.</div>"
         f"<div class=blklist>{rows}</div>"
         f"<div class=blkfoot>"
-        f"<button class='mbtn apply' data-settings='/cv/block?title='>+ Khối mới</button>"
+        f"<a class='mbtn apply' href='/cv/soan?moi=1'>+ Khối mới</a>"
         f"</div>")
-
-
-def edit(block: dict | None, gaps: list[str]) -> str:
-    """Mảnh HTML cho tấm phủ: soạn một khối.
-
-    Ghi thẳng vào `cv_text` — MỘT nguồn sự thật. Không dựng bảng khối riêng:
-    hai kho thì phải ngồi giữ chúng khớp nhau, đúng cái bệnh vừa chữa xong ở
-    tầng chấm điểm và tầng dựng CV.
-    """
-    b = block or {"kind": "project", "title": "", "meta": "", "lines": [],
-                  "skills": [], "reach": 0}
-    boxes = "".join(
-        f"<textarea class=cvdraft name=line rows=2>{esc(l)}</textarea>"
-        for l in b["lines"] + ["", ""])
-    kinds = "".join(
-        f"<option value='{k}'{' selected' if k == b['kind'] else ''}>{esc(v)}</option>"
-        for k, v in KIND_TAG.items())
-    aim = "".join(f"<span class=cvmiss>{esc(g)}</span>" for g in gaps[:10])
-
-    return (
-        "<form class=setform method=post action='/cv/block'>"
-        f"<h3>{'Sửa khối' if block else 'Khối mới'}</h3>"
-        "<div class=safe>Mỗi câu ở đây là một câu có thể lên CV. Câu nào không "
-        "chứng minh được gì thì không tin nào với tới — nhưng câu nói về QUY MÔ "
-        "hay VẾT XƯỚC vẫn đáng viết, chúng thuyết phục theo cách khác.<br>"
-        f"Đang câm ở: {aim}</div>"
-        f"<input type=hidden name=was value='{esc(b['title'])}'>"
-        f"<label class=slab>Loại</label><select name=kind>{kinds}</select>"
-        "<label class=slab>Tên khối</label>"
-        f"<input class=dfthead type=text name=title value='{esc(b['title'])}'>"
-        "<label class=slab>Ngày tháng / tổ chức<span>để trống nếu là project</span></label>"
-        f"<input class=dfthead type=text name=meta value='{esc(b['meta'])}'>"
-        f"<label class=slab>Câu<span>mỗi ô một câu · ô trống thì bỏ qua</span></label>"
-        f"{boxes}"
-        "<div class=setfoot>"
-        "<button class='mbtn apply' type=submit>Lưu vào CV gốc</button>"
-        + (f"<button class='mbtn kill' type=submit name=kill value=1>Xoá khối"
-           f"</button>" if block else "")
-        + "<span class=applynote>ghi thẳng vào hồ sơ · mọi bản CV dựng lại từ đó"
-        "</span></div>"
-        + (f"<div class=forced>Khối này hợp với <b>{b['reach']}</b> tin. "
-           f"Không hợp tin nào thì xoá đi cho sạch — giữ lại chỉ làm CV gốc "
-           f"bẩn thêm.</div>" if block and b["reach"] == 0 else "")
-        + "</form>")
 
 
 # ------------------------------------------------------ tấm Điều chỉnh ⚟
@@ -318,18 +277,15 @@ def edit(block: dict | None, gaps: list[str]) -> str:
 #   giọng văn  -> bật/tắt phép lược chủ ngữ trong cv/rewrite.py
 #   từ khoá    -> trọng số "trúng thứ tin đòi" trong rules.sentence_weight
 #   bố cục     -> số dòng mỗi khối (rules.BUDGET)
+# HAI NÚM NHIỀU MỨC. Cả hai đo được là ĐỔI THẬT: giọng văn đổi 60/60 bản,
+# bố cục đổi 60/60. Núm "độ dày từ khoá" đã BỎ — đo trên 60 tin, xoay sang
+# "dày" đổi ĐÚNG 0 bản, và nó dựa trên "keyword density", thứ không nhà cung
+# cấp ATS nào công bố công thức.
 NUM = (
     ("giong", "Giọng văn",
      "Câu trên CV mở đầu thế nào. Máy chỉ CẮT chữ bạn viết — không viết thêm.",
      (("cv", "Lược chủ ngữ", "Built… · Designed… — quy ước của CV"),
       ("nguyen", "Giữ nguyên", "I built… · I designed… — đúng giọng bạn viết"))),
-    ("khoa", "Độ dày từ khoá",
-     "Máy ưu tiên câu TRÚNG thứ tin đòi đến mức nào. Đây KHÔNG phải nút nhồi "
-     "từ khoá: máy không thêm từ nào, nó chỉ đổi thứ tự ưu tiên giữa mấy câu "
-     "bạn đã viết.",
-     (("nhe", "Nhẹ", "ưu tiên câu mạnh về nội dung, dù không trúng từ nào"),
-      ("thuong", "Thường", "cân giữa trúng từ khoá và nội dung"),
-      ("day", "Dày", "ưu tiên câu trúng từ khoá — qua máy sàng ATS dễ hơn"))),
     ("bo_cuc", "Bố cục",
      "Mấy dòng mỗi khối. Trần một mặt giấy: gọn thì đọc nhanh nhưng nói được "
      "ít, đầy thì ngược lại.",
@@ -338,40 +294,120 @@ NUM = (
       ("day", "Đầy", "4 dòng mỗi khối"))),
 )
 
+# CÔNG TẮC = mấy quyết định máy đang TỰ LÀM THAY. Mỗi cái kèm con số nó đang
+# tốn, đo trên chính hồ sơ này — không có số thì đó chỉ là một nút bấm thử.
+# CÔNG TẮC = mấy quyết định máy đang TỰ LÀM THAY.
+#
+# Chữ ở đây mô tả LUẬT, không trích câu của ai. Bản trước gõ cứng câu của một
+# người vào phần giải thích ("«drawdown ran 30% deeper than predicted»"); hồ
+# sơ khác mở lên thì đó là câu của người lạ, và cái panel thành tờ quảng cáo
+# chứ không phải bản mô tả hồ sơ của họ.
+#
+# Ví dụ THẬT lấy từ chính hồ sơ đang mở — xem live.cv_gia.
+CONG_TAC = (
+    ("that_bai", "Giữ câu kể thất bại",
+     "Câu kể một kết cục xấu của chính bạn. Chỗ của nó là buổi phỏng vấn, nơi "
+     "người đọc có kinh nghiệm coi sự trung thực là điểm mạnh — không phải "
+     "trước mặt người sàng 200 CV một buổi chiều."),
+    ("y_kien", "Giữ câu không kể việc bạn làm",
+     "Câu không nói bạn LÀM gì, không có số đo, không nhắc kỹ năng nào. Nó có "
+     "thể là kiến thức đáng giá, cũng có thể chỉ là một câu hay — máy không "
+     "phân biệt được nên nó đánh dấu chứ không xoá."),
+    ("rui_ro", "Giữ câu mời người đọc nghi ngờ",
+     "Câu nhắc tới tài khoản demo, vốn tự bỏ, hay công cụ AI. Chúng làm người "
+     "đọc đặt câu hỏi về quy mô thật của việc bạn làm. Câu nào có số đo cứng "
+     "thì luật chỉ đánh dấu 'xem lại' chứ không bỏ."),
+    ("giu_muc", "Giữ mục kỹ năng mềm",
+     "Mục kỹ năng mà cả dòng không có lấy một cái tên công nghệ nào — nó đang "
+     "chiếm chỗ bằng tính từ."),
+    ("moi_khoi_viec", "Giữ MỌI khối kinh nghiệm",
+     "Tắt đi thì chỉ in khối hợp với tin. Nhưng khối vắng mặt để lại một lỗ "
+     "trên dòng thời gian, và khoảng trống đắt hơn nhiều so với một khối kém "
+     "liên quan."),
+)
 
-def adjust(num: dict) -> str:
-    """Mảnh cho tấm phủ ⚟ — BA NÚM của tầng CV.
+
+def adjust(num: dict, gia: dict | None = None) -> str:
+    """Tấm phủ ⚟ — mấy quyết định của tầng CV.
 
     Bấm là có tác dụng ngay, KHÔNG đi qua nút Áp dụng — giống công tắc nguồn ở
-    tab Search. Nhưng nó không tự dựng lại: dựng mất 5 giây, và người vừa xoay
-    thử một núm chưa chắc muốn trả cái giá đó. Nên nút Chạy đổi thành "Cập
-    nhật" và để người quyết lúc nào.
+    tab Search. Nhưng nó không tự dựng lại: dựng mất 5 giây, và người vừa lật
+    thử một công tắc chưa chắc muốn trả cái giá đó ngay.
+
+    MỖI CÔNG TẮC KÈM CON SỐ CỦA HÔM NAY. Đó là khác biệt giữa tấm này và một
+    bảng nút: "Giữ câu kể thất bại" thì chưa ai quyết được gì, nhưng "Giữ câu
+    kể thất bại — đang bỏ 5 câu" thì đọc xong là biết mình đang đánh đổi cái gì.
     """
     dang = (num or {}).get("ten") or {}
+    g = gia or {}
+    def _noi(ma: str) -> str:
+        """Công tắc này đang làm gì với hồ sơ NÀY. Không đổi gì thì NÓI RA —
+        im lặng để người dùng tự bấm thử rồi không thấy khác là cách chắc
+        chắn nhất làm họ thôi tin cả bảng."""
+        d = g.get(ma) or {}
+        phan = []
+        if d.get("bo"):
+            phan.append(f"đang bỏ {d['bo']} câu")
+        if d.get("xem"):
+            phan.append(f"đánh dấu {d['xem']} câu 'xem lại' (vẫn in ra)")
+        return " · ".join(phan) or "hồ sơ này không có câu nào dính luật"
+
+    so = {ma: _noi(ma) for ma in ("that_bai", "y_kien", "rui_ro")}
+    so["giu_muc"] = (("đang bỏ mục " + " · ".join(g.get("muc") or []))
+                     if g.get("muc") else "hồ sơ không có mục nào bị bỏ")
+    so["moi_khoi_viec"] = f"{g.get('khoi_viec', 0)} khối kinh nghiệm trong hồ sơ"
+
     khoi = []
     for ma, ten, y_nghia, chon in NUM:
         nut = "".join(
-            f"<button class='mbtn tiny{'' if dang.get(ma) == gia else ' off'}'"
-            f" data-post='/api/cv/num' data-arg='{esc(ma)}:{esc(gia)}'"
+            f"<button class='mbtn tiny{'' if dang.get(ma) == gia_tri else ' off'}'"
+            f" data-post='/api/cv/num' data-arg='{esc(ma)}:{esc(gia_tri)}'"
             f" title='{esc(ghi)}'>{esc(nhan)}</button>"
-            for gia, nhan, ghi in chon)
-        giai = "".join(
-            f"<div class=krow><span>{esc(nhan)}</span><b>{esc(ghi)}</b></div>"
-            for gia, nhan, ghi in chon)
+            for gia_tri, nhan, ghi in chon)
         khoi.append(
             f"<label class=slab>{esc(ten)}<span>{esc(y_nghia)}</span></label>"
-            f"<div class=srcrow>{nut}</div><div class=krows>{giai}</div>")
+            f"<div class=srcrow>{nut}</div>")
+
+    hang = []
+    for ma, ten, y_nghia in CONG_TAC:
+        on = bool(dang.get(ma))
+        # VÍ DỤ LẤY TỪ CHÍNH HỒ SƠ ĐANG MỞ. Đây là thứ biến một dòng mô tả
+        # chung chung thành một câu nói về hồ sơ của người đang đọc: họ nhận
+        # ra ngay câu đó là câu mình viết, và quyết được luôn.
+        vd = (g.get(ma) or {}).get("vi_du") or []
+        cau_minh = "".join(f"<span class=swvd>{esc(x)}</span>" for x in vd[:2])
+        hang.append(
+            f"<div class=swrow>"
+            f"<button class='mbtn tiny swbtn{'' if on else ' off'}'"
+            f" data-post='/api/cv/num' data-arg='{esc(ma)}:{'0' if on else '1'}'>"
+            f"{'BẬT' if on else 'TẮT'}</button>"
+            f"<div class=swmain><b>{esc(ten)}</b>"
+            f"<span class=swnow>{esc(so.get(ma, ''))}</span>"
+            f"{cau_minh}"
+            f"<span class=swwhy>{esc(y_nghia)}</span></div></div>")
+
     return ("<div class=sheethead>Điều chỉnh · CV</div>"
             + "".join(khoi)
-            + "<div class=note>Xoay núm xong thì nút trên thanh đổi thành "
+            + "<label class=slab>Máy đang tự quyết thay bạn"
+              "<span>mỗi công tắc kèm con số nó đang tốn, đo trên chính hồ sơ "
+              "của bạn</span></label>"
+            + "".join(hang)
+            + "<div class=note>Lật công tắc xong thì nút trên thanh đổi thành "
               "<b>Cập nhật</b> — bấm lúc nào cũng được. Máy không tự dựng lại: "
               "dựng mất ~5 giây và đó là quyết định của bạn.</div>")
 
 
 # ------------------------------------------------------------ khối HỤT
 
-VIEC = {"viet": ("VIẾT", "viet", "bạn có làm rồi, chỉ chưa viết ra — một buổi tối"),
-        "hoc": ("HỌC", "hoc", "gọi đích danh tên sản phẩm, không viết thay được")}
+# CHÚ THÍCH PHẢI NÓI ĐÚNG THỨ MÁY ĐO. Bản trước ghi "bạn có làm rồi, chỉ chưa
+# viết ra" — máy không biết điều đó và chưa bao giờ đo nó; nó chỉ đo được là
+# mấy dòng yêu cầu này không gọi tên sản phẩm nào. Khẳng định thay người dùng
+# là đúng cái bệnh cả app này tránh.
+VIEC = {"viet": ("VIẾT", "viet",
+                 "mấy dòng đòi nó không gọi tên sản phẩm nào — diễn đạt lại "
+                 "bằng chữ của bạn được, nếu bạn đã làm. Một buổi tối."),
+        "hoc": ("HỌC", "hoc",
+                "gọi đích danh tên sản phẩm — không câu nào viết thay được")}
 
 
 def hut(d: dict) -> str:
@@ -405,7 +441,12 @@ def hut(d: dict) -> str:
             f"<span class=hbar><i style='width:{rong}%' class={lop}></i></span>"
             f"<span class=hplus>+{b['them']}<span>tin</span></span>"
             f"<span class=hcum>{b['cong_don']}<span>/{tong}</span></span>"
-            f"<span class=hsplit>{b['dong']} dòng đòi · "
+            # NÚT VIẾT chỉ trên dòng CÓ THỂ VIẾT. Dòng toàn tên sản phẩm
+            # thì mời viết là mời làm một việc không làm được.
+            + (f"<a class='mbtn tiny hgo'"
+               f" href='/cv/soan?ky={quote(b['ky_nang'], safe='')}'>Viết</a>"
+               if b["dong"] - b["rieng"] > 0 else "")
+            + f"<span class=hsplit>{b['dong']} dòng đòi · "
             f"<b>{viet_duoc}</b> viết được"
             + (f" · <b>{b['rieng']}</b> phải học" if b["rieng"] else "")
             + "</span></div>")
@@ -431,4 +472,3 @@ def hut(d: dict) -> str:
           "đã làm rồi, chỉ chưa viết ra hồ sơ. <b>HỌC</b> = nó gọi đích danh "
           "tên sản phẩm, không câu nào viết thay được. Máy chỉ chọn được chữ "
           "bạn đã viết, nên mấy chỗ này là việc của bạn.</div>")
-

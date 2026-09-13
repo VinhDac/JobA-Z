@@ -456,6 +456,40 @@ def health(conn: sqlite3.Connection) -> dict:
     }
 # ---------------------------------------------------------------- projects
 
+# ---------------------------------------------------- KHO NHỚ TẦNG CV
+#
+# MỘT kho, MỘT khoá, MỘT chỗ quên.
+#
+# Trước đây có ba cache rời — _CV_CACHE, _BLOCK_CACHE, _HUT_CACHE — cùng dựng
+# trên đúng một khoá `_cv_key`, nhưng được xoá ở ba tập chỗ KHÁC NHAU: reset
+# quên _HUT_CACHE, route xoay núm quên _BLOCK_CACHE, batch chỉ xoá _CV_CACHE.
+# Ba thứ cùng phụ thuộc một đầu vào mà hết hạn theo ba lịch khác nhau thì sớm
+# muộn màn hình trộn số cũ với số mới, và không ai lần ra được.
+_NHO: dict = {}
+
+
+def nho(conn: sqlite3.Connection, ten: str, tinh):
+    """Nhớ `tinh()` theo khoá chung của tầng CV.
+
+    Khoá gồm: chữ CV · luật chấm · tập tin đang giữ · mấy núm Điều chỉnh —
+    xem `_cv_key`. Đổi bất kỳ thứ nào thì CẢ BA con số cùng hết hạn, vì cả ba
+    đều đọc từ chúng.
+    """
+    from ..profile import store as pstore
+    key = _cv_key(conn, pstore.load(conn).get("cv_text") or "")
+    cu = _NHO.get(ten)
+    if cu is not None and cu[0] == key:
+        return cu[1]
+    ra = tinh()
+    _NHO[ten] = (key, ra)
+    return ra
+
+
+def quen() -> None:
+    """Quên hết. MỘT chỗ gọi cho mọi thay đổi đụng tới tầng CV."""
+    _NHO.clear()
+
+
 def cv_hut(conn: sqlite3.Connection) -> dict:
     """Thang HỤT — viết/học thứ nào trước thì mở khoá nhiều tin nhất.
 
@@ -467,35 +501,95 @@ def cv_hut(conn: sqlite3.Connection) -> dict:
     from ..scoring.vocab import alias_hits
     from ..profile import store as pstore
 
-    answers = pstore.load(conn)
-    key = _cv_key(conn, answers.get("cv_text") or "")
-    if _HUT_CACHE.get("key") == key:
-        return _HUT_CACHE["value"]
-    co: set = set()
-    for e in build_index(answers):
-        co |= set(alias_hits(e.normal))
-    ra = thang(conn, co)
-    _HUT_CACHE.update(key=key, value=ra)
-    return ra
-
-
-_HUT_CACHE: dict = {}
+    def _tinh():
+        answers = pstore.load(conn)
+        co: set = set()
+        for e in build_index(answers):
+            co |= set(alias_hits(e.normal))
+        return thang(conn, co)
+    return nho(conn, "hut", _tinh)
 
 
 def cv_nut(conn: sqlite3.Connection) -> dict:
-    """Ba núm của tầng CV, đã đổi sang con số build() dùng được.
+    """Mấy núm của tầng CV, đã đổi sang thứ build() dùng được.
 
-    MỘT chỗ dịch từ "tên núm" sang "con số". Dịch ở hai chỗ thì có ngày tấm
-    Điều chỉnh hiện 'dày' mà bộ dựng chạy 'thường', và không ai lần ra được.
+    MỘT chỗ dịch từ "tên núm" sang "giá trị". Dịch ở hai chỗ thì có ngày tấm
+    Điều chỉnh hiện một đằng mà bộ dựng chạy một nẻo.
     """
     from ..core import prefs
     giong = prefs.get(conn, prefs.CV_GIONG) or "cv"
-    khoa = prefs.get(conn, prefs.CV_KHOA) or "thuong"
     bo_cuc = prefs.get(conn, prefs.CV_BO_CUC) or "thuong"
+    giu = {ma for ma, khoa in (("that_bai", prefs.CV_GIU_THAT_BAI),
+                               ("y_kien", prefs.CV_GIU_Y_KIEN),
+                               ("rui_ro", prefs.CV_GIU_RUI_RO))
+           if prefs.flag(conn, khoa)}
     return {"giong": giong if giong in prefs.GIONG else "cv",
-            "khoa": prefs.KHOA.get(khoa, prefs.KHOA["thuong"]),
             "dong": prefs.BO_CUC.get(bo_cuc, prefs.BO_CUC["thuong"]),
-            "ten": {"giong": giong, "khoa": khoa, "bo_cuc": bo_cuc}}
+            "giu": giu,
+            "giu_muc": prefs.flag(conn, prefs.CV_GIU_MUC),
+            "moi_khoi_viec": prefs.flag(conn, prefs.CV_MOI_KHOI_VIEC),
+            "ten": {"giong": giong, "bo_cuc": bo_cuc,
+                    "that_bai": prefs.flag(conn, prefs.CV_GIU_THAT_BAI),
+                    "y_kien": prefs.flag(conn, prefs.CV_GIU_Y_KIEN),
+                    "rui_ro": prefs.flag(conn, prefs.CV_GIU_RUI_RO),
+                    "giu_muc": prefs.flag(conn, prefs.CV_GIU_MUC),
+                    "moi_khoi_viec": prefs.flag(conn, prefs.CV_MOI_KHOI_VIEC)}}
+
+
+def cv_gia(conn: sqlite3.Connection) -> dict:
+    """MỖI CÔNG TẮC ĐANG TỐN GÌ — đo bằng cách CHẠY THẬT luật, không đếm khớp.
+
+    Đếm số câu KHỚP mẫu là sai, và tôi đã sai đúng chỗ đó: luật `RISKY` gặp
+    câu có bằng chứng cứng thì chỉ đánh dấu "xem lại" chứ KHÔNG bỏ. Panel ghi
+    "đang bỏ 1 câu" trong khi câu đó vẫn nằm trên CV — lật công tắc đổi 0/40
+    bản. Một con số sai trên tấm Điều chỉnh còn tệ hơn không có số.
+
+    Nên đo bằng phép trừ: chạy `sentence_ok` với luật BẬT và với luật TẮT, rồi
+    xem câu nào đổi phán quyết. Đó đúng là thứ công tắc sẽ làm.
+    """
+    from ..cv import rules
+    from ..cv.blocks import parse as parse_cv, sentences as cau_cua
+    from ..cv.build import skills_in
+    from ..profile import store as pstore
+
+    txt = str(pstore.load(conn).get("cv_text") or "")
+    cau = [rules.clean(x) for b in parse_cv(txt)
+           if b.kind in ("experience", "project") for x in cau_cua(b)]
+    cau = [t for t in cau if len(t) >= 12]
+
+    ra: dict = {}
+    for ma in ("that_bai", "y_kien", "rui_ro"):
+        bo = xem = 0
+        vi_du: list = []
+        for t in cau:
+            tags = sorted(skills_in(t))
+            cu_, _ = rules.sentence_ok(t, tags)              # luật BẬT
+            moi_, _ = rules.sentence_ok(t, tags, {ma})       # luật TẮT
+            if cu_ == moi_:
+                continue
+            if cu_ == "drop":
+                bo += 1
+            elif cu_ == "review":
+                xem += 1
+            # VÍ DỤ LẤY TỪ CHÍNH HỒ SƠ ĐANG MỞ, không gõ cứng.
+            #
+            # Tấm Điều chỉnh từng trích thẳng câu của một người ("«drawdown
+            # ran 30% deeper than predicted»"). Hồ sơ khác mở lên thì đó là
+            # câu của người lạ — người dùng không nhận ra, và cái panel biến
+            # thành tờ quảng cáo thay vì bản mô tả hồ sơ của họ.
+            if len(vi_du) < 2:
+                vi_du.append(t[:110])
+        ra[ma] = {"bo": bo, "xem": xem, "vi_du": vi_du}
+
+    # DÙNG CHUNG LUẬT VỚI BỘ DỰNG. Chỗ này từng tra `rules.DROP_SKILL_GROUPS`
+    # — một tập đã bị làm rỗng khi luật đổi sang xét NỘI DUNG. Kết quả: tấm
+    # Điều chỉnh báo "không bỏ mục nào" trong khi bộ dựng vẫn bỏ thật. Hai
+    # tầng đọc hai luật khác nhau về cùng một việc.
+    # TÊN MỤC THẬT đang bị bỏ, không phải một cặp tên gõ cứng.
+    muc = sorted(b.title for b in parse_cv(txt) if b.kind == "skill"
+                 and rules.bo_muc_ky_nang(b.title, " ".join(b.lines)))
+    return {**ra, "muc": muc,
+            "khoi_viec": sum(1 for b in parse_cv(txt) if b.kind == "experience")}
 
 
 def _cv_key(conn: sqlite3.Connection, cv_text: str) -> tuple:
@@ -512,7 +606,6 @@ def _cv_key(conn: sqlite3.Connection, cv_text: str) -> tuple:
 # Dựng CV cho 101 tin mất 1,4 giây. Không được trả cái giá đó MỖI LẦN mở
 # trang. Nhớ lại trong bộ nhớ tiến trình, và quên đi khi một trong ba thứ đầu
 # vào đổi: chữ CV, luật chấm, tập tin.
-_CV_CACHE: dict = {}
 
 
 def cv_versions(conn: sqlite3.Connection) -> dict:
@@ -528,9 +621,10 @@ def cv_versions(conn: sqlite3.Connection) -> dict:
     from ..profile import store as pstore
 
     answers = pstore.load(conn)
+    san = _NHO.get("ban")
     key = _cv_key(conn, answers.get("cv_text") or "")
-    if _CV_CACHE.get("key") == key:
-        return _CV_CACHE["value"]
+    if san is not None and san[0] == key:
+        return san[1]
     # BA NÚM của tấm Điều chỉnh. Đọc MỘT LẦN ở đây rồi truyền xuống: để
     # build() tự đọc DB thì nó hết thuần, và 364 lần dựng là 1.092 lượt đọc
     # prefs cho ba giá trị không đổi.
@@ -599,7 +693,7 @@ def cv_versions(conn: sqlite3.Connection) -> dict:
              # Kỹ năng CẢ THỊ TRƯỜNG đòi mà hồ sơ không nói được câu nào. Đây
              # là danh sách đáng đọc nhất trên trang: nó nói CV thiếu gì.
              "gaps": sorted({m for v in out for m in v["missing"]})}
-    _CV_CACHE.update(key=key, value=value)
+    _NHO["ban"] = (key, value)
     return value
 
 
@@ -783,7 +877,6 @@ def cv_pdf_for(conn: sqlite3.Connection, posting_id: int) -> Path | None:
     return root / f"{slug(row['company'])}-{slug(row['title'])}-{posting_id}.pdf"
 
 
-_BLOCK_CACHE: dict = {}
 
 
 def cv_blocks(conn: sqlite3.Connection) -> list[dict]:
@@ -801,9 +894,10 @@ def cv_blocks(conn: sqlite3.Connection) -> list[dict]:
     # Có CACHE, như cv_versions. Đo được: 7,8 giây MỖI LẦN gọi, và tab CV gọi
     # nó mỗi lần mở — Vin ngồi chờ 10 giây để xem một trang không đổi gì.
     answers_now = pstore.load(conn)
+    san = _NHO.get("khoi")
     key = _cv_key(conn, answers_now.get("cv_text") or "")
-    if _BLOCK_CACHE.get("key") == key:
-        return _BLOCK_CACHE["value"]
+    if san is not None and san[0] == key:
+        return san[1]
     from ..scoring.market import demand as thi_truong
 
     text = pstore.load(conn).get("cv_text") or ""
@@ -825,8 +919,81 @@ def cv_blocks(conn: sqlite3.Connection) -> list[dict]:
             "reach": sum(demand.get(s, 0) for s in skills),
         })
     out.sort(key=lambda b: -b["reach"])
-    _BLOCK_CACHE.update(key=key, value=out)
+    _NHO["khoi"] = (key, out)
     return out
+
+
+def cv_soan(conn: sqlite3.Connection, title: str = "", ky: str = "",
+            nen: str = "") -> dict:
+    """Mọi thứ màn SOẠN KHỐI cần — đo ở đây, màn hình chỉ vẽ.
+
+    Màn soạn khác tấm phủ cũ ở đúng một chỗ, và đó là lý do nó tồn tại: nó
+    chấm TỪNG CÂU ngay lúc soạn. Trước đây Vin gõ vào một ô trống rồi bấm
+    Lưu, và chỉ biết câu vừa viết bị luật bỏ sau khi dựng lại cả loạt bản —
+    nếu còn nhớ mà đi đọc.
+
+        phan    luật nói gì: lên CV · xem lại · luật bỏ
+        reach   bao nhiêu TIN đang đòi thứ câu đó nhắc tới
+
+    `reach` KHÔNG phải điểm chất lượng. Câu kiến thức không nhắc tên công cụ
+    nào thì reach = 0 mà vẫn là câu mạnh nhất hồ sơ. Nó trả lời đúng một câu:
+    *thị trường có hỏi thứ này không* — còn câu đó đáng giữ hay không là việc
+    của người viết.
+
+    `ky` = ĐANG NHẮM kỹ năng nào. Nó mở thêm phần BRIEF: nguyên văn mấy dòng
+    yêu cầu thật đang đòi thứ đó, và mấy dòng DÙNG ĐƯỢC LÀM NỀN bản nháp.
+
+    `nen` = dòng yêu cầu người dùng đã chọn làm nền — nó rơi thẳng vào ô soạn.
+    Đây là chỗ duy nhất máy đặt sẵn chữ vào ô, và chữ đó là của NHÀ TUYỂN
+    DỤNG, nguyên văn, có ghi rõ nguồn. Máy vẫn không viết câu nào: người dùng
+    phải viết lại thành việc chính họ đã làm, và `gap.qua_giong` canh đúng chỗ
+    đó lúc Lưu.
+
+    VÌ SAO BRIEF Ở ĐÂY chứ không phải một tấm phủ riêng: viết một câu mới CHÍNH
+    LÀ sửa một khối — cùng một phép ghi vào `cv_text`, cùng một chỗ ngồi. Tách
+    ra hai màn là bắt người dùng đọc yêu cầu ở một chỗ rồi gõ ở chỗ khác, và
+    để lại hai đường ghi phải trông nhau.
+    """
+    from ..cv import rules
+    from ..cv.build import skills_in
+    from ..scoring.gap import ho_hoi, nen_nhap
+    from ..scoring.market import demand as thi_truong
+
+    khoi = cv_blocks(conn)
+    chon = next((b for b in khoi if b["title"] == title), None) if title else None
+    can = nho(conn, "can", lambda: thi_truong(conn))
+    giu = cv_nut(conn)["giu"]
+
+    cau = []
+    for line in (chon or {}).get("lines", []):
+        tags = sorted(skills_in(line))
+        phan, vi_sao = rules.sentence_ok(line, tags, giu)
+        cau.append({"chu": line, "tags": tags, "phan": phan, "vi_sao": vi_sao,
+                    "reach": sum(can.get(t, 0) for t in tags)})
+
+    # THANG HỤT rút gọn: soạn khối mà không biết thị trường đang thiếu gì thì
+    # chỉ là sửa chính tả. Chỉ lấy dòng VIẾT ĐƯỢC — dòng "phải học" không phải
+    # việc làm được trong màn này.
+    d_hut = cv_hut(conn)
+    hut = [b for b in (d_hut.get("buoc") or [])
+           if b["dong"] - b["rieng"] > 0][:6]
+
+    brief = None
+    if ky:
+        chung, rieng = ho_hoi(conn, ky)
+        # NỀN BẢN NHÁP đứng riêng khỏi `chung`: chỉ mấy dòng TẢ VIỆC mới đổi
+        # sang câu CV được. "Bạn đã viết gần nhất" ĐÃ BỎ — nó gọi
+        # `gan_nhat` vốn không hề dùng tới tham số kỹ năng, nên trả về đúng
+        # ba câu giống hệt nhau cho mọi chỗ hụt, trong đó có cả câu luật cấm
+        # lên CV. Một gợi ý không đổi theo đầu vào thì không phải gợi ý.
+        brief = {"ky": ky, "chung": chung, "rieng": rieng,
+                 "nen": nen_nhap(conn, ky)}
+    return {"khoi": khoi, "chon": chon, "cau": cau, "hut": hut, "brief": brief,
+            "nen": nen,
+            # Độ phủ HÔM NAY, không phải delta của lần lưu vừa rồi. Delta nằm
+            # ở nhật ký, nơi nó có dấu thời gian và không hoá thành lời nói dối
+            # sau một lần bấm F5.
+            "dap": (d_hut.get("nen") or 0, d_hut.get("tin") or 0)}
 
 
 # ------------------------------------------------------- chức danh bỏ sót

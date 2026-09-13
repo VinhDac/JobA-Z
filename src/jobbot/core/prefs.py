@@ -87,14 +87,45 @@ CV_GIONG = "cv_giong"
 GIONG = {"cv": "lược chủ ngữ — Built…, Designed…",
          "nguyen": "giữ nguyên chữ bạn viết — I built…, I designed…"}
 
-# ĐỘ DÀY TỪ KHOÁ. Đây là trọng số cho "câu này trúng thứ tin đòi" trong
-# rules.sentence_weight. Dày lên thì máy ưu tiên câu trúng từ khoá; nhẹ đi
-# thì nó ưu tiên câu mạnh về nội dung dù không trúng từ nào.
+# "ĐỘ DÀY TỪ KHOÁ" ĐÃ BỎ. Đo trên 60 tin: xoay sang "dày" đổi ĐÚNG 0 bản,
+# "nhẹ" đổi 1 bản. Một cái núm không đổi được gì là núm trang trí, và một núm
+# trang trí làm người dùng mất tin vào cả bảng.
 #
-# KHÔNG phải nút "nhồi từ khoá": máy không thêm từ nào vào CV. Nó chỉ đổi
-# THỨ TỰ ƯU TIÊN giữa mấy câu Vin đã viết.
-CV_KHOA = "cv_khoa"
-KHOA = {"nhe": 1.5, "thuong": 3.0, "day": 5.0}
+# Nó cũng dựa trên một thứ không có thật: không nhà cung cấp ATS nào công bố
+# công thức "keyword density" — xem phần nghiên cứu. Giữ lại là hứa một thứ
+# mình không làm.
+
+# --- MẤY QUYẾT ĐỊNH MÁY ĐANG TỰ LÀM THAY -------------------------------
+#
+# Mỗi công tắc dưới đây lật một quyết định máy đang âm thầm làm. Không lật
+# được thì người dùng không có cách nào biết máy vừa bỏ mất cái gì của mình.
+#
+# MẶC ĐỊNH LÀ CÁCH MÁY ĐANG LÀM — bật lên là "tôi tự quyết", không phải "sửa
+# lỗi". Luật vẫn đúng trong đa số trường hợp; chỉ là nó không biết hoàn cảnh.
+
+# Câu KỂ THẤT BẠI ("drawdown ran 30% deeper than predicted"). Chỗ của nó là
+# buổi phỏng vấn, nơi người đọc có kinh nghiệm coi trung thực là điểm mạnh —
+# không phải trước mặt người sàng 200 CV một buổi chiều.
+CV_GIU_THAT_BAI = "cv_giu_that_bai"
+
+# Câu Ý KIẾN ("Profit on its own means nothing"). Không phải bằng chứng năng lực.
+CV_GIU_Y_KIEN = "cv_giu_y_kien"
+
+# Câu MỜI NGHI NGỜ — nhắc tự bỏ vốn, tài khoản demo, công cụ AI. Đây là công
+# tắc đáng lật nhất: đo trên hồ sơ thật nó đang cắt đúng một câu,
+# "Self-funded, across 17 instruments and five years of data" — một trong bốn
+# câu DUY NHẤT có số đo trên cả hồ sơ.
+CV_GIU_RUI_RO = "cv_giu_rui_ro"
+
+# Mục kỹ năng Compute / Method. Luật bỏ chúng vì dạy người đọc kiến thức cơ
+# bản là tín hiệu non tay. Đo: giữ lại thì +0 tin — nhưng đó là số của HÔM
+# NAY, và người dùng nên thấy con số đó rồi tự quyết.
+CV_GIU_MUC = "cv_giu_muc"
+
+# Khối KINH NGHIỆM không hợp tin: giữ đủ (mặc định — không đục khoảng trống
+# thời gian) hay chỉ in khối hợp. Đo: 6/12 bản từng rơi hẳn khối WorldQuant
+# Jan–Sep 2025, tức tự khai một lỗ 9 tháng.
+CV_MOI_KHOI_VIEC = "cv_moi_khoi_viec"
 
 # BỐ CỤC — mấy dòng mỗi khối. Trần một mặt giấy: gọn thì đọc nhanh nhưng nói
 # được ít, đầy thì ngược lại.
@@ -105,7 +136,9 @@ BO_CUC = {"gon": 2, "thuong": 3, "day": 4}
 DEFAULTS = {AUTORUN: "0", SCAN_EVERY: "60",
             HOURS_FROM: "8", HOURS_TO: "22", PACE: "thuong",
             SRC_BOARD: "1", SRC_LINKEDIN: "1", SRC_ALERT: "1", LI_DONE: "", LI_LEVELS: "", MAIL_DAYS: "30",
-            CV_GIONG: "cv", CV_KHOA: "thuong", CV_BO_CUC: "thuong",
+            CV_GIONG: "cv", CV_BO_CUC: "thuong",
+            CV_GIU_THAT_BAI: "0", CV_GIU_Y_KIEN: "0", CV_GIU_RUI_RO: "0",
+            CV_GIU_MUC: "0", CV_MOI_KHOI_VIEC: "1",
             **{k: "1" for k in SRC_ATS.values()}}
 
 

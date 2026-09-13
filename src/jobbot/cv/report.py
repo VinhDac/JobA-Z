@@ -48,7 +48,8 @@ VIET = {
 }
 
 
-def _vi(why: str) -> str:
+def vi(why: str) -> str:
+    """Lý do bỏ, sang tiếng Việt. Dùng chung với màn Soạn khối."""
     return VIET.get(why, why)
 
 
@@ -66,7 +67,7 @@ def _bo(cv: TailoredCV) -> str:
             return ""
         muc = "".join(
             f"<li><span class=dtext>{esc(t)}</span>"
-            f"<span class=dwhy>{esc(_vi(w))}</span></li>" for t, w in rows)
+            f"<span class=dwhy>{esc(vi(w))}</span></li>" for t, w in rows)
         return (f"<h4 class=cvsec>{esc(tieu_de)} ({len(rows)})</h4>"
                 f"<ul class=droplist>{muc}</ul><div class=note>{dan}</div>")
 
