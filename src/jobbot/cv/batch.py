@@ -84,6 +84,19 @@ def saved(conn: sqlite3.Connection) -> dict | None:
     return data
 
 
+def xoa(conn: sqlite3.Connection) -> int:
+    """Vứt bản đã dựng. Trả về số bản vừa bỏ đi.
+
+    CHỈ ĐỤNG THỨ MÁY DỰNG RA. `cv_text` — chữ người dùng viết — không hề bị
+    động tới, nên xoá nhầm chỉ tốn một lần bấm Chạy. Đó cũng là lý do chốt ở
+    đây nhẹ hơn chốt của /api/reset: cái kia xoá thứ không dựng lại được.
+    """
+    cu = len((saved(conn) or {}).get("versions") or [])
+    conn.execute("DELETE FROM cv_build")
+    conn.commit()
+    return cu
+
+
 def stage(conn: sqlite3.Connection) -> dict:
     """Lượt dựng TỚI sẽ làm gì. MỘT chỗ quyết, nút Chạy chỉ đọc lại để đặt tên.
 

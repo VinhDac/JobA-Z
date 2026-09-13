@@ -749,6 +749,40 @@ with tempfile.TemporaryDirectory() as tmp:
           "đưa mục kỹ năng tin này hỏi lên trước" in _adj
           and "bản/120 tin" not in _adj)
     check("có công tắc MÁY TỰ LO", "data-arg='tu_lo:" in _adj)
+    # BẬT thì phải SÁNG LÊN — và trạng thái phải đọc được từ HTML, không chỉ
+    # từ màu. Cùng lỗi với `.mbtn.off`: lớp có ở HTML mà không có CSS.
+    check("công tắc TẮT mang lớp off", "swbtn off" in _adj)
+    _cE = db.connect(Path(tmp) / "jobbot.db")
+    _pfc.set_flag(_cE, _pfc.CV_TU_LO, True)
+    _cE.close()
+    _adjE = get("/adjust/cv")[1]
+    check("bật lên -> nút đổi chữ và BỎ lớp off",
+          ">BẬT<" in _adjE and "swbtn off" not in _adjE)
+    check("và dòng trạng thái nói ra máy đang lo gì",
+          "nháp dựng sẵn" in _adjE)
+    _cE = db.connect(Path(tmp) / "jobbot.db")
+    _pfc.set_flag(_cE, _pfc.CV_TU_LO, False)
+    _cE.close()
+    # CSS phải TÔ cả hai trạng thái, không chỉ khai lớp rồi bỏ đó.
+    _cssE = (Path(__file__).resolve().parent.parent
+             / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
+    for _sel in (".swbtn{", ".swbtn.off{", ".mbtn.tiny.on{", ".mbtn.tiny.off{"):
+        check(f"CSS có tô «{_sel[:-1]}»", _sel in _cssE)
+    # MỨC ĐANG DÙNG PHẢI CÓ DẤU TÍCH. Lớp `off` từng được gắn mà không có một
+    # dòng CSS nào, nên ba nút trông y hệt nhau — núm quan trọng nhất của app
+    # không nói được nó đang ở đâu.
+    check("đúng MỘT mức được đánh dấu đang dùng", _adj.count("tiny on'") == 1)
+    check("và đánh dấu bằng ✓, đọc được cả khi màu hỏng", "✓" in _adj)
+    _cD = db.connect(Path(tmp) / "jobbot.db")
+    _pfc.put(_cD, _pfc.CV_RIENG, "vua")
+    _cD.close()
+    _adj2 = get("/adjust/cv")[1]
+    check("đổi mức -> dấu tích chạy theo",
+          "data-arg='rieng:vua' title='+ đưa mục kỹ năng tin này hỏi lên trước'>✓"
+          in _adj2)
+    _cD = db.connect(Path(tmp) / "jobbot.db")
+    _pfc.put(_cD, _pfc.CV_RIENG, "rieng")
+    _cD.close()
     check("lý do nằm trong thẻ gấp, không đổ thẳng ra",
           "<details class=swwhy>" in _adj)
     check("chữ không chạm viền tấm phủ", "class=adjbox" in _adj)
@@ -2046,6 +2080,47 @@ with tempfile.TemporaryDirectory() as tmp:
     _titles5 = (store.load(_conn5).get("job_titles") or "")
     _conn5.close()
     check("lưới lọc còn nguyên sau mấy cú POST đó", bool(_titles5.strip()))
+
+    print("\n[CV: nút XOÁ trên thanh — có chốt, và chỉ đụng thứ máy dựng ra]")
+    _, _cvX = get("/cv")
+    check("thanh CV có nút xoá bản", "/api/cv/xoa" in _cvX)
+    check("và nút đó có chốt hai nhịp", "data-arm=" in _cvX)
+    # CHỐT MÁY CHỦ, không bao giờ tin mỗi phía trình duyệt.
+    check("POST rỗng -> từ chối", post_form("/api/cv/xoa", "") == 400)
+    check("POST sai chữ -> từ chối", post_form("/api/cv/xoa", "arg=co") == 400)
+    from jobbot.cv import batch as _btX
+    _cX = db.connect(Path(tmp) / "jobbot.db")
+    _cvtext_X = store.load(_cX).get("cv_text") or ""
+    _co_ban = bool(_btX.saved(_cX))
+    _cX.close()
+    check("đang có bản đã dựng để mà xoá", _co_ban)
+    check("POST đúng chữ -> xoá", post_form("/api/cv/xoa", "arg=xoa") == 200)
+    _cX = db.connect(Path(tmp) / "jobbot.db")
+    check("bản đã dựng biến mất", _btX.saved(_cX) is None)
+    # CHỈ ĐỤNG THỨ MÁY DỰNG RA. Chữ người dùng viết không được suy suyển.
+    check("chữ trên CV gốc KHÔNG bị đụng",
+          (store.load(_cX).get("cv_text") or "") == _cvtext_X)
+    # XOÁ XONG THÌ NẰM YÊN — không có đường nào tự dựng lại. Phải chạy Search,
+    # sang tab CV, bấm Chạy.
+    check("nút trên thanh về lại 'Chạy'", _btX.stage(_cX)["label"] == "Chạy")
+    _cX.close()
+    _, _sau_xoa = get("/cv")
+    check("mở lại tab CV vẫn trống, máy KHÔNG tự dựng",
+          "Chưa dựng bản CV nào" in _sau_xoa)
+    _cX = db.connect(Path(tmp) / "jobbot.db")
+    check("và vẫn trống sau khi mở trang", _btX.saved(_cX) is None)
+    _cX.close()
+    # Dựng lại để mấy khúc dưới có bản mà soi.
+    post_form("/api/stage/start", "arg=cv")
+    import time as _tX
+    for _ in range(60):
+        _cX = db.connect(Path(tmp) / "jobbot.db")
+        _lai = _btX.saved(_cX)
+        _cX.close()
+        if _lai:
+            break
+        _tX.sleep(0.5)
+    check("bấm Chạy thì dựng lại được", bool(_lai))
 
     print("\n[CV: màn con SOẠN KHỐI — chỗ ngồi viết, không phải tấm phủ]")
     # Tấm phủ /cv/block cũ rộng 380px và CÂM: gõ xong bấm Lưu, rồi chỉ biết

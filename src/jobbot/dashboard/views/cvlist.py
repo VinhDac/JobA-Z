@@ -194,7 +194,10 @@ def render(*, versions: list[dict], jobs: int, gaps: list[str],
                  run=info.get("label", "Chạy"),
                  run_note=info.get("note", ""),
                  sua=("/cv/soan", "Sửa khối",
-                      "Mở màn soạn khối — rộng cả cửa sổ, chấm từng câu")),
+                      "Mở màn soạn khối — rộng cả cửa sổ, chấm từng câu"),
+                 xoa=("/api/cv/xoa", "Xoá bản", "Xoá thật?",
+                      "Vứt mọi bản CV đã dựng. Chữ trên CV gốc KHÔNG bị đụng "
+                      "— bấm Chạy là dựng lại")),
         note=note,
         cols=2, columns="minmax(360px, 1fr) 1.6fr",
         rows_tpl="minmax(260px, auto) 1fr 140px", journal_at=(1, 3),
@@ -307,11 +310,16 @@ def adjust(num: dict | None = None) -> str:
     dang = (num or {}).get("ten") or {}
     khoi = ""
     for ma, ten, y_nghia, chon in NUM:
-        nut = "".join(
-            f"<button class='mbtn tiny{'' if dang.get(ma) == gia_tri else ' off'}'"
-            f" data-post='/api/cv/num' data-arg='{esc(ma)}:{esc(gia_tri)}'"
-            f" title='{esc(ghi)}'>{esc(nhan)}</button>"
-            for gia_tri, nhan, ghi in chon)
+        # MỨC ĐANG DÙNG PHẢI CÓ DẤU TÍCH, không chỉ khác màu. Bản trước gắn
+        # lớp `off` cho mấy mức còn lại — mà `.mbtn.off` chưa bao giờ có CSS,
+        # nên cả ba nút trông y hệt nhau và không ai biết mình đang ở đâu.
+        # Dấu ✓ đọc được cả khi màu hỏng, cả khi in ra giấy.
+        nut = ""
+        for gia_tri, nhan, ghi in chon:
+            on = dang.get(ma) == gia_tri
+            nut += (f"<button class='mbtn tiny{' on' if on else ' off'}'"
+                    f" data-post='/api/cv/num' data-arg='{esc(ma)}:{esc(gia_tri)}'"
+                    f" title='{esc(ghi)}'>{'✓ ' if on else ''}{esc(nhan)}</button>")
         khoi += (f"<div class=adjrow><div class=adjname><b>{esc(ten)}</b>"
                  f"<span>{esc(y_nghia)}</span></div>"
                  f"<div class=srcrow>{nut}</div></div>")

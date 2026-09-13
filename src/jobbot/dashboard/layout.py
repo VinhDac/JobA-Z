@@ -57,7 +57,7 @@ LOGO = (
 
 def deck(stage: str, name: str, state: str, metrics: list,
          adjust: str = "", run: str = "Chạy", run_note: str = "",
-         sua: tuple = ()) -> str:
+         sua: tuple = (), xoa: tuple = ()) -> str:
     """Thanh của MỘT khúc: tên + trạng thái · số liệu · chạy/dừng · điều chỉnh.
 
     MỘT khối cho mọi chức năng. Trước đây thanh trên cùng là của cả app —
@@ -104,6 +104,15 @@ def deck(stage: str, name: str, state: str, metrics: list,
     # Là THẺ <a>, không phải nút mở tấm phủ: tấm phủ hợp với mấy công tắc bật
     # xong đóng lại, không hợp với chỗ ngồi soạn chữ. Màn riêng thì có địa chỉ
     # riêng, lưu lại được, Back được, và rộng bằng cả cửa sổ.
+    # NÚT PHÁ — chốt HAI NHỊP (xem live.js): nhịp một đổi chữ trên nút, nhịp
+    # hai mới gửi. Máy chủ còn một chốt nữa, đòi arg="xoa" — không bao giờ tin
+    # mỗi phía trình duyệt.
+    #
+    # `xoa` = (đường POST, nhãn, nhãn khi đã nạp đạn, mô tả).
+    pha = (f"<button class='mbtn kill' data-post='{esc(xoa[0])}'"
+           f" data-arg='xoa' data-arm='{esc(xoa[2])}'"
+           f" title='{esc(xoa[3] if len(xoa) > 3 else xoa[1])}'>"
+           f"{esc(xoa[1])}</button>" if xoa else "")
     khac = (f"<a class='mbtn qua' href='{esc(sua[0])}'"
             f" title='{esc(sua[2] if len(sua) > 2 else sua[1])}'>"
             f"{esc(sua[1])}</a>" if sua else "")
@@ -124,7 +133,7 @@ def deck(stage: str, name: str, state: str, metrics: list,
         f" title='{esc(run_note)}'>{esc(run)}</button>"
         f"<button class=mbtn data-post='/api/stage/stop'"
         f" data-arg='{esc(stage)}'>Dừng</button>"
-        f"{khac}{knob}</span>"
+        f"{khac}{pha}{knob}</span>"
         f"</div></div>")
 
 

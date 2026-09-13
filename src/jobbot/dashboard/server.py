@@ -755,6 +755,27 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
             return self._redirect(f"/jobs/{job}/cv")
 
+        if path == "/api/cv/xoa":
+            # XOÁ BẢN ĐÃ DỰNG. Chốt hai lớp: trình duyệt bắt bấm hai nhịp
+            # (live.js), máy chủ đòi arg="xoa". Không bao giờ tin mỗi phía
+            # trình duyệt — bài thử ném rác vào mọi route từng xoá mất app
+            # password thật 12 lần liền.
+            if form.get("arg", [""])[0].strip() != "xoa":
+                return self._json({"ok": False, "note": "cần xác nhận"},
+                                  status=400)
+            conn = db.connect()
+            try:
+                from ..cv import batch
+                n = batch.xoa(conn)
+            finally:
+                conn.close()
+            live.quen()
+            journal.log.ok(journal.CV,
+                           f"đã xoá {n} bản CV đã dựng — bấm Chạy để dựng lại"
+                           if n else "chưa có bản nào để xoá")
+            return self._json({"ok": True, "reload": True,
+                               "note": f"đã xoá {n} bản CV"})
+
         if path == "/api/cv/num":
             # BA NÚM của tầng CV. Bấm là lưu ngay, KHÔNG tự dựng lại: dựng mất
             # 5 giây và người vừa xoay thử chưa chắc muốn trả giá đó. Nút Chạy

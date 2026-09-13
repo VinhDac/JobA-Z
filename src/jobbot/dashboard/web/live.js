@@ -533,8 +533,30 @@
       // luôn cái form rồi gán textContent lên nó, tức là XOÁ SẠCH RUỘT FORM:
       // bấm Nối một cái là ô nhập biến mất. Form để trình nghe 'submit' lo.
       if (post && post.tagName === 'FORM') return;
+      // CHỐT HAI NHỊP cho nút phá. Nhịp một chỉ ĐỔI CHỮ trên nút và nạp đạn;
+      // nhịp hai mới gửi đi. Không hộp thoại — hộp thoại bị bấm OK theo phản
+      // xạ, còn một cái nút đổi thành "Xoá thật?" thì mắt phải đọc lại.
+      //
+      // Tự tháo đạn sau 4 giây: nút nạp sẵn nằm đó cả buổi là đúng cái bẫy
+      // mình vừa dựng ra để tránh.
+      if (post && post.dataset.arm !== undefined && !post.dataset.armed) {
+        e.preventDefault();
+        const cu = post.textContent;
+        post.dataset.armed = '1';
+        post.textContent = post.dataset.arm || 'Chắc chưa?';
+        post.classList.add('armed');
+        setTimeout(() => {
+          if (!post.dataset.armed) return;
+          delete post.dataset.armed;
+          post.textContent = cu;
+          post.classList.remove('armed');
+        }, 4000);
+        return;
+      }
       if (post) {
         e.preventDefault();
+        delete post.dataset.armed;
+        post.classList.remove('armed');
         const was = post.textContent;
         post.disabled = true;                 // chặn bấm hai lần ra hai luồng
         fetch(post.dataset.post, {

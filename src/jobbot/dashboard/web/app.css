@@ -1693,6 +1693,13 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
    dưới từng công tắc — năm công tắc thành bốn mươi dòng chữ, và người mở tấm
    này ra để LẬT MỘT CÔNG TẮC phải cuộn qua cả bài. */
 .adjbox{padding:0 var(--sheet-pad) var(--sheet-pad)}
+/* MỨC ĐANG DÙNG. `.mbtn.off` từng được gắn ở HTML mà không có một dòng CSS
+   nào — ba nút trông y hệt nhau, và núm quan trọng nhất của app không nói
+   được nó đang ở đâu. Đánh dấu mức ĐANG DÙNG bằng màu ĐẶC, không bằng cách
+   làm mờ mấy mức kia: nhìn vào là thấy ngay cái đang bật. */
+.mbtn.tiny.on{color:var(--acc);background:var(--acc-bg);border-color:var(--acc)}
+.mbtn.tiny.off{color:var(--mute);border-color:var(--line)}
+.mbtn.tiny.off:hover{color:var(--ink);border-color:var(--line-2)}
 .adjrow{display:flex;align-items:center;justify-content:space-between;
   gap:14px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)}
 .adjname b{display:block;font-size:12.5px;font-weight:600;color:var(--ink)}
@@ -1710,7 +1717,13 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .swrow{display:grid;grid-template-columns:46px 1fr auto;gap:5px 11px;
   align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .swrow:last-of-type{border-bottom:0}
-.swbtn{flex:none;width:46px;font-size:9.5px;font-weight:700;letter-spacing:.05em}
+/* BẬT thì phải SÁNG LÊN. Cùng lỗi với `.mbtn.off`: lớp có ở HTML mà không
+   có CSS, nên BẬT và TẮT vẽ ra y hệt nhau. Dùng đúng một cách đánh dấu với
+   mấy nút chọn mức ở trên — học một lần, đọc được cả tấm. */
+.swbtn{flex:none;width:52px;font-size:9.5px;font-weight:700;letter-spacing:.05em;
+  color:var(--acc);background:var(--acc-bg);border-color:var(--acc)}
+.swbtn.off{color:var(--mute);background:transparent;border-color:var(--line)}
+.swbtn.off:hover{color:var(--ink);border-color:var(--line-2)}
 .swten{font-size:12.5px;font-weight:600;color:var(--ink);min-width:0}
 .swnow{font-size:11px;color:var(--acc);text-align:right;white-space:nowrap}
 .swrow.off .swnow{color:var(--warn)}
@@ -1884,3 +1897,9 @@ a.mbtn.apply{color:var(--acc)}
 .sannhap{display:block;font-size:12.5px;color:var(--ink);line-height:1.55}
 .sanco{display:block;font-size:10.5px;color:var(--mute);margin-top:4px}
 .sanone:hover .sanco{color:var(--acc)}
+
+/* Nút phá đã NẠP ĐẠN: nhịp một đổi chữ, nhịp hai mới gửi (xem live.js).
+   Phải nhìn ra ngay là nó đang khác trạng thái thường, nếu không chốt hai
+   nhịp chỉ là hai lần bấm. */
+.mbtn.kill.armed{background:var(--bad);color:#1A0E0D;border-color:var(--bad);
+  font-weight:700}

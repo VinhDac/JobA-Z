@@ -453,7 +453,10 @@ def render(*, khoi: list[dict], chon: dict | None, cau: list[dict],
                  adjust="/adjust/cv",
                  run=info.get("label", "Chạy"),
                  run_note=info.get("note", ""),
-                 sua=("/cv", "← Bản CV", "Quay lại danh sách bản sẽ gửi")),
+                 sua=("/cv", "← Bản CV", "Quay lại danh sách bản sẽ gửi"),
+                 xoa=("/api/cv/xoa", "Xoá bản", "Xoá thật?",
+                      "Vứt mọi bản CV đã dựng. Chữ trên CV gốc KHÔNG bị đụng "
+                      "— bấm Chạy là dựng lại")),
         cols=2, columns="minmax(330px, 1fr) 1.7fr",
         rows_tpl="1fr 150px", journal_at=(1, 2),
         panels=[
