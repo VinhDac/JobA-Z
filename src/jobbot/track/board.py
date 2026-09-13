@@ -31,7 +31,24 @@ STAGE_LABEL = {DRAFT: "đang điền", SENT: "đã nộp", INTERVIEW: "phỏng v
 # tính vào đây và không bao giờ bị gọi là "im lặng".
 OPEN = (SENT, INTERVIEW)
 
-SILENT_AFTER = 14        # ngày, chưa thư nào thì coi như im lặng
+# MẶC ĐỊNH của "quá bao nhiêu ngày im thì coi như trượt". Người dùng xoay
+# được (⚟ trên thanh Quản lí — xem core/prefs.IM_QUA); con số ở đây chỉ là
+# chỗ dựa khi chưa ai xoay, và khi gọi `all()` mà không truyền gì.
+#
+# 20, không phải 14: 14 là mốc ĐO ĐƯỢC (lá hồi âm muộn nhất trong hộp thư
+# thật về sau đúng 14 ngày), nhưng mốc đo được là mốc của quá khứ — lấy y
+# nguyên nó làm hạn chót là không chừa chỗ cho lá thư thứ 38.
+SILENT_AFTER = 20
+
+
+def nguong(conn: sqlite3.Connection) -> int:
+    """Số ngày im hiện đang dùng. MỘT chỗ đọc, để bảng và thanh đếm giống nhau.
+
+    Hai chỗ tự đọc là có ngày thanh trên báo "32 trượt" còn bảng dưới xếp 34
+    dòng vào nhóm đó, và không ai biết chỗ nào sai.
+    """
+    from ..core import prefs
+    return prefs.num(conn, prefs.IM_QUA, 3, 365)
 
 
 def _now() -> str:
@@ -154,24 +171,142 @@ def _days(stamp: str) -> int | None:
     return int((datetime.now(timezone.utc) - then).total_seconds() // 86400)
 
 
-def all(conn: sqlite3.Connection) -> list[dict]:
-    """Cả bảng. Đang chờ lên trước, im lặng lâu nhất lên đầu."""
+# SỨC SỐNG của một lần nộp — thứ bảng phải trả lời mà `stage` một mình không
+# trả lời nổi. "Đã nộp" 40 ngày trước, im lặng, khác hẳn "đã nộp" hôm qua.
+SONG_NONG = "nong"        # họ đang nói chuyện với bạn — phỏng vấn, nhận việc
+SONG_CHO = "cho"          # còn trong cửa sổ hồi âm
+SONG_IM = "im"            # quá cửa sổ mà không một chữ
+SONG_XONG = "xong"        # đã có kết cục
+
+# AI NỘP — ba giá trị, và người dùng cần phân biệt rõ cả ba.
+#     mail   bạn tự nộp TRƯỚC KHI dùng app; máy dựng lại từ thư
+#     apply  bạn nộp qua app
+#     tay    máy định nộp mà không nộp được (LinkedIn khoá) — bạn tự làm
+AI_NOP = {"mail": "tự nộp trước đây", "apply": "nộp qua app",
+          "auto": "máy nộp", "tay": "phải tự nộp tay",
+          "manual": "thêm bằng tay"}
+
+
+def nguon_cua(source: str) -> str:
+    """`greenhouse:imc` -> board · `linkedin` -> linkedin · `alert` -> alert.
+
+    MỘT chỗ dịch, dùng chung với tab Search (views/search.FOUND_BY). Dịch ở
+    hai chỗ thì có ngày hai tab gọi cùng một tin bằng hai tên nguồn.
+    """
+    s = (source or "").strip().lower()
+    if not s:
+        return ""
+    return s if s in ("linkedin", "alert") else "board"
+
+
+def all(conn: sqlite3.Connection, im_qua: int | None = None) -> list[dict]:
+    """Cả bảng, kèm SỐ ĐO về thời gian và thư.
+
+    IM LẶNG ĐO TỪ LÁ THƯ CUỐI, KHÔNG TỪ `last_event_at`. `last_event_at` chỉ
+    được ghi khi người dùng BẤM NHẬN một đề xuất; nên một công ty đã trả lời
+    bốn lá thư mà người dùng chưa bấm thì vẫn bị đếm là "im lặng". Đo trên hộp
+    thư thật: bảng báo 35 im lặng trong khi chỉ có 28 — 7 công ty đã trả lời
+    bị ghi là im.
+    """
+    moc = nguong(conn) if im_qua is None else int(im_qua)
+    thu = {}
+    for r in conn.execute(
+            "SELECT application_id, COUNT(*) n, MAX(received_at) cuoi,"
+            " MIN(received_at) dau FROM message"
+            " WHERE application_id IS NOT NULL GROUP BY application_id"):
+        thu[r["application_id"]] = (r["n"], r["cuoi"], r["dau"])
+
     rows = []
     for r in conn.execute(
-            "SELECT a.*, p.url AS url, p.score AS score FROM application a"
+            "SELECT a.*, p.url AS url, p.score AS score, p.source AS source_tin,"
+            " p.title AS tin_title FROM application a"
             " LEFT JOIN posting p ON p.id = a.posting_id ORDER BY a.id DESC"):
         row = dict(r)
+        n, cuoi, dau = thu.get(row["id"], (0, "", ""))
+        row["so_thu"] = n
+        row["thu_cuoi"] = cuoi or ""
         row["days"] = _days(row["applied_at"])
         row["event_days"] = _days(row["last_event_at"])
-        # im lặng = đã nộp lâu, chưa thư nào. Chỉ tính khi còn đang chờ.
+        # LẦN CHẠM CUỐI CÙNG = mốc muộn nhất trong ba thứ: lá thư mới nhất,
+        # mốc sự kiện người dùng đã xác nhận, và lúc nộp.
+        #
+        # Thiếu `last_event_at` là sai: người dùng bấm Nhận cho một thư mời
+        # phỏng vấn thì ĐÓ LÀ một lần chạm, dù thư đó cũ. Bỏ nó ra thì một
+        # dòng đang phỏng vấn vẫn bị đếm là "im lặng".
+        row["im_ngay"] = _days(max(
+            x for x in (cuoi, row["last_event_at"], row["applied_at"]) if x)
+            if any((cuoi, row["last_event_at"], row["applied_at"])) else "")
+        row["ho_tra_loi"] = n > 1 or bool(cuoi and dau and cuoi != dau)
         row["silent"] = (row["stage"] in OPEN
-                         and not row["last_event_at"]
-                         and (row["days"] or 0) >= SILENT_AFTER)
+                         and (row["im_ngay"] or 0) >= moc)
+        if row["stage"] in (INTERVIEW, OFFER):
+            row["song"] = SONG_NONG
+        elif row["stage"] not in OPEN:
+            row["song"] = SONG_XONG
+        else:
+            row["song"] = SONG_IM if row["silent"] else SONG_CHO
+        row["nguon"] = nguon_cua(row.get("source_tin") or "")
+        row["ai_nop"] = AI_NOP.get(row.get("origin") or "", row.get("origin") or "")
+        row["co_cv"] = bool(row.get("cv_file")) or bool(row.get("posting_id"))
         rows.append(row)
     # Nháp lên đầu: đó là việc đang dở, và việc đang dở phải đập vào mắt.
     rows.sort(key=lambda r: (r["stage"] != DRAFT, r["stage"] not in OPEN,
                              -(r["days"] or 0)))
     return rows
+
+
+def im_da_pha(conn: sqlite3.Connection) -> dict:
+    """Những khoảng IM LẶNG ĐÃ TỪNG BỊ PHÁ VỠ — số đo để chọn mốc cho đúng.
+
+    Câu hỏi thật của cái núm "coi như trượt sau bao nhiêu ngày" không phải
+    "họ thường trả lời trong bao lâu". Nó là: ĐẶT MỐC NÀY THÌ TÔI ĐÓNG NHẦM
+    MẤY LÁ? Và câu đó có đáp án chính xác trong hộp thư đang có — mỗi lần
+    một lá thư về sau một quãng im, quãng đó là một lần mốc-bằng-quãng-ấy
+    đã sai.
+
+    Nên hàm này trả về MỌI quãng im đã bị phá vỡ. Mốc M đóng nhầm đúng bằng
+    số quãng >= M.
+
+    KHÔNG PHẢI `max(im_ngay)` — đó là cái bảng đang đo nhầm trước đây.
+    `im_ngay` là "lần chạm cuối cách đây bao lâu", tức là quãng im ĐANG KÉO
+    DÀI và chưa ai phá vỡ; lấy nó làm "thư về muộn nhất" thì trên hộp thư
+    thật nó ra 40 ngày trong khi số đúng là 18.
+    """
+    from datetime import datetime, timezone
+
+    def _moc(x):
+        try:
+            t = datetime.fromisoformat((x or "").replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            return None
+        return t.replace(tzinfo=timezone.utc) if t.tzinfo is None else t
+
+    thu = {}
+    for m in conn.execute("SELECT application_id, received_at FROM message"
+                          " WHERE application_id IS NOT NULL"
+                          " ORDER BY application_id, received_at"):
+        thu.setdefault(m["application_id"], []).append(m["received_at"])
+
+    khoang, ai, lau = [], "", 0
+    for a in conn.execute("SELECT id, company, applied_at FROM application"):
+        moc = [x for x in [_moc(a["applied_at"])]
+               + [_moc(t) for t in thu.get(a["id"], [])] if x]
+        for truoc, sau in zip(moc, moc[1:]):
+            n = int((sau - truoc).total_seconds() // 86400)
+            if n < 0:
+                continue
+            khoang.append(n)
+            if n > lau:
+                lau, ai = n, a["company"] or ""
+    return {"lau": lau, "ai": ai, "so": len(khoang), "khoang": sorted(khoang)}
+
+
+def thu_cua(conn: sqlite3.Connection, app_id: int) -> list[dict]:
+    """Mọi lá thư của MỘT lần nộp, mới nhất trước. Ruột của thẻ chi tiết."""
+    return [dict(r) for r in conn.execute(
+        "SELECT id, subject, snippet, kind, received_at, from_addr"
+        " FROM message WHERE application_id = ? ORDER BY received_at DESC",
+        (app_id,))]
 
 
 def counts(conn: sqlite3.Connection) -> dict:

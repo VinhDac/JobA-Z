@@ -114,7 +114,14 @@ body{margin:0;background:var(--side);color:var(--ink);overflow:hidden;
   justify-content:safe center;overflow-y:auto}
 .navlink{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:8px;
   color:var(--dim);text-decoration:none;font-size:13.5px;transition:background .1s,color .1s}
-.navlink i{font-style:normal;font-size:11px;width:13px;text-align:center;color:var(--mute)}
+.navlink i{display:flex;align-items:center;justify-content:center;
+  width:16px;flex:none;color:var(--mute)}
+/* MỘT chỗ khai kiểu cho CẢ bộ icon. Nét, cỡ, đầu nét — đổi ở đây là đổi
+   toàn app; khai ở từng chỗ dùng là có ngày thanh bên một kiểu, nút ⚟ một
+   kiểu. `currentColor` nên màu theo chữ xung quanh, không phải sửa hình. */
+.ico{width:16px;height:16px;flex:none;display:block;
+  fill:none;stroke:currentColor;stroke-width:1.75;
+  stroke-linecap:round;stroke-linejoin:round}
 .navlink span{flex:1}
 .navlink:hover{background:var(--panel-2);color:var(--ink)}
 .navlink.on{background:var(--acc-bg);color:var(--acc);font-weight:600}
@@ -570,7 +577,8 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .whead h3{margin:0;font-size:11px;font-weight:700;letter-spacing:.07em;
   text-transform:uppercase;color:var(--dim)}
 .wtools{display:flex;align-items:center;gap:6px}
-.wexp{font:inherit;font-size:13px;line-height:1;color:var(--mute);cursor:pointer;
+.wexp{font:inherit;line-height:0;color:var(--mute);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
   background:none;border:0;padding:3px 5px;border-radius:5px}
 .wexp:hover{color:var(--ink);background:var(--panel-2)}
 /* Đây là chỗ làm nên "không cuộn trang": ô tự cuộn, trang đứng yên. */
@@ -716,7 +724,8 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .brandrow{display:flex;align-items:center;gap:6px;padding:6px 4px 14px 0}
 .brandrow .brand{padding:0 0 0 10px;flex:1;min-width:0;white-space:nowrap;
   overflow:hidden}
-.navtoggle{font:inherit;font-size:13px;line-height:1;color:var(--mute);
+.navtoggle{font:inherit;line-height:0;color:var(--mute);
+  display:flex;align-items:center;justify-content:center;
   cursor:pointer;background:none;border:0;border-radius:6px;padding:5px 7px;
   flex:none}
 .navtoggle:hover{color:var(--ink);background:var(--panel-2)}
@@ -731,8 +740,11 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .navmin .navtoggle{transform:rotate(180deg)}
 .navmin .navlink{justify-content:center;padding:10px 0;gap:0}
 .navmin .navlink span{display:none}
-/* Lúc gập, icon là thứ DUY NHẤT để bấm — không được mờ như lúc có chữ bên cạnh. */
-.navmin .navlink i{width:auto;font-size:22px;line-height:1;color:var(--dim)}
+/* Lúc gập, icon là thứ DUY NHẤT để bấm — không được mờ như lúc có chữ bên cạnh.
+   To lên bằng cách đổi CỠ SVG, không phải font-size: hình vector nên nó nét
+   ở mọi cỡ, và cả năm cái to lên đúng bằng nhau. */
+.navmin .navlink i{width:auto;color:var(--dim)}
+.navmin .navlink .ico{width:20px;height:20px}
 .navmin .navlink:hover i{color:var(--ink)}
 .navmin .navlink.on i{color:var(--acc)}
 .navmin .navtoggle{color:var(--dim)}
@@ -1364,7 +1376,9 @@ body[data-run=running] .deckpill{border-color:var(--acc-2);
 .deckpill .mbtn{border-radius:999px;padding:5px 13px}
 .mbtn.go{border-color:var(--acc-2);color:var(--acc);background:var(--acc-bg-2);
 }
-.mbtn.knob{padding:5px 10px;font-size:13px;line-height:1}
+.mbtn.knob{padding:6px 9px;line-height:0;display:inline-flex;
+  align-items:center;justify-content:center}
+.mbtn.knob .ico{width:15px;height:15px}
 
 /* Hàng nút phá hoại: ô gõ chữ + nút, nút khoá sẵn cho tới khi gõ đúng. */
 /* Ô thẻ trong FORM HỒ SƠ — BA VÙNG, không nhồi vào một khung:
@@ -1705,6 +1719,13 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .adjname b{display:block;font-size:12.5px;font-weight:600;color:var(--ink)}
 .adjname span{font-size:10.5px;color:var(--mute)}
 .adjrow .srcrow{margin-bottom:0}
+/* CÁI GIÁ CỦA MỘT MỨC, in ngay trên cái nút chọn nó. Mốc im lặng là núm duy
+   nhất trong app có thể ĐÓNG NHẦM một dòng còn sống, và số dòng đó đếm được
+   trên thư có thật — giấu nó vào tooltip là bắt người dùng rê chuột từng nút
+   mới biết mình đang đánh đổi cái gì. Đỏ vì nó là mất mát, không phải số nền. */
+.mbtn.tiny .nham{display:block;font-style:normal;font-size:9px;font-weight:600;
+  letter-spacing:.03em;color:var(--bad);margin-top:2px;opacity:.85}
+.mbtn.tiny.on .nham{opacity:1}
 /* Tiêu đề nhóm: cái gì máy quyết, cái gì là nhịp chạy — hai câu hỏi khác nhau */
 .adjsec{font-size:10px;font-weight:700;letter-spacing:.09em;
   text-transform:uppercase;color:var(--mute);margin:20px 0 4px;
@@ -1913,3 +1934,395 @@ a.mbtn.apply{color:var(--acc)}
 /* Không dựng nổi thì NÓI RA, đừng im lặng — im lặng để người dùng tưởng
    công tắc hỏng. */
 .hnhap.tho{color:var(--mute);background:transparent;border-left-color:var(--line)}
+
+/* ---------------- Quản lí: BẢNG TRẠNG THÁI ----------------
+   Bốn số trên đầu, mỗi số một việc. Bản cũ in "37 lần nộp · 35 đang chờ ·
+   35 im lặng" — hai cách đếm cùng một chồng, và không con nào nói phải làm gì. */
+.tsum{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 14px}
+.tstat{display:flex;flex-direction:column;gap:1px;border:1px solid var(--line);
+  border-radius:9px;padding:8px 14px;min-width:112px;font-size:10.5px;
+  color:var(--mute)}
+.tstat b{font-size:19px;font-weight:600;color:var(--dim);line-height:1.1}
+.tstat.act{border-color:var(--acc-2);background:var(--acc-bg)}
+.tstat.act b{color:var(--acc)}
+.tstat.warn{border-color:rgba(216,161,94,.35);background:var(--warn-bg)}
+.tstat.warn b{color:var(--warn)}
+.tstat.stock b{color:var(--info)}
+.tstat.zero b{color:var(--mute)}
+
+/* DÒNG NHÓM — chia bảng theo VIỆC PHẢI LÀM, không theo bảng chữ cái */
+.tgroup td{padding:16px 0 7px !important;border-bottom:1px solid var(--line)}
+.tgroup b{font-size:11px;font-weight:700;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--dim)}
+.tgroup span{font-size:11px;color:var(--mute);margin-left:7px}
+.tgroup i{display:block;font-style:normal;font-size:10.5px;color:var(--mute);
+  line-height:1.5;margin-top:3px;max-width:640px}
+.tgroup.gnong b{color:var(--acc)}
+.tgroup.gim b{color:var(--warn)}
+
+/* LẦN CHẠM CUỐI — con số quan trọng nhất của mỗi dòng: nó trả lời "còn sống
+   không", thứ mà cột trạng thái không trả lời được. */
+.tcham{white-space:nowrap}
+.tcham b{color:var(--dim);font-weight:600}
+.tcham i{display:block;font-style:normal;font-size:10px;color:var(--mute)}
+tr.snong .tcham b{color:var(--acc)}
+/* QUÁ CỬA SỔ thì đỏ, kể cả dòng đang phỏng vấn — đặt SAU .snong để thắng. */
+tr.qua .tcham b{color:var(--warn)}
+tr.sxong{opacity:.55}
+.tthu{text-align:right;color:var(--mute);font-size:11.5px}
+
+/* Thư MÁY KHÔNG ĐỌC ĐƯỢC — khác hẳn ô đề xuất: ô kia máy đã hiểu và chỉ xin
+   xác nhận, ô này máy nói thẳng là nó bó tay. Viền xám, không cam. */
+.askbox.mu{border-color:var(--line-2);background:transparent}
+.askbox.mu .askhead{color:var(--mute)}
+.askbox.mu .askhead b{color:var(--dim)}
+.askbox.mu .askto{color:var(--mute);margin-left:9px}
+.askbox.mu .askmain b{margin-right:2px}
+.asksnip{font-size:11px;color:var(--mute);line-height:1.5;margin-top:3px}
+.askbox.mu .askact{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;
+  max-width:330px}
+
+/* ---------------- Quản lí: DATASHEET ----------------
+   Cùng khuôn với "Việc tìm được" bên Search: ô tìm, hàng chip đổi ngay,
+   trạng thái nằm hết trên URL. Học một tab là biết cả ba. */
+.locbox{display:flex;flex-direction:column;gap:4px;margin:8px 0 10px}
+.locbox .vbar{display:flex;gap:22px;flex-wrap:wrap;align-items:center}
+.locbox .vgrp{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.locten{font-size:10px;color:var(--mute);letter-spacing:.04em;
+  text-transform:uppercase}
+
+/* MỘT DÒNG = một thẻ bấm mở được. Bảng <table> không mở ra được mà không cần
+   JavaScript; <details> thì mở được, và cả app này không có một dòng JS nào
+   cho mấy màn CV/Quản lí. */
+.tboard{display:flex;flex-direction:column}
+.trow{border-bottom:1px solid var(--line)}
+.trow:last-child{border-bottom:0}
+/* MỘT lưới cột cho CẢ hàng tiêu đề và mọi dòng — khai hai chỗ là có ngày
+   chúng lệch nhau và bảng tính hết ra bảng tính.
+
+   KHÔNG TRACK NÀO ĐƯỢC CO THEO NỘI DUNG. Dùng chung một biến là CHƯA ĐỦ:
+   bản trước cột cuối khai `auto`, và `auto` đo bằng thứ nằm trong ô. Ô tiêu
+   đề cuối rỗng -> rộng 0; ô dữ liệu cuối có hai cái nút -> rộng 110. Hai cột
+   `fr` đầu bảng chia phần thừa lệch nhau đúng 110px, nên MỌI ô dữ liệu trôi
+   sang trái khỏi nhãn của nó — mà cái khai báo thì vẫn "dùng chung", nhìn
+   vào code không thấy sai ở đâu.
+   Nên: chỉ px và fr. auto / min-content / max-content / fit-content đều
+   cấm ở đây, và có bài test canh. Cùng một khai báo + cùng bề rộng khung
+   + không ô nào co theo ruột = hai hàng KHÔNG THỂ lệch. */
+.tboard{--cot: minmax(132px,1.35fr) minmax(140px,1.55fr) 84px 106px 50px
+        96px 38px 50px 88px}
+/* KHÔNG DÍNH. Bản trước hàng tiêu đề `position:sticky` — nó đè lên dòng
+   đang cuộn qua (chữ dòng hiện xuyên qua nền nó), và một thanh cứ lơ lửng
+   giữa bảng thì đọc mệt hơn là lợi. Bảng này ngắn, cuộn lên một cái là thấy
+   nhãn; đổi lại mọi dòng đọc sạch, không bị che nửa dòng. */
+.thead{display:grid;grid-template-columns:var(--cot);gap:10px;
+  padding:7px 4px;border-bottom:1px solid var(--line-2);background:var(--panel)}
+.thead span{font-size:9.5px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--mute);
+  border-right:1px solid var(--line);padding-right:9px}
+.thead span:last-child{border-right:0}
+/* BẢNG TÍNH, không phải danh sách: có VẠCH CỘT và nền so le, nên mắt đi
+   theo hàng ngang mà không lạc sang dòng dưới. */
+.trow > summary{display:grid;grid-template-columns:var(--cot);
+  gap:10px;align-items:center;padding:8px 4px;cursor:pointer;list-style:none}
+.trow > summary > span{border-right:1px solid var(--line);padding-right:9px;
+  min-height:17px;display:flex;flex-direction:column;justify-content:center}
+.trow > summary > span:last-child{border-right:0}
+.trow:nth-of-type(even) > summary{background:rgba(255,255,255,.018)}
+/* SUY RA, không phải họ nói. Viền ĐỨT và không tô nền: mọi huy hiệu thật đều
+   liền viền có nền, nên nhìn một cái là biết cái này do máy kết luận chứ
+   không phải do công ty trả lời. */
+.pill.suy{color:var(--mute);border:1px dashed var(--line-2);background:none}
+.trow .c1 b{font-size:12.5px;font-weight:600;color:var(--ink)}
+.trow .c2{font-size:11.5px;color:var(--dim);line-height:1.35}
+/* Cột "ai nộp" là một NHÃN phải đọc được, không phải chữ mờ trang trí. */
+.trow .c4{font-size:10.5px;color:var(--mute)}
+.trow .c5{font-size:11px;color:var(--mute);white-space:nowrap}
+.trow .c6{font-size:11px;color:var(--mute);white-space:nowrap}
+.trow .c6 b{color:var(--dim);font-weight:600;margin-right:2px}
+.trow .c6 i{display:block;font-style:normal;font-size:9.5px}
+.trow .c7{font-size:11px;color:var(--mute);text-align:right}
+.trow .c8{font-size:11px}
+.trow > summary::-webkit-details-marker{display:none}
+.trow > summary:hover{background:var(--panel-2)}
+.trow[open] > summary{background:var(--panel-2)}
+.trow .tco b{display:block;font-size:13px;font-weight:600;color:var(--ink)}
+.trow .tco i{display:block;font-style:normal;font-size:11px;color:var(--mute)}
+.ttag{display:flex;gap:5px;flex-wrap:wrap}
+.ttag .src{font-style:normal;font-size:9.5px;border:1px solid var(--line-2);
+  border-radius:20px;padding:1px 7px;color:var(--mute)}
+.ttag .src.linkedin{color:#8FA9C9;border-color:rgba(143,169,201,.35)}
+.ttag .src.board{color:var(--acc);border-color:rgba(85,201,141,.3)}
+.ttag .src.alert{color:var(--warn);border-color:rgba(216,161,94,.35)}
+.ttag .who{font-style:normal;font-size:9.5px;color:var(--line-2)}
+.trow .twhen{font-size:11px;color:var(--mute);white-space:nowrap}
+.trow .tthu{font-size:11px;color:var(--mute);text-align:right}
+.trow.sxong > summary{opacity:.6}
+
+/* RUỘT — ba thứ, cả ba là đường ĐI TIẾP chứ không phải chữ để đọc */
+.dtail{padding:4px 4px 16px 4px;border-left:2px solid var(--line-2);
+  margin:0 0 10px 6px;padding-left:14px}
+.dtblock b{font-size:11px;color:var(--dim)}
+.dtlist{list-style:none;margin:7px 0 0;padding:0;display:flex;
+  flex-direction:column;gap:9px}
+.dtlist li{display:grid;grid-template-columns:78px 1fr 78px;gap:8px}
+.dtkind{font-size:9.5px;color:var(--mute);border:1px solid var(--line-2);
+  border-radius:20px;padding:1px 6px;height:fit-content;text-align:center}
+.dtsub{font-size:12px;color:var(--ink);line-height:1.45}
+.dtwhen{font-size:10.5px;color:var(--mute);text-align:right}
+.dtsnip{grid-column:2 / -1;font-size:11px;color:var(--mute);line-height:1.5}
+.dtact{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.dtact .muted{font-size:11px}
+
+/* MÁY BÓ TAY, NGƯỜI LÀM ĐƯỢC — đưa đủ đồ nghề, không chỉ báo là hỏng. */
+/* ĐỔI CHẶNG BẰNG TAY — hai bước có chủ ý, không phải 74 nút rải trên bảng.
+   Chọn dòng, rồi mới hiện chặng đi tiếp CỦA DÒNG ĐÓ. */
+.doiform{display:flex;gap:8px;align-items:center;padding:10px 12px;
+  flex-wrap:wrap}
+.doiform select{flex:1;min-width:220px;background:var(--panel-2);
+  color:var(--ink);border:1px solid var(--line);border-radius:7px;
+  padding:6px 9px;font-size:11.5px;font-family:inherit}
+.doinow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+  padding:10px 12px;border-top:1px solid var(--line);background:var(--panel-2)}
+.doinow b{font-size:12.5px;color:var(--ink)}
+.doinow > span{font-size:11px;color:var(--mute)}
+.askhead span{display:block;font-weight:400;font-size:10.5px;color:var(--mute);
+  margin-top:3px;letter-spacing:0;text-transform:none}
+.taybox{border:1px solid rgba(216,161,94,.35);background:var(--warn-bg);
+  border-radius:9px;padding:11px 13px;margin:10px 0 4px}
+.taybox b{display:block;font-size:12px;color:var(--warn);margin-bottom:4px}
+.taybox span{display:block;font-size:11px;color:var(--mute);line-height:1.55}
+.tayact{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+
+/* Ô chọn "thư này của lần nộp nào" — 37 công ty không nhét vừa một hàng nút. */
+.ganform{margin:0}
+.ganform select{font:inherit;font-size:11px;color:var(--ink);
+  background:var(--bg);border:1px solid var(--line-2);border-radius:7px;
+  padding:5px 8px;max-width:250px}
+.ganform select:focus{outline:none;border-color:var(--acc-2)}
+.ganform select:disabled{opacity:.5}
+
+/* ================================================================
+   HOME — TỔNG QUAN. Đọc lại bốn tab kia, mỗi ô dẫn về tab của nó.
+   ================================================================ */
+
+/* CHI TIẾT — chỉ hiện khi bấm ⤢ mở to ô. Thuần CSS, không thêm JS: nút ⤢
+   đã có sẵn trên mọi ô, và `.wid.big` là tấm phủ cả cửa sổ nên lúc đó tha hồ
+   chỗ. Gọn lúc liếc, đủ lúc soi — bày hết ra không phải là nói nhiều, nó là
+   KHÔNG CHỌN, và chọn hộ người đọc mới đúng là việc của trang tổng quan. */
+.chitiet{display:none}
+.wid.big .chitiet{display:block}
+/* ĐỘ ĐẶC HIỆU PHẢI THẮNG, không phải chỉ "khai sau". `.chitiet{display:none}`
+   và `.cdrow{display:flex}` cùng độ đặc hiệu (0,1,0) — cái nào đứng sau
+   trong file thì thắng, mà `.cdrow` nằm dưới ~200 dòng. Kết quả: thẻ gắn
+   .chitiet vẫn hiện, và nó hỏng CÂM: không lỗi, chỉ là cắt mà không cắt.
+   Ghép hai lớp lên 0,2,0 thì thứ tự khai báo hết vai trò. */
+.cdrow.chitiet{display:none}
+.wid.big .cdrow.chitiet{display:flex}
+.wid.big .cdmain span.chitiet{margin-top:3px}
+.chitiet p{margin:0 0 9px;font-size:11.5px;color:var(--mute);line-height:1.6}
+.chitiet p:last-child{margin-bottom:0}
+.chitiet p b{color:var(--ink);font-weight:600}
+.wid.big .chitiet{margin-top:14px;padding-top:13px;
+  border-top:1px solid var(--line)}
+
+/* ---------------- PHỄU: rơi rụng ở khúc nào ---------------- */
+/* Bề rộng theo bước ĐẦU nên mắt thấy ngay độ hụt; nhưng con số nói lên khúc
+   nào cắt mạnh nhất lại là "% giữ so với bước LIỀN TRƯỚC" — so với bước đầu
+   thì bước nào cũng bé, và cái bé đó không chỉ ra được chỗ nào đang hỏng. */
+/* TÊN RIÊNG `.fbuoc`, KHÔNG mượn `.prow`: .prow đã là hàng thanh tiến độ
+   trong nhật ký (live.js vẽ) và hàng radio bên Cài đặt. Mượn tên là đúng lớp
+   lỗi .side và .pill đã dính hai lần — lần nào cũng hỏng câm, không báo. */
+.pheu{display:flex;flex-direction:column;gap:0}
+.fbuoc{display:grid;grid-template-columns:118px 1fr 78px;gap:8px;
+  align-items:center;padding:0 6px;border-radius:5px;text-decoration:none;
+  color:var(--dim)}
+.fbuoc:hover{background:var(--panel-2);color:var(--ink)}
+/* KHÔNG XUỐNG DÒNG. Nhãn dài ("đáng nộp (điểm ≥80)") gãy hai dòng thì
+   riêng nó đẩy cả ô cao thêm, và nó chỉ gãy trên màn hẹp — tức là đúng chỗ
+   đang thiếu chỗ nhất. */
+.pten{font-size:10.5px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.pbar{height:7px;background:var(--panel-2);border-radius:3px;overflow:hidden}
+.pbar > span{display:block;height:100%;border-radius:3px;
+  background:linear-gradient(90deg,var(--acc),rgba(111,208,140,.45))}
+.pso{text-align:right;font-size:12px;color:var(--ink);font-weight:600}
+.pso b{font-size:12px;font-weight:600}
+/* "% giữ bước trước" là chi tiết, không phải đầu bài — giấu tới lúc mở to. */
+.protr{display:none}
+.wid.big .protr{display:block;font-style:normal;font-size:9.5px;
+  color:var(--mute);font-weight:400}
+.wid.big .fbuoc{padding:6px;grid-template-columns:150px 1fr 130px}
+.wid.big .pbar{height:16px}
+/* Chỗ NỐI hai đoạn phễu. Phải nhìn ra là một VẾT NỐI chứ không phải bước tiếp
+   theo: đoạn dưới gần như không phải kết quả của đoạn trên. */
+.pseam{margin:3px 0 2px;font-size:9px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--mute);text-align:center;
+  border-top:1px dashed var(--line-2);padding-top:5px}
+
+/* ---------------- KẾT QUẢ: MỘT số to, không ba số ngang nhau ---------------- */
+/* Ba số ngang nhau là ba số không có số nào quan trọng, và người đọc phải tự
+   chọn hộ mình. Số này trả lời câu duy nhất người ta mở Home để hỏi. */
+.qtop{display:flex;align-items:flex-end;justify-content:space-between;
+  gap:18px;flex-wrap:wrap;margin-bottom:12px}
+.hero b{display:block;font-size:38px;line-height:1;font-weight:600;
+  color:var(--acc);letter-spacing:-.02em}
+.hero span{display:block;font-size:12px;color:var(--ink);margin-top:4px}
+.hero i{display:block;font-style:normal;font-size:10.5px;color:var(--mute);
+  margin-top:1px}
+.wid.big .hero b{font-size:60px}
+.hphu{display:flex;gap:20px}
+.hphu > span{font-size:10.5px;color:var(--dim)}
+.hphu b{display:block;font-size:16px;font-weight:600;color:var(--ink);
+  line-height:1.2}
+.hphu i{display:block;font-style:normal;font-size:9.5px;color:var(--mute)}
+/* Mỗi tỉ lệ BẮT BUỘC kèm mẫu số: "2,7%" trên 37 lần nộp và "2,7%" trên 3.700
+   lần nộp là hai sự thật khác hẳn nhau, mà nhìn con số % thì không phân biệt
+   được — mẫu số không phải chú thích, nó là một nửa của thông tin. */
+.qbar{display:flex;height:12px;border-radius:4px;overflow:hidden;
+  background:var(--panel-2);gap:1px}
+.segq{display:block;height:100%}
+.segq.qdi{background:var(--acc)}
+.segq.qtu{background:var(--bad)}
+/* "Coi như trượt" là PHÉP SUY, không phải họ nói — nhạt hơn khúc từ chối
+   thật, đúng cách huy hiệu .pill.suy nhạt hơn .pill.rejected. */
+.segq.qim{background:var(--bad);opacity:.42}
+.segq.qcho{background:var(--line-2)}
+.qkeys{display:flex;gap:11px;flex-wrap:wrap;margin-top:8px}
+.qkey{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--mute)}
+.qkey b{color:var(--ink);font-weight:600}
+.qdot{width:7px;height:7px;border-radius:2px;flex:none}
+.qdot.qdi{background:var(--acc)}
+.qdot.qtu{background:var(--bad)}
+.qdot.qim{background:var(--bad);opacity:.42}
+.qdot.qcho{background:var(--line-2)}
+
+/* ---------------- NĂNG SUẤT: mỗi việc một dải ---------------- */
+/* Mỗi dải tự chuẩn hoá theo ĐỈNH CỦA CHÍNH NÓ: một ngày quét ra 4.651 tin
+   trong khi nộp 4 đơn, chung trục thì dải "nộp" phẳng thành một vạch — mà đó
+   đúng là dải cần nhìn nhất. Đổi lại HAI DẢI KHÔNG SO ĐƯỢC BẰNG MẮT, nên mỗi
+   dải in đỉnh của nó ra bằng chữ. */
+.dai{padding:2px 0;border-bottom:1px solid var(--line)}
+.dai:last-child{border-bottom:0;padding-bottom:0}
+.dai:first-child{padding-top:0}
+.daitop{display:flex;justify-content:space-between;align-items:baseline;
+  gap:10px;margin-bottom:2px}
+.daitop a{font-size:11px;color:var(--dim);text-decoration:none}
+.daitop a:hover{color:var(--ink)}
+.daiso{text-align:right}
+.daiso b{font-size:12.5px;color:var(--ink);font-weight:600}
+.daiso i{font-style:normal;font-size:9.5px;color:var(--mute);margin-left:7px}
+.spark{display:block;width:100%;height:15px}
+.wid.big .spark{height:64px}
+.spark rect{fill:var(--acc);opacity:.72}
+/* MÀU MANG NGHĨA, không phải trang trí — cùng luật với số liệu trên thanh khúc.
+   Một cột cao của thư TỪ CHỐI mà tô xanh thì đọc thành "hôm nay được việc",
+   và người đọc rút ra kết luận ngược hẳn với sự thật. */
+.spark.kho rect{fill:var(--info,#6E9BD8)}      /* kho đang giữ — đọc để biết */
+.spark.lam rect{fill:var(--acc)}               /* việc mình làm */
+.spark.tot rect{fill:var(--acc);opacity:1}     /* kết cục TỐT */
+.spark.xau rect{fill:var(--bad);opacity:.85}   /* kết cục XẤU */
+.spark.tot rect.khong,.spark.xau rect.khong,.spark.kho rect.khong{
+  fill:var(--line-2)}
+.spark.tot rect.ngoai,.spark.xau rect.ngoai,.spark.kho rect.ngoai{
+  fill:var(--line)}
+.spark rect:hover{opacity:1}
+/* Ngày CÓ trong dải mà số bằng 0 -> chấm đáy. Bỏ trống hẳn thì nó lẫn với
+   ngày nằm NGOÀI dải (app chưa chạy), và hai thứ đó khác hẳn nhau. */
+.spark rect.khong{fill:var(--line-2);opacity:1}
+/* NGOÀI DẢI (app chưa chạy) phải NHẠT HƠN cột 0. Hai thứ này là nguồn gốc
+   của mọi biểu đồ nói dối: "hôm đó làm được 0" và "hôm đó chưa có app" mà vẽ
+   giống nhau thì người đọc tin cái thứ nhất. */
+.spark rect.ngoai{fill:var(--line);opacity:.55}
+.daichan{display:none;justify-content:space-between;margin-top:3px;
+  font-size:9.5px;color:var(--mute)}
+.wid.big .daichan{display:flex}
+.nhip{margin-top:4px;padding-top:4px;border-top:1px solid var(--line);
+  font-size:9.5px;color:var(--mute)}
+.nhip b{color:var(--ink);font-weight:600}
+.nhip b.xau{color:var(--bad)}
+
+/* ---------------- THEO THỨ / THEO THÁNG (chỉ khi mở to) ---------------- */
+.tqhead{font-size:11px;font-weight:600;color:var(--ink);margin-bottom:4px}
+.tqten{font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--mute);margin:14px 0 7px}
+.thubar{display:flex;gap:7px;align-items:flex-end;height:96px}
+.tcot{flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:flex-end;height:100%;gap:4px}
+.tbar{width:100%;max-width:46px;background:var(--acc);opacity:.72;
+  border-radius:4px 4px 0 0;min-height:2px}
+.tcot:hover .tbar{opacity:1}
+/* Gộp theo thứ/tháng ăn CÙNG màu với dải ngày của nó — cùng một việc thì
+   cùng một màu, nếu không thì "báo trượt" gộp theo tháng lại xanh. */
+.thubar.kho .tbar{background:var(--info)}
+.thubar.xau .tbar{background:var(--bad)}
+.tcot b{font-size:10.5px;color:var(--ink);font-weight:600}
+.tcot i{font-style:normal;font-size:9.5px;color:var(--mute)}
+/* CHƯA ĐỦ DỮ LIỆU THÌ NÓI RA. Một biểu đồ trống trông y hệt một biểu đồ
+   "năng suất bằng 0", và người dùng sẽ tin cái thứ hai. */
+.chuadu{padding:15px;border:1px dashed var(--line-2);border-radius:9px;
+  background:var(--panel-2)}
+.chuadu b{display:block;font-size:12px;color:var(--dim);margin-bottom:4px}
+.chuadu span{font-size:11px;color:var(--mute);line-height:1.55}
+.chuadu span b{display:inline;color:var(--ink)}
+
+/* ---------------- CHẨN ĐOÁN ---------------- */
+/* ĐỘ CHẮC nằm trên mặt thẻ, không giấu trong tooltip. Một con số đếm trực
+   tiếp (130 tin chưa nộp) và một suy đoán trên 4 mẫu mà trông giống nhau thì
+   người dùng đi sửa nhầm chỗ — và đó là cách tệ nhất một trang thống kê hỏng:
+   nó không im lặng, nó chỉ sai hướng. */
+.cdlist{display:flex;flex-direction:column;gap:4px}
+.cdrow{display:flex;gap:8px;align-items:center;padding:2px 8px;
+  border-radius:8px;border:1px solid var(--line);background:var(--panel-2);
+  text-decoration:none;color:var(--dim)}
+.wid.big .cdrow{align-items:flex-start;padding:12px}
+.cdrow:hover{border-color:var(--line-2)}
+.cdrow.chac{border-left:2px solid var(--acc)}
+.cdrow.vua{border-left:2px solid var(--warn)}
+.cdrow.yeu{border-left:2px solid var(--line-2)}
+.cdso{font-size:14px;font-weight:600;color:var(--ink);min-width:44px;
+  line-height:1.25}
+.cdmain{flex:1;min-width:0}
+.cdmain b{display:block;font-size:11.5px;color:var(--ink);line-height:1.35}
+.cdmain span{font-size:11px;color:var(--mute);line-height:1.5}
+.cdmain i{font-style:normal;font-size:9.5px;color:var(--mute);opacity:.8}
+.cdend{display:flex;align-items:center;gap:7px;flex:none}
+.wid.big .cdend{flex-direction:column;align-items:flex-end}
+.cdmuc{font-size:9px;letter-spacing:.08em;text-transform:uppercase;
+  padding:2px 6px;border-radius:4px;border:1px solid var(--line-2);
+  color:var(--mute)}
+.cdmuc.chac{color:var(--acc);border-color:var(--acc)}
+.cdmuc.vua{color:var(--warn);border-color:rgba(216,161,94,.5)}
+
+/* Lúc gọn chỉ bày BA dấu hiệu chắc nhất — bốn thẻ xếp chồng trên một ô cao
+   190px thì không đọc được thẻ nào. Dòng này nói thẳng còn mấy cái nữa, chứ
+   không cắt im lặng: cắt mà không báo thì người dùng tin là hết. */
+.cdmore{margin-top:3px;font-size:9.5px;color:var(--mute);text-align:center}
+.cdmore b{color:var(--ink);font-weight:600}
+.wid.big .cdmore{display:none}
+
+/* ---- SIẾT CHO VỪA MỘT KHUNG ----
+   Ô tổng quan mà phải cuộn thì nó đã thôi là tổng quan. Mấy dòng dưới cắt
+   đúng những chỗ KHÔNG mang thông tin: đệm nút, chiều cao dòng, cỡ chữ phụ.
+   Không cắt con số nào, không cắt mẫu số nào — cắt dữ liệu để vừa khung là
+   đổi một cái xấu lấy một cái sai. Mở to ô thì mọi thứ giãn lại như cũ. */
+.cdrow .mbtn.tiny{padding:3px 7px;font-size:10px}
+.cdrow .cdmuc{padding:1px 5px}
+.wid.big .cdrow .mbtn.tiny{padding:5px 10px;font-size:11px}
+.pten{line-height:1.25}
+.pso{line-height:1.25}
+.qkeys{margin-top:6px}
+
+.wid.big .dai{padding:9px 0}
+.wid.big .cdrow{padding:12px}
+.wid.big .pheu{gap:3px}
+.wid.big .pbar{height:16px}
+
+/* Ô VỪA RUỘT — không phải khung cuộn.
+   `.wbody{overflow:auto}` làm min-content của ô bằng 0, nên lưới nén ô xuống
+   bao nhiêu cũng được và ruột đành cuộn. Bỏ overflow thì ô đòi đúng chiều cao
+   nó cần; hàng `auto` cấp đủ; cửa sổ quá thấp thì CẢ TRANG cuộn — hỏng đúng
+   cách, thay vì bốn ô cùng cuộn lén. Mở to (.big) thì trả lại cuộn, vì lúc
+   đó ruột giãn ra và có thể dài hơn màn hình thật. */
+.wid.vua > .wbody{overflow:visible;min-height:0}
+.wid.vua.big > .wbody{overflow:auto}

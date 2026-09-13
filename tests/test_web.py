@@ -437,7 +437,7 @@ with tempfile.TemporaryDirectory() as tmp:
         _known |= set(_re.findall(r'"([^"]+)"', _grp))
     _known |= set(_re.findall(r'path\.startswith\("([^"]+)"\)', _server))
     _wired = set()
-    for page in ("/search", "/cv", "/track", "/"):
+    for page in ("/search", "/cv", "/track", "/track/queue", "/"):
         _s, body = get(page)
         if _s != 200:
             continue
@@ -461,6 +461,16 @@ with tempfile.TemporaryDirectory() as tmp:
                                   mail_address="a@b.c")
             _wired |= set(_re.findall(r"data-post='([^']+)'", _html))
             _wired |= set(_re.findall(r'data-post="([^"]+)"', _html))
+    # Nút của THƯ đã dọn sang màn hàng chờ (/track/queue). Không vẽ nó ở đây
+    # thì bài này thôi kiểm /api/track/mail/* — đúng mấy đường mới nhất.
+    from jobbot.dashboard.views import trackcho as _cho
+    _hq = _cho.render(
+        rows=[_row], mu=[dict(id=3, company="M", company_guess="",
+                              subject="s", snippet="n")],
+        asks=[dict(id=2, company="X", company_guess="X", stage="applied",
+                   kind="rejected", subject="s", snippet="n", app_id=None)])
+    _wired |= set(_re.findall(r"data-post='([^']+)'", _hq))
+    _wired |= set(_re.findall(r'data-post="([^"]+)"', _hq))
 
     check("có nút data-post để mà kiểm", len(_wired) >= 7, str(sorted(_wired)))
     for _target in sorted(_wired):
@@ -1687,8 +1697,32 @@ with tempfile.TemporaryDirectory() as tmp:
                    posting_id=None, url="", score=0)],
         asks=[], counts={"total": 1}, mail_ready=False, mail_address="")
     check("bảng Quản lí vẫn vẽ huy hiệu .pill", "class='pill " in _trk)
-    check("và huy hiệu KHÔNG dính kiểu của viên thuốc",
-          "class=deckpill" not in _trk)
+    # KHÔNG DÒNG NÀO ĐƯỢC BIẾN MẤT. Bảng xếp theo nhóm sức sống; dòng thiếu
+    # trường đó phải rơi vào nhóm cuối chứ không được lặng lẽ mất khỏi màn.
+    check("dòng chưa xếp được nhóm vẫn hiện ra",
+          "X" in _trk and "Chưa xếp được nhóm" in _trk)
+    # QUÁ CỬA SỔ HỒI ÂM THÌ PHẢI ĐỎ, kể cả dòng đang phỏng vấn: một lời mời
+    # 20 ngày trước chưa ai nhắc lại là chuyện đáng lo nhất trên bảng.
+    _nong = _tk.render(
+        rows=[dict(id=1, stage=_bd2.INTERVIEW, company="Kappa Lab", role="",
+                   days=20, event_days=None, last_event="", silent=False,
+                   cv_file="", posting_id=None, url="", score=0,
+                   song="nong", im_ngay=20, so_thu=1, ho_tra_loi=False)],
+        asks=[], counts={"total": 1}, mail_ready=False, mail_address="")
+    check("dòng phỏng vấn im quá lâu -> vẫn tô cảnh báo", "snong qua" in _nong)
+    _moi = _tk.render(
+        rows=[dict(id=1, stage=_bd2.INTERVIEW, company="Kappa Lab", role="",
+                   days=2, event_days=None, last_event="", silent=False,
+                   cv_file="", posting_id=None, url="", score=0,
+                   song="nong", im_ngay=2, so_thu=1, ho_tra_loi=False)],
+        asks=[], counts={"total": 1}, mail_ready=False, mail_address="")
+    check("còn trong cửa sổ thì không tô cảnh báo", "snong qua" not in _moi)
+    # Quản lí GIỜ CÓ thanh khúc, như Search và CV. Thứ bài này canh vẫn còn
+    # nguyên giá trị: huy hiệu trạng thái (`.pill`) và viên thuốc thanh trên
+    # (`.deckpill`) phải là HAI lớp khác nhau, không lớp nào ăn kiểu của lớp kia.
+    check("Quản lí có thanh khúc như Search và CV", "class=deckpill" in _trk)
+    check("huy hiệu trạng thái vẫn là lớp riêng",
+          "class='pill " in _trk and "class='deckpill" not in _trk)
     _cssP = (Path(__file__).resolve().parent.parent
              / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
     check("viên thuốc căn giữa", "align-items:center" in _cssP)
@@ -1859,7 +1893,12 @@ with tempfile.TemporaryDirectory() as tmp:
     _, _blank = get("/")
     check("Home vẫn mở được", "Home" in _blank)
     check("và không còn là trang trống", "đang trống" not in _blank)
-    check("Home nói rõ nó sẽ là gì", "bảng điều khiển pipeline" in _blank)
+    # Chỗ giữ chỗ đã thành trang thật — canh THỨ nó phải có, không canh câu
+    # hứa hẹn cũ. Bốn ô + thanh khúc + nhật ký.
+    check("Home có thanh khúc như mọi tab", "class=deckpill" in _blank)
+    for _o in ("Kết quả", "Năng suất", "Chẩn đoán", "Phễu"):
+        check(f"Home có ô «{_o}»", _o in _blank)
+    check("và có nhật ký", "data-journal" in _blank)
     # Gỡ nội dung mà để lại đống code nuôi nó thì mới là bẩn.
     for _gone in ("class=funnel", "class=needs", "class=stats", "class=plot"):
         check(f"không còn {_gone}", _gone not in _blank)
@@ -2011,7 +2050,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # MỌI trang trong thanh bên. Đã sập trắng vì một tham số thừa ở chỗ gọi
     # (`mail.account(conn)` sau khi hàm bỏ tham số) — 906 bài test xanh mà
     # trang /track chết, vì không bài nào mở nó.
-    for page in ("/", "/search", "/track", "/cv", "/profile",
+    for page in ("/", "/search", "/track", "/track/queue", "/cv", "/profile",
                  "/settings"):
         code, body = get(page)
         check(f"{page} mở được", code == 200, f"HTTP {code}")
@@ -2070,10 +2109,44 @@ with tempfile.TemporaryDirectory() as tmp:
              / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
     _, _sv = get("/")
     check("logo là chìa khoá vẽ bằng SVG", "<svg class=logo" in _sv)
+    # ĐẾM TRONG LOGO, không đếm cả trang: bộ icon thanh bên cũng có <circle>
+    # (kính lúp, người, bánh răng), nên đếm cả trang là bài này thôi kiểm
+    # đúng thứ nó mang tên.
+    _lg = _re7.search(r"<svg class=logo.*?</svg>", _sv, _re7.S)
+    _lg = _lg.group(0) if _lg else ""
     check("ba vòng chìa là vòng THẬT — có lỗ, không phải chấm đặc",
-          _sv.count("<circle") == 3 and "fill=none" in _sv)
+          _lg.count("<circle") == 3 and "fill=none" in _lg)
     check("logo ăn màu từ CSS, không đóng cứng trong hình",
-          "currentColor" in _sv and ".logo{" in _css7)
+          "currentColor" in _lg and ".logo{" in _css7)
+
+    print("\n[BỘ ICON — một bộ, không phải nhặt ký tự Unicode mỗi chỗ một cái]")
+    from jobbot.dashboard import layout as _lay
+    check("mọi tab đều có icon trong bộ",
+          all(m in _lay.ICON for _, _, m in _lay.NAV))
+    check("không icon nào trong bộ bị bỏ quên",
+          set(_lay.ICON) == {m for _, _, m in _lay.NAV}
+          | {"setting", "adjust", "to", "gap"})
+    # Ký tự Unicode làm icon là thứ đã hỏng: mỗi ký tự một cỡ quang học, một
+    # baseline, nên phóng to lúc gập thanh bên là so le hẳn.
+    # CANH ĐÚNG THẾ DÙNG LÀM ICON: ký tự chiếm TRỌN một thẻ (`<i>◈</i>`,
+    # `>⚟</button>`). Nhắc tên nút trong câu văn ("chỉnh ở ⚟") thì được —
+    # đó là cách gọi tên thứ người dùng đang nhìn thấy, và cấm nó là cấm
+    # nhầm: cái hỏng là ký tự THAY CHO hình, không phải ký tự trong câu.
+    for _xau in ("◈", "⌕", "▤", "▣", "◇", "⚙", "⚟", "⤢", "«"):
+        check(f"không còn ký tự «{_xau}» làm icon", f">{_xau}<" not in _sv)
+    for _ten, _than in _lay.ICON.items():
+        check(f"icon «{_ten}» vẽ bằng hình, không phải chữ",
+              "<" in _than and "text" not in _than)
+    _i1 = _lay.ico("home")
+    check("icon khai chung một khung 24×24", "viewBox='0 0 24 24'" in _i1)
+    check("và ăn màu từ CSS, không đóng cứng", "stroke:currentColor" in _css7)
+    check("một chỗ khai nét cho cả bộ", _css7.count("stroke-width:1.75") == 1)
+    check("trình đọc màn hình không đọc icon hai lần", "aria-hidden" in _i1)
+    # Lúc gập, icon là thứ DUY NHẤT để bấm — phóng bằng cỡ SVG chứ không phải
+    # font-size, nếu không cả năm cái to lên không bằng nhau.
+    check("gập thanh bên thì phóng bằng cỡ SVG, không phải font-size",
+          ".navmin .navlink .ico{width:20px" in _css7
+          and "font-size:22px" not in _css7)
     check("navend bị đẩy xuống đáy", "margin-top:auto" in _css7)
 
     print("\n[đường PHÁ HOẠI không được là đường mặc định]")

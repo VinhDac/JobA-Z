@@ -510,6 +510,90 @@ def cv_hut(conn: sqlite3.Connection) -> dict:
     return nho(conn, "hut", _tinh)
 
 
+def phien_stage(conn: sqlite3.Connection) -> dict:
+    """Trạng thái PHIÊN cho thanh Home — một câu, đọc là biết đang thế nào.
+
+    Ba tình trạng, và chúng KHÁC NHAU về việc người dùng nên làm:
+        đang chạy   khúc nào đó đang làm việc ngay lúc này
+        đang trực   phiên bật, đang đếm tới vòng sau
+        đang TẮT    không có gì sẽ tự xảy ra cả
+    Gộp hai cái sau thành "bật" là mất phân biệt duy nhất giữa "sắp có tin"
+    và "đang nghỉ giữa hai vòng".
+    """
+    from ..core import prefs, scheduler
+    sch = scheduler.current()
+    bat = [prefs.PHIEN[k][1] for k in prefs.PHIEN if prefs.flag(conn, k)]
+    khuc = " → ".join(bat) if bat else "CHƯA BẬT KHÚC NÀO"
+    if sch.running:
+        cau, nhan = f"phiên ĐANG CHẠY · {khuc}", "Đang chạy…"
+    elif sch.paused:
+        cau, nhan = f"phiên đang TẮT · sẽ chạy {khuc}", "Start session"
+    else:
+        phut = max(1, sch.next_in() // 60)
+        cau = f"đang trực · vòng sau sau {phut} phút · {khuc}"
+        nhan = "Chạy vòng ngay"
+    return {"phien": cau, "nhan_phien": nhan,
+            "dang_truc": not sch.paused,
+            "bat": {k: prefs.flag(conn, k) for k in prefs.PHIEN}}
+
+
+def track_stage(conn: sqlite3.Connection) -> dict:
+    """Số đo cho thanh của khúc QUẢN LÍ. Mỗi số phải là một việc.
+
+    Ba số, không hơn — cùng luật với Search và CV: số nào không trả lời được
+    "giờ tôi làm gì" thì nó chỉ làm loãng thanh.
+
+        đi tiếp    họ đang nói chuyện với bạn — việc quan trọng nhất
+        chờ bạn    thư đang đợi bạn quyết, cộng thư máy không đọc nổi
+        đã nộp     nền, đọc để biết quy mô
+    """
+    from ..track import board, scan
+    hang = board.all(conn)
+    that = [r for r in hang if r["stage"] != board.DRAFT]
+    di_tiep = [r for r in that if r.get("song") == board.SONG_NONG]
+    cho = len(scan.proposals(conn)) + len(scan.kho_hieu(conn))
+    im = [r for r in that if r.get("song") == board.SONG_IM]
+    from ..core import prefs
+    # BỐN SỐ BẠN XIN: đã nộp · đi tiếp · trượt · chờ bạn.
+    #
+    # Bản trước tôi tự đổi "trượt" thành "im quá lâu" — hai thứ khác nhau:
+    # trượt là họ ĐÃ NÓI, im lặng là họ CHƯA NÓI GÌ. Gộp lại là mất phân biệt
+    # duy nhất giữa "đã chết" và "chưa biết".
+    #
+    # NHƯNG IM QUÁ LÂU THÌ ĐẾM VÀO TRƯỢT. Đó là quyết định của người dùng, và
+    # nó làm bảng VƠI ĐI được: 28/37 lần nộp chưa bao giờ nhận một chữ nào:
+    # để chúng nằm mãi ở "đang chờ" thì con số "đang chờ" chỉ lớn dần và
+    # không nói được gì. Ngưỡng xoay được (⚟), và vì nó là PHÉP SUY chứ không
+    # phải sự thật nên hạ rồi nâng lại thì mọi dòng về đúng chỗ cũ.
+    #
+    # Hai thứ vẫn TÁCH RA ĐẾM RIÊNG để dòng trạng thái nói được câu đầy đủ:
+    # bao nhiêu là họ ĐÃ NÓI, bao nhiêu là máy SUY RA.
+    ho_noi = [r for r in that if r["stage"] == board.REJECTED]
+    truot = ho_noi + im
+    moc = board.nguong(conn)
+    # ĐO ĐƯỢC, không gõ cứng: hồi âm là chuyện của hộp thư từng người. Con số
+    # này đi thẳng lên tấm ⚟ để người dùng xoay ngưỡng có căn cứ mà xoay —
+    # với mỗi mốc, ĐẶT NÓ THÌ ĐÓNG NHẦM MẤY LÁ, đếm trên thư có thật.
+    tra_loi = [r for r in that if r.get("ho_tra_loi")]
+    pha = board.im_da_pha(conn)
+    return {"di_tiep": len(di_tiep), "cho_ban": cho, "da_nop": len(that),
+            "truot": len(truot), "im": len(im), "nguong": moc,
+            "do": {"tra_loi": len(tra_loi), "tong": len(that), **pha},
+            # Hàng đợi cho nút NỘP: tin đáng nộp mà CHƯA nộp chỗ nào.
+            "hang_doi": conn.execute(
+                "SELECT COUNT(*) FROM posting p WHERE p.kept = 1"
+                " AND p.realism IN ('likely','possible') AND p.score >= 80"
+                " AND p.id NOT IN (SELECT posting_id FROM application"
+                "                  WHERE posting_id IS NOT NULL)").fetchone()[0],
+            # DÒNG TRẠNG THÁI TÁCH ĐÔI CON SỐ TRƯỢT. Thanh trên chỉ có chỗ
+            # cho một số; nếu nó gộp 2 lời từ chối thật với 32 phép suy mà
+            # không nói ra thì người đọc tưởng 34 công ty đã nói không.
+            "state": (f"{len(that)} lần nộp · {len(ho_noi)} họ từ chối · "
+                      f"{len(im)} coi như trượt (im quá {moc} ngày)"
+                      if that else "chưa nộp chỗ nào"),
+            "nop": {k: prefs.flag(conn, k) for k in prefs.NOP}}
+
+
 def cv_nut(conn: sqlite3.Connection) -> dict:
     """Hai núm của tầng CV, đã đổi sang thứ build() dùng được.
 

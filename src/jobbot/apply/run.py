@@ -182,6 +182,12 @@ class Report:
     missing: list[str] = _field(default_factory=list)                  # hồ sơ thiếu
     note: str = ""
     needs_login: str = ""          # trang đòi đăng nhập; giá trị là địa chỉ đó
+    # MÁY BÓ TAY, NGƯỜI LÀM ĐƯỢC. Giá trị là địa chỉ người dùng phải tự mở.
+    #
+    # Cờ RIÊNG chứ không đọc chữ trong `note`: bảng Quản lí gắn nhãn "phải tự
+    # nộp tay" theo cờ này, và bắt nhãn bằng cách dò chuỗi tiếng Việt trong
+    # một câu mô tả là thứ hỏng ngay lần đầu ai đó sửa câu chữ.
+    tu_lam: str = ""
 
     def line(self) -> str:
         if self.needs_login:
@@ -644,7 +650,7 @@ def open_and_fill(url: str, book: dict[str, Ans], resume: Path | None,
         real = lk.apply_url(tab)
         if not real:
             return done(Report(
-                url=url,
+                url=url, tu_lam=url,
                 note="tin LinkedIn này không lộ đường nộp — thường là môi "
                      "giới, nộp qua LinkedIn hoặc qua người tuyển"))
         tab.go(real, timeout=45)

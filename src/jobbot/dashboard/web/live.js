@@ -105,12 +105,17 @@
   const progress = (all) => $('[data-progress]').forEach((b) => drawProgress(b, all));
 
   // --------------------------------------------------------------- trạng thái
-  // 'tạm dừng' lúc vừa mở app đọc ra như đang hỏng. Nói thẳng ra là tự quét
-  // đang tắt, và nút bên cạnh chính là chỗ bật.
+  // 'tạm dừng' lúc vừa mở app đọc ra như đang hỏng. Nói thẳng ra là TRẠM TRỰC
+  // đang tắt, và nút Start session trên tab Tổng quan chính là chỗ bật.
+  //
+  // "Trạm trực", không phải "tự quét": vòng nền giờ chạy CẢ dây chuyền
+  // (Search → Make CV → Manage mail), không riêng lượt quét. Gọi nó là "tự
+  // quét" thì người dùng tắt nó đi để khỏi quét, và mất luôn hai khúc kia
+  // mà không biết.
   function label(state, mins) {
-    if (state === 'running') return 'đang chạy';
-    if (state === 'paused') return 'tự quét: TẮT';
-    return mins > 0 ? 'chờ · quét sau ' + mins + ' phút' : 'chờ';
+    if (state === 'running') return 'phiên đang chạy';
+    if (state === 'paused') return 'trạm trực: TẮT';
+    return mins > 0 ? 'đang trực · vòng sau sau ' + mins + ' phút' : 'đang trực';
   }
 
   // Việc gần nhất, hiện ở thanh trạng thái đáy app. Không lưu đâu cả — đây là
@@ -124,10 +129,10 @@
     document.body.dataset.run = state;
     $('[data-state]').forEach((el) => { el.textContent = label(state, mins); });
     $('[data-act="pause"]').forEach((b) => {
-      b.textContent = state === 'paused' ? 'Bật tự quét' : 'Tắt tự quét';
+      b.textContent = state === 'paused' ? 'Bật trạm trực' : 'Tắt trạm trực';
       b.title = state === 'paused'
-        ? 'Quét theo lịch. Lựa chọn được nhớ cho lần mở app sau.'
-        : 'Ngưng quét theo lịch. Nút Chạy ngay vẫn dùng được.';
+        ? 'Chạy cả dây chuyền theo lịch. Lựa chọn được nhớ cho lần mở app sau.'
+        : 'Ngưng chạy theo lịch. Nút chạy tay vẫn dùng được.';
     });
     $('[data-act="run"]').forEach((b) => { b.disabled = state === 'running'; });
 
@@ -430,6 +435,24 @@
     });
   }
 
+  // GÁN THƯ VÀO MỘT DÒNG. Ô chọn, không phải nút: danh sách 37 công ty
+  // không nhét vừa một hàng nút, và người dùng phải TÌM đúng dòng của mình.
+  function wireGan() {
+    document.addEventListener('change', (e) => {
+      const sel = e.target.closest('select[data-ganfor]');
+      if (!sel || !sel.value) return;
+      sel.disabled = true;
+      fetch('/api/track/mail/gan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ arg: sel.dataset.ganfor + ':' + sel.value }).toString(),
+      })
+        .then((r) => r.json())
+        .then((s) => { if (s.reload) location.reload(); else sel.disabled = false; })
+        .catch(() => { sel.disabled = false; });
+    });
+  }
+
   function wireDangerWord() {
     document.addEventListener('input', (e) => {
       const box = e.target;
@@ -641,6 +664,7 @@
   wire();
   wireTags();
   wireSheet();
+  wireGan();
   wireDangerWord();
   wireSheetTabs();
   wireSuggestFilter();

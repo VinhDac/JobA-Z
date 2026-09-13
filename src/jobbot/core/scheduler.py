@@ -96,9 +96,9 @@ class Scheduler:
         # Chrome bật lên trong khi cửa sổ còn chưa vẽ xong.
         self.last_scan = time.time()
         jlog.emit(SYSTEM,
-                  "app mở — tự quét đang TẮT, bấm Chạy ngay khi bạn sẵn sàng"
+                  "app mở — trạm trực đang TẮT, bấm Start session trên tab Tổng quan"
                   if self.paused else
-                  f"app mở — tự quét ĐANG BẬT, lần đầu sau {self.scan_every // 60} phút")
+                  f"app mở — trạm trực ĐANG BẬT, vòng đầu sau {self.scan_every // 60} phút")
         self._thread = threading.Thread(target=self._loop, daemon=True, name="scheduler")
         self._thread.start()
 
@@ -125,12 +125,12 @@ class Scheduler:
         """
         self.paused = True
         self._remember(False)
-        jlog.warn(SYSTEM, "ĐÃ TẠM DỪNG — không quét tự động nữa")
+        jlog.warn(SYSTEM, "TRẠM TRỰC ĐÃ TẮT — không tự chạy vòng nào nữa")
 
     def resume(self) -> None:
         self.paused = False
         self._remember(True)
-        jlog.ok(SYSTEM, f"tự quét ĐÃ BẬT — lần sau trong {self.next_in() // 60} phút")
+        jlog.ok(SYSTEM, f"trạm trực ĐÃ BẬT — vòng sau trong {self.next_in() // 60} phút")
 
     @staticmethod
     def _remember(on: bool) -> None:
@@ -165,7 +165,7 @@ class Scheduler:
             # phút ở menu Cài đặt là ăn ngay, không phải mở lại app.
             self.scan_every = scan_every_min() * 60
             if not self.paused and time.time() - self.last_scan >= self.scan_every:
-                self.scan_once()
+                self.phien_once()
             self.stop_flag.wait(30)
 
     @property
@@ -197,6 +197,36 @@ class Scheduler:
                 conn.close()
             except Exception:                           # noqa: BLE001
                 pass
+        finally:
+            self._gate.release()
+            jlog.done(SEARCH)
+            jlog.done(SYSTEM)
+        return self.last_result
+
+    def phien_once(self) -> str:
+        """MỘT PHIÊN: chạy lần lượt mọi khúc đang bật (xem jobbot/phien.py).
+
+        Khác `scan_once` ở chỗ nó chạy CẢ dây chuyền chứ không riêng lượt
+        tìm việc. Vòng 24/7 gọi hàm này, và nút «Start session» trên Home
+        cũng vậy — hai lối vào, MỘT việc. Hai định nghĩa "một vòng" là có
+        ngày bấm tay ra một đằng, để tự chạy ra một nẻo.
+
+        DÙNG CHUNG KHOÁ với scan_once: hai phiên chồng nhau thì hai chỗ cùng
+        ghi một file SQLite và cùng mở Chrome.
+        """
+        if not self._gate.acquire(blocking=False):
+            jlog.warn(SYSTEM, "đang chạy dở — bỏ qua yêu cầu chạy chồng")
+            return self.last_result
+        self.last_scan = time.time()
+        try:
+            from ..phien import chay
+            ra = chay()
+            self.last_result = ("cả ba khúc đang tắt" if ra.get("tat") else
+                                f"{len(ra['xong'])} khúc xong"
+                                + (f", {len(ra['hong'])} hỏng" if ra["hong"] else ""))
+        except Exception as exc:                        # noqa: BLE001
+            self.last_result = f"lỗi: {type(exc).__name__}: {exc}"
+            jlog.error(SYSTEM, f"phiên hỏng: {type(exc).__name__} — {str(exc)[:70]}")
         finally:
             self._gate.release()
             jlog.done(SEARCH)

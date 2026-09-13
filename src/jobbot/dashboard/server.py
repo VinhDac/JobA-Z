@@ -24,8 +24,11 @@ from . import upload
 from .views import cv as cvview
 from .views import cvhealth, importcv
 from .filters import JobFilter
+# `trackcho`, KHÔNG phải `queue`: dòng 9 đã `import queue` của thư viện
+# chuẩn, và luồng SSE bắt `queue.Empty`. Một cái tên đè lên nhau ở đây
+# là màn hình đứng im, không phải lỗi nổ ra cho ai thấy.
 from .views import (cvlist, cvsoan, home, jobs, profile, search,
-                    settings, track)
+                    settings, track, trackcho)
 
 HOST = "127.0.0.1"          # chỉ máy này truy cập được. Không mở ra mạng.
 
@@ -289,6 +292,20 @@ class Handler(BaseHTTPRequestHandler):
                         f"{who} — CHƯA ĐĂNG NHẬP {site}. Cửa sổ Chrome nộp đang "
                         f"mở sẵn trang đó: đăng nhập một lần rồi bấm Nộp lại.")
                     return
+                # MÁY BÓ TAY THÌ GIAO LẠI CHO NGƯỜI, đừng để lần nộp đó rơi.
+                # Dòng đã dựng sẵn ở /api/apply; đổi nhãn để bảng Quản lí xếp
+                # nó vào "phải tự nộp tay", kèm đường nộp và đường tải CV.
+                if report.tu_lam:
+                    conn.execute(
+                        "UPDATE application SET origin = 'tay'"
+                        " WHERE posting_id = ? AND stage = ?",
+                        (row["id"], "draft"))
+                    conn.commit()
+                    live.quen()
+                    journal.log.warn(
+                        journal.SEARCH,
+                        f"{who} — máy không nộp được, đã chuyển sang "
+                        f"«phải tự nộp tay» ở tab Quản lí")
                 journal.log.ok(journal.SEARCH, f"{who} — {report.line()}")
                 if report.note:
                     journal.log.emit(journal.SEARCH, f"  {report.note}")
@@ -409,6 +426,25 @@ class Handler(BaseHTTPRequestHandler):
                              name="scan-manual").start()
             return None
 
+        if stage == "track":
+            # Nút Chạy của khúc Quản lí LÀ nút Quét thư — một khúc một nút,
+            # đúng như Search và CV.
+            def _quet():
+                conn2 = db.connect()
+                try:
+                    from ..track import scan as tscan
+                    tscan.run(conn2)
+                    tscan.noi_lai(conn2)
+                except Exception as exc:            # noqa: BLE001
+                    journal.log.error(journal.SEARCH,
+                                      f"quét thư hỏng — {type(exc).__name__}: {exc}")
+                finally:
+                    conn2.close()
+                    live.quen()
+
+            threading.Thread(target=_quet, daemon=True, name="mail-scan").start()
+            return None
+
         if stage == "cv":
             # Dựng bản CV cho 364 tin mất 5,3 giây — quá lâu để chạy trong
             # lúc trả lời HTTP, nên ở NỀN, tiến độ xem ở nhật ký luồng cv.
@@ -457,7 +493,15 @@ class Handler(BaseHTTPRequestHandler):
             conn = db.connect()
             try:
                 if path == "/":
-                    return self._html(home.render(live.onboarding(conn)))
+                    # MỘT lượt đọc cho cả trang (tongquan.tat_ca) — đo 0,4s
+                    # trên kho 5.166 tin. Tách ra gọi từng ô thì mỗi ô lại
+                    # quét lại bảng application, và bốn ô có thể nói bốn con
+                    # số khác nhau vì đọc ở bốn thời điểm.
+                    from . import tongquan
+                    return self._html(home.render(
+                        live.onboarding(conn),
+                        so=tongquan.tat_ca(conn),
+                        stage=live.phien_stage(conn)))
                 parts = _segments(path)
                 found = live.job_detail(conn, parts[1])
                 if not found:
@@ -498,12 +542,33 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 from ..core import prefs
                 from ..track import board, mail, scan
+                hang = board.all(conn)
                 return self._html(track.render(
-                    rows=board.all(conn), asks=scan.proposals(conn),
+                    rows=hang, asks=scan.proposals(conn),
+                    mu=scan.kho_hieu(conn), stage=live.track_stage(conn),
+                    thu={r["id"]: board.thu_cua(conn, r["id"]) for r in hang},
+                    loc={k: (query.get(k) or [""])[0][:40]
+                         for k in ("q", "ng", "ai", "tt", "cv")},
                     counts=board.counts(conn),
                     mail_ready=all(mail.account()),
                     mail_address=mail.account()[0],
                     mail_days=prefs.num(conn, prefs.MAIL_DAYS, 1, 365)))
+            finally:
+                conn.close()
+
+        if path == "/track/queue":
+            # MÀN CON của Quản lí — mọi thứ máy KHÔNG TỰ CHỐT ĐƯỢC.
+            #
+            # Trước đây nó là ô thứ hai ngay trên tab Quản lí, và 16 thẻ thư
+            # đẩy cái bảng xuống dưới một màn hình. Bảng là thứ đã xong, hàng
+            # chờ là thứ chưa xong — hai nhịp khác nhau, nên hai màn.
+            conn = db.connect()
+            try:
+                from ..track import board, scan
+                return self._html(trackcho.render(
+                    rows=board.all(conn), asks=scan.proposals(conn),
+                    mu=scan.kho_hieu(conn), stage=live.track_stage(conn),
+                    doi=(query.get("doi") or [""])[0][:12]))
             finally:
                 conn.close()
 
@@ -571,6 +636,12 @@ class Handler(BaseHTTPRequestHandler):
             # khung giờ, hộp thư); Điều chỉnh đổi thứ MÀN HÌNH NÀY làm việc
             # trên. Cùng tấm phủ, khác nội dung.
             stage = _segments(path)[-1]
+            if stage == "home":
+                conn = db.connect()
+                try:
+                    return self._html(home.adjust(live.phien_stage(conn)["bat"]))
+                finally:
+                    conn.close()
             if stage not in STAGES:
                 return self._404()
             conn = db.connect()
@@ -579,6 +650,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._html(search.adjust(live.sieve(conn)))
                 if stage == "cv":
                     return self._html(cvlist.adjust(live.cv_nut(conn)))
+                if stage == "track":
+                    d = live.track_stage(conn)
+                    return self._html(track.adjust(
+                        d.get("nop"), d.get("nguong") or 20, d.get("do")))
                 return self._html(
                     f"<div class=sheethead>Điều chỉnh · {STAGES[stage]}</div>"
                     "<div class=sheetwait>chưa có gì để chỉnh ở khúc này</div>")
@@ -998,6 +1073,188 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
             self._start_send(row)
             return self._json({"ok": True, "note": "đang kiểm form…"})
+
+        if path == "/api/track/nop-tiep":
+            # NỘP TIN KẾ TIẾP — cây cầu từ bảng theo dõi sang tab Search.
+            # Chọn tin điểm cao nhất CHƯA nộp chỗ nào, và chỉ trong mấy nguồn
+            # người dùng đã bật ở ⚟ (xem prefs.NOP).
+            from ..core import prefs
+            from ..track import board as tboard
+            conn = db.connect()
+            try:
+                bat = [tboard.nguon_cua(n) for n, k in
+                       (("board", prefs.NOP_BOARD), ("linkedin", prefs.NOP_LINKEDIN),
+                        ("alert", prefs.NOP_ALERT)) if prefs.flag(conn, k)]
+                if not bat:
+                    return self._json({"ok": False,
+                                       "note": "đã tắt cả ba nguồn nộp ở ⚟"},
+                                      status=400)
+                row = None
+                for r in conn.execute(
+                        "SELECT id, title, company, url, source FROM posting"
+                        " WHERE kept = 1 AND realism IN ('likely','possible')"
+                        " AND score >= 80 AND url != ''"
+                        " AND id NOT IN (SELECT posting_id FROM application"
+                        "                WHERE posting_id IS NOT NULL)"
+                        " ORDER BY score DESC, id DESC LIMIT 200"):
+                    if tboard.nguon_cua(r["source"]) in bat:
+                        row = r
+                        break
+                if row is None:
+                    return self._json({"ok": False,
+                                       "note": "không còn tin đáng nộp nào "
+                                               "trong mấy nguồn đang bật"},
+                                      status=400)
+                pdf = live.cv_pdf_for(conn, row["id"])
+                tboard.add(conn, row["company"], row["title"],
+                           posting_id=row["id"],
+                           cv_file=pdf.name if pdf and pdf.exists() else "",
+                           origin="apply", stage=tboard.DRAFT)
+            finally:
+                conn.close()
+            self._start_apply(dict(row), pdf)
+            live.quen()
+            return self._json({"ok": True,
+                               "note": f"đang mở form — {row['company']}"})
+
+        if path == "/api/home/num":
+            # BA CÔNG TẮC của PHIÊN. Cùng khuôn với /api/cv/num và
+            # /api/track/num: một tầng một đường.
+            from ..core import prefs
+            khoa, _, gia = form.get("arg", [""])[0].partition(":")
+            if khoa not in prefs.PHIEN or gia not in ("0", "1"):
+                return self._json({"ok": False, "note": "núm lạ"}, status=400)
+            conn = db.connect()
+            try:
+                prefs.put(conn, khoa, gia)
+            finally:
+                conn.close()
+            journal.log.ok(journal.SYSTEM,
+                           f"phiên · {prefs.PHIEN[khoa][1]} -> "
+                           + ("bật" if gia == "1" else "tắt"))
+            return self._json({"ok": True, "reload": True})
+
+        if path in ("/api/session/start", "/api/session/stop"):
+            # PHIÊN, không phải khúc. Nút này bật cả TRẠM TRỰC: chạy một vòng
+            # ngay, rồi để vòng nền lặp lại 24/7 (scheduler.phien_once).
+            #
+            # Bật trạm trực mà không chạy ngay là sai: người vừa bấm phải đợi
+            # tới nhịp sau — có thể một tiếng — mới thấy gì xảy ra, và họ sẽ
+            # tưởng nút hỏng.
+            from ..core import halt
+            runner = sched.current()
+            if path.endswith("/stop"):
+                runner.pause()
+                for khuc in STAGES:
+                    halt.ask(khuc)
+                return self._json({"ok": True, "reload": True,
+                                   "note": "đã tắt trạm trực"})
+            for khuc in STAGES:
+                halt.clear(khuc)
+            runner.resume()
+            threading.Thread(target=runner.phien_once, daemon=True,
+                             name="phien").start()
+            return self._json({"ok": True, "reload": True,
+                               "note": "phiên đang chạy…"})
+
+        if path == "/api/track/num":
+            # MỌI NÚM CỦA TẦNG QUẢN LÍ, MỘT ĐƯỜNG — như /api/cv/num bên CV.
+            # Ba công tắc nguồn và mốc im lặng đều là "đổi một quyết định của
+            # tầng này"; đẻ hai route cho cùng một việc là đẻ hai chỗ có thể
+            # lệch nhau.
+            #
+            # Khác hẳn /api/source bên Search: bên đó bật/tắt việc QUÉT, đây
+            # bật/tắt việc NỘP. Hai câu hỏi, hai đường.
+            from ..core import prefs
+            khoa, _, gia = form.get("arg", [""])[0].partition(":")
+            if khoa in prefs.NOP and gia in ("0", "1"):
+                ghi = (f"nộp từ {prefs.NOP[khoa][0]} -> "
+                       + ("bật" if gia == "1" else "tắt"))
+            elif khoa == "im_qua" and gia in prefs.IM_MUC:
+                khoa, ghi = prefs.IM_QUA, f"coi như trượt sau {gia} ngày im"
+            else:
+                return self._json({"ok": False, "note": "núm lạ"}, status=400)
+            conn = db.connect()
+            try:
+                prefs.put(conn, khoa, gia)
+            finally:
+                conn.close()
+            journal.log.ok(journal.SEARCH, ghi)
+            return self._json({"ok": True, "reload": True})
+
+        if path == "/api/track/xoa":
+            # XOÁ BẢNG — chỉ mấy dòng DỰNG TỪ THƯ. Đơn người dùng tự nộp qua
+            # app là việc họ đã làm, quét lại không dựng lại được.
+            if form.get("arg", [""])[0].strip() != "xoa":
+                return self._json({"ok": False, "note": "cần xác nhận"},
+                                  status=400)
+            conn = db.connect()
+            try:
+                n = conn.execute("SELECT COUNT(*) FROM application"
+                                 " WHERE origin = 'mail'").fetchone()[0]
+                conn.execute("UPDATE message SET application_id = NULL,"
+                             " needs_you = 0 WHERE application_id IN"
+                             " (SELECT id FROM application WHERE origin='mail')")
+                conn.execute("DELETE FROM application WHERE origin = 'mail'")
+                conn.commit()
+            finally:
+                conn.close()
+            live.quen()
+            journal.log.ok(journal.SEARCH,
+                           f"đã xoá {n} lần nộp dựng từ thư — bấm Quét thư "
+                           f"để dựng lại")
+            return self._json({"ok": True, "reload": True,
+                               "note": f"đã xoá {n} dòng"})
+
+        if path == "/api/track/mail/gan":
+            # GÁN một lá thư vào đúng lần nộp. Nửa còn thiếu của "không lá nào
+            # biến mất": máy đọc được kết cục mà không đoán ra công ty thì
+            # người dùng chỉ tay, chứ không phải chỉ được Bỏ qua.
+            ma, _, app = form.get("arg", [""])[0].partition(":")
+            conn = db.connect()
+            try:
+                from ..track import scan as tscan
+                xong = (ma.isdigit() and app.isdigit()
+                        and tscan.gan(conn, int(ma), int(app)))
+            finally:
+                conn.close()
+            if not xong:
+                return self._json({"ok": False, "note": "không gán được"},
+                                  status=400)
+            live.quen()
+            return self._json({"ok": True, "reload": True})
+
+        if path == "/api/track/mail/ignore":
+            # BỎ QUA một lá máy không hiểu: nó không thuộc lần nộp nào thật,
+            # hoặc chỉ là thư quảng cáo. Không xoá thư — chỉ thôi hỏi.
+            ma = form.get("arg", [""])[0].strip()
+            if not ma.isdigit():
+                return self._json({"ok": False}, status=400)
+            conn = db.connect()
+            try:
+                conn.execute("UPDATE message SET needs_you = 0 WHERE id = ?",
+                             (int(ma),))
+                conn.commit()
+            finally:
+                conn.close()
+            return self._json({"ok": True, "reload": True})
+
+        if path == "/api/track/mail/xep":
+            # NGƯỜI DÙNG TỰ XẾP một lá thư máy không hiểu. Đây là nửa còn lại
+            # của lời hứa "không lá nào biến mất": máy chỉ ra chỗ nó bó tay,
+            # người dùng quyết, và trạng thái đổi ngay.
+            ma, _, loai = form.get("arg", [""])[0].partition(":")
+            conn = db.connect()
+            try:
+                from ..track import scan as tscan
+                xong = ma.isdigit() and tscan.xep(conn, int(ma), loai)
+            finally:
+                conn.close()
+            if not xong:
+                return self._json({"ok": False, "note": "không xếp được"},
+                                  status=400)
+            live.quen()
+            return self._json({"ok": True, "reload": True})
 
         if path == "/api/track/drop":
             # Chỉ xoá được bản nháp — xem board.drop.

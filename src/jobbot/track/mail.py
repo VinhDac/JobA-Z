@@ -27,7 +27,13 @@ from email.header import decode_header
 HOST = "imap.gmail.com"
 PORT = 993
 SINCE_DAYS = 30
-MAX_MESSAGES = 400          # trần cứng, để một hộp thư to không treo vòng quét
+# TRẦN CỨNG, để một hộp thư to không treo vòng quét. 400 là quá thấp và nó
+# CẮT ÂM THẦM: hộp thư thật có 1.041 thư trong 60 ngày, lấy 400 thư mới nhất
+# là chỉ đọc 19 ngày — 41 ngày còn lại không bao giờ tới, và thư mời phỏng
+# vấn nằm trong đó. Người dùng bấm "quét 60 ngày" và nhận về 19.
+#
+# Đắt nhất là lượt fetch, không phải con số này: 0,27 giây mỗi thư.
+MAX_MESSAGES = 3000
 SNIPPET = 400               # ký tự lấy từ thân thư
 
 # App password của Google: đúng 16 chữ cái thường. Google hiện nó theo nhóm 4
@@ -170,7 +176,17 @@ def fetch(address: str, password: str, since_days: int = SINCE_DAYS,
         ok, data = box.search(None, loc + ")")
         if ok != "OK":
             raise MailError(f"tìm thư hỏng: {ok}")
-        ids = (data[0] or b"").split()[-limit:]
+        tat_ca = (data[0] or b"").split()
+        ids = tat_ca[-limit:]
+        # CẮT THÌ PHẢI NÓI. Lấy `limit` thư MỚI NHẤT nghĩa là bỏ phần cũ hơn,
+        # tức bỏ luôn mấy ngày đầu của khoảng người dùng vừa xin. Im lặng ở
+        # đây là báo "đã quét 60 ngày" trong khi mới đọc 19.
+        if len(tat_ca) > len(ids):
+            from ..core.journal import SEARCH, log as jlog
+            jlog.warn(SEARCH,
+                      f"hộp thư có {len(tat_ca):,} thư trong {since_days} ngày, "
+                      f"trần đang là {limit:,} — chỉ đọc {len(ids):,} thư MỚI "
+                      f"NHẤT, phần cũ hơn chưa đọc")
 
         out, broken = [], 0
         for num in ids:

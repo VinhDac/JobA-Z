@@ -203,5 +203,46 @@ if sys.platform == "darwin":
 else:
     check("bỏ qua — không phải macOS", True)
 
+print("\n[ICON APP — vẽ bằng HÌNH, đen trắng, cùng dấu với logo trong app]")
+import importlib.util as _il
+from pathlib import Path as _P
+_goc = _P(__file__).resolve().parent.parent
+_spec = _il.spec_from_file_location("make_app", _goc / "scripts/make_app.py")
+_ma = _il.module_from_spec(_spec); _spec.loader.exec_module(_ma)
+_src = (_goc / "scripts/make_app.py").read_text(encoding="utf-8")
+
+# ĐEN TRẮNG: ba màu phải là xám thuần — ba kênh RGB bằng nhau.
+for _ten, _h in (("nền", _ma.NEN), ("vòng", _ma.VONG), ("chìa", _ma.NET)):
+    _rgb = [int(_h.lstrip("#")[i:i+2], 16) for i in (0, 2, 4)]
+    check(f"màu {_ten} là xám thuần, không ám màu nào",
+          _rgb[0] == _rgb[1] == _rgb[2])
+check("vòng tròn tương phản hẳn với nền",
+      abs(int(_ma.NEN.lstrip('#')[:2], 16) - int(_ma.VONG.lstrip('#')[:2], 16)) > 200)
+check("chìa cùng màu nền nên nó là hình CẮT RA khỏi vòng tròn",
+      _ma.NET == _ma.NEN)
+# VẼ BẰNG HÌNH, KHÔNG BẰNG KÝ TỰ. Bản trước vẽ "◆" bằng font hệ thống: cỡ
+# quang học và baseline do font quyết, nên đổi macOS là icon xê dịch và không
+# có gì báo.
+# Canh THỨ ĐANG CHẠY, không canh chữ trong chú thích: dòng chú thích kể lại
+# cái đã bỏ là dòng đáng giữ nhất, cấm nó là cấm nhầm.
+_code = "\n".join(l for l in _src.splitlines() if not l.lstrip().startswith("#"))
+for _cam in ("NSAttributedString", "NSFont", "drawAtPoint_"):
+    check(f"không còn dựa vào «{_cam}»", _cam not in _code)
+check("chìa vẽ bằng đường, có hàm riêng", hasattr(_ma, "_khoa"))
+check("ba vòng tay cầm là NÉT, không tô — lỗ là lỗ thật",
+      "setLineWidth_" in _src and ".stroke()" in _src)
+# Icon ở Dock và logo trên thanh bên phải là MỘT cái tên.
+# ĐẾM TRONG LOGO, không đếm cả file: bộ icon thanh bên cũng có <circle>
+# (kính lúp, người, bánh răng) — đúng lớp lỗi bài "ba vòng chìa" bên test_web
+# đã dính. Cùng một cái bẫy, hai lần.
+_lay = (_goc / "src/jobbot/dashboard/layout.py").read_text(encoding="utf-8")
+_logo = _lay[_lay.index("LOGO = ("):]
+_logo = _logo[:_logo.index("</svg>")]
+check("logo trong app cũng là chìa khoá ba vòng", _logo.count("<circle cx=") == 3)
+check("bộ đủ cỡ tới 16px cho Finder", "16, 32, 128, 256, 512" in _src)
+_icns = _goc / "jobbot.app/Contents/Resources/jobbot.icns"
+if _icns.exists():
+    check("bản .icns đã đóng gói không rỗng", _icns.stat().st_size > 10_000)
+
 print(f"\n{ok} ok, {fail} fail")
 sys.exit(1 if fail else 0)

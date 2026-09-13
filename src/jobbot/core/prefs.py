@@ -72,6 +72,78 @@ LI_LEVELS = "li_levels"
 # lời cho đơn nộp tháng trước, mà không phải lôi cả hộp thư về.
 MAIL_DAYS = "mail_days"
 
+# --- BA NGUỒN, NHƯNG LÀ CÂU HỎI KHÁC ------------------------------------
+#
+# `SRC_*` ở trên hỏi: CÓ QUÉT nguồn này không.
+# `NOP_*` dưới đây hỏi: CÓ NỘP tin từ nguồn này không.
+#
+# Cùng ba cái tên, hai việc khác hẳn nhau, nên hai bộ công tắc — mỗi tab hỏi
+# câu của mình. Gộp làm một thì tắt LinkedIn để khỏi nộp là mất luôn 2.409
+# tin khỏi kho, và người dùng không hiểu vì sao Search trống.
+#
+# LINKEDIN KHÔNG BỊ TẮT CẢ CỤM. Phần lớn tin LinkedIn dẫn ra trang nộp của
+# chính công ty (xem apply/linkedin.py) — nộp được bình thường. Chỉ tin nào
+# BUỘC nộp trong LinkedIn mới nằm ngoài tầm; chúng có nhãn riêng và có đường
+# nộp tay, chứ không kéo cả nguồn xuống theo.
+NOP_BOARD = "nop_board"
+NOP_LINKEDIN = "nop_linkedin"
+NOP_ALERT = "nop_alert"
+NOP = {NOP_BOARD: ("board", "trang tuyển của chính công ty — nộp thẳng được"),
+       NOP_LINKEDIN: ("linkedin", "tin LinkedIn; cái nào dẫn ra web công ty "
+                      "thì nộp được, cái nào buộc nộp trong LinkedIn thì để "
+                      "bạn tự làm"),
+       NOP_ALERT: ("alert", "tin đến từ thư báo việc")}
+
+# --- PHIÊN: BA KHÚC, MỘT VÒNG ------------------------------------------
+#
+# Home là trạm trực 24/7. Một PHIÊN là một vòng chạy hết cả dây chuyền, và ba
+# công tắc này nói vòng đó gồm khúc nào.
+#
+# THỨ TỰ TRONG DICT LÀ THỨ TỰ CHẠY, không phải tình cờ: tìm việc trước (kho
+# mới có tin), dựng CV sau (nó xếp chữ theo tin trong kho), đọc thư sau cùng
+# (nó cập nhật bảng theo thứ đã nộp). Đảo lại thì lượt dựng CV đang xếp theo
+# kho của vòng trước.
+#
+# VÌ SAO PHẢI TẮT ĐƯỢC TỪNG KHÚC: ba khúc có giá rất khác nhau. Đọc thư 12
+# giây, dựng CV 5,3 giây, còn quét LinkedIn phải mở Chrome và tốn nửa tiếng.
+# Ai chỉ muốn trực hộp thư ban đêm thì tắt hai khúc kia, chứ không phải chọn
+# giữa "chạy tất" và "không chạy gì".
+#
+# MẶC ĐỊNH BẬT CẢ BA. Một khúc tắt lặng lẽ là kiểu hỏng tệ nhất: phiên chạy
+# suốt đêm mà sáng ra không có bản CV nào mới, và không ai hiểu vì sao.
+PHIEN_SEARCH = "phien_search"
+PHIEN_CV = "phien_cv"
+PHIEN_MAIL = "phien_mail"
+PHIEN = {PHIEN_SEARCH: ("search", "Search",
+                        "tìm tin mới ở board công ty và LinkedIn, lọc rồi "
+                        "chấm điểm. Khúc đắt nhất: phải mở Chrome."),
+         PHIEN_CV: ("cv", "Make CV",
+                    "xếp lại chữ trên CV cho khớp từng tin trong kho. Không "
+                    "viết câu mới — chỉ chọn và sắp xếp câu bạn đã viết."),
+         PHIEN_MAIL: ("track", "Manage mail",
+                      "đọc hộp thư rồi cập nhật bảng Quản lí. Chỉ đọc, "
+                      "không đụng gì vào hộp thư của bạn.")}
+
+
+# --- NÚM CỦA TẦNG QUẢN LÍ ------------------------------------------------
+#
+# QUÁ BAO NHIÊU NGÀY IM THÌ COI NHƯ TRƯỢT.
+#
+# Đây là cái núm biến một đống "chưa biết" thành "xong" — và không có nó thì
+# bảng chỉ lớn dần chứ không bao giờ vơi: đo trên hộp thư thật, 28/37 lần nộp
+# không bao giờ nhận được một chữ nào. Chúng nằm mãi ở "đang chờ", và "đang
+# chờ" 40 ngày là một lời nói dối lịch sự.
+#
+# SỐ NÀY LÀ PHÉP SUY, KHÔNG PHẢI SỰ THẬT — nên nó KHÔNG ghi vào cột `stage`.
+# Mỗi lần đọc bảng mới tính lại; hạ xuống 10 rồi nâng lại 45 thì mọi dòng
+# quay về đúng chỗ cũ. Ghi xuống thì đó là đường một chiều, và một hôm nào
+# đó thư trả lời về sau 31 ngày sẽ đâm vào một dòng đã bị đóng vĩnh viễn.
+IM_QUA = "im_qua"
+
+# Năm mức, và mỗi mức phải trả lời được "chọn nó thì khác gì" — không phải
+# một thanh trượt 1..365 để người dùng tự đoán.
+IM_MUC = ("10", "14", "20", "30", "45")
+
 # --- HAI NÚM CỦA TẦNG CV ------------------------------------------------
 #
 # HAI, không hơn. Mỗi núm phải trả lời được "xoay nó thì bản CV đổi thế nào"
@@ -121,7 +193,9 @@ CV_TU_LO = "cv_tu_lo"
 DEFAULTS = {AUTORUN: "0", SCAN_EVERY: "60",
             HOURS_FROM: "8", HOURS_TO: "22", PACE: "thuong",
             SRC_BOARD: "1", SRC_LINKEDIN: "1", SRC_ALERT: "1", LI_DONE: "", LI_LEVELS: "", MAIL_DAYS: "30",
-            CV_TU_LO: "0", CV_RIENG: "rieng",
+            NOP_BOARD: "1", NOP_LINKEDIN: "1", NOP_ALERT: "1",
+            CV_TU_LO: "0", CV_RIENG: "rieng", IM_QUA: "20",
+            PHIEN_SEARCH: "1", PHIEN_CV: "1", PHIEN_MAIL: "1",
             **{k: "1" for k in SRC_ATS.values()}}
 
 

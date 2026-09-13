@@ -27,12 +27,77 @@ from html import escape as esc
 # kết quả tìm" là một việc. Chấm điểm không phải một hệ chạy riêng, nó là
 # giai đoạn cuối của cùng một lần quét.
 # /jobs/<id> và /jobs/<id>/cv VẪN SỐNG — danh sách mới sẽ trỏ tới đó.
+# --------------------------------------------------------------- BỘ ICON
+#
+# SVG NÉT, KHÔNG PHẢI KÝ TỰ UNICODE. Bản trước dùng ◈ ⌕ ▤ ▣ ◇ — và chúng
+# không phải một bộ: mỗi ký tự do một nhà thiết kế font vẽ cho một mục đích
+# khác, nên cỡ quang học, độ dày nét và baseline đều lệch nhau. Lúc thanh bên
+# GẬP, CSS phóng chúng lên 22px và cái lệch đó thành lộ hẳn: ⌕ bé tí, ▤ là
+# khối đặc, ◇ mảnh như sợi chỉ. Thêm nữa ◈ ▣ ▤ không nói được nó là cái gì —
+# người dùng phải học thuộc "hình thoi kép = Home".
+#
+# Bộ này: một khung 24×24, một độ dày nét (1.75), đầu nét bo tròn, tô bằng
+# `currentColor` nên đổi màu theo CSS chứ không phải sửa ảnh. Không file
+# ngoài, không font, không CDN — đúng luật không-phụ-thuộc của app.
+#
+# TÊN ICON PHẢI TẢ ĐÚNG VIỆC CỦA TAB, không phải tả hình:
+#     home     mái nhà      — chỗ nhìn tổng thể
+#     search   kính lúp     — đi tìm việc
+#     cv       tờ giấy      — mấy bản sẽ gửi đi
+#     track    kẹp + dấu ✓  — theo dõi đơn đã nộp tới đâu
+#     profile  người        — hồ sơ của bạn
+#     setting  bánh răng    — cài đặt cả app
+#     adjust   ba cần gạt   — điều chỉnh RIÊNG màn đang mở (nút ⚟)
+#     to       bốn góc      — mở to một ô
+#     gap      hai mũi <<   — gập thanh bên (CSS xoay 180° khi đã gập)
+#
+# Bánh răng dựng bằng lượng giác (6 răng) chứ không gõ tay 24 toạ độ: gõ tay
+# thì lệch một số là răng méo, mà ở 16px mắt không bắt được — chỉ thấy "nhìn
+# hơi bẩn" mà không biết vì sao.
+ICON = {
+    "home": "<path d='M3.2 10.4 12 3.2l8.8 7.2'/>"
+            "<path d='M5.6 9.1V20.3h12.8V9.1'/>"
+            "<path d='M9.7 20.3v-5.1h4.6v5.1'/>",
+    "search": "<circle cx='10.9' cy='10.9' r='6.7'/>"
+              "<path d='M20.4 20.4 15.7 15.7'/>",
+    "cv": "<path d='M13.6 3.2H7.4A2.2 2.2 0 0 0 5.2 5.4v13.2a2.2 2.2 0 0 0 2.2"
+          " 2.2h9.2a2.2 2.2 0 0 0 2.2-2.2V8.4z'/>"
+          "<path d='M13.6 3.2v5.2h5.2'/><path d='M8.8 13.1h6.4M8.8 16.6h6.4'/>",
+    "track": "<path d='M9.2 4.6H7.4a2.2 2.2 0 0 0-2.2 2.2v11.8a2.2 2.2 0 0 0 2.2"
+             " 2.2h9.2a2.2 2.2 0 0 0 2.2-2.2V6.8a2.2 2.2 0 0 0-2.2-2.2h-1.8'/>"
+             "<rect x='9.2' y='2.8' width='5.6' height='3.6' rx='1.2'/>"
+             "<path d='M9.3 13.6l2.1 2.1 4.3-4.3'/>",
+    "profile": "<circle cx='12' cy='8.1' r='3.9'/>"
+               "<path d='M4.9 20.6a7.1 7.1 0 0 1 14.2 0'/>",
+    "setting": "<path d='M18.03 9.32 20.84 9.83 20.84 14.17 18.03 14.68 17.34"
+               " 15.88 18.3 18.57 14.54 20.74 12.69 18.56 11.31 18.56 9.46"
+               " 20.74 5.7 18.57 6.66 15.88 5.97 14.68 3.16 14.17 3.16 9.83"
+               " 5.97 9.32 6.66 8.12 5.7 5.43 9.46 3.26 11.31 5.44 12.69 5.44"
+               " 14.54 3.26 18.3 5.43 17.34 8.12Z'/>"
+               "<circle cx='12' cy='12' r='3.3'/>",
+    "adjust": "<path d='M4 6.4h3.1M11.1 6.4H20'/><circle cx='9.1' cy='6.4' r='2'/>"
+              "<path d='M4 12h8.9M16.9 12H20'/><circle cx='14.9' cy='12' r='2'/>"
+              "<path d='M4 17.6h3.1M11.1 17.6H20'/>"
+              "<circle cx='9.1' cy='17.6' r='2'/>",
+    "to": "<path d='M8.8 3.6H3.6v5.2M15.2 3.6h5.2v5.2M20.4 15.2v5.2h-5.2"
+          "M3.6 15.2v5.2h5.2'/>",
+    "gap": "<path d='M13.4 6.2 7.6 12l5.8 5.8M19.2 6.2 13.4 12l5.8 5.8'/>",
+}
+
+
+def ico(ten: str) -> str:
+    """Một icon. `aria-hidden` vì chữ bên cạnh (hoặc title=) đã nói rồi —
+    trình đọc màn hình đọc hai lần là tệ hơn không đọc."""
+    return (f"<svg class=ico viewBox='0 0 24 24' aria-hidden=true>"
+            f"{ICON[ten]}</svg>")
+
+
 NAV = [
-    ("/",          "Home",     "◈"),
-    ("/search",    "Search",   "⌕"),      # rt — bước 1
-    ("/cv",        "CV",       "▤"),      # rt — mọi bản sẽ gửi
-    ("/track",     "Quản lí",  "▣"),      # rt — bước 5-6: nộp và theo dõi
-    ("/profile",   "Profile",  "◇"),
+    ("/",          "Home",     "home"),
+    ("/search",    "Search",   "search"),    # bước 1
+    ("/cv",        "CV",       "cv"),        # mọi bản sẽ gửi
+    ("/track",     "Quản lí",  "track"),     # bước 5-6: nộp và theo dõi
+    ("/profile",   "Profile",  "profile"),
 ]
 
 
@@ -57,7 +122,9 @@ LOGO = (
 
 def deck(stage: str, name: str, state: str, metrics: list,
          adjust: str = "", run: str = "Chạy", run_note: str = "",
-         sua: tuple = (), xoa: tuple = ()) -> str:
+         sua: tuple = (), xoa: tuple = (), them: tuple = (),
+         run_path: str = "/api/stage/start",
+         stop_path: str = "/api/stage/stop") -> str:
     """Thanh của MỘT khúc: tên + trạng thái · số liệu · chạy/dừng · điều chỉnh.
 
     MỘT khối cho mọi chức năng. Trước đây thanh trên cùng là của cả app —
@@ -99,7 +166,8 @@ def deck(stage: str, name: str, state: str, metrics: list,
         f"<b>{esc(str(v))}</b>{esc(label)}</span>"
         for v, label, kind in metrics)
     knob = (f"<button class='mbtn knob' data-settings='{esc(adjust)}'"
-            f" title='Điều chỉnh {esc(name)}'>⚟</button>" if adjust else "")
+            f" title='Điều chỉnh {esc(name)}'>{ico('adjust')}</button>"
+            if adjust else "")
     # `sua` = (đường dẫn, nhãn, mô tả) — nút dẫn sang MÀN KHÁC của cùng khúc.
     # Là THẺ <a>, không phải nút mở tấm phủ: tấm phủ hợp với mấy công tắc bật
     # xong đóng lại, không hợp với chỗ ngồi soạn chữ. Màn riêng thì có địa chỉ
@@ -113,6 +181,11 @@ def deck(stage: str, name: str, state: str, metrics: list,
            f" data-arg='xoa' data-arm='{esc(xoa[2])}'"
            f" title='{esc(xoa[3] if len(xoa) > 3 else xoa[1])}'>"
            f"{esc(xoa[1])}</button>" if xoa else "")
+    # `them` = (đường POST, nhãn, mô tả) — một VIỆC NỀN nữa của khúc này,
+    # cạnh nút Chạy. Khác `xoa` ở chỗ nó không phá gì nên không cần chốt.
+    nut_them = (f"<button class='mbtn' data-post='{esc(them[0])}'"
+                f" title='{esc(them[2] if len(them) > 2 else them[1])}'>"
+                f"{esc(them[1])}</button>" if them else "")
     khac = (f"<a class='mbtn qua' href='{esc(sua[0])}'"
             f" title='{esc(sua[2] if len(sua) > 2 else sua[1])}'>"
             f"{esc(sua[1])}</a>" if sua else "")
@@ -128,12 +201,12 @@ def deck(stage: str, name: str, state: str, metrics: list,
         f"<b class=deckname>{esc(name)}</b></span>"
         f"<span class=metrics>{nums}</span>"
         f"<span class=deckbtns>"
-        f"<button class='mbtn go' data-post='/api/stage/start'"
+        f"<button class='mbtn go' data-post='{esc(run_path)}'"
         f" data-arg='{esc(stage)}' data-run='{esc(run)}'"
         f" title='{esc(run_note)}'>{esc(run)}</button>"
-        f"<button class=mbtn data-post='/api/stage/stop'"
+        f"<button class=mbtn data-post='{esc(stop_path)}'"
         f" data-arg='{esc(stage)}'>Dừng</button>"
-        f"{khac}{pha}{knob}</span>"
+        f"{nut_them}{khac}{pha}{knob}</span>"
         f"</div></div>")
 
 
@@ -142,7 +215,8 @@ def deck(stage: str, name: str, state: str, metrics: list,
 # Xếp từ RIÊNG tới CHUNG: "/jobs/7/cv" là BẢN CV, không phải trang tin —
 # khớp "/jobs/" trước thì nút ghi "← tin này" trong khi nó về bản CV.
 _TEN_DUONG = (("/cv/soan", "Soạn khối"), ("/cv", "Bản CV"),
-              ("/search", "Search"), ("/track", "Quản lí"),
+              ("/search", "Search"), ("/track/queue", "Hàng chờ"),
+              ("/track", "Quản lí"),
               ("/profile", "Hồ sơ"), ("/jobs/", "tin này"))
 
 
@@ -181,7 +255,7 @@ def page(title: str, body: str, active: str = "",
         # title= để lúc gập còn biết icon nào là gì
         links += (f"<a class='navlink{on}' href='{esc(href)}'"
                   f" title='{esc(label)}'>"
-                  f"<i>{mark}</i><span>{esc(label)}</span></a>")
+                  f"<i>{ico(mark)}</i><span>{esc(label)}</span></a>")
 
     # Cài đặt: nút, KHÔNG phải link. /settings trả về mảnh HTML cho tấm phủ.
     # `data-appset` chứ KHÔNG dùng chung `data-settings` với nút ⚟ của khúc:
@@ -190,7 +264,7 @@ def page(title: str, body: str, active: str = "",
     # khác cả khung (⚟ ra tấm bên phải, Cài đặt ra hộp giữa màn).
     settings = ("<div class=navend>"
                 "<button class=navlink data-appset title='Cài đặt'>"
-                "<i>⚙</i><span>Cài đặt</span></button></div>")
+                f"<i>{ico('setting')}</i><span>Cài đặt</span></button></div>")
 
     # Thanh trạng thái ĐÁY APP — tin chung, không thuộc tab nào. Không nhận
     # dữ liệu từ view: live.js đổ vào từ dòng SSE đang có sẵn, nên không phải
@@ -234,7 +308,8 @@ def page(title: str, body: str, active: str = "",
         f"<header class=titlebar><b>{esc(title)}</b></header>"
         f"<aside class=side>"
         f"<div class=brandrow><div class=brand>{LOGO}jobbot</div>"
-        f"<button class=navtoggle data-nav title='Gập thanh bên'>«</button></div>"
+        f"<button class=navtoggle data-nav title='Gập thanh bên'>"
+        f"{ico('gap')}</button></div>"
         f"<nav>{links}</nav>{settings}</aside>"
         f"<main class='{'flow' if flow else ''}'>{top}"
         f"<div class=inner>{body}</div></main>"
@@ -288,7 +363,8 @@ def widget(title: str, body: str, tools: str = "", span: int = 1,
     span = chiếm mấy cột. expand=True thì có nút mở to ra toàn màn hình để
     xem kỹ hoặc chỉnh, bấm lại (hoặc Esc) thì thu về.
     """
-    grow = ("<button class=wexp data-expand title='Mở to (Esc để thu)'>⤢</button>"
+    grow = (f"<button class=wexp data-expand title='Mở to (Esc để thu)'>"
+            f"{ico('to')}</button>"
             if expand else "")
     # at=(cột, hàng) đặt ô vào ĐÚNG chỗ. Không có thì để trình duyệt tự xếp —
     # nhưng ô nào phải nằm cố định một cột (nhật ký ở cột cuối) thì tự xếp sẽ

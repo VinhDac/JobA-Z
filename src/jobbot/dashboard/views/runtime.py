@@ -75,14 +75,14 @@ def _rows_needed(panels: list[tuple], width: int, run_span: int = 0) -> int:
 
 
 def panel(title: str, body: str, span: int = 1, rows: int = 1,
-          at: tuple[int, int] | None = None) -> tuple:
+          at: tuple[int, int] | None = None, cls: str = "") -> tuple:
     """Một ô nội dung riêng của tab. Khuôn lo phần chung, tab lo phần ruột.
 
     at=(cột, hàng) đặt ô vào đúng chỗ. Để None thì trình duyệt tự xếp — đủ
     cho tab mà mấy ô ngang vai nhau. Tab nào cần bố cục riêng (Search: nhật
     ký nằm dưới ô lưới, danh sách kéo suốt chiều cao) thì nói rõ ra.
     """
-    return (title, body, span, rows, at)
+    return (title, body, span, rows, at, cls)
 
 
 def render(*, title: str, active: str, stream: str, panels: list[tuple],
@@ -90,7 +90,7 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
            run_extra: str = "", journal: str = "column",
            columns: str = "", journal_h: str = "118px",
            rows_tpl: str = "", journal_at: tuple[int, int] = (1, 2),
-           bar: str = "") -> str:
+           bar: str = "", setup: str = "") -> str:
     """Khuôn chung cho mọi tab CÓ THỜI GIAN CHẠY.
 
     journal="column"  nhật ký chiếm trọn cột cuối, cạnh nội dung
@@ -110,8 +110,8 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
         # danh sách, mà danh sách mới là kết quả.
         # Tab tự đặt cột/hàng và vị trí từng ô: bố cục này không đều nhau nên
         # để trình duyệt tự xếp là ra lệch.
-        boxes = [widget(t, body, span=sp, rows=rw, at=at)
-                 for t, body, sp, rw, at in panels]
+        boxes = [widget(t, body, span=sp, rows=rw, at=at, cls=cl)
+                 for t, body, sp, rw, at, cl in panels]
         boxes.append(widget(
             f"Nhật ký · {title.lower()}",
             f"<div class=jflat><div class=jprog>{progress_box(stream)}</div>"
@@ -119,16 +119,24 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
             span=1, cls="flat corner", at=journal_at))
         return page(title, head + grid(*boxes, cols=cols, columns=columns,
                                        rows=rows_tpl),
-                    active=active, flow=False, bar=bar)
+                    active=active, flow=False, bar=bar, setup=setup)
 
     if journal == "bottom":
         rows = _rows_needed(panels, cols, 0)
-        boxes = [widget(t, body, span=sp, rows=rw)
-                 for t, body, sp, rw, *_ in panels]
+        # `at` ĐI QUA ĐƯỢC. Nhánh này bỏ nó, nên tab nào có ô 2×2 nằm cạnh ô
+        # 1×1 thì auto-flow tự chèn, và bố cục đổi theo thứ tự khai báo chứ
+        # không theo ý người viết. Tab nào không truyền `at` vẫn như cũ.
+        if any(at for _t, _b, _sp, _rw, at, _c in panels):
+            rows = max((at[1] + rw - 1)
+                       for _t, _b, _sp, rw, at, _c in panels if at)
+        boxes = [widget(t, body, span=sp, rows=rw, at=at, cls=cl)
+                 for t, body, sp, rw, at, cl in panels]
         # Hàng nội dung co giãn, hàng nhật ký cao cố định. Không ghim thì lưới
         # chia đều và dải nhật ký chiếm nguyên một hàng — cao gấp đôi thứ nó
         # cần, và ăn mất chỗ của danh sách.
-        row_tpl = " ".join(["1fr"] * rows) + f" {journal_h}"
+        # Tab nào tự khai chiều cao hàng thì dùng khai báo của nó — Home có
+        # sáu hàng và chúng KHÔNG ngang vai nhau.
+        row_tpl = rows_tpl or (" ".join(["1fr"] * rows) + f" {journal_h}")
         # Dải nhật ký: tiến độ bên trái, dòng sự kiện bên phải. Hai thứ cùng
         # trả lời "nó đang làm gì", tách ra hai ô là chia đôi một câu hỏi.
         boxes.append(widget(
@@ -138,7 +146,7 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
             span=cols, cls="flat", at=(1, rows + 1)))
         return page(title, head + grid(*boxes, cols=cols, columns=columns,
                                        rows=row_tpl),
-                    active=active, flow=False, bar=bar)
+                    active=active, flow=False, bar=bar, setup=setup)
 
     boxes = [widget("Đang chạy", progress_box(stream) + run_extra,
                     span=run_span if run_span else cols - 1),
@@ -146,5 +154,5 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
                     rows=_rows_needed(panels, cols - 1, run_span or 0),
                     cls="tall", at=(cols, 1))]
     boxes += [widget(t, body, span=sp, rows=rw)
-              for t, body, sp, rw, *_ in panels]
-    return page(title, head + grid(*boxes, cols=cols), active=active, flow=False, bar=bar)
+              for t, body, sp, rw, *_r in panels]
+    return page(title, head + grid(*boxes, cols=cols), active=active, flow=False, bar=bar, setup=setup)

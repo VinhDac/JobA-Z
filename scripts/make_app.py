@@ -23,13 +23,67 @@ APP = ROOT / "jobbot.app"
 BUNDLE_ID = "com.jobbot.app"
 
 
+# --- ICON -----------------------------------------------------------------
+#
+# Khuôn giống icon app quen thuộc (GitHub Desktop, Slack…): ô bo tròn đặc →
+# vòng tròn → dấu hiệu bên trong. Khuôn đó thắng vì cái vòng tròn cắt hẳn dấu
+# hiệu ra khỏi nền, nên ở 32px mắt vẫn bắt được hình chứ không thấy một cục.
+#
+# ĐEN TRẮNG, và dấu hiệu là CHÌA KHOÁ — cùng dấu với logo trong app (ba vòng
+# làm tay cầm). Icon ở Dock và logo trên thanh bên phải là MỘT cái tên; hai
+# hình khác nhau thì người dùng phải học hai lần.
+#
+# VẼ BẰNG HÌNH, KHÔNG DÙNG KÝ TỰ. Bản trước vẽ ký tự "◆" bằng font hệ thống:
+# cỡ quang học và baseline do font quyết định, nên đổi macOS là icon xê dịch,
+# mà không có gì báo. Hình thì 512px hay 16px cũng ra đúng một tỉ lệ.
+NEN, VONG, NET = "#0A0A0A", "#FFFFFF", "#0A0A0A"
+
+# Đảo lại (nền trắng, vòng đen, chìa trắng) thì đổi đúng ba hằng số trên.
+
+GOC = -38          # độ nghiêng của chìa — dùng đường chéo của vòng tròn
+TI_VONG = 0.615    # đường kính vòng / cạnh ô
+TI_KHOA = 0.90     # chiều dài chìa / đường kính vòng
+
+
+def _mau(hexa: str):
+    from AppKit import NSColor
+    h = hexa.lstrip("#")
+    return NSColor.colorWithSRGBRed_green_blue_alpha_(
+        *[int(h[k:k + 2], 16) / 255 for k in (0, 2, 4)], 1.0)
+
+
+def _khoa(L: float, mau) -> None:
+    """Chìa khoá nằm ngang: từ x=0 tới x=L, trục dọc ở y=0.
+
+    Vẽ ở tư thế NẰM NGANG rồi để người gọi xoay. Gõ cứng toạ độ đã xoay thì
+    đổi góc một cái là phải tính lại cả hai chục con số bằng tay.
+
+    Ba vòng tay cầm DÀY HƠN logo ngang trong app: ở 32px ba vòng mảnh dính
+    vào nhau thành một cục đen, và cái làm nên dấu hiệu này là ba cái lỗ.
+    """
+    from AppKit import NSBezierPath, NSMakeRect
+    mau.set()
+    r, net = L * .105, L * .072
+    for cx, cy in ((.115, 0), (.275, .125), (.27, -.125)):
+        vong = NSBezierPath.bezierPathWithOvalInRect_(
+            NSMakeRect(cx * L - r, cy * L - r, r * 2, r * 2))
+        vong.setLineWidth_(net)
+        vong.stroke()                      # NÉT, không tô — lỗ là lỗ thật
+    h = L * .082
+    NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(       # thân
+        NSMakeRect(.29 * L, -h / 2, .71 * L, h), h / 2, h / 2).fill()
+    NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(       # khấc
+        NSMakeRect(.60 * L, -h / 2, h, L * .20), h / 2, h / 2).fill()
+    for x in (.775, .885):                                         # hai răng
+        NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
+            NSMakeRect(x * L, -L * .225, h, L * .19), h / 2, h / 2).fill()
+
+
 def draw_icon(out_dir: Path) -> Path | None:
     """Vẽ icon bằng AppKit (có sẵn), xuất .icns bằng iconutil (có sẵn)."""
     try:
-        from AppKit import (NSAttributedString, NSBezierPath, NSBitmapImageRep,
-                            NSColor, NSFont, NSFontAttributeName,
-                            NSForegroundColorAttributeName, NSImage, NSMakePoint,
-                            NSMakeRect, NSPNGFileType)
+        from AppKit import (NSAffineTransform, NSBezierPath, NSBitmapImageRep,
+                            NSImage, NSMakeRect, NSPNGFileType)
         from Foundation import NSMakeSize
     except ImportError:
         return None
@@ -40,23 +94,24 @@ def draw_icon(out_dir: Path) -> Path | None:
     def render(size: int) -> bytes:
         image = NSImage.alloc().initWithSize_(NSMakeSize(size, size))
         image.lockFocus()
-        pad = size * 0.08
-        radius = size * 0.225
-        NSColor.colorWithSRGBRed_green_blue_alpha_(0.106, 0.239, 0.204, 1.0).set()
+        pad = size * .085
+        _mau(NEN).set()
         NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
-            NSMakeRect(pad, pad, size - 2 * pad, size - 2 * pad), radius, radius).fill()
+            NSMakeRect(pad, pad, size - 2 * pad, size - 2 * pad),
+            size * .225, size * .225).fill()
 
-        # NSAttributedString, KHÔNG phải str của Python — str không có
-        # sizeWithAttributes_, đó là method của NSString.
-        attrs = {
-            NSFontAttributeName: NSFont.systemFontOfSize_(size * 0.46),
-            NSForegroundColorAttributeName:
-                NSColor.colorWithSRGBRed_green_blue_alpha_(0.42, 0.647, 0.561, 1.0),
-        }
-        text = NSAttributedString.alloc().initWithString_attributes_("◆", attrs)
-        bounds = text.size()
-        text.drawAtPoint_(NSMakePoint((size - bounds.width) / 2,
-                                      (size - bounds.height) / 2))
+        d = size * TI_VONG
+        _mau(VONG).set()
+        NSBezierPath.bezierPathWithOvalInRect_(
+            NSMakeRect((size - d) / 2, (size - d) / 2, d, d)).fill()
+
+        L = d * TI_KHOA
+        t = NSAffineTransform.transform()
+        t.translateXBy_yBy_(size / 2, size / 2)
+        t.rotateByDegrees_(GOC)
+        t.translateXBy_yBy_(-L / 2, 0)     # CĂN TÂM: chìa dài L, tâm ở L/2
+        t.concat()
+        _khoa(L, _mau(NET))
         image.unlockFocus()
 
         rep = NSBitmapImageRep.imageRepWithData_(image.TIFFRepresentation())
