@@ -16,20 +16,22 @@ from __future__ import annotations
 from html import escape as esc
 
 from ...cv.build import TailoredCV
+from ...cv.build import bench
 from ...cv.render import dem_lai, paper
 from ...cv.report import chi_tiet, head
 from ..layout import h1, page
 
 
-def render(job: dict, cv: TailoredCV) -> str:
+def render(job: dict, cv: TailoredCV, profile: dict | None = None) -> str:
     dem_lai()          # số câu đếm lại từ 1 cho mỗi tờ
+    du_bi = bench(profile or {}, cv) if profile else []
     return page(
         f"CV — {job['title']}",
         f"<a class=back href='/jobs/{esc(job['id'])}'>← {esc(job['title'])}</a>"
         + h1("Bản CV cho tin này",
              f"Dựng cho {job['company']} — {job['title']}.")
         + head(cv)
-        + paper(cv, cham=True)
+        + paper(cv, cham=True, du_bi=du_bi, job=str(job['id']))
         + chi_tiet(cv),
         active="/jobs",
     )

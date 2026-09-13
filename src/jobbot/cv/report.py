@@ -56,43 +56,6 @@ def _la_cam(why: str) -> bool:
     return any(k in why for k in CAM)
 
 
-def _chi_tiet(index: int, line) -> str:
-    """Khối chi tiết cho MỘT câu — chỗ nút bấm trên tờ CV nhảy xuống.
-
-    KHÔNG chép lại toàn văn câu. Câu đã nằm ngay trên tờ giấy rồi; chép lại là
-    bắt người đọc đọc hai lần cùng một thứ và tự ghép hai bản với nhau. Ở đây
-    chỉ có thứ tờ giấy KHÔNG nói được: tin đòi gì, vì sao sửa, còn hổng gì.
-    """
-    doi = ("".join(f"<span class='badge ok'>{esc(h)}</span>" for h in line.hits)
-           if line.hits else
-           "<span class=muted>tin này không gọi tên kỹ năng nào mà câu này "
-           "trúng — nó lên CV vì mang quy mô hoặc phán đoán</span>")
-
-    # CHỈ LÝ DO, không chép lại câu. Nút Trước/Sau ở trên đã cho xem tận mắt
-    # chữ gốc rồi — chép nguyên câu thêm hai lần ở đây là bắt người đọc đọc
-    # cùng một thứ bốn lượt.
-    sua = ""
-    if line.sua:
-        buoc = "".join(f"<li>{esc(x.vi_sao)}</li>" for x in line.sua)
-        sua = f"<div class=gsua><b>Máy đã sửa</b><ul>{buoc}</ul></div>"
-
-    yeu = ""
-    if line.yeu:
-        muc = "".join(f"<li><b>{esc(y.noi)}</b> — {esc(y.lam_gi)}</li>"
-                      for y in line.yeu)
-        yeu = f"<div class=gyeu><b>Bạn cần viết thêm</b><ul>{muc}</ul></div>"
-
-    xem = (f"<div class=gnote>⚠ {esc(_vi(line.review))}</div>"
-           if line.review else "")
-
-    return (f"<div class='gcau{' review' if line.review else ''}' id='ct{index}'>"
-            f"<a class=gnum href='#cau{index}' title='về câu {index} trên CV'>"
-            f"{index}</a>"
-            f"<div class=gbody>"
-            f"<div class=gdoi><span class=glab>Tin này đòi</span>{doi}</div>"
-            f"{xem}{sua}{yeu}</div></div>")
-
-
 def _bo(cv: TailoredCV) -> str:
     """Câu bị bỏ, CHIA HAI NHÓM — vì hai nhóm cần hai hành động khác nhau."""
     cam = [(t, w) for t, w in cv.dropped if _la_cam(w)]
@@ -129,77 +92,92 @@ def diem(cv: TailoredCV) -> dict:
         "xem": sum(1 for l in lines if l.review),
         "bo_cam": sum(1 for _, w in cv.dropped if _la_cam(w)),
         "bo_yeu": sum(1 for _, w in cv.dropped if not _la_cam(w)),
-        "doi": len(cv.wanted),
-        "tra_loi": len(cv.covered),
+        # Xem live.cv_versions: wanted/covered là cặp NÓI DỐI (mẫu số nhặt
+        # cả đoạn giới thiệu công ty, tử số bỏ qua mục Technical skills).
+        "doi": len(cv.asked),
+        "tra_loi": len(cv.on_paper),
         "cam": len(cv.missing),
     }
 
 
-def head(cv: TailoredCV) -> str:
-    """ĐIỂM + THỐNG KÊ + NÚT TRƯỚC/SAU. Đứng trên cùng, trước cả tờ CV.
+def cho_xem(cv: TailoredCV) -> list:
+    """Mọi CHỖ đáng xem trên tờ này, theo loại. [(loại, nhãn, số), …]
 
-    Nút Trước/Sau là một `<input type=checkbox>` ẩn, không phải JavaScript:
-    đổi qua đổi lại một cái nhãn thì không đáng gọi thêm một trình nghe, và
-    không JS thì nó không bao giờ hỏng.
+    Đếm theo CHỖ chứ không theo câu: một câu có thể vừa thiếu số vừa quá dài,
+    và đó là hai việc phải làm, không phải một.
+    """
+    from collections import Counter
+    dem: Counter = Counter()
+    for sec in cv.sections:
+        if sec.kind not in ("experience", "project"):
+            continue
+        for line in sec.lines:
+            for v in getattr(line, "vet", ()) or ():
+                dem[v.loai] += 1
+    ten = {"thieu_so": "thiếu số đo", "qua_dai": "quá dài",
+           "lac_de": "không chạm tin này", "da_sua": "máy đã sửa chữ"}
+    thu_tu = ("thieu_so", "qua_dai", "lac_de", "da_sua")
+    return [(k, ten[k], dem[k]) for k in thu_tu if dem[k]]
+
+
+def head(cv: TailoredCV) -> str:
+    """ĐIỂM + CHỖ CẦN XEM + nút Trước/Sau. Đứng trên cùng, trước cả tờ CV.
+
+    Con số đầu tiên phải trả lời "tờ này còn việc gì" — mở ra là biết ngay có
+    5 chỗ phải xem, không phải bấm từng dòng mới phát hiện ra.
     """
     d = diem(cv)
     ty = f"{d['tra_loi']}/{d['doi']}" if d["doi"] else "—"
-    o = (("<div class=gsum>"
-          f"<span class=gstat><b>{ty}</b>yêu cầu của tin được trả lời</span>"
-          f"<span class=gstat><b>{d['vao']}</b>câu lên bản này</span>"
-          f"<span class=gstat><b>{d['sua']}</b>câu máy sửa chữ</span>"
-          f"<span class=gstat><b>{d['hong']}</b>câu còn hổng</span>"
-          f"<span class=gstat><b>{d['bo_cam'] + d['bo_yeu']}</b>câu bị bỏ</span>"
-          "</div>"))
-    # CHECKBOX ĐỨNG NGOÀI `.gtoggle`, cùng cấp với tờ CV. Luật CSS dùng bộ
-    # chọn anh-em `~` để bật/tắt chữ trước-sau; nhét checkbox vào trong một
-    # <div> thì nó là cháu chứ không phải anh em, và cái nút bấm không làm gì
-    # cả — im lặng, không lỗi. Đã xảy ra thật ở bản đầu.
-    # <label for=...> thì vẫn với tới được qua id dù nằm khác cha.
+    cho = cho_xem(cv)
+    can = sum(n for k, _, n in cho if k != "da_sua")
+
+    o = ("<div class=gsum>"
+         f"<span class='gstat {'act' if can else ''}'><b>{can}</b>"
+         f"chỗ cần bạn xem</span>"
+         f"<span class=gstat><b>{ty}</b>thứ tin này đòi, CV nói được</span>"
+         f"<span class=gstat><b>{d['vao']}</b>câu lên bản này</span>"
+         f"<span class=gstat><b>{len(cv.missing)}</b>thứ hồ sơ câm</span>"
+         "</div>")
+    # CHÚ GIẢI vệt — không có nó thì mấy đường gạch chân là câu đố.
+    chu_giai = ("<div class=glegend>"
+                + "".join(f"<span class='gleg v{k}'>{esc(nhan)} <b>{n}</b></span>"
+                          for k, nhan, n in cho)
+                + "<span class='gleg kw'>từ khoá tin này đòi</span></div>"
+                if cho else "")
     nut = ("<input type=checkbox id=cvtruoc class=gswitch hidden>"
            "<div class=gtoggle>"
            "<label for=cvtruoc><span class=gt1>Sau khi sửa</span>"
            "<span class=gt2>Trước khi sửa</span></label>"
            "<span class=muted>bấm để xem chữ gốc bạn viết</span></div>")
-    chu = ("<div class=note><b class=ksua>Xanh</b> = máy đã sửa chữ, kiểm lại "
-           "xem có đúng ý bạn không. <b class=khong>Cam</b> = còn việc cho "
-           "bạn. Rê chuột xem nhanh, bấm vào nhảy xuống lý do. Máy chỉ "
-           "<b>cắt và xếp lại</b> chữ của bạn — mọi từ trên bản in ra đều có "
+    chu = ("<div class=note>Gạch chân là chỗ máy có ý kiến — bấm vào chính "
+           "đoạn đó để xem cách sửa và đổi sang câu khác bạn đã viết. Máy chỉ "
+           "<b>cắt và xếp lại</b> chữ của bạn; mọi từ trên bản in ra đều có "
            "trong câu bạn đã viết.</div>")
-    # BỌC .cvaudit — cổng kiểm lúc in bắt được: `<h4 class=cvsec>Chấm điểm
-    # bản này</h4>` đứng trần nên nó IN RA GIẤY, và đẩy tờ CV sang 2 trang.
-    # Nút Trước/Sau phải đứng NGOÀI bọc: luật CSS dùng bộ chọn anh-em để với
-    # tới tờ CV, nhét vào trong một <div> là nó hết với tới.
     return (f"{nut}<div class=cvaudit>"
-            f"<h4 class=cvsec>Chấm điểm bản này</h4>{o}{chu}</div>")
+            f"<h4 class=cvsec>Chấm điểm bản này</h4>{o}{chu_giai}{chu}</div>")
 
 
 def chi_tiet(cv: TailoredCV) -> str:
-    """Phần dưới tờ CV: vì sao từng câu như thế, và những câu KHÔNG lên bài."""
-    thu = 0
-    khoi = []
-    for section in cv.sections:
-        if section.kind not in ("experience", "project"):
-            continue
-        for line in section.lines:
-            thu += 1
-            # Câu không sửa, không hổng, không cần xem lại thì KHÔNG có gì để
-            # nói — đừng đẻ ra một khối rỗng chỉ để cho đủ bộ.
-            if dang_ke(line):
-                khoi.append(_chi_tiet(thu, line))
+    """Phần dưới tờ CV — CHỈ thứ KHÔNG thuộc về một câu nào.
 
+    Từng câu đã được chữa NGAY TRÊN BÀI (xem render._muc): bấm vào dòng là
+    thẻ mở ra tại chỗ, nói tin này đòi gì, máy sửa gì, còn hổng gì, đổi sang
+    câu nào. Nên ở đây KHÔNG lặp lại từng câu nữa — lặp là bắt người đọc đọc
+    hai lần cùng một thứ rồi tự ghép "câu 3 ở dưới" với câu nào ở trên.
+
+    Còn lại đúng hai thứ, và cả hai đều nói về TỜ GIẤY chứ không về một dòng:
+        câu KHÔNG lên bài   — vì sao chúng vắng mặt
+        tin đòi mà hồ sơ câm — việc phải làm, và không câu nào lấp được
+    """
     cam = ""
     if cv.missing:
         cam = ("<h4 class=cvsec>Tin đòi mà hồ sơ câm</h4>"
                "<div class=chiprow>"
                + "".join(f"<span class='badge warn'>{esc(m)}</span>"
                          for m in cv.missing)
-               + "</div><div class=note>Hoặc bạn thật sự chưa có, hoặc có mà "
-                 "chưa viết ra. Cái thứ hai sửa được ngay: thêm một câu vào "
-                 "khối ở tab CV.</div>")
-
-    tieu = ("<h4 class=cvsec>Vì sao từng câu như thế</h4>" if khoi else "")
-    # BỌC TRONG .cvaudit — luật @media print đã ẩn lớp này sẵn. Bản chấm điểm
-    # là chuyện giữa app và Vin; tờ giấy gửi đi chỉ có tờ CV.
-    return ("<div class=cvaudit>" + tieu + "".join(khoi)
-            + _bo(cv) + cam + "</div>")
+               + "</div><div class=note>Không câu nào trong hồ sơ lấp được "
+                 "mấy chỗ này — máy chỉ chọn được chữ bạn đã viết. Hoặc bạn "
+                 "thật sự chưa có, hoặc có làm mà chưa viết ra; cái thứ hai "
+                 "sửa được tối nay bằng một câu.</div>")
+    # BỌC .cvaudit — luật @media print đã ẩn lớp này sẵn.
+    return "<div class=cvaudit>" + _bo(cv) + cam + "</div>"

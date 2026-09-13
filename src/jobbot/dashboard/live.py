@@ -456,6 +456,32 @@ def health(conn: sqlite3.Connection) -> dict:
     }
 # ---------------------------------------------------------------- projects
 
+def cv_hut(conn: sqlite3.Connection) -> dict:
+    """Thang HỤT — viết/học thứ nào trước thì mở khoá nhiều tin nhất.
+
+    CÓ CACHE: thang chạy tham lam qua ~47 ứng viên, đo được 0,6 giây. Tab CV
+    mở nhiều lần một buổi, và kết quả chỉ đổi khi hồ sơ hoặc kho tin đổi.
+    """
+    from ..scoring.gap import thang
+    from ..scoring.score import build_index
+    from ..scoring.vocab import alias_hits
+    from ..profile import store as pstore
+
+    answers = pstore.load(conn)
+    key = _cv_key(conn, answers.get("cv_text") or "")
+    if _HUT_CACHE.get("key") == key:
+        return _HUT_CACHE["value"]
+    co: set = set()
+    for e in build_index(answers):
+        co |= set(alias_hits(e.normal))
+    ra = thang(conn, co)
+    _HUT_CACHE.update(key=key, value=ra)
+    return ra
+
+
+_HUT_CACHE: dict = {}
+
+
 def cv_nut(conn: sqlite3.Connection) -> dict:
     """Ba núm của tầng CV, đã đổi sang con số build() dùng được.
 
@@ -557,8 +583,15 @@ def cv_versions(conn: sqlite3.Connection) -> dict:
             "top": [j["company"] for j in slot["jobs"][:3]],
             # --- con số của TIN ĐẦU ĐÀN, để dòng nói được điều gì thật ---
             "best": dau,
-            "hoi": len(cv.wanted),          # tin đó hỏi mấy thứ
-            "tra_loi": len(cv.covered),     # CV nói được mấy thứ trong đó
+            # DÙNG `asked`/`on_paper`, KHÔNG dùng `wanted`/`covered`.
+            #   wanted  quét cả tin, kể cả đoạn công ty tự giới thiệu -> mẫu
+            #           số phồng lên (NXP "đòi" cloud; BoA 3/4 chữ là từ đoạn
+            #           giới thiệu)
+            #   covered chỉ đếm kỹ năng do mấy CÂU chứng minh -> bỏ qua mục
+            #           TECHNICAL SKILLS đang in trên chính tờ giấy đó
+            # Đo trên 287 tin: phân số cũ 28%, phân số thật 64%.
+            "hoi": len(cv.asked),           # tin đó THẬT SỰ đòi mấy thứ
+            "tra_loi": len(cv.on_paper),    # TỜ GIẤY nói ra được mấy thứ
             "cam": sorted(cv.missing),      # và câm về những thứ nào
         })
 

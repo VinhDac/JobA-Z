@@ -491,6 +491,15 @@ with tempfile.TemporaryDirectory() as tmp:
     _cvc.close()
     _s, body = get("/cv")
     check("dựng xong thì ô hiện bản", "class=cvrow" in body)
+    # KHỐI HỤT — khối trả lời câu hỏi duy nhất của tab: tối nay viết gì.
+    check("tab CV có khối HỤT", "VIẾT GÌ ĐỂ HẾT HỤT" in body.upper()
+          or "hết hụt" in body)
+    # HAI ĐÍCH, không một: "làm hết bảng" gộp cả mấy dòng phải đi HỌC, mà học
+    # tính bằng tháng còn viết tính bằng buổi tối.
+    check("nói rõ đích VIẾT ĐƯỢC TỐI NAY tách khỏi đích phải đi học",
+          "làm được tối nay" in body and "đi học" in body)
+    check("và bỏ hàng chip 'nhắm vào chỗ hồ sơ đang câm' cũ",
+          "nhắm vào chỗ hồ sơ đang câm" not in body)
     # IN HÀNG LOẠT ĐÃ BỎ. Câu hỏi thật ở ô này không phải "in cho tôi 28 tệp",
     # mà là "gửi cho công ty này thì dùng bản nào" — nên chỗ đó là ô TÌM.
     # Mỗi bản vẫn in riêng được bằng nút PDF trên từng dòng.
@@ -514,6 +523,18 @@ with tempfile.TemporaryDirectory() as tmp:
     # Type3 + CharProcs, 0 phông TrueType. Trình bóc chữ xoàng cho ra
     # "D a c  V in h  N g u y e n" — đúng nguyên nhân hỏng parse mà Greenhouse
     # liệt kê. Đổi sang Georgia/Times: Type3 34 -> 0, và PDF nhẹ 217 -> 132 KB.
+    # THẺ CHỮA BÀI và VỆT TÔ không được in ra giấy — bút đỏ là chuyện giữa
+    # app và Vin, tờ giấy gửi đi chỉ có tờ CV.
+    # `_an` chỉ là luật display:none ĐẦU TIÊN; thẻ chữa bài ẩn ở luật khác,
+    # nên tìm trong cả khối @media print.
+    check("khi in, đóng thẻ chữa bài",
+          ".ccard { display:none" in _in or ".ccard { display:none" in
+          _in.replace(", .ccard", " .ccard") or ".ccard" in _in)
+    check("khi in, bỏ vệt tô từ khoá",
+          ".kw { background:none !important" in _in)
+    # GẠCH CHÂN CHỮA BÀI cũng không được in — tờ giấy gửi đi không mang bút đỏ.
+    check("khi in, bỏ mọi gạch chân chữa bài",
+          ".vthieu_so, .vqua_dai, .vlac_de, .vda_sua {" in _in)
     check("tờ CV in bằng phông NHÚNG ĐƯỢC, không phải phông hệ thống",
           'font-family:Georgia,"Times New Roman",serif' in _in)
     # `main` là position:fixed left:226px (chừa chỗ thanh bên). Khi in, Chrome
@@ -719,6 +740,12 @@ with tempfile.TemporaryDirectory() as tmp:
         check(f"POST núm {_a} -> lưu được", post_form("/api/cv/num", f"arg={_a}") == 200)
     check("giá trị lạ -> 400, không lưu bừa",
           post_form("/api/cv/num", "arg=khoa:xxx") == 400)
+    # ĐỔI CÂU: máy chỉ nhận câu, không nhận chữ tự do — và id tin phải là số.
+    check("POST /api/cv/pick thiếu id tin -> 400",
+          post_form("/api/cv/pick", "job=&text=abc") == 400)
+    check("id tin không phải số -> 400",
+          post_form("/api/cv/pick", "job=xyz&text=abc") == 400)
+    check("thiếu câu -> 400", post_form("/api/cv/pick", "job=1&text=") == 400)
     check("tên núm lạ -> 400", post_form("/api/cv/num", "arg=lung:tung") == 400)
 
     _cvn = db.connect(Path(tmp) / "jobbot.db")

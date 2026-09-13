@@ -164,3 +164,69 @@ def diem_yeu(text: str, tags: list[str], wanted: set[str]) -> list[Yeu]:
                       "để dành cho tin khác — hoặc nối nó vào một kỹ năng "
                       "tin này có đòi"))
     return ra
+
+
+# --- VẾT: CHỖ NÀO trong câu, không phải CÂU NÀO -------------------------
+#
+# Đây là khác biệt giữa "chấm bài" và "liệt kê lỗi". Gạch chân cả dòng thì
+# người đọc vẫn phải tự dò xem chỗ nào hỏng; gạch đúng cụm chữ thì mắt tới
+# thẳng chỗ phải sửa. Grammarly có giá trị chính ở chỗ đó.
+#
+# Không phải điểm yếu nào cũng có đoạn chữ. Thiếu số đo là một chỗ TRỐNG —
+# không gạch được cái không có. Nhưng gạch được chỗ CON SỐ ĐÁNG RA PHẢI NẰM:
+# cụm động từ khoe việc. "Built two systems" gạch chân, chú thích "bao nhiêu
+# cái, trên bao nhiêu dữ liệu" — người đọc biết ngay phải chèn vào đâu.
+
+# Cụm KHOE VIỆC: từ động từ hành động tới hết mệnh đề đầu. Đây là chỗ con số
+# thuộc về.
+_MENH_DE = re.compile(r"^(.{0,90}?)(?=[,:;]|\s+(?:then|and then|which)\b|$)",
+                      re.I | re.S)
+
+
+@dataclass
+class Vet:
+    """Một ĐOẠN CHỮ đáng đánh dấu: [dau, cuoi) trong câu."""
+    dau: int
+    cuoi: int
+    loai: str           # 'thieu_so' | 'qua_dai' | 'lac_de' | 'da_sua'
+    noi: str            # chỗ này sao
+    lam_gi: str         # sửa thế nào
+
+
+def vet(text: str, tags: list, wanted: set, da_sua=()) -> list:
+    """Mọi đoạn chữ đáng đánh dấu trong MỘT câu.
+
+    Trả về theo thứ tự xuất hiện. Đoạn chồng nhau là chuyện thường (một câu
+    vừa dài vừa thiếu số), người vẽ tự gộp.
+    """
+    ra: list = []
+
+    # 1. MÁY ĐÃ SỬA — đánh dấu chữ đầu, vì đó là chỗ chữ "I" vừa bị cắt.
+    if da_sua:
+        het = text.find(" ")
+        ra.append(Vet(0, het if het > 0 else len(text), "da_sua",
+                      "máy đã sửa chữ ở đây",
+                      " · ".join(x.vi_sao for x in da_sua)))
+
+    # 2. KHOE VIỆC MÀ THIẾU SỐ — gạch đúng cụm động từ, chỗ con số thuộc về.
+    if rules.ACTION_VERB.match(text.strip()) and not rules.HAS_NUMBER.search(text):
+        m = _MENH_DE.match(text)
+        if m and m.end() > 3:
+            ra.append(Vet(0, m.end(), "thieu_so",
+                          "khoe việc mà không có số đo",
+                          "chèn một con số thật vào đúng đây: bao nhiêu cái, "
+                          "trên bao nhiêu dữ liệu, đổi được mấy phần trăm"))
+
+    # 3. QUÁ DÀI — gạch ĐÚNG PHẦN THỪA, từ chỗ mắt người đọc bắt đầu trượt.
+    if len(text) > DAI_NHAT:
+        ra.append(Vet(DAI_NHAT, len(text), "qua_dai",
+                      f"từ đây là phần thứ {len(text) - DAI_NHAT} ký tự vượt trần",
+                      "cắt phần bối cảnh, giữ phần bạn LÀM — hoặc tách hai câu"))
+
+    # 4. KHÔNG CHẠM TIN NÀY — cả câu, vì vấn đề là của cả câu.
+    if tags and wanted and not (set(tags) & set(wanted)):
+        ra.append(Vet(0, len(text), "lac_de",
+                      "không chạm yêu cầu nào của tin này",
+                      "để dành cho tin khác, hoặc đổi sang câu có trúng"))
+    return sorted(ra, key=lambda v: (v.dau, -v.cuoi))
+

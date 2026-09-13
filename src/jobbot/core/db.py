@@ -327,6 +327,27 @@ MIGRATIONS: list[str] = [
         payload  TEXT NOT NULL
     );
     """,
+    # 20 — NGƯỜI CHỌN LẠI CÂU cho MỘT tin cụ thể.
+    #
+    # Máy xếp câu theo trọng số, và trọng số là luật chung — nó không biết Vin
+    # vừa nói chuyện với ai, hay tin này nghiêng về mảng nào. Nên Vin phải
+    # chọn lại được: ghim một câu vào, gạt một câu ra.
+    #
+    # ĐÂY VẪN LÀ CHỌN, KHÔNG PHẢI VIẾT. Câu ghim vào phải là câu đã có trong
+    # hồ sơ — đúng luật gốc "mọi câu trên CV đều là câu Vin đã viết".
+    #
+    # Lưu theo NGUYÊN VĂN CÂU chứ không theo số thứ tự: thứ tự đổi mỗi lần
+    # dựng lại, còn câu thì không. Sửa chữ câu đó trong hồ sơ thì lựa chọn cũ
+    # tự hết hiệu lực — đúng, vì nó không còn là câu ấy nữa.
+    """
+    CREATE TABLE cv_pick (
+        posting_id INTEGER NOT NULL REFERENCES posting(id) ON DELETE CASCADE,
+        text       TEXT    NOT NULL,
+        mode       TEXT    NOT NULL CHECK (mode IN ('pin','drop')),
+        made_at    TEXT    NOT NULL,
+        PRIMARY KEY (posting_id, text)
+    );
+    """,
 ]
 
 

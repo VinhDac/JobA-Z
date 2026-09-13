@@ -40,6 +40,9 @@ class Line:
     goc: str = ""
     sua: list = field(default_factory=list)         # [rewrite.Sua]
     yeu: list = field(default_factory=list)         # [rewrite.Yeu] — máy chỉ, Vin sửa
+    # VẾT = chỗ nào TRONG câu, không phải câu nào. Gạch cả dòng thì người đọc
+    # vẫn phải tự dò; gạch đúng cụm chữ thì mắt tới thẳng chỗ phải sửa.
+    vet: list = field(default_factory=list)         # [rewrite.Vet]
 
 
 def dang_ke(line: Line) -> bool:
@@ -67,9 +70,13 @@ class TailoredCV:
     summary: str
     sections: list[Section]
     dropped: list[tuple[str, str]]      # (câu, lý do bỏ)
-    wanted: list[str]                   # kỹ năng JD đòi
+    wanted: list[str]                   # kỹ năng JD quan tâm (rộng — để xếp thứ tự)
     covered: list[str]                  # trong đó CV này nói được
     missing: list[str]                  # JD đòi mà hồ sơ không có
+    # HAI TRƯỜNG CHO CON SỐ HIỆN RA. Tách khỏi wanted/covered vì chúng đo
+    # thứ khác: wanted rộng để xếp câu, asked hẹp để làm mẫu số thật thà.
+    asked: list[str] = field(default_factory=list)    # tin THẬT SỰ đòi
+    on_paper: list[str] = field(default_factory=list) # TỜ GIẤY nói ra được
 
 
 def skills_in(text: str) -> set[str]:
@@ -92,8 +99,29 @@ def wanted_skills(explain: dict | None, jd_text: str = "") -> set[str]:
     return out
 
 
+def asked_skills(explain: dict | None) -> set[str]:
+    """Kỹ năng tin này THẬT SỰ ĐÒI — chỉ từ DÒNG YÊU CẦU, không từ cả tin.
+
+    Khác `wanted_skills` ở đúng một chỗ, và chỗ đó quyết định con số hiện ra:
+
+        wanted  quét cả tin  -> dùng để XẾP THỨ TỰ câu. Rộng là tốt: bắt nhầm
+                một chữ thì cùng lắm xếp sai chỗ, không ai thấy.
+        asked   chỉ dòng yêu cầu -> dùng làm MẪU SỐ của phân số hiện ra. Rộng
+                ở đây là NÓI DỐI.
+
+    Đo trên kho thật: NXP "đòi" cloud — chữ `cloud` chỉ nằm ở đoạn công ty tự
+    giới thiệu. Bank of America: 3/4 chữ trong mẫu số là từ đoạn giới thiệu.
+    Hậu quả: màn hình báo phủ 29% trong khi tờ giấy thật mang 63%, và nó
+    khuyên Vin đừng nộp những tin tờ giấy đang trả lời tốt.
+    """
+    out: set[str] = set()
+    for req in (explain or {}).get("requirements", []):
+        out |= skills_in(req.get("text", ""))
+    return out
+
+
 def build(profile: dict, explain: dict | None, jd_text: str = "",
-          num: dict | None = None) -> TailoredCV:
+          num: dict | None = None, pick: dict | None = None) -> TailoredCV:
     from ..scoring.score import build_index, _matches
 
     blocks = parse(profile.get("cv_text") or "")
@@ -164,7 +192,7 @@ def build(profile: dict, explain: dict | None, jd_text: str = "",
             lines = _pick(block, wanted, answers,
                           int((num or {}).get("dong")
                               or rules.BUDGET["exp_bullets"]),
-                          bo=bi_cam, num=num)
+                          bo=bi_cam, num=num, chon=pick)
             if lines:
                 sections.append(Section(kind, block.title, block.meta, lines))
 
@@ -200,9 +228,24 @@ def build(profile: dict, explain: dict | None, jd_text: str = "",
                 and rules.clean(t) not in goc_hien
                 and rules.clean(t) not in cam_text and _worth(t)]
 
+    # TỜ GIẤY NÓI ĐƯỢC GÌ — đọc từ chính thứ sắp in ra, gồm CẢ mục kỹ năng.
+    # Bản cũ chỉ đếm kỹ năng chứng minh được bởi mấy câu được chọn, nên mục
+    # TECHNICAL SKILLS đang in trên chính tờ giấy đó không được tính.
+    tren_giay: set[str] = set()
+    for sec in sections:
+        # TIÊU ĐỀ MỤC CŨNG IN RA GIẤY. `render.paper` in nó dưới dạng
+        # "<b>Git and GitHub</b> — every project version-controlled…", nên bỏ
+        # tiêu đề khỏi phép đếm là tự báo thiếu: đo được `git` bị coi là rơi
+        # ở 14/287 tin, trong khi chữ đó nằm ngay trên tờ giấy.
+        tren_giay |= skills_in(sec.title)
+        for line in sec.lines:
+            tren_giay |= skills_in(line.text)
+    doi = asked_skills(explain)
     return TailoredCV(header, summary, sections, dropped, sorted(wanted),
                       sorted({s for v in answers.values() for s in v} & wanted),
-                      sorted(_real_missing(explain, wanted, have)))
+                      sorted(_real_missing(explain, wanted, have)),
+                      asked=sorted(doi),
+                      on_paper=sorted(doi & tren_giay))
 
 
 def _real_missing(explain: dict | None, wanted: set[str], have: set[str]) -> set[str]:
@@ -223,7 +266,8 @@ def _real_missing(explain: dict | None, wanted: set[str], have: set[str]) -> set
 
 
 def _pick(block: Block, wanted: set[str], answers: dict, cap: int,
-          bo: list | None = None, num: dict | None = None) -> list[Line]:
+          bo: list | None = None, num: dict | None = None,
+          chon: dict | None = None) -> list[Line]:
     """Câu trong một khối: trả lời được đứng trước, câu bị CẤM bỏ hẳn.
 
     HỎI `rules.sentence_ok` — trước đây KHÔNG hỏi, và đó là lỗ thật. Luật cấm
@@ -257,9 +301,20 @@ def _pick(block: Block, wanted: set[str], answers: dict, cap: int,
             text, rules.sentence_weight(text, wanted, tags, khoa), hits,
             review=ly_do if phan == "review" else "",
             goc=goc, sua=da_sua,
-            yeu=rewrite.diem_yeu(text, tags, wanted)))
-    # Trả lời được xếp trước; trong cùng nhóm thì theo trọng số cũ.
-    kept.sort(key=lambda l: (-len(l.hits), -l.weight))
+            yeu=rewrite.diem_yeu(text, tags, wanted),
+            vet=rewrite.vet(text, tags, wanted, da_sua)))
+    # NGƯỜI CHỌN THẮNG MÁY. Vin ghim một câu thì nó lên, dù trọng số thấp;
+    # Vin gạt một câu thì nó xuống, dù trọng số cao. Máy xếp bằng luật chung,
+    # còn Vin biết thứ luật chung không biết — tin này nghiêng về đâu, vừa
+    # nói chuyện với ai.
+    #
+    # Ghim KHÔNG phá trần `cap`: một tờ giấy vẫn là một tờ giấy. Ghim quá số
+    # ô thì câu ghim chiếm hết ô, và đó là ý Vin.
+    ghim = set((chon or {}).get("pin") or ())
+    gat = set((chon or {}).get("drop") or ())
+    kept = [l for l in kept if (l.goc or l.text) not in gat]
+    kept.sort(key=lambda l: ((l.goc or l.text) not in ghim,
+                             -len(l.hits), -l.weight))
     return kept[:cap]
 
 
@@ -299,3 +354,65 @@ def _identity(profile: dict, blocks: list[Block],
     if lead:
         facts.append(" · ".join(lead))
     return header, " · ".join(f for f in facts if f)
+
+
+# --- NGƯỜI CHỌN LẠI: ghim / gạt, và băng ghế dự bị --------------------
+
+def picks(conn, posting_id: int) -> dict:
+    """Lựa chọn của Vin cho MỘT tin: {'pin': [...], 'drop': [...]}."""
+    ra: dict = {"pin": [], "drop": []}
+    for row in conn.execute(
+            "SELECT text, mode FROM cv_pick WHERE posting_id = ?", (posting_id,)):
+        ra.setdefault(row["mode"], []).append(row["text"])
+    return ra
+
+
+def set_pick(conn, posting_id: int, text: str, mode: str) -> None:
+    """Ghim / gạt một câu. `mode=''` là bỏ lựa chọn, về lại cách máy xếp."""
+    if not mode:
+        conn.execute("DELETE FROM cv_pick WHERE posting_id = ? AND text = ?",
+                     (posting_id, text))
+    else:
+        from ..core.postings import now
+        conn.execute(
+            "INSERT INTO cv_pick (posting_id, text, mode, made_at)"
+            " VALUES (?, ?, ?, ?) ON CONFLICT(posting_id, text)"
+            " DO UPDATE SET mode = excluded.mode, made_at = excluded.made_at",
+            (posting_id, text, mode, now()))
+    conn.commit()
+
+
+def bench(profile: dict, cv: TailoredCV, block_title: str = "") -> list[dict]:
+    """Câu DỰ BỊ — câu hợp luật trong hồ sơ mà bản này không chọn.
+
+    Đây là thứ làm "chọn lại" thành chọn THẬT chứ không phải lời hứa: máy
+    không viết câu mới, nó đưa ra mấy câu Vin ĐÃ VIẾT mà lần này không được
+    gọi, xếp theo mức trúng thứ TIN NÀY đòi.
+
+    Đo trên hồ sơ thật: 10 câu dự bị cho một tin — đủ để đổi có nghĩa.
+    """
+    in_ra = {l.goc or l.text for s in cv.sections for l in s.lines}
+    # Dùng tập RỘNG: đây là gợi ý "đổi sang câu này thì trúng thêm gì", chứ
+    # không phải con số chấm điểm. Hẹp quá thì mọi câu dự bị đều hiện "không
+    # trúng thêm gì" và người dùng không có căn cứ nào để chọn.
+    doi = set(cv.wanted)
+    ra = []
+    for block in parse(str(profile.get("cv_text") or "")):
+        if block.kind not in ("experience", "project"):
+            continue
+        if block_title and block.title != block_title:
+            continue
+        for raw in sentences(block):
+            text = rules.clean(raw)
+            if text in in_ra or not _worth(text):
+                continue
+            phan, _ = rules.sentence_ok(text, sorted(skills_in(text)))
+            if phan == "drop":
+                continue
+            trung = sorted(skills_in(text) & doi)
+            ra.append({"text": text, "khoi": block.title, "trung": trung,
+                       "diem": rules.sentence_weight(text, doi,
+                                                     sorted(skills_in(text)))})
+    # Câu trúng thứ tin này đòi đứng trước — đó là lý do để đổi sang nó.
+    ra.sort(key=lambda x: (-len(x["trung"]), -x["diem"]))
+    return ra

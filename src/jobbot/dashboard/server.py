@@ -414,8 +414,11 @@ class Handler(BaseHTTPRequestHandler):
                     from ..profile import store as pstore
                     answers = pstore.load(conn)
                     explain = _json.loads(found["score_json"]) if found.get("score_json") else None
-                    tailored = build_cv(answers, explain, found["jd"])
-                    return self._html(cvview.render(found, tailored))
+                                        # LỰA CHỌN CỦA VIN thắng cách máy xếp — xem cv/build.picks
+                    from ..cv.build import picks as _picks
+                    tailored = build_cv(answers, explain, found['jd'],
+                                        pick=_picks(conn, int(found['id'])))
+                    return self._html(cvview.render(found, tailored, answers))
                 return self._html(jobs.render_detail(found))
             finally:
                 conn.close()
@@ -475,7 +478,8 @@ class Handler(BaseHTTPRequestHandler):
                     # và nó chỉ tốn một lần đọc hồ sơ.
                     blocks=live.cv_blocks(conn),
                     stage=batch.stage(conn),
-                    q=(query.get("q") or [""])[0].strip()[:80]))
+                    q=(query.get("q") or [""])[0].strip()[:80],
+                    gap=live.cv_hut(conn)))
             finally:
                 conn.close()
 
@@ -659,6 +663,25 @@ class Handler(BaseHTTPRequestHandler):
             # đứng hình, mà nhật ký hiện tiến độ rồi nên không cần chờ.
             threading.Thread(target=_rejudge, daemon=True, name="rejudge").start()
             return self._redirect("/search")
+
+        if path == "/api/cv/pick":
+            # ĐỔI CÂU cho MỘT tin. Ghim câu mới vào, gạt câu cũ ra — cả hai
+            # đều là câu Vin ĐÃ VIẾT, nên đây vẫn là CHỌN, không phải viết.
+            job = form.get("job", [""])[0].strip()
+            vao = form.get("text", [""])[0]
+            ra = form.get("out", [""])[0]
+            if not job.isdigit() or not vao:
+                return self._json({"ok": False}, status=400)
+            conn = db.connect()
+            try:
+                from ..cv.build import set_pick
+                set_pick(conn, int(job), vao, "pin")
+                if ra and ra != vao:
+                    set_pick(conn, int(job), ra, "drop")
+                journal.log.ok(journal.CV, f"tin #{job}: đổi câu trên CV")
+            finally:
+                conn.close()
+            return self._redirect(f"/jobs/{job}/cv")
 
         if path == "/api/cv/num":
             # BA NÚM của tầng CV. Bấm là lưu ngay, KHÔNG tự dựng lại: dựng mất

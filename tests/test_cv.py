@@ -337,7 +337,9 @@ check("không chấm -> tờ CV trơn như cũ", "cjump" not in _to_sach
 check("chấm -> mỗi câu có neo riêng", _re2.search(r"id='cau1'", _to))
 check("và có dấu theo LOẠI VIỆC, không phải màu trang trí",
       "dsua" in _to or "dhong" in _to)
-check("có mách nước lúc rê chuột", "class=ctip" in _to)
+check("bấm vào dòng là mở thẻ chữa bài NGAY TẠI CHỖ", "class=cdet" in _to
+      and "class=ccard" in _to)
+check("tô từ khoá tin này ĐÒI ngay trong câu", "'kw'" in _to or "kw " in _to)
 check("có chữ GỐC sẵn trong DOM để nút Trước/Sau bật tắt", "class=ctruoc" in _to)
 
 # MỖI CÂU MỘT CHỖ. Câu chỉ được nằm trên tờ giấy; phần dưới nói thứ tờ giấy
@@ -351,11 +353,14 @@ if _cau_dai:
 
 # LINK CHẾT. Bút đỏ trên bài và khối chi tiết phải hỏi CÙNG một câu hỏi; hỏi
 # ở hai chỗ thì chúng trôi khỏi nhau và bấm vào không nhảy đi đâu — im lặng.
-_di = set(_re2.findall(r"href='#(ct\d+)'", _to2))
-_den = set(_re2.findall(r"id='(ct\d+)'", _duoi))
-check("mọi dấu bấm được đều CÓ ĐÍCH — " + str(sorted(_di - _den)), _di <= _den)
-check("và mọi khối chi tiết đều có chỗ bấm trên bài", _den <= _di)
-check("chỉ câu CÓ GÌ ĐỂ NÓI mới thành link — một chỗ quyết",
+# MỖI CÂU MỘT CHỖ. Thẻ chữa bài nằm NGAY TRÊN dòng, nên phần dưới KHÔNG
+# được nhắc lại từng câu nữa — nhắc lại là bắt đọc hai lần rồi tự ghép.
+check("phần dưới KHÔNG còn lặp lại từng câu", "class='gcau" not in _duoi
+      and "class=gcau" not in _duoi)
+check("phần dưới chỉ còn thứ KHÔNG thuộc về một câu nào",
+      "hồ sơ câm" in _duoi or "Luật không cho" in _duoi or _duoi.strip()
+      .startswith("<div class=cvaudit>"))
+check("chỉ câu CÓ GÌ ĐỂ NÓI mới thành thẻ — một chỗ quyết",
       _dk.__module__ == "jobbot.cv.build")
 
 # NÚT TRƯỚC/SAU dùng bộ chọn anh-em, nên checkbox phải CÙNG CẤP với tờ CV.
@@ -367,6 +372,111 @@ check("phần chấm điểm bọc .cvaudit nên không in ra giấy",
       "<div class=cvaudit>" in _h)
 check("nhưng nút Trước/Sau đứng ngoài bọc đó",
       _h.index("id=cvtruoc") < _h.index("<div class=cvaudit>"))
+
+print("\n[chọn lại: máy đưa câu KHÁC BẠN ĐÃ VIẾT, không viết câu mới]")
+from jobbot.cv.build import bench as _bench, _pick as _pk2
+from jobbot.cv.blocks import Block as _Bk
+from jobbot.cv.render import to_khoa as _tk
+
+# BĂNG GHẾ = câu hợp luật trong hồ sơ mà bản này không chọn. Đây là thứ làm
+# "chọn lại" thành chọn THẬT chứ không phải lời hứa.
+_bg = _bench(PROFILE, ml)
+check("có câu dự bị để đổi sang", len(_bg) > 0)
+_tren_giay = {l.goc or l.text for s2 in ml.sections for l in s2.lines}
+check("câu dự bị KHÔNG phải câu đang in trên bản",
+      not any(b["text"] in _tren_giay for b in _bg))
+check("mọi câu dự bị đều LÀ CÂU TRONG HỒ SƠ — máy không bịa câu nào",
+      all(b["text"][:38] in CV.replace("\n", " ") for b in _bg))
+check("xếp câu trúng thứ tin này đòi lên trước",
+      not _bg or len(_bg[0]["trung"]) >= len(_bg[-1]["trung"]))
+check("mỗi câu dự bị nói rõ đổi sang thì TRÚNG THÊM GÌ",
+      all("trung" in b and "khoi" in b for b in _bg))
+
+# GHIM / GẠT: người chọn thắng cách máy xếp.
+_kh = _Bk(kind="experience", title="X", meta="",
+          lines=[f"Built system number {_i} with Python daily." for _i in range(6)])
+_thuong = [l.text for l in _pk2(_kh, set(), {}, 2)]
+_ghim = [l.text for l in _pk2(_kh, set(), {}, 2,
+                              chon={"pin": [_kh.lines[5]]})]
+check("ghim một câu -> nó lên bản dù trọng số không đổi",
+      _kh.lines[5] in _ghim)
+_gat = [l.text for l in _pk2(_kh, set(), {}, 2, chon={"drop": [_thuong[0]]})]
+check("gạt một câu -> nó biến khỏi bản", _thuong[0] not in _gat)
+check("ghim KHÔNG phá trần số dòng — một tờ giấy vẫn là một tờ giấy",
+      len(_ghim) == 2)
+
+print("\n[tô từ khoá: nhìn phát biết tờ giấy có nói ra thứ họ hỏi không]")
+_h = _tk("Built models in Python and managed portfolio risk.", {"python", "risk"})
+check("tô đúng chữ có thật trong câu", ">Python<" in _h and "kw" in _h)
+check("giữ nguyên phần chữ còn lại", "Built models in" in _h)
+check("không đòi thì không tô",
+      "kw" not in _tk("Built models in Python.", set()))
+# Thẻ lồng nhau là HTML vỡ: "machine learning" và "learning" chồng lên nhau.
+_ml = _tk("deep learning and machine learning models",
+          {"machine learning", "deep learning"})
+check("thẻ mở và đóng cân bằng dù vệt chồng nhau",
+      _ml.count("<span") == _ml.count("</span>"))
+# VỆT CHỒNG NHAU là chuyện thường: một cụm vừa là từ khoá, vừa nằm trong đoạn
+# "thiếu số đo", vừa trong đoạn "quá dài". Bọc lần lượt thì đẻ thẻ cắt chéo.
+from jobbot.cv.rewrite import vet as _vt, sua as _sa
+_t2 = "Built two systems in MQL5 and Python: signals and risk."
+_, _ds = _sa("I built two systems in MQL5 and Python: signals and risk.")
+_h2 = _tk(_t2, {"python", "risk"}, _vt(_t2, ["python", "risk"], {"python", "risk"}, _ds))
+check("vệt chồng nhau vẫn ra HTML phẳng, cân bằng",
+      _h2.count("<span") == _h2.count("</span>"))
+check("một cụm mang ĐƯỢC nhiều nhãn cùng lúc", "kw vthieu_so" in _h2)
+# Chữ của người dùng phải được escape — tên công ty có & là chuyện thường.
+check("chữ vẫn được escape",
+      "&amp;" in _tk("Risk & return with Python", {"python"}))
+
+print("\n[VẾT: gạch đúng ĐOẠN CHỮ, không gạch cả dòng]")
+# Đây là chỗ bản trước làm sai: nó đánh dấu ở mức DÒNG bằng viền trái 2px, đo
+# được 0 dấu nào nằm TRÊN CHỮ. Mở tờ CV ra thấy mấy chữ xanh và không biết có
+# vấn đề gì, phải bấm từng dòng mới phát hiện — ngược hẳn với chấm bài.
+from jobbot.cv.rewrite import vet as _vt3, sua as _sa3, DAI_NHAT as _DN
+
+# THIẾU SỐ: gạch đúng cụm động từ — chỗ con số ĐÁNG RA phải nằm. Không gạch
+# được chỗ trống, nhưng gạch được chỗ nó thuộc về.
+_t = "Built two systems in MQL5 and Python: signals and risk."
+_v = _vt3(_t, ["python"], {"python"})
+_ts = [x for x in _v if x.loai == "thieu_so"]
+check("khoe việc mà thiếu số -> có vệt", len(_ts) == 1)
+check("vệt dừng ở hết mệnh đề đầu, không nuốt cả câu",
+      _ts and _t[_ts[0].dau:_ts[0].cuoi] == "Built two systems in MQL5 and Python")
+check("và nói rõ chèn số vào ĐÂU", _ts and "vào đúng đây" in _ts[0].lam_gi)
+check("có số rồi thì KHÔNG gạch",
+      not [x for x in _vt3("Built 17 systems in Python.", ["python"], {"python"})
+           if x.loai == "thieu_so"])
+# KIẾN THỨC không bị đòi số — 12/16 câu của hồ sơ là kiến thức.
+check("câu kiến thức KHÔNG bị gạch thiếu số",
+      not [x for x in _vt3("A random train/test split leaks.", [], set())
+           if x.loai == "thieu_so"])
+
+# QUÁ DÀI: gạch ĐÚNG PHẦN THỪA, từ chỗ mắt bắt đầu trượt — không gạch cả câu.
+_dai = "Built " + "x" * (_DN + 40)
+_qd = [x for x in _vt3(_dai, [], set()) if x.loai == "qua_dai"]
+check("quá dài -> gạch từ đúng chỗ vượt trần", _qd and _qd[0].dau == _DN)
+check("và không gạch từ đầu câu", _qd and _qd[0].dau > 0)
+
+# MÁY ĐÃ SỬA: đánh dấu chữ đầu — chỗ chữ "I" vừa bị cắt.
+_, _ds3 = _sa3("I built two systems.")
+_ms = [x for x in _vt3("Built two systems.", [], set(), _ds3) if x.loai == "da_sua"]
+check("máy sửa chữ -> đánh dấu đúng chữ đầu", _ms and _ms[0].dau == 0)
+
+# MỖI VẾT phải kèm việc làm được, không phải lời phán.
+check("mọi vệt đều kèm CÁCH SỬA cụ thể",
+      all(x.lam_gi and len(x.lam_gi) > 15 for x in _vt3(_t, ["python"], {"python"})))
+
+# THANH ĐẾM: mở tờ CV ra là biết có mấy chỗ, không phải bấm từng dòng.
+from jobbot.cv.report import cho_xem as _cx
+_ds4 = _cx(ml)
+check("đếm được chỗ cần xem trên cả tờ", isinstance(_ds4, list))
+check("đếm theo CHỖ, không theo câu — một câu có thể có hai việc",
+      all(len(x) == 3 and isinstance(x[2], int) for x in _ds4))
+_h4 = _hd(ml)
+check("thanh đầu nói thẳng còn mấy chỗ cần xem", "chỗ cần bạn xem" in _h4)
+check("và có chú giải, không để mấy đường gạch thành câu đố",
+      "glegend" in _h4 or not _ds4)
 
 print(f"\n{ok} ok, {fail} fail")
 sys.exit(1 if fail else 0)

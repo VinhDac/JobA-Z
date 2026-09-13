@@ -163,7 +163,8 @@ def _list(data: dict, q: str = "") -> str:
 
 def render(*, versions: list[dict], jobs: int, gaps: list[str],
            core: int = 0, blocks: list[dict] | None = None,
-           stage: dict | None = None, q: str = "") -> str:
+           stage: dict | None = None, q: str = "",
+           gap: dict | None = None) -> str:
     """Tab CV. KHỐI là nguyên liệu của Vin; BẢN SẼ GỬI là thứ máy dựng ra.
 
     Hai ô đó khác hẳn nhau về quyền sở hữu, nên chỉ ô bên phải chờ nút Chạy:
@@ -194,11 +195,14 @@ def render(*, versions: list[dict], jobs: int, gaps: list[str],
                  run_note=info.get("note", "")),
         note=note,
         cols=2, columns="minmax(360px, 1fr) 1.6fr",
-        rows_tpl="1fr 150px", journal_at=(1, 2),
+        rows_tpl="minmax(260px, auto) 1fr 140px", journal_at=(1, 3),
         panels=[
-            runtime.panel("Khối", _blocks(blocks, gaps), at=(1, 1)),
+            # HỤT đứng TRÊN kho khối: nó nói việc phải làm, kho khối nói
+            # thứ đang có. Việc phải làm đọc trước.
+            runtime.panel("Viết gì để hết hụt", hut(gap or {}), at=(1, 1)),
+            runtime.panel("Khối nguyên liệu", _blocks(blocks, gaps), at=(1, 2)),
             runtime.panel("Bản sẽ gửi", _list(data, q) if versions
-                          else _chua_dung(info), rows=2, at=(2, 1)),
+                          else _chua_dung(info), rows=3, at=(2, 1)),
         ],
     )
 
@@ -257,7 +261,7 @@ def _blocks(blocks: list[dict], gaps: list[str]) -> str:
         f"<div class=blklist>{rows}</div>"
         f"<div class=blkfoot>"
         f"<button class='mbtn apply' data-settings='/cv/block?title='>+ Khối mới</button>"
-        f"<div class=blkaim>nhắm vào chỗ hồ sơ đang câm: {aim}</div></div>")
+        f"</div>")
 
 
 def edit(block: dict | None, gaps: list[str]) -> str:
@@ -362,3 +366,69 @@ def adjust(num: dict) -> str:
             + "<div class=note>Xoay núm xong thì nút trên thanh đổi thành "
               "<b>Cập nhật</b> — bấm lúc nào cũng được. Máy không tự dựng lại: "
               "dựng mất ~5 giây và đó là quyết định của bạn.</div>")
+
+
+# ------------------------------------------------------------ khối HỤT
+
+VIEC = {"viet": ("VIẾT", "viet", "bạn có làm rồi, chỉ chưa viết ra — một buổi tối"),
+        "hoc": ("HỌC", "hoc", "gọi đích danh tên sản phẩm, không viết thay được")}
+
+
+def hut(d: dict) -> str:
+    """Viết thêm câu về cái gì thì bao nhiêu TIN HẾT HỤT.
+
+    Khối trả lời câu hỏi duy nhất của tab này: *tối nay tôi viết gì?*
+
+    ĐƠN VỊ LÀ TIN HẾT HỤT — tin mà MỌI dòng must đều đáp được. Đếm theo lượt
+    thì `cloud` đứng đầu (50 dòng) trong khi nó chỉ mở khoá thêm 19 tin, còn
+    `visualisation` mở 28. Đếm sai đơn vị là xếp sai thứ tự việc.
+
+    Mỗi dòng là GIÁ TRỊ BIÊN khi đã làm xong mấy dòng trên nó — ba kỹ năng
+    cùng mở một tin thì cộng riêng lẻ là đếm tin đó ba lần.
+    """
+    buoc = d.get("buoc") or []
+    tong, nen = d.get("tin") or 0, d.get("nen") or 0
+    if not buoc or not tong:
+        return ("<div class=empty-box>Chưa đo được chỗ hụt — cần tin đã chấm "
+                "điểm. Chạy Search trước.</div>")
+
+    hang = []
+    for b in buoc:
+        nhan, lop, y = VIEC.get(b["viec"], VIEC["viet"])
+        viet_duoc = b["dong"] - b["rieng"]
+        # Vạch dài theo SỐ TIN MỞ KHOÁ, không theo số dòng — đó là thứ quyết định
+        rong = round(100 * b["them"] / max(1, buoc[0]["them"]))
+        hang.append(
+            f"<div class=hrow title='{esc(y)}'>"
+            f"<span class='hlab {lop}'>{nhan}</span>"
+            f"<span class=hname>{esc(b['ky_nang'])}</span>"
+            f"<span class=hbar><i style='width:{rong}%' class={lop}></i></span>"
+            f"<span class=hplus>+{b['them']}<span>tin</span></span>"
+            f"<span class=hcum>{b['cong_don']}<span>/{tong}</span></span>"
+            f"<span class=hsplit>{b['dong']} dòng đòi · "
+            f"<b>{viet_duoc}</b> viết được"
+            + (f" · <b>{b['rieng']}</b> phải học" if b["rieng"] else "")
+            + "</span></div>")
+
+    het = buoc[-1]["cong_don"]
+    cv_ = d.get("chi_viet") or nen
+    nv = d.get("so_viet") or 0
+    # HAI ĐÍCH, KHÔNG MỘT. "Làm hết bảng" gộp cả mấy dòng phải đi HỌC — học
+    # tính bằng tháng, viết tính bằng buổi tối. Gộp lại là chỉ cho người dùng
+    # một cái đích tối nay không với tới được.
+    return (
+        f"<div class=gapnote>Hồ sơ đang đáp trọn <b>{nen}</b>/{tong} tin "
+        f"(<b>{nen * 100 // tong}%</b>).</div>"
+        f"<div class=htarget>"
+        f"<span class=ht1><b>{cv_}</b> tin ({cv_ * 100 // tong}%)"
+        f"<span>chỉ cần VIẾT {nv} câu — làm được tối nay</span></span>"
+        f"<span class=ht2><b>{het}</b> tin ({het * 100 // tong}%)"
+        f"<span>nếu đi học nốt mấy thứ còn lại</span></span></div>"
+        f"<div class=gapnote>Mỗi dòng là số tin mở khoá THÊM khi đã làm xong "
+        f"mấy dòng trên nó — không phải cộng lại.</div>"
+        + "".join(hang)
+        + "<div class=note><b>VIẾT</b> = dòng yêu cầu nói chung chung mà bạn "
+          "đã làm rồi, chỉ chưa viết ra hồ sơ. <b>HỌC</b> = nó gọi đích danh "
+          "tên sản phẩm, không câu nào viết thay được. Máy chỉ chọn được chữ "
+          "bạn đã viết, nên mấy chỗ này là việc của bạn.</div>")
+
