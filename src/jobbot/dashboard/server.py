@@ -766,6 +766,28 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
             return self._redirect(f"/jobs/{job}/cv")
 
+        if path == "/api/search/xoa":
+            # DỌN KHO TIN để quét lại từ đầu. Chốt hai lớp như nút bên CV,
+            # nhưng nặng hơn nhiều: bản CV dựng lại mất 15 giây, kho tin dựng
+            # lại mất một lượt quét đầy đủ có mở Chrome. Tin đã có đơn thì
+            # GIỮ — đó là việc người dùng đã làm, quét lại không lấy lại được.
+            if form.get("arg", [""])[0].strip() != "xoa":
+                return self._json({"ok": False, "note": "cần xác nhận"},
+                                  status=400)
+            conn = db.connect()
+            try:
+                from ..core import postings as _pst
+                ket = _pst.xoa_kho(conn)
+            finally:
+                conn.close()
+            live.quen()
+            journal.log.ok(journal.SEARCH,
+                           f"đã dọn kho: bỏ {ket['tin']:,} tin, "
+                           f"giữ {ket['giu']:,} tin đã có đơn · "
+                           f"bỏ {ket['ban_cv']} bản CV dựng từ kho đó")
+            return self._json({"ok": True, "reload": True,
+                               "note": f"đã bỏ {ket['tin']:,} tin"})
+
         if path == "/api/cv/xoa":
             # XOÁ BẢN ĐÃ DỰNG. Chốt hai lớp: trình duyệt bắt bấm hai nhịp
             # (live.js), máy chủ đòi arg="xoa". Không bao giờ tin mỗi phía

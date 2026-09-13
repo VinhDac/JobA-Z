@@ -713,6 +713,10 @@ def search_stage(conn: sqlite3.Connection) -> dict:
                    " AND realism IN ('likely','possible') AND score >= 80"
                    " AND id NOT IN (SELECT posting_id FROM application)")
     da_nop = one("SELECT COUNT(*) FROM application")
+    # CẢ KHO, không phải phần qua lưới lọc. Nút Dọn kho xoá cả kho, nên nhãn
+    # của nó phải đếm cả kho — nói "bỏ 363 tin" rồi bỏ 5.166 tin là nói dối
+    # đúng lúc người dùng cần số thật nhất.
+    ca_kho = one("SELECT COUNT(*) FROM posting")
     last = conn.execute(
         "SELECT at FROM audit WHERE kind = 'scan_started'"
         " ORDER BY id DESC LIMIT 1").fetchone()
@@ -757,6 +761,7 @@ def search_stage(conn: sqlite3.Connection) -> dict:
     from ..ingest.filter import NOI
     nha, gan = noi_toi(conn)
     return {"kept": kept, "worth": worth, "fresh": fresh, "state": state,
+            "ca_kho": ca_kho,
             "hang_doi": hang_doi, "da_nop": da_nop,
             "run_label": kieu["label"], "run_note": kieu["note"],
             "gan": gan, "vung": NOI[nha]["ten"]}

@@ -50,6 +50,40 @@ def _row_values(source: str, raw_id: int, item: Posting) -> tuple[list[str], lis
     return columns, values
 
 
+def xoa_kho(conn: sqlite3.Connection) -> dict:
+    """Dọn sạch KHO TIN để quét lại từ đầu. Trả về những gì vừa bỏ đi.
+
+    GIỮ LẠI TIN ĐÃ ĐỘNG TỚI. Tin có đơn (`application`) hay có câu ghim
+    (`cv_pick`) là việc người dùng đã làm, không phải thứ máy cào về — xoá nó
+    là xoá mất dấu vết một lần nộp, và không quét lại nào lấy lại được.
+
+    KHÁC HẲN nút Xoá bản bên CV. Bản CV dựng lại mất 15 giây; kho tin dựng
+    lại mất một lượt quét đầy đủ, có mở Chrome. Nên chốt ở đây phải nói rõ số
+    tin sắp mất, chứ không chỉ hỏi "chắc chưa".
+
+    KHÔNG đụng tới: hồ sơ, đơn đã nộp, thư, cài đặt, lưới lọc.
+    """
+    giu = ("SELECT posting_id FROM application"
+           " UNION SELECT posting_id FROM cv_pick")
+    n = conn.execute(f"SELECT COUNT(*) FROM posting WHERE id NOT IN ({giu})"
+                     ).fetchone()[0]
+    # raw_posting xoá theo `raw_id` của chính mấy tin sắp bỏ — xoá sạch bảng
+    # thì mất luôn nguyên văn của tin đang có đơn.
+    conn.execute(
+        f"DELETE FROM raw_posting WHERE id IN ("
+        f"  SELECT raw_id FROM posting WHERE id NOT IN ({giu}) AND raw_id IS NOT NULL)")
+    conn.execute(f"DELETE FROM posting WHERE id NOT IN ({giu})")
+    lan = conn.execute("SELECT COUNT(*) FROM source_run").fetchone()[0]
+    conn.execute("DELETE FROM source_run")
+    # BẢN CV DỰNG TỪ KHO TIN NÀY. Giữ lại là giữ 157 bản nói về 5.000 tin vừa
+    # biến mất — xem cv/batch.py.
+    ban = conn.execute("SELECT COUNT(*) FROM cv_build").fetchone()[0]
+    conn.execute("DELETE FROM cv_build")
+    conn.commit()
+    con = conn.execute("SELECT COUNT(*) FROM posting").fetchone()[0]
+    return {"tin": n, "giu": con, "lan_quet": lan, "ban_cv": ban}
+
+
 def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 

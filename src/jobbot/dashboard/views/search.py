@@ -416,7 +416,13 @@ def render(*, jobs: list[dict], flt, counts: dict, sieve: dict,
              (f"{info.get('da_nop', 0):,}", "đã nộp", "view")],
             adjust="/adjust/search",
             run=info.get("run_label", "Chạy"),
-            run_note=info.get("run_note", "")),
+            run_note=info.get("run_note", ""),
+            # SỐ TIN SẮP MẤT nằm ngay trên nút đã nạp đạn. "Chắc chưa?" không
+            # nói được cái giá; "Bỏ 5.166 tin?" thì nói được.
+            xoa=("/api/search/xoa", "Dọn kho",
+                 f"Bỏ {info.get('ca_kho', 0):,} tin?",
+                 "Xoá kho tin để quét lại từ đầu. Tin đã có đơn thì GIỮ. "
+                 "Hồ sơ, đơn đã nộp và lưới lọc không bị đụng.")),
         # Lưới sàng đã chuyển vào ⚟ nên cột trái hết việc. Danh sách — thứ
         # Vin thật sự đọc — lấy cả bề ngang. Nhật ký về dải dẹt dưới đáy.
         cols=1, journal="bottom",

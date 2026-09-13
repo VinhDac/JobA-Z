@@ -2608,6 +2608,54 @@ with tempfile.TemporaryDirectory() as tmp:
           all(_live.cv_pdf_for(conn, item["ids"][0]) == item["file"] for item in plan))
     conn.close()
 
+    print("\n[Search: nút DỌN KHO — giữ lại thứ người dùng đã động tới]")
+    _, _srh = get("/search")
+    check("thanh Search có nút dọn kho", "/api/search/xoa" in _srh)
+    check("và có chốt hai nhịp", "data-arm=" in _srh)
+    # SỐ TIN SẮP MẤT nằm ngay trên nút đã nạp đạn. "Chắc chưa?" không nói được
+    # cái giá; "Bỏ 5.166 tin?" thì nói được.
+    # SỐ PHẢI LÀ SỐ THẬT SẮP MẤT. `kept` là phần qua lưới lọc; nút này xoá
+    # CẢ KHO. Ghi "bỏ 363 tin" rồi bỏ 5.166 tin là nói dối đúng lúc người
+    # dùng cần số thật nhất.
+    _cK = db.connect(Path(tmp) / "jobbot.db")
+    _ca_kho = _cK.execute("SELECT COUNT(*) FROM posting").fetchone()[0]
+    _loc = _cK.execute("SELECT COUNT(*) FROM posting WHERE kept=1").fetchone()[0]
+    _cK.close()
+    check("nút nạp đạn nói rõ SỐ TIN sắp mất — đếm CẢ KHO, không phải phần lọc",
+          f"Bỏ {_ca_kho:,} tin?" in _srh, f"kho {_ca_kho} · lọc {_loc}")
+    check("POST rỗng -> từ chối", post_form("/api/search/xoa", "") == 400)
+    check("POST sai chữ -> từ chối", post_form("/api/search/xoa", "arg=co") == 400)
+
+    # GIỮ LẠI TIN ĐÃ ĐỘNG TỚI. Tin có đơn là việc người dùng đã làm, không
+    # phải thứ máy cào về — quét lại không lấy lại được.
+    _cS = db.connect(Path(tmp) / "jobbot.db")
+    _giu_id = _cS.execute("SELECT id FROM posting WHERE kept=1 LIMIT 1").fetchone()[0]
+    _cS.execute("INSERT INTO application (company, company_key, role, posting_id,"
+                " origin, applied_at, stage, last_event_at, last_event, cv_file,"
+                " note) VALUES ('X','x','R',?,'apply','2026-01-01','draft','','','','')",
+                (_giu_id,))
+    _cS.commit()
+    _truoc_tin = _cS.execute("SELECT COUNT(*) FROM posting").fetchone()[0]
+    _ho_so_truoc = store.load(_cS).get("cv_text") or ""
+    _cS.close()
+    check("đang có tin để mà dọn", _truoc_tin > 1)
+    check("POST đúng chữ -> dọn", post_form("/api/search/xoa", "arg=xoa") == 200)
+    _cS = db.connect(Path(tmp) / "jobbot.db")
+    check("kho tin sạch, TRỪ tin đã có đơn",
+          _cS.execute("SELECT COUNT(*) FROM posting").fetchone()[0] == 1)
+    check("và đúng là tin đó",
+          _cS.execute("SELECT id FROM posting").fetchone()[0] == _giu_id)
+    check("đơn đã nộp KHÔNG bị đụng",
+          _cS.execute("SELECT COUNT(*) FROM application").fetchone()[0] >= 1)
+    check("nguyên văn của tin giữ lại cũng còn",
+          _cS.execute("SELECT COUNT(*) FROM raw_posting").fetchone()[0] >= 1)
+    check("hồ sơ KHÔNG bị đụng",
+          (store.load(_cS).get("cv_text") or "") == _ho_so_truoc)
+    # Bản CV dựng TỪ kho tin đó — giữ lại là giữ bản nói về tin vừa biến mất.
+    from jobbot.cv import batch as _btS
+    check("bản CV dựng từ kho đó cũng bỏ theo", _btS.saved(_cS) is None)
+    _cS.close()
+
     httpd.shutdown(); httpd.server_close()
     os.environ.pop("JOBBOT_DATA_DIR", None)
 
