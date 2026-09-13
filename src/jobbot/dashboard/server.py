@@ -201,10 +201,13 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "jobbot"
 
     # --- tiện ích ---------------------------------------------------------
-    def _send(self, body: bytes, status: int = 200, ctype: str = "text/html; charset=utf-8"):
+    def _send(self, body: bytes, status: int = 200,
+              ctype: str = "text/html; charset=utf-8", no_cache: bool = False):
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
+        if no_cache:
+            self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 
@@ -480,6 +483,20 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/static/app.css":
             return self._send((web_dir() / "app.css").read_bytes(),
                               ctype="text/css; charset=utf-8")
+        if path == "/static/mau.css":
+            # KHÔNG CHO CACHE. Đây là tấm chỉ vài trăm byte, mà cache nó thì
+            # đổi màu xong phải xoá cache trình duyệt mới thấy — người dùng
+            # sẽ kết luận cái nút hỏng.
+            from . import mau as _mau
+            conn = db.connect()
+            try:
+                from ..core import prefs as _prefs
+                than = _mau.css(_prefs.get(conn, _prefs.MAU))
+            finally:
+                conn.close()
+            return self._send(than.encode("utf-8"),
+                              ctype="text/css; charset=utf-8", no_cache=True)
+
         if path == "/static/live.js":
             return self._send((web_dir() / "live.js").read_bytes(),
                               ctype="text/javascript; charset=utf-8")
@@ -755,7 +772,55 @@ class Handler(BaseHTTPRequestHandler):
                     prefs.put(conn, prefs.MAIL_DAYS,
                               form.get("mail_days", ["30"])[0])
                     journal.log.emit(journal.SYSTEM, "đổi số ngày đọc lại thư")
-                    return self._html(settings.render(**live.settings(conn)))
+                    return self._html(settings.render(**live.settings(conn),
+                                                      mo="gmail"))
+                if phan == "telegram":
+                    # TOKEN VÀO config.toml, KHÔNG vào DB: cùng chỗ với app
+                    # password Gmail (chmod 600, đã gitignore). Để trống thì
+                    # giữ token cũ — người dùng chỉ sửa số chat thì không
+                    # phải dán lại token.
+                    from ..core import config as _cfg, tele as _tele
+                    tok = form.get("token", [""])[0].strip()
+                    if tok:
+                        _cfg.write_value("telegram", "token", tok)
+                    chat = form.get("chat_id", [""])[0].strip()
+                    if form.get("tim"):
+                        # TÌM CHAT: đọc một lượt getUpdates rồi lấy số chat
+                        # của tin gần nhất. Người dùng khỏi phải đi tra bằng
+                        # một bot thứ ba nào đó.
+                        ds, _ = _tele.nhan(0)
+                        ai = [str((((u.get("message") or {}).get("chat")) or {})
+                                  .get("id", "")) for u in ds]
+                        ai = [x for x in ai if x]
+                        if ai:
+                            chat = ai[-1]
+                            journal.log.ok(journal.SYSTEM,
+                                           f"tìm thấy chat Telegram {chat}")
+                        else:
+                            journal.log.warn(
+                                journal.SYSTEM,
+                                "chưa thấy tin nào — nhắn một câu cho bot rồi "
+                                "bấm Tìm chat lại")
+                    if chat:
+                        _cfg.write_value("telegram", "chat_id", chat)
+                    if tok or chat:
+                        journal.log.ok(journal.SYSTEM, "đã lưu cấu hình Telegram")
+                    # TEST chạy SAU khi lưu, không trước: người dùng dán
+                    # token rồi bấm thẳng Test là chuyện thường, và test bằng
+                    # token cũ thì nó báo sai về cái vừa dán.
+                    kq = ()
+                    if form.get("test"):
+                        from .. import bao as _bao
+                        kq = _bao.thu(conn)
+                    return self._html(settings.render(
+                        **live.settings(conn), tin_test=kq, mo="bao"))
+                if phan == "bao_so":
+                    prefs.put(conn, prefs.BAO_NGUONG,
+                              form.get("bao_nguong", ["10"])[0])
+                    prefs.put(conn, prefs.BAO_GIO, form.get("bao_gio", ["20"])[0])
+                    journal.log.emit(journal.SYSTEM, "đổi ngưỡng/giờ thông báo")
+                    return self._html(settings.render(**live.settings(conn),
+                                                      mo="bao"))
                 if phan == "nguon":
                     bat = set(form.get("ats", []))
                     for ats, key in prefs.SRC_ATS.items():
@@ -763,7 +828,8 @@ class Handler(BaseHTTPRequestHandler):
                     prefs.set_flag(conn, prefs.SRC_ALERT, "alert" in bat)
                     journal.log.emit(journal.SYSTEM,
                                      "nguồn API: " + (", ".join(sorted(bat)) or "TẮT HẾT"))
-                    return self._html(settings.render(**live.settings(conn)))
+                    return self._html(settings.render(**live.settings(conn),
+                                                      mo="nguon"))
                 prefs.put(conn, prefs.SCAN_EVERY, form.get("every", ["60"])[0])
                 prefs.put(conn, prefs.HOURS_FROM, form.get("from", ["8"])[0])
                 prefs.put(conn, prefs.HOURS_TO, form.get("to", ["22"])[0])
@@ -773,7 +839,8 @@ class Handler(BaseHTTPRequestHandler):
                 chon = form.get("pace", ["thuong"])[0]
                 prefs.put(conn, prefs.PACE, chon if chon in NHIP else "thuong")
                 journal.log.emit(journal.SYSTEM, "cài đặt đã đổi")
-                return self._html(settings.render(**live.settings(conn)))
+                return self._html(settings.render(**live.settings(conn),
+                                                  mo="chay"))
             finally:
                 conn.close()
 
@@ -1116,6 +1183,53 @@ class Handler(BaseHTTPRequestHandler):
             live.quen()
             return self._json({"ok": True,
                                "note": f"đang mở form — {row['company']}"})
+
+        if path == "/api/bao":
+            # Bốn công tắc báo + ba mức điều khiển. Một đường cho cả tab.
+            from ..core import prefs, tele as _tele
+            khoa, _, gia = form.get("arg", [""])[0].partition(":")
+            if khoa in prefs.BAO and gia in ("0", "1"):
+                ghi = (f"báo «{prefs.BAO[khoa][0]}» -> "
+                       + ("bật" if gia == "1" else "tắt"))
+            elif khoa == "muc" and gia in _tele.MUC_DIEU_KHIEN:
+                khoa = prefs.BAO_MUC
+                ghi = f"điều khiển từ xa -> {_tele.MUC_DIEU_KHIEN[gia][0]}"
+            else:
+                return self._json({"ok": False, "note": "núm lạ"}, status=400)
+            conn = db.connect()
+            try:
+                prefs.put(conn, khoa, gia)
+            finally:
+                conn.close()
+            journal.log.ok(journal.SYSTEM, ghi)
+            return self._json({"ok": True, "reload": True})
+
+        if path == "/api/chung":
+            # CÀI ĐẶT CỦA CẢ APP — màu nhấn và tự-trực-khi-mở. Một đường cho
+            # cả tab, cùng khuôn với /api/cv/num và /api/track/num.
+            from . import mau as _mau
+            from ..core import prefs
+            khoa, _, gia = form.get("arg", [""])[0].partition(":")
+            if khoa == "mau" and gia in _mau.BANG:
+                khoa, ghi = prefs.MAU, f"màu nhấn -> {_mau.BANG[gia][0]}"
+            elif khoa == "truc" and gia in ("0", "1"):
+                khoa, ghi = (prefs.AUTORUN,
+                             "tự trực khi mở app -> "
+                             + ("bật" if gia == "1" else "tắt"))
+            else:
+                return self._json({"ok": False, "note": "núm lạ"}, status=400)
+            conn = db.connect()
+            try:
+                prefs.put(conn, khoa, gia)
+            finally:
+                conn.close()
+            # ĐỔI TỰ-TRỰC THÌ BÁO LUÔN CHO VÒNG NỀN, đừng đợi mở lại app: cái
+            # công tắc nói "từ giờ", không phải "lần sau".
+            if khoa == prefs.AUTORUN:
+                runner = sched.current()
+                runner.resume() if gia == "1" else runner.pause()
+            journal.log.ok(journal.SYSTEM, ghi)
+            return self._json({"ok": True, "reload": True})
 
         if path == "/api/home/num":
             # BA CÔNG TẮC của PHIÊN. Cùng khuôn với /api/cv/num và
@@ -1640,8 +1754,19 @@ def find_port(start: int = DEFAULT_PORT, tries: int = 20) -> int:
 
 
 def serve(port: int | None = None) -> tuple[ThreadingHTTPServer, str]:
-    port = port or find_port()
-    return ThreadingHTTPServer((HOST, port), Handler), f"http://{HOST}:{port}/"
+    """Dựng server. `port=0` -> để HỆ ĐIỀU HÀNH cấp một cổng trống.
+
+    Địa chỉ trả về đọc NGƯỢC từ socket đã bind, không dựng từ con số truyền
+    vào: với port=0 thì con số truyền vào là 0, mà 0 không phải cổng nào cả.
+
+    Vì sao có port=0: `find_port()` hỏi "cổng này có ai nghe không" rồi mới
+    bind — giữa hai bước đó có khe. Hai tiến trình cùng chạy (hai lượt test
+    chồng nhau) cùng thấy trống, cùng bind, và một cái chết với "Address
+    already in use". Để hệ cấp thì không có khe nào để đua.
+    """
+    httpd = ThreadingHTTPServer((HOST, find_port() if port is None else port),
+                                Handler)
+    return httpd, f"http://{HOST}:{httpd.server_address[1]}/"
 
 
 def _state_payload() -> dict:

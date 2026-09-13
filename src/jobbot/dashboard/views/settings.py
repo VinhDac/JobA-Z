@@ -187,13 +187,155 @@ def _gmail(ready: bool, address: str, days: int, ho_so: str = "") -> str:
             f"lời, hẹn phỏng vấn, từ chối.</div>{khop}{noi}{ngay}")
 
 
+def _chung(mau_nay: str, tu_truc: bool) -> str:
+    """Tab CHUNG — cài đặt của CẢ APP, không thuộc khúc nào.
+
+    Ranh giới với mấy tab kia: "Chạy" chỉnh nhịp quét, "Nguồn" chỉnh nơi tìm,
+    "Gmail" chỉnh hộp thư — cả ba đều là cài đặt của MỘT việc. Ở đây là thứ
+    đúng ở mọi tab: màu, và app có tự trực khi mở lên hay không.
+
+    Bấm là ăn NGAY, không qua nút Lưu. Màu mà phải bấm Lưu mới thấy thì người
+    dùng không so được hai màu với nhau — mà so chính là cách người ta chọn.
+    """
+    from .. import mau as _mau
+    o = ""
+    for ma, (ten, bo) in _mau.BANG.items():
+        on = ma == mau_nay
+        o += (f"<button class='swatch{' on' if on else ''}'"
+              f" data-post='/api/chung' data-arg='mau:{ma}'"
+              f" title='{esc(ten)}' style='--o:{bo['--acc']}'>"
+              f"<span class=swdot></span><b>{esc(ten)}</b>"
+              + ("<i>đang dùng</i>" if on else "") + "</button>")
+    truc = (f"<div class='swrow{'' if tu_truc else ' off'}'>"
+            f"<button class='mbtn tiny swbtn{'' if tu_truc else ' off'}'"
+            f" data-post='/api/chung' data-arg='truc:"
+            f"{'0' if tu_truc else '1'}'>{'BẬT' if tu_truc else 'TẮT'}</button>"
+            f"<b class=swten>Tự trực khi mở app</b>"
+            f"<span class=swnow>"
+            + ("chạy phiên theo lịch ngay" if tu_truc else "đợi bạn bấm")
+            + "</span><details class=swwhy><summary>vì sao</summary>"
+            "<div class=swbody>Mặc định TẮT, cố ý: mở app lên mà nó tự mở "
+            "Chrome đi quét trong lúc bạn còn chưa kịp xem gì là sai. Bật khi "
+            "bạn đã yên tâm với cấu hình. Nút Start session trên tab Tổng quan "
+            "cũng bật cái này.</div></details></div>")
+    return ("<div class=sthead>Màu hệ thống</div>"
+            f"<div class=swgrid>{o}</div>"
+            "<div class=note>Đổi màu KHÔNG đụng tới màu mang nghĩa: đỏ vẫn là "
+            "trượt, cam vẫn là cảnh báo, xanh dương vẫn là số nền. Chỉ màu "
+            "NHẤN đổi — thứ đánh dấu «cái đang chọn» và «việc phải làm».</div>"
+            "<div class=sthead>Khi mở app</div>" + truc)
+
+
+def _thong_bao(noi: bool, token_che: str, chat: str, bat: dict,
+               muc: str, nguong: int, gio: int, tin_test: tuple = ()) -> str:
+    """Tab THÔNG BÁO — báo về điện thoại, và điều khiển từ xa.
+
+    KHÔNG BAO GIỜ VẼ TOKEN RA. Một ô có sẵn giá trị là bí mật nằm trong
+    HTML: đọc được bằng View Source và bị trình duyệt lưu vào bộ nhớ đệm.
+    Chỉ hiện bốn ký tự cuối để người dùng biết mình đã dán cái nào.
+    """
+    from ...core import prefs, tele
+
+    if noi:
+        dau = (f"<div class=safe>Bot đã nối · token <b>{esc(token_che)}</b> · "
+               f"chat <b>{esc(chat)}</b>. Nhắn <b>/giupdo</b> cho bot để xem "
+               f"danh sách lệnh. Dán token mới vào ô dưới để đổi.</div>")
+    else:
+        dau = ("<div class=safe><b>Chưa nối.</b> Máy treo ở nhà thì thông báo "
+               "của macOS không ai thấy — Telegram là đường duy nhất không "
+               "phải mở cổng router.<br><br>"
+               "1. Trên Telegram nhắn <b>@BotFather</b> → <b>/newbot</b> → "
+               "nó cho bạn một token.<br>"
+               "2. Dán token vào đây và Lưu.<br>"
+               "3. Nhắn một câu bất kỳ cho bot vừa tạo, rồi bấm "
+               "<b>Tìm chat</b> — app tự đọc ra số chat của bạn.</div>")
+
+    form = (
+        "<form class=setform method=post action='/settings'>"
+        "<input type=hidden name=phan value=telegram>"
+        "<label class=srow><span>Token của bot</span>"
+        "<input class=stext type=password name=token autocomplete=off"
+        " placeholder='dán token từ @BotFather'></label>"
+        "<label class=srow><span>Số chat của bạn</span>"
+        f"<input class=stext type=text name=chat_id value='{esc(chat)}'"
+        " autocomplete=off placeholder='để trống rồi bấm Tìm chat'></label>"
+        "<div class=setfoot>"
+        "<button class='mbtn apply' type=submit>Lưu</button>"
+        "<button class=mbtn type=submit name=tim value=1>Tìm chat</button>"
+        # NÚT TEST gửi THẬT một tin. Kiểm từng khúc rồi kết luận "chắc là
+        # chạy" là đúng kiểu tự lừa app này tránh — cả chuỗi token → số chat
+        # → mạng → Telegram chỉ chứng minh được bằng cách đi hết một vòng.
+        "<button class=mbtn type=submit name=test value=1"
+        " title='Gửi một tin thử về điện thoại — tin đó nói luôn bạn đang ở"
+        " chế độ nào và dùng được lệnh gì'>Test</button>"
+        "<span class=applynote>token chỉ nằm trong config.toml (chmod 600, "
+        "đã gitignore) — không vào DB, không vào nhật ký</span></div>"
+        "</form>")
+
+    # KẾT QUẢ TEST hiện ngay trên đầu, không giấu vào nhật ký: người vừa bấm
+    # đang nhìn chỗ này, và hỏng thì phải nói HỎNG Ở ĐÂU chứ không phải
+    # "không gửi được" — câu đó họ tự biết rồi.
+    if tin_test:
+        was_ok, cau = tin_test
+        form = (f"<div class='testkq {'ok' if was_ok else 'xau'}'>"
+                f"<b>{'✅ Gửi được' if was_ok else '⚠️ Chưa gửi được'}</b>"
+                f"<span>{esc(cau)}</span></div>") + form
+
+    # --- bốn loại báo
+    hang = ""
+    for khoa, (ten, y) in prefs.BAO.items():
+        on = bool(bat.get(khoa))
+        hang += (f"<div class='swrow{'' if on else ' off'}'>"
+                 f"<button class='mbtn tiny swbtn{'' if on else ' off'}'"
+                 f" data-post='/api/bao' data-arg='{esc(khoa)}:"
+                 f"{'0' if on else '1'}'>{'BẬT' if on else 'TẮT'}</button>"
+                 f"<b class=swten>{esc(ten)}</b>"
+                 f"<span class=swnow>{'có nhắn' if on else 'bỏ qua'}</span>"
+                 f"<details class=swwhy><summary>vì sao</summary>"
+                 f"<div class=swbody>{esc(y)}</div></details></div>")
+
+    # --- ba mức điều khiển
+    nut = ""
+    for ma, (ten, y) in tele.MUC_DIEU_KHIEN.items():
+        on = ma == muc
+        nut += (f"<button class='mbtn tiny{' on' if on else ' off'}'"
+                f" data-post='/api/bao' data-arg='muc:{esc(ma)}'"
+                f" title='{esc(y)}'>{'✓ ' if on else ''}{esc(ten)}</button>")
+    y_muc = tele.MUC_DIEU_KHIEN.get(muc, ("", ""))[1]
+
+    so = ("<form class=setform method=post action='/settings'>"
+          "<input type=hidden name=phan value=bao_so>"
+          "<label class=srow><span>Hàng chờ dồn quá</span>"
+          + _num("bao_nguong", nguong, 1, 999, "việc") + "</label>"
+          "<label class=srow><span>Gửi bản tin cuối ngày lúc</span>"
+          + _num("bao_gio", gio, 0, 23, "giờ") + "</label>"
+          "<div class=setfoot><button class='mbtn apply' type=submit>Lưu"
+          "</button></div></form>")
+
+    return (dau + form
+            + "<div class=sthead>Nhắn về điện thoại khi nào</div>" + hang + so
+            + "<div class=sthead>Điều khiển từ xa</div>"
+            + f"<div class=srcrow>{nut}</div>"
+            + f"<div class=note>{esc(y_muc)}</div>"
+            + "<div class=safe><b>Ba chốt cứng, không đổi được ở đây:</b> "
+              "lệnh chỉ nhận từ đúng số chat đã ghim — tin từ chat khác bị bỏ "
+              "và ghi nhật ký. Token không bao giờ vào DB hay nhật ký. Và "
+              "<b>không có lệnh nộp đơn ở bất kỳ mức nào</b>: cú bấm Gửi vẫn "
+              "là của bạn, trước mặt cái form.</div>")
+
+
 def render(*, every: int, hours: tuple[int, int],
            status: list[tuple[str, str]], pace: str = "thuong",
            sources: list[dict] | None = None, board_on: bool = True,
            mail_ready: bool = False, mail_address: str = "", mail_days: int = 30,
            mail_profile: str = "",
            reset_rows: int = 0, reset_files: int = 0, reset_mb: float = 0.0,
-           reset_backup_dir: str = "") -> str:
+           reset_backup_dir: str = "",
+           mau_nay: str = "la", tu_truc: bool = False,
+           tele_noi: bool = False, tele_token: str = "", tele_chat: str = "",
+           bao_bat: dict | None = None, bao_muc: str = "tat",
+           bao_nguong: int = 10, bao_gio: int = 20,
+           tin_test: tuple = (), mo: str = "") -> str:
     rows = "".join(f"<div class=strow><span>{esc(k)}</span><b>{esc(v)}</b></div>"
                    for k, v in status)
 
@@ -224,7 +366,12 @@ def render(*, every: int, hours: tuple[int, int],
         "khoản nào, chỉ đọc trang tuyển dụng công khai. Cookie chỉ bấm Từ chối. "
         "Bị chặn thì dừng và ghi nhật ký, không cãi lại.</div>")
 
-    tab = [("chay", "Chạy", chay),
+    # CHUNG ĐỨNG ĐẦU: nó là cài đặt của cả app, mấy tab sau là của từng khúc.
+    tab = [("chung", "Chung", _chung(mau_nay, tu_truc)),
+           ("bao", "Thông báo",
+            _thong_bao(tele_noi, tele_token, tele_chat, bao_bat or {},
+                       bao_muc, bao_nguong, bao_gio, tin_test)),
+           ("chay", "Chạy", chay),
            ("nguon", "Nguồn", _nguon(sources or [], board_on)),
            ("gmail", "Gmail",
             _gmail(mail_ready, mail_address or mail_profile, mail_days,
@@ -233,12 +380,20 @@ def render(*, every: int, hours: tuple[int, int],
            ("lam-lai", "Làm lại",
             _lam_lai(reset_rows, reset_files, reset_mb, reset_backup_dir))]
 
+    # TAB NÀO MỞ SẴN. `mo` = tab vừa gửi form lên, để sau khi Lưu nó ở lại
+    # đúng chỗ người dùng đang đứng.
+    #
+    # Không có nó thì mọi lượt POST đều văng về tab đầu — bấm Test xong cái
+    # băng kết quả nằm ở tab Thông báo, mà màn hình lại đang mở tab Chung:
+    # người dùng thấy y như không có gì xảy ra.
+    co = {tid for tid, _t, _n in tab}
+    dau = mo if mo in co else tab[0][0]
     chips = "".join(
-        f"<button class='stab{" on" if n == 0 else ""}' data-stab='{tid}'>"
-        f"{esc(ten)}</button>" for n, (tid, ten, _) in enumerate(tab))
+        f"<button class='stab{" on" if tid == dau else ""}' data-stab='{tid}'>"
+        f"{esc(ten)}</button>" for tid, ten, _ in tab)
     panes = "".join(
-        f"<div class='stpane{" on" if n == 0 else ""}' data-pane='{tid}'>{noi}</div>"
-        for n, (tid, _, noi) in enumerate(tab))
+        f"<div class='stpane{" on" if tid == dau else ""}' data-pane='{tid}'>"
+        f"{noi}</div>" for tid, _, noi in tab)
 
     return (f"<div class=sheethead>Cài đặt</div>"
             f"<div class=stabs>{chips}</div>{panes}")

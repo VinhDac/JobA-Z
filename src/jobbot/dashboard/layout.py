@@ -294,6 +294,12 @@ def page(title: str, body: str, active: str = "",
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
         f"<title>{esc(title)} · jobbot</title>"
         "<link rel=stylesheet href='/static/app.css'>"
+        # MÀU NHẤN đi qua một tấm CSS RIÊNG, nạp sau app.css để đè lên.
+        #
+        # Không đọc tuỳ chọn ngay trong page(): layout là tầng CHỈ VẼ, cho nó
+        # chạm vào DB là mở cửa cho mọi thứ khác cũng chạm. Và tấm riêng thì
+        # trình duyệt không cache nhầm — đổi màu là thấy ngay.
+        "<link rel=stylesheet href='/static/mau.css'>"
         f"{early}</head><body"
         # Cờ BẮT ĐIỀN: live.js thấy thuộc tính này thì bật tấm phủ chu
         # trình dựng hồ sơ ngay khi trang dựng xong. Chỉ trang Home đặt

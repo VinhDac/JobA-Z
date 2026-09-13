@@ -948,14 +948,16 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
    THẮNG — hidden thành vô nghĩa, tấm phủ nằm trên cùng vĩnh viễn, phủ đen
    cả trang và nuốt mọi cú bấm. Không bấm được gì hết. */
 .sheet[hidden]{display:none}
-/* Tấm chu trình dựng hồ sơ rộng hơn tấm Cài đặt: nó có danh sách 6 mục,
-   nhét vào 400px thì dòng nào cũng gãy làm ba. */
 .setupbody{padding:4px 15px 15px}
-.sheet.mid .sheetbox:has(.setupbody){width:620px}
 
 /* Cài đặt CẢ APP đứng giữa màn, không phải tấm bên phải như ⚟ của khúc. */
 .sheet.mid{align-items:center;justify-content:center;padding:20px}
-.sheetbox{width:480px;max-width:calc(100vw - 28px);max-height:100%;overflow:auto;
+/* 760, KHÔNG phải 480. Tấm Cài đặt giờ có bảy tab — đo bề rộng thật của
+   hàng chip (chữ 12px + đệm 12px mỗi bên + 6 khe) là 530px, nên ở 480 nó gãy
+   xuống hai dòng và "Tình trạng" với "Làm lại" bị cắt làm đôi. Rộng ra cũng
+   trả lại chỗ cho lưới màu ba cột và mấy hàng công tắc Thông báo.
+   `max-width` vẫn giữ để không bao giờ tràn ra ngoài cửa sổ. */
+.sheetbox{width:760px;max-width:calc(100vw - 28px);max-height:100%;overflow:auto;
   background:var(--panel);border:1px solid var(--line-2);border-radius:12px;
   box-shadow:0 24px 70px rgba(0,0,0,.6)}
 .sheetwait{padding:26px;color:var(--mute);font-size:12px;text-align:center}
@@ -1451,8 +1453,14 @@ body[data-run=running] .deckpill{border-color:var(--acc-2);
 
 /* Tab trong tấm Cài đặt. Cả ba tab nằm sẵn trong DOM, chỉ một cái mang .on —
    đổi tab không gọi lại server, nên không có khoảnh khắc trống. */
+/* HÀNG TAB KHÔNG XUỐNG DÒNG. Gãy dòng thì tên tab bị cắt làm đôi ("Tình
+   trạng" thành hai tầng) và hàng chip cao gấp đôi. Thêm tab thứ tám thì nó
+   cuộn ngang, không phải vỡ bố cục. */
 .stabs{display:flex;gap:5px;padding:0 var(--sheet-pad) 12px;
-  border-bottom:1px solid var(--line)}
+  border-bottom:1px solid var(--line);flex-wrap:nowrap;overflow-x:auto;
+  scrollbar-width:none}
+.stabs::-webkit-scrollbar{display:none}
+.stab{white-space:nowrap;flex:none}
 .stab{font:inherit;font-size:12px;font-weight:600;color:var(--mute);cursor:pointer;
   background:none;border:1px solid transparent;border-radius:999px;padding:5px 12px}
 .stab:hover{color:var(--ink);background:var(--panel-2)}
@@ -2326,3 +2334,36 @@ tr.sxong{opacity:.55}
    đó ruột giãn ra và có thể dài hơn màn hình thật. */
 .wid.vua > .wbody{overflow:visible;min-height:0}
 .wid.vua.big > .wbody{overflow:auto}
+
+/* ---------------- CÀI ĐẶT · CHUNG: màu hệ thống ---------------- */
+/* Ô màu phải TỰ nó là màu đó — bày tên "Tím" bên cạnh một chấm xám thì người
+   dùng phải bấm mới biết mình chọn gì, mà chọn màu là việc của mắt. */
+.swgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:4px 0 12px}
+.swatch{display:flex;flex-direction:column;align-items:flex-start;gap:6px;
+  padding:11px 12px;border-radius:10px;border:1px solid var(--line);
+  background:var(--panel-2);cursor:pointer;font:inherit;text-align:left}
+.swatch:hover{border-color:var(--line-2)}
+.swatch.on{border-color:var(--o)}
+.swdot{width:100%;height:22px;border-radius:6px;background:var(--o)}
+.swatch b{font-size:11.5px;font-weight:600;color:var(--ink)}
+.swatch i{font-style:normal;font-size:9.5px;color:var(--o);margin-top:-3px}
+
+/* ---------------- CÀI ĐẶT · THÔNG BÁO ---------------- */
+/* Ô chữ trong tấm Cài đặt. Ô token để type=password — không phải vì sợ ai
+   nhìn trộm, mà để trình duyệt đừng tự điền và đừng lưu vào lịch sử form. */
+.stext{flex:1;min-width:180px;background:var(--panel-2);color:var(--ink);
+  border:1px solid var(--line);border-radius:7px;padding:7px 10px;
+  font-size:11.5px;font-family:inherit}
+.stext:focus{outline:none;border-color:var(--acc)}
+.stext::placeholder{color:var(--mute);opacity:.7}
+
+/* Kết quả nút Test — hiện NGAY trên đầu tab, không giấu vào nhật ký: người
+   vừa bấm đang nhìn chỗ này. Hỏng thì màu cảnh báo, được thì màu nhấn. */
+.testkq{padding:11px 13px;border-radius:9px;margin-bottom:14px;
+  border:1px solid var(--line-2);background:var(--panel-2)}
+.testkq.ok{border-color:var(--acc);background:var(--acc-bg)}
+.testkq.xau{border-color:rgba(216,161,94,.5);background:var(--warn-bg)}
+.testkq b{display:block;font-size:12px;margin-bottom:3px;color:var(--ink)}
+.testkq.ok b{color:var(--acc)}
+.testkq.xau b{color:var(--warn)}
+.testkq span{font-size:11.5px;color:var(--mute);line-height:1.55}

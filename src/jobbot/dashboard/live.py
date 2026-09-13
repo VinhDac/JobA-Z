@@ -340,6 +340,8 @@ def settings(conn: sqlite3.Connection) -> dict:
     from ..core import prefs, versions
     from ..core.derive import stale_count
     from ..core.scheduler import MAX_EVERY, MIN_EVERY, human_window
+    from . import mau
+    from ..core import tele as _tele
 
     boards = int(conn.execute(
         "SELECT COUNT(DISTINCT substr(source, instr(source,':') + 1)) FROM posting"
@@ -390,6 +392,18 @@ def settings(conn: sqlite3.Connection) -> dict:
         "reset_backup_dir": str(reset_mod.backup_dir()),
         "every": prefs.num(conn, prefs.SCAN_EVERY, MIN_EVERY, MAX_EVERY),
         "pace": prefs.get(conn, prefs.PACE) or "thuong",
+        # Hai núm của TAB CHUNG — cài đặt của cả app, không thuộc khúc nào.
+        "mau_nay": mau.hop_le(prefs.get(conn, prefs.MAU)),
+        "tu_truc": prefs.flag(conn, prefs.AUTORUN),
+        # TAB THÔNG BÁO. `tele_token` là bản ĐÃ CHE — chỉ bốn ký tự cuối.
+        # Token thật không bao giờ rời khỏi config.toml.
+        "tele_noi": _tele.da_noi(),
+        "tele_token": _tele.che(_tele.cau_hinh().get("token", "")),
+        "tele_chat": str(_tele.cau_hinh().get("chat_id", "") or ""),
+        "bao_bat": {k: prefs.flag(conn, k) for k in prefs.BAO},
+        "bao_muc": prefs.get(conn, prefs.BAO_MUC) or "tat",
+        "bao_nguong": prefs.num(conn, prefs.BAO_NGUONG, 1, 999),
+        "bao_gio": prefs.num(conn, prefs.BAO_GIO, 0, 23),
         "sources": nguon,
         "board_on": prefs.flag(conn, prefs.SRC_BOARD),
         # CHỈ địa chỉ và trạng thái. Mật khẩu không bao giờ rời config.toml.

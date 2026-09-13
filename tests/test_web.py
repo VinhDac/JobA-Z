@@ -100,8 +100,13 @@ with tempfile.TemporaryDirectory() as tmp:
     job_id = conn.execute("SELECT id FROM posting WHERE kept=1 LIMIT 1").fetchone()[0]
     conn.close()
 
+    # CỔNG TỰ TÌM, không đóng cứng. Đóng cứng 8791 thì hai lượt test chạy
+    # chồng nhau (hoặc một cái gì khác đang nghe ở đó) là "Address already in
+    # use" — bài test đỏ vì lý do chẳng liên quan gì tới code, và đỏ KHÔNG
+    # ĐỀU nên càng khó tin. Bắt đầu từ 8791 để tránh cổng của app đang chạy
+    # (8765), rồi nhích lên nếu bận.
     from jobbot.dashboard.server import serve
-    httpd, base = serve(port=8791)
+    httpd, base = serve(port=0)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
     def get(path):
@@ -2118,6 +2123,198 @@ with tempfile.TemporaryDirectory() as tmp:
           _lg.count("<circle") == 3 and "fill=none" in _lg)
     check("logo ăn màu từ CSS, không đóng cứng trong hình",
           "currentColor" in _lg and ".logo{" in _css7)
+
+    print("\n[TELEGRAM — báo về điện thoại, và ba chốt an toàn]")
+    from jobbot.core import tele as _tl, db as _db, prefs as _prefs
+    from jobbot.dashboard.views import settings as _setm
+    from jobbot import bao as _bao
+    # CHỐT 1 — BOT TELEGRAM AI CŨNG NHẮN ĐƯỢC. Đây là hàng rào duy nhất giữa
+    # cái máy ở nhà và bất kỳ ai biết tên bot.
+    _that = {"message": {"chat": {"id": 111}, "text": "/trangthai"}}
+    _la = {"message": {"chat": {"id": 999}, "text": "/tatphien"}}
+    check("đúng chat thì nhận", _tl.duoc_phep(_that, "111"))
+    check("CHAT LẠ THÌ BỎ", not _tl.duoc_phep(_la, "111"))
+    check("chưa ghim chat thì bỏ tất", not _tl.duoc_phep(_that, ""))
+    check("tin rỗng cũng không lọt", not _tl.duoc_phep({}, "111"))
+    check("chat_id so bằng CHUỖI, không bằng số", _tl.duoc_phep(_that, " 111 "))
+    # CHỐT 2 — TOKEN KHÔNG BAO GIỜ RA HTML.
+    check("token in ra chỉ còn đuôi", _tl.che("7123456789:AAHxxxxYZ9k") == "…Z9k"
+          or _tl.che("7123456789:AAHxxxxYZ9k").startswith("…"))
+    check("che không để lọt phần đầu token",
+          "7123" not in _tl.che("7123456789:AAHxxxxYZ9k"))
+    # CHỐT 3 — KHÔNG CÓ LỆNH NỘP ĐƠN Ở BẤT KỲ MỨC NÀO. Ranh giới gốc của cả
+    # app: máy KHÔNG bấm Gửi. Nó phải giữ nguyên qua Telegram.
+    for _muc in (_tl.TAT, _tl.XEM, _tl.DAY_DU):
+        for _cam in ("nopdon", "apply", "send", "gui", "nop"):
+            check(f"mức «{_muc}» không cho lệnh /{_cam}",
+                  not _tl.cho_phep_lenh(_cam, _muc))
+    check("mức TẮT không cho lệnh nào", not any(
+        _tl.cho_phep_lenh(l, _tl.TAT) for l in _tl.LENH_XEM + _tl.LENH_GHI))
+    check("mức XEM không cho lệnh GHI vào bảng",
+          not any(_tl.cho_phep_lenh(l, _tl.XEM) for l in _tl.LENH_GHI))
+    check("mức ĐẦY ĐỦ mới cho duyệt thư",
+          all(_tl.cho_phep_lenh(l, _tl.DAY_DU) for l in _tl.LENH_GHI))
+    check("và ba mức đều có mô tả cho người dùng chọn",
+          len(_tl.MUC_DIEU_KHIEN) == 3
+          and all(len(v) == 2 and v[1] for v in _tl.MUC_DIEU_KHIEN.values()))
+    # Đọc lệnh: Telegram tự thêm "@tên_bot" trong nhóm.
+    check("bỏ được đuôi @tên_bot",
+          _tl.doc_lenh({"message": {"text": "/trangthai@jobbot_bot"}})[0] == "trangthai")
+    check("không phân biệt hoa thường",
+          _tl.doc_lenh({"message": {"text": "/BatPhien"}})[0] == "batphien")
+    check("chữ thường không phải lệnh",
+          _tl.doc_lenh({"message": {"text": "xin chào"}}) == ("", ""))
+    # CHƯA NỐI BOT thì không loại báo nào được coi là bật — nếu không, mỗi
+    # lượt quét lại gọi API với token rỗng và nhật ký đầy rác.
+    _cbao = _db.connect(":memory:")
+    check("chưa nối bot thì mọi loại báo coi như tắt",
+          not any(_bao.bat(_cbao, k) for k in _prefs.BAO))
+    check("và vòng nghe lệnh tự thoát", _bao.cau_hinh_nghe() is None)
+    check("mặc định KHÔNG nhận lệnh từ xa",
+          _prefs.DEFAULTS[_prefs.BAO_MUC] == _tl.TAT)
+    _cbao.close()
+    # Tab Cài đặt
+    _stb = _setm.render(every=60, hours=(8, 22), status=[], tele_noi=True,
+                       tele_token="…Z9k", tele_chat="111",
+                       bao_bat={k: True for k in _prefs.BAO}, bao_muc="xem")
+    check("Cài đặt có tab Thông báo", "data-stab='bao'" in _stb)
+    check("bày đủ bốn loại báo", _stb.count("data-post='/api/bao'")
+          == len(_prefs.BAO) + len(_tl.MUC_DIEU_KHIEN))
+    check("ô token là password, không phải text", "type=password name=token" in _stb)
+    check("và KHÔNG có value= trên ô token",
+          "name=token value" not in _stb and "name=token autocomplete" in _stb)
+    check("nói rõ ba chốt cứng cho người dùng biết",
+          "không có lệnh nộp đơn" in _stb.lower())
+    check("chỉ dẫn tạo bot cho người chưa nối",
+          "@BotFather" in _setm.render(every=60, hours=(8, 22), status=[]))
+    # KHUNG PHẢI ĐỦ RỘNG CHO CẢ HÀNG TAB. Đo bề rộng thật: bảy chip chữ 12px
+    # + đệm 12px mỗi bên + sáu khe = ~530px, cộng đệm khung 36 -> 566. Ở 480
+    # nó gãy xuống hai dòng và tên tab bị cắt làm đôi.
+    _rong = int(_re.search(r"\.sheetbox\{width:(\d+)px", _css7).group(1))
+    _so_tab = _stb.count("data-stab=")
+    check(f"khung Cài đặt đủ rộng cho {_so_tab} tab ({_rong}px)", _rong >= 700)
+    check("hàng tab KHÔNG xuống dòng", "flex-wrap:nowrap" in _css7
+          and ".stab{white-space:nowrap" in _css7)
+    check("thêm tab nữa thì cuộn ngang, không vỡ bố cục",
+          "overflow-x:auto" in _css7.split(".stabs{")[1][:200])
+    # CỔNG DO HỆ CẤP, không đóng cứng và không "hỏi rồi mới bind".
+    # `find_port` hỏi "có ai nghe không" rồi mới bind — giữa hai bước có khe,
+    # và hai lượt test chạy chồng nhau cùng thấy trống rồi cùng bind. Lỗi
+    # "Address already in use" đó KHÔNG ĐỀU, nên càng khó tin bài test.
+    _goc = Path(__file__).resolve().parent.parent
+    check("server dựng xong thì đọc NGƯỢC cổng thật từ socket",
+          "httpd.server_address[1]" in
+          (_goc / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8"))
+    check("và bộ test xin cổng 0 để hệ tự cấp",
+          "serve(port=0)" in Path(__file__).resolve().read_text(encoding="utf-8"))
+
+    print("\n[NÚT TEST — gửi THẬT, và hỏng thì nói HỎNG Ở ĐÂU]")
+    _ct = _db.connect(":memory:")
+    # Tin thử chính LÀ bản hướng dẫn: nói chế độ đang dùng, lệnh dùng được,
+    # và sẽ nhắn khi nào. Một tin chỉ nói "ok" thì mới chứng minh ĐƯỜNG ĐI
+    # thông, chưa chứng minh CẤU HÌNH đúng.
+    for _muc, _ten in ((_tl.TAT, "Chỉ báo"), (_tl.XEM, "Xem và"),
+                       (_tl.DAY_DU, "duyệt thư")):
+        _prefs.put(_ct, _prefs.BAO_MUC, _muc)
+        _tin = _bao.tin_thu(_ct)
+        check(f"tin thử nói chế độ «{_muc}»", _ten in _tin)
+        check(f"và nói sẽ nhắn khi nào (mức {_muc})", "nhắn khi" in _tin
+              or "Chưa bật loại báo nào" in _tin)
+    _prefs.put(_ct, _prefs.BAO_MUC, _tl.TAT)
+    check("mức TẮT thì nói thẳng là không nhận lệnh",
+          "không nhận lệnh" in _bao.tin_thu(_ct))
+    check("và KHÔNG bày lệnh nào ra", "/trangthai" not in _bao.tin_thu(_ct))
+    _prefs.put(_ct, _prefs.BAO_MUC, _tl.DAY_DU)
+    _tin = _bao.tin_thu(_ct)
+    for _l in ("/trangthai", "/batphien", "/nhan"):
+        check(f"mức đầy đủ bày lệnh {_l}", _l in _tin)
+    check("mức đầy đủ KHÔNG bày lệnh nộp đơn",
+          "/nop" not in _tin and "/apply" not in _tin)
+    _prefs.put(_ct, _prefs.BAO_MUC, _tl.TAT)
+    # LÝ DO HỎNG phải dịch sang tiếng người. "không gửi được" là câu người
+    # dùng đã tự biết rồi — nút Test tồn tại để nói hỏng Ở ĐÂU.
+    check("chưa có token -> nói rõ lấy token ở đâu",
+          "@BotFather" in _tl.goi("getMe", {})[1])
+    _okt, _lyd = _bao.thu(_ct)
+    check("chưa nối thì Test trả về THẤT BẠI", not _okt)
+    check("và câu báo chỉ đúng việc phải làm",
+          "Tìm chat" in _lyd or "số chat" in _lyd)
+    _ct.close()
+    _stt = _setm.render(every=60, hours=(8, 22), status=[],
+                        tin_test=(False, "token sai hoặc đã bị thu hồi"))
+    check("có nút Test cạnh Tìm chat", "name=test value=1" in _stt)
+    check("kết quả hỏng hiện thành băng cảnh báo", "testkq xau" in _stt)
+    check("và in nguyên lý do ra màn", "token sai" in _stt)
+    check("kết quả được thì hiện băng xanh", "testkq ok" in _setm.render(
+        every=60, hours=(8, 22), status=[], tin_test=(True, "Đã gửi.")))
+    # SAU KHI BẤM, TẤM PHẢI Ở LẠI ĐÚNG TAB. Không thì băng kết quả nằm ở tab
+    # Thông báo mà màn hình đang mở tab Chung — người dùng thấy y như không
+    # có gì xảy ra.
+    _mo = _setm.render(every=60, hours=(8, 22), status=[], mo="bao")
+    check("mở đúng tab vừa gửi form", "stab on' data-stab='bao'" in _mo)
+    check("không truyền thì vẫn mở tab đầu",
+          "stab on' data-stab='chung'" in _setm.render(
+              every=60, hours=(8, 22), status=[]))
+    check("tab lạ thì rơi về tab đầu", "stab on' data-stab='chung'" in
+          _setm.render(every=60, hours=(8, 22), status=[], mo="lung-tung"))
+    # BẪY FormData: FormData(form) BỎ MẤT name/value của chính cái nút vừa
+    # bấm, nên `Tìm chat` và `Test` gửi lên y hệt nút Lưu — hai nút trông vẫn
+    # chạy mà không làm gì cả.
+    _js2 = (Path(__file__).resolve().parent.parent
+            / "src/jobbot/dashboard/web/live.js").read_text(encoding="utf-8")
+    check("form Cài đặt gửi kèm CÁI NÚT vừa bấm",
+          "new FormData(form, e.submitter)" in _js2)
+    check("và có đường lui cho trình duyệt cũ",
+          "fd.append(e.submitter.name" in _js2)
+    check("không đè ghi chú khi máy chủ đã trả kết quả thật",
+          "querySelector('.testkq')) return" in _js2)
+
+    print("\n[MÀU HỆ THỐNG — đổi được, và không màu nào đọc không nổi]")
+    from jobbot.dashboard import mau as _mau
+    # MỌI MÀU PHẢI ĐẠT TƯƠNG PHẢN. Màu nhấn hay nằm trên chữ 10px (nhãn tab
+    # đang mở, số trên thanh khúc) — một màu đẹp mà không đọc được thì nó
+    # không phải lựa chọn, nó là cái bẫy.
+    for _ma, (_ten, _bo) in _mau.BANG.items():
+        _tp = _mau.tuong_phan(_bo["--acc"], _mau.NEN_PANEL)
+        check(f"màu «{_ten}» đọc được trên thẻ ({_tp}:1)", _tp >= _mau.TOI_THIEU)
+        _ti = _mau.tuong_phan(_bo["--acc-ink"], _bo["--acc"])
+        check(f"chữ trên nền «{_ten}» đọc được ({_ti}:1)", _ti >= _mau.TOI_THIEU)
+        check(f"«{_ten}» khai đủ cả bộ năm", len(_bo) == 5)
+    check("có ít nhất bốn màu để chọn", len(_mau.BANG) >= 4)
+    # MẶC ĐỊNH KHÔNG ĐÈ GÌ CẢ: app.css vẫn là nguồn sự thật cho bộ xanh lá,
+    # nên chọn mặc định thì không thể lệch tông so với hôm nay.
+    check("màu mặc định không đè lên app.css", _mau.css(_mau.MAC_DINH) == "")
+    check("màu lạ cũng không đè", _mau.css("lung-tung") == "")
+    check("màu lạ rơi về mặc định", _mau.hop_le("lung-tung") == _mau.MAC_DINH)
+    _tim = _mau.css("tim")
+    for _k in ("--acc:", "--acc-2:", "--acc-ink:", "--acc-bg:", "--acc-bg-2:"):
+        check(f"đổi màu thì đổi cả «{_k}»", _k in _tim)
+    # MÀU MANG NGHĨA KHÔNG ĐƯỢC ĐỔI — đỏ vẫn phải là trượt. Đây là lời hứa in
+    # ngay trên tấm Cài đặt, nên phải có bài đỡ lưng.
+    for _giu in ("--bad", "--warn", "--info", "--ink", "--bg"):
+        check(f"đổi màu KHÔNG đụng tới «{_giu}»", _giu not in _tim)
+    # Tấm màu phải nạp SAU app.css, nếu không nó không đè được.
+    _i1, _i2 = _sv.index("/static/app.css"), _sv.index("/static/mau.css")
+    check("tấm màu nạp sau app.css nên đè được", _i1 < _i2)
+    _c5, _h5 = get("/static/mau.css")
+    check("đường /static/mau.css sống", _c5 == 200)
+    # KHÔNG CHO CACHE: cache nó thì đổi màu xong phải xoá cache mới thấy, và
+    # người dùng sẽ kết luận cái nút hỏng.
+    check("và không cho trình duyệt cache tấm màu",
+          "no-store" in str(_h5).lower() or "no-store" in open(
+              "src/jobbot/dashboard/server.py", encoding="utf-8").read())
+    from jobbot.dashboard.views import settings as _setm
+    _sh = _setm.render(every=60, hours=(8, 22), status=[], mau_nay="tim",
+                      tu_truc=False)
+    check("Cài đặt có tab Chung", "data-stab='chung'" in _sh)
+    check("và nó đứng ĐẦU — cài đặt cả app, không phải của một khúc",
+          _sh.index("data-stab='chung'") < _sh.index("data-stab='chay'"))
+    check("bày đủ mọi màu để chọn", _sh.count("data-arg='mau:") == len(_mau.BANG))
+    check("đánh dấu màu ĐANG dùng", "swatch on" in _sh and "đang dùng" in _sh)
+    check("ô màu tự nó mang màu đó, không phải chấm xám",
+          "style='--o:#A78BFA'" in _sh)
+    check("hứa không đụng màu mang nghĩa", "KHÔNG đụng tới màu mang nghĩa" in _sh)
+    check("và có công tắc tự-trực-khi-mở-app", "data-arg='truc:" in _sh)
 
     print("\n[BỘ ICON — một bộ, không phải nhặt ký tự Unicode mỗi chỗ một cái]")
     from jobbot.dashboard import layout as _lay

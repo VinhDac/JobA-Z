@@ -94,6 +94,62 @@ NOP = {NOP_BOARD: ("board", "trang tuyển của chính công ty — nộp thẳ
                       "bạn tự làm"),
        NOP_ALERT: ("alert", "tin đến từ thư báo việc")}
 
+# --- THÔNG BÁO VỀ ĐIỆN THOẠI -------------------------------------------
+#
+# Luật gốc của notify.py giữ nguyên: BÁO ÍT THÔI. Báo nhiều thì người dùng
+# tắt, và lúc đó cái tin đáng giá duy nhất cũng mất theo.
+#
+# Nên bốn loại, không hơn, và mỗi loại phải trả lời được "biết cái này thì
+# làm gì khác đi":
+#
+#   tiep  có người gọi đi tiếp — đo trên hộp thư thật: 1 lần trong 60 ngày.
+#         Hiếm nhất và quan trọng nhất. Biết sớm là trả lời sớm.
+#   hong  một khúc của phiên hỏng — LinkedIn chặn, app password bị thu hồi.
+#         HỎNG CÂM là kiểu hỏng tệ nhất: máy đứng im mấy ngày mà bảng vẫn
+#         xanh, và người dùng chỉ phát hiện khi thấy lâu quá không có tin.
+#   cho   hàng chờ dồn quá ngưỡng — việc đang đợi người, không ai làm hộ.
+#   ngay  bản tin cuối ngày — bốn số của hôm nay.
+#
+# KHÔNG BÁO "quét xong 515 tin". Đó là tin về máy, không phải tin về việc.
+BAO_TIEP = "bao_tiep"
+BAO_HONG = "bao_hong"
+BAO_CHO = "bao_cho"
+BAO_NGAY = "bao_ngay"
+BAO = {BAO_TIEP: ("Có người gọi đi tiếp",
+                  "Thư mời phỏng vấn hoặc nhận việc vừa về. Hiếm nhất, đáng "
+                  "biết nhất — biết sớm là trả lời sớm."),
+       BAO_HONG: ("Phiên chạy hỏng",
+                  "Một khúc không chạy được: LinkedIn chặn, app password bị "
+                  "thu hồi, mất mạng. Hỏng câm thì máy đứng im mấy ngày mà "
+                  "không có gì trên màn hình nói ra."),
+       BAO_CHO: ("Hàng chờ dồn",
+                 "Thư máy không tự chốt được đang chất đống, chờ bạn quyết."),
+       BAO_NGAY: ("Bản tin cuối ngày",
+                  "Bốn số của hôm nay: tìm được, đã nộp, được gọi tiếp, báo "
+                  "trượt. Gửi một lần, đúng giờ bạn đặt.")}
+
+# Ngưỡng cho `cho`: dồn quá bao nhiêu việc thì mới nhắn. Dưới ngưỡng thì
+# không đáng làm phiền — người dùng mở app lúc nào cũng thấy.
+BAO_NGUONG = "bao_nguong"
+BAO_GIO = "bao_gio"          # giờ gửi bản tin cuối ngày (0-23)
+
+# MỐC ĐÃ BÁO TỚI ĐÂU — số hiệu lá thư cuối cùng đã nhắn về điện thoại.
+# Không có nó thì mỗi lần quét lại nhắn lại đúng lá cũ, và người dùng tắt
+# thông báo sau đúng hai ngày.
+BAO_MOC = "bao_moc"
+BAO_NGAY_CUOI = "bao_ngay_cuoi"   # bản tin cuối ngày đã gửi cho ngày nào
+
+# MỨC ĐIỀU KHIỂN TỪ XA. Giá trị hợp lệ ở core/tele.py (TAT / XEM / DAY_DU).
+# Mặc định TAT: bot mới nối xong mà đã nhận lệnh là mở cửa trước khi người
+# dùng kịp hiểu cửa đó dẫn đi đâu.
+BAO_MUC = "bao_muc"
+
+
+# MÀU NHẤN của cả app. Giá trị hợp lệ và bảng màu nằm ở dashboard/mau.py —
+# ở đây chỉ giữ cái KHOÁ, vì core không được biết gì về chuyện vẽ vời.
+MAU = "mau_nhan"
+
+
 # --- PHIÊN: BA KHÚC, MỘT VÒNG ------------------------------------------
 #
 # Home là trạm trực 24/7. Một PHIÊN là một vòng chạy hết cả dây chuyền, và ba
@@ -195,7 +251,10 @@ DEFAULTS = {AUTORUN: "0", SCAN_EVERY: "60",
             SRC_BOARD: "1", SRC_LINKEDIN: "1", SRC_ALERT: "1", LI_DONE: "", LI_LEVELS: "", MAIL_DAYS: "30",
             NOP_BOARD: "1", NOP_LINKEDIN: "1", NOP_ALERT: "1",
             CV_TU_LO: "0", CV_RIENG: "rieng", IM_QUA: "20",
-            PHIEN_SEARCH: "1", PHIEN_CV: "1", PHIEN_MAIL: "1",
+            PHIEN_SEARCH: "1", PHIEN_CV: "1", PHIEN_MAIL: "1", MAU: "la",
+            BAO_TIEP: "1", BAO_HONG: "1", BAO_CHO: "0", BAO_NGAY: "0",
+            BAO_NGUONG: "10", BAO_GIO: "20", BAO_MUC: "tat",
+            BAO_MOC: "0", BAO_NGAY_CUOI: "",
             **{k: "1" for k in SRC_ATS.values()}}
 
 

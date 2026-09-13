@@ -255,6 +255,55 @@ check("đang bật thì nút sáng, không chỉ khác chữ", "swbtn'" in _adj_
 check("nói rõ thứ tự cố định và VÌ SAO", "Dựng CV đọc kho tin" in _adj_on)
 c3.close()
 
+print("\n[BÁO VỀ ĐIỆN THOẠI — báo ÍT thôi, và không báo lại cái cũ]")
+from jobbot import bao as _bao
+from jobbot.core import tele as _tele, prefs as _pf2
+c4 = db.connect(":memory:")
+_ap = board.add(c4, "Kappa Lab", "Quant", applied_at=truoc(9))
+for i, k in enumerate(("interview", "rejected", "other")):
+    c4.execute("INSERT INTO message (msg_id, from_addr, subject, received_at,"
+               " snippet, kind, application_id) VALUES (?,?,?,?,?,?,?)",
+               (f"b{i}", "a@b.c", f"thư {k}", truoc(0), "", k, _ap))
+c4.commit()
+# CHỈ THƯ ĐI TIẾP mới được nhắn. Nhắn cả thư từ chối và thư quảng cáo thì
+# người dùng tắt thông báo sau đúng hai ngày, và mất luôn cái đáng giá.
+_moi = _bao._thu_moi(c4)
+check("chỉ lấy thư ĐI TIẾP để nhắn", [m["kind"] for m in _moi] == ["interview"])
+check("và kèm tên công ty, không phải mỗi tiêu đề",
+      _moi[0]["cong_ty"] == "Kappa Lab")
+# MỐC ĐÃ BÁO: không có nó thì mỗi lượt quét lại nhắn đúng lá cũ.
+_pf2.put(c4, _pf2.BAO_MOC, str(_moi[0]["id"]))
+check("đã nhắn rồi thì KHÔNG nhắn lại", _bao._thu_moi(c4) == [])
+# Chưa nối bot thì không hàm nào được gửi đi đâu cả.
+check("chưa nối bot -> không báo gì", _bao.di_tiep(c4) == 0)
+check("và cũng không báo phiên hỏng", not _bao.phien_hong(c4, ["search"]))
+check("dù có bật công tắc",
+      _pf2.flag(c4, _pf2.BAO_TIEP) and not _bao.bat(c4, _pf2.BAO_TIEP))
+# Bản tin cuối ngày gửi ĐÚNG MỘT LẦN: vòng nền chạy mỗi 30 giây, không có
+# mốc ngày thì qua giờ hẹn nó nhắn liên tục tới nửa đêm.
+check("bản tin ngày có mốc chống nhắn lặp",
+      _pf2.BAO_NGAY_CUOI in _pf2.DEFAULTS)
+# Bốn loại, không hơn — mỗi loại phải trả lời được "biết rồi thì làm gì khác".
+check("đúng bốn loại báo", len(_pf2.BAO) == 4)
+check("mỗi loại có tên và lý do cho người dùng đọc",
+      all(len(v) == 2 and v[0] and v[1] for v in _pf2.BAO.values()))
+check("mặc định chỉ bật hai loại ĐÁNG NHẤT",
+      [k for k in _pf2.BAO if _pf2.DEFAULTS[k] == "1"]
+      == [_pf2.BAO_TIEP, _pf2.BAO_HONG])
+
+print("\n[LỆNH TỪ XA — chốt quyền TRƯỚC, rồi mới đọc nội dung]")
+check("lệnh không rõ thì chỉ đường, không im",
+      "giupdo" in _bao.tra_loi(c4, "xyz", ""))
+check("/giupdo nói rõ KHÔNG có lệnh nộp đơn",
+      "không có lệnh nộp đơn" in _bao.GIUP.lower())
+check("/nhan thiếu số thì nói thiếu gì", "Thiếu số hiệu" in _bao.tra_loi(c4, "nhan", ""))
+check("/nhan số lạ thì không nổ, chỉ báo không thấy",
+      "Không thấy" in _bao.tra_loi(c4, "nhan", "99999"))
+_tt = _bao.tra_loi(c4, "trangthai", "")
+for _so in ("tìm được", "nộp", "gọi tiếp", "trượt", "trạm trực"):
+    check(f"/trangthai có «{_so}»", _so in _tt)
+c4.close()
+
 print("\n[KHÔNG BỊA — kho rỗng vẫn phải vẽ được]")
 _r = db.connect(":memory:")
 _hr = home.render({"gate_open": True}, so=T.tat_ca(_r), stage={})

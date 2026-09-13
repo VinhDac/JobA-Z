@@ -244,6 +244,13 @@ def run() -> int:
     scheduler = scheduler_mod.current()
     scheduler.start()
 
+    # LUỒNG NGHE LỆNH TELEGRAM — riêng một luồng, không dùng chung với
+    # scheduler: mỗi lượt long-poll ngủ 25 giây, mà vòng quét thì không được
+    # ngủ theo. Tự thoát ngay nếu chưa nối bot hoặc mức điều khiển đang TẮT.
+    from . import bao as _bao
+    threading.Thread(target=_bao.nghe, args=(scheduler.stop_flag,),
+                     daemon=True, name="telegram").start()
+
     app = NSApplication.sharedApplication()
     app.setActivationPolicy_(NSApplicationActivationPolicyRegular)   # có icon Dock, cmd-tab
 

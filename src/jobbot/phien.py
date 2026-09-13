@@ -101,6 +101,10 @@ def chay(conn: sqlite3.Connection | None = None) -> dict:
                 jlog.error(SYSTEM, f"phiên · {ten[s]} hỏng — "
                                    f"{type(exc).__name__}: {str(exc)[:70]}")
         jlog.ok(SYSTEM, f"phiên xong — {len(xong)}/{len(khuc)} khúc chạy được")
+        # BÁO VỀ ĐIỆN THOẠI — một chỗ gọi, ngay sau khi vòng xong. Rải lời
+        # gọi vào từng khúc thì thêm một loại báo là phải nhớ sửa ba chỗ.
+        from .bao import sau_phien
+        sau_phien(conn, {"xong": xong, "hong": hong})
     finally:
         if tu_mo:
             conn.close()

@@ -511,15 +511,31 @@
       e.preventDefault();          // lưu tại chỗ, không rời trang đang xem
       // URLSearchParams chứ KHÔNG phải FormData trần: FormData gửi kiểu
       // multipart, mà server đọc urlencoded — gửi đi thì im lặng không lưu gì.
+      //
+      // FormData(form, SUBMITTER) — tham số thứ hai là bắt buộc, không phải
+      // tuỳ chọn. FormData(form) BỎ MẤT name/value của chính cái nút vừa
+      // bấm, nên `Tìm chat` (name=tim) và `Test` (name=test) gửi lên y hệt
+      // nút Lưu: server không thấy cờ nào và chỉ lưu, im lặng. Hai cái nút
+      // trông vẫn chạy, chỉ là không làm gì cả — kiểu hỏng câm tệ nhất.
+      const fd = new FormData(form, e.submitter);
+      // Trình duyệt cũ không nhận tham số thứ hai: tự nhét vào cho đủ.
+      if (e.submitter && e.submitter.name && !fd.has(e.submitter.name)) {
+        fd.append(e.submitter.name, e.submitter.value || '');
+      }
       fetch('/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams(new FormData(form)).toString(),
+        body: new URLSearchParams(fd).toString(),
       })
         .then((r) => r.text())
         .then((html) => {
-          document.querySelector('.sheetbox').innerHTML = html;
-          const note = document.querySelector('.sheetbox .applynote');
+          const box = document.querySelector('.sheetbox');
+          box.innerHTML = html;
+          // KHÔNG đè ghi chú khi máy chủ đã trả về một KẾT QUẢ THẬT (băng
+          // .testkq). Đè lên là thay một câu đo được bằng một câu đoán, và
+          // "đã lưu" thì sai hẳn khi việc vừa làm là gửi tin thử.
+          if (box.querySelector('.testkq')) return;
+          const note = box.querySelector('.applynote');
           if (note) note.textContent = 'đã lưu · có tác dụng từ lần quét sau';
         })
         .catch(() => {});
