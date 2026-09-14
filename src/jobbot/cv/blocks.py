@@ -1,10 +1,10 @@
-"""Tách CV thành các KHỐI rời để chọn và sắp lại theo từng JD.
+"""Split a CV into separate BLOCKS so they can be picked and reordered per JD.
 
-Luật xuyên suốt thư mục này: **chỉ CHỌN và SẮP XẾP sự thật đã có.
-Không thêm một chữ nào không có trong hồ sơ.**
+The rule running through this directory: **only PICK and ORDER facts that
+already exist. Never add a word that is not in the profile.**
 
-Vì sao phải tách khối: không tách thì chỉ có một cục văn bản, mà một cục thì
-hoặc lấy hết hoặc bỏ hết. Tách rồi mới trả lời được câu "JD này cần dòng nào".
+Why blocks are needed: without them there is one lump of text, and a lump is
+all-or-nothing. Split, you can answer "which lines does this JD need".
 """
 
 from __future__ import annotations
@@ -15,18 +15,20 @@ from dataclasses import dataclass, field
 from ..ingest.base import norm
 from ..scoring.vocab import ALIASES
 
-# TÊN MỤC TRÊN CV — nhận nhiều cách viết, KHÔNG phân biệt hoa thường.
+# CV SECTION HEADINGS — many spellings accepted, CASE-INSENSITIVE.
 #
-# Bản trước chỉ khớp đúng chữ VIẾT HOA và đúng mấy từ tác giả tự dùng. Đo
-# thật trên cùng một CV, chỉ đổi dòng tiêu đề:
-#     EXPERIENCE          -> có khối experience, chấm 92 điểm
-#     WORK EXPERIENCE     -> MẤT khối experience, chấm 22 điểm
+# The previous version matched only UPPERCASE and only the exact words the
+# author happened to use. Measured on one CV, changing nothing but the
+# heading line:
+#     EXPERIENCE          -> experience blocks present, score 92
+#     WORK EXPERIENCE     -> experience blocks GONE, score 22
 #     Experience          -> MẤT
 #     EMPLOYMENT HISTORY  -> MẤT
 #     EXPERIENCE:         -> MẤT
-# Mất khối kinh nghiệm thì chỉ số bằng chứng rỗng, mọi dòng yêu cầu bị chấm
-# KHÔNG ĐẠT — và không một lời báo. App chỉ chạy đúng cho CV viết y hệt cách
-# tác giả viết; đó là đặc cách, không phải hệ thống.
+# With the experience blocks gone the evidence index is empty, every
+# requirement line scores NOT MET — and nothing says a word. The app only
+# worked for CVs written exactly as the author writes them; that is a special
+# case, not a system.
 SECTION = re.compile(
     r"^\s*("
     r"(?:work|professional|relevant|employment|career)?\s*"
@@ -38,7 +40,7 @@ SECTION = re.compile(
     r"|volunteering|languages?|interests?"
     r")\s*:?\s*$", re.I)
 
-# Ngày tháng bị dính vào cuối dòng chức danh khi trích từ PDF
+# Dates glued to the end of a title line by PDF extraction
 DATE_TAIL = re.compile(
     r"\s+((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}"
     r"(?:\s*[–—-]\s*(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*)?"
@@ -53,9 +55,9 @@ SENTENCE = re.compile(r"(?<=[.!?])\s+")
 class Block:
     kind: str                 # header|summary|experience|project|education|cert|skill
     title: str = ""
-    meta: str = ""            # ngày tháng, tổ chức
+    meta: str = ""            # dates, organisation
     lines: list[str] = field(default_factory=list)
-    tags: list[str] = field(default_factory=list)   # kỹ năng nhận ra trong khối
+    tags: list[str] = field(default_factory=list)   # skills recognised in the block
 
     def text(self) -> str:
         return " ".join([self.title, self.meta, *self.lines])
@@ -72,7 +74,7 @@ def _tags(text: str) -> list[str]:
 
 
 def _label(line: str) -> tuple[str, str]:
-    """'Nhãn — nội dung' -> ('Nhãn', 'nội dung'). Không có gạch thì nhãn rỗng."""
+    """'Label — content' -> ('Label', 'content'). No dash means an empty label."""
     for dash in (" — ", " – "):
         head, sep, rest = line.partition(dash)
         if sep and rest.strip():
@@ -81,7 +83,7 @@ def _label(line: str) -> tuple[str, str]:
 
 
 def _split_role(line: str) -> tuple[str, str]:
-    """'Research Consultant — WorldQuant Jan 2025 – Sep 2025' -> (chức danh, ngày)."""
+    """'Research Consultant — WorldQuant Jan 2025 – Sep 2025' -> (title, dates)."""
     found = DATE_TAIL.search(line)
     if found:
         return line[:found.start()].strip(), found.group(1).strip()
@@ -89,11 +91,11 @@ def _split_role(line: str) -> tuple[str, str]:
 
 
 def _looks_like_role(line: str) -> bool:
-    """Dòng chức danh, KHÔNG phải câu văn có gạch ngang.
+    """A title line, NOT a prose sentence containing a dash.
 
-    LỖI ĐÃ SỬA: chỉ cần thấy " — " là coi là chức danh, nên câu
+    A BUG THAT WAS FIXED: a " — " anywhere made it a title, so the sentence
     "...peak profit in the most recent window — which rewards luck" bị cắt
-    thành một vai trò mới, xé đôi khối kinh nghiệm.
+    became a new role and tore the experience block in two.
     """
     if DATE_TAIL.search(line):
         return True
@@ -101,33 +103,35 @@ def _looks_like_role(line: str) -> bool:
         return False
     if not (" — " in line or " – " in line):
         return False
-    # dòng chức danh không mở đầu bằng chữ thường hay liên từ
+    # a title line does not open with a lowercase word or a conjunction
     first = line.split()[0] if line.split() else ""
     return first[:1].isupper() and first.lower() not in {
         "the", "a", "an", "and", "but", "so", "then", "every", "one", "no", "it"}
 
 
 def mo_khoi_project(line: str, truoc: str | None) -> bool:
-    """Dòng này có mở một khối project MỚI không.
+    """Does this line open a NEW project block.
 
-    MỘT LUẬT, MỘT CHỖ — và đây là chỗ nó suýt giết dữ liệu. Trước đây `parse`
-    và `_bounds` mỗi bên tự đoán một kiểu: `parse` nhận cả tên trần một dòng,
-    còn `_bounds` chỉ dừng ở dòng có " — ". Hậu quả: lưu một project thì mọi
-    project BÊN DƯỚI nó trong cùng mục bị xoá sạch, vì `_bounds` không thấy
-    ranh giới nên nuốt tới cuối tệp.
+    ONE RULE, ONE PLACE — and this is where it nearly destroyed data.
+    `parse` and `_bounds` used to guess separately: `parse` accepted a bare
+    name on its own line, while `_bounds` only stopped at a line containing
+    " — ". The consequence: saving one project deleted every project BELOW it
+    in the same section, because `_bounds` saw no boundary and swallowed to
+    the end of the file.
 
-    Tên project: NGẮN, hoa đầu, KHÔNG kết thúc như một câu. Có dấu gạch thì
-    chính nó đánh dấu ranh giới; không có gạch thì phải chặt hơn vì tiêu đề
-    và một dòng nội dung trông giống hệt nhau — đòi cả dòng không kết thúc
-    như một câu, và phải đứng sau chỗ câu trước đã hết.
+    A project name: SHORT, capitalised, NOT ending like a sentence. With a
+    dash, the dash itself marks the boundary; without one it has to be
+    stricter, because a heading and a content line look identical — it
+    demands that the line does not end like a sentence, and that it comes
+    after the previous sentence has ended.
 
     VÀ KHÔNG ĐƯỢC MỞ ĐẦU BẰNG ĐỘNG TỪ HÀNH ĐỘNG. "Improved research
-    frameworks — cut runtime to 90 s." có đủ mọi dấu hiệu của một tiêu đề, mà
-    nó là một CÂU. Tên project không bắt đầu bằng "Built", "Improved",
-    "Designed" — đó là câu kể việc. Đây là vế cứu được dòng người dùng vừa
-    viết khỏi bị đọc thành tên khối.
+    frameworks — cut runtime to 90 s." has every signal of a heading, and it
+    is a SENTENCE. A project name does not begin with "Built", "Improved" or
+    "Designed" — those are claims. This is the half that saves a line the
+    user just wrote from being read as a block name.
     """
-    from . import rules                       # nạp muộn: rules đọc ngược build
+    from . import rules                       # late import: rules reads build back
     head = re.split(r"\s+[—–]\s+", line, maxsplit=1)[0]
     co_gach = head != line
     if not (len(head) <= 70 and head[:1].isupper()):
@@ -155,7 +159,7 @@ def parse(cv_text: str) -> list[Block]:
             blocks.append(current)
         current = None
 
-    truoc_do = None          # dòng chữ ngay trước — xem luật mở khối project
+    truoc_do = None          # the line just above — see the project-open rule
     for raw in lines:
         line = raw.strip()
         if not line:
@@ -164,15 +168,16 @@ def parse(cv_text: str) -> list[Block]:
         found = SECTION.match(line)
         if found:
             flush()
-            # SO BẰNG TỪ CÓ TRONG TÊN, không so bằng cả chuỗi.
+            # MATCH BY A WORD IN THE HEADING, not by the whole string.
             #
-            # Bản trước dùng `name == "experience"`, nên nới bảng tên mục ra
-            # là hỏng ngay: "work experience" không bằng "experience" nên nó
-            # rơi xuống nhánh cuối và thành "skill" — mục kinh nghiệm bị xếp
-            # vào mục kỹ năng, tệ hơn cả lúc nó biến mất.
+            # The previous version used `name == "experience"`, so widening
+            # the heading table broke it immediately: "work experience" does
+            # not equal "experience", so it fell to the last branch and
+            # became "skill" — the experience section filed as a skills
+            # section, worse than when it vanished.
             #
-            # Thứ tự CÓ NGHĨA: xét từ riêng tới chung. "technical skills" phải
-            # bị bắt bởi nhánh skill trước khi chạm nhánh nào khác.
+            # The ORDER MATTERS: specific before general. "technical skills"
+            # has to be caught by the skill branch before anything else.
             name = " ".join(found.group(1).lower().split())
             section = ("project" if "project" in name
                        else "cert" if ("certification" in name
@@ -188,10 +193,10 @@ def parse(cv_text: str) -> list[Block]:
                        else "skill")
             continue
 
-        # --- phần đầu: tên, liên hệ, tóm tắt ---
+        # --- the header: name, contact, summary ---
         if section == "head":
             if not blocks and not current:
-                blocks.append(Block("header", line))          # tên
+                blocks.append(Block("header", line))          # the name
                 continue
             if CONTACT.search(line) or "visa" in line.lower():
                 blocks.append(Block("header", "", "", [line]))
@@ -203,7 +208,7 @@ def parse(cv_text: str) -> list[Block]:
 
         _truoc = truoc_do
         truoc_do = line
-        # --- kinh nghiệm / project: dòng chức danh mở khối mới ---
+        # --- experience / projects: a title line opens a new block ---
         if section in ("experience", "project"):
             if section == "project":
                 starts_new = mo_khoi_project(line, _truoc)
@@ -213,7 +218,7 @@ def parse(cv_text: str) -> list[Block]:
             if starts_new:
                 flush()
                 title, meta = _split_role(line)
-                # 'Tên project — mô tả' : phần mô tả là nội dung, không phải chức danh
+                # 'Project name — description': the description is content, not a title
                 if section == "project" and " — " in title:
                     name, rest = title.split(" — ", 1)
                     current = Block("project", name.strip(), meta, [rest.strip()])
@@ -225,23 +230,23 @@ def parse(cv_text: str) -> list[Block]:
             current.lines.append(line)
             continue
 
-        # --- học vấn / chứng chỉ / kỹ năng: mỗi dòng một khối ---
+        # --- education / certificates / skills: one block per line ---
         if line.lower().startswith("certification"):
             flush()
             # 'Certifications — CFA Level I, …'
             #
-            # Chữ "Certifications" đã LÀ tên mục: render.py đặt tiêu đề theo
-            # kind ("cert" -> "Certifications"). Để nguyên trong thân thì bản
-            # in ra hai dòng chồng nhau:
+            # The word "Certifications" IS the section name: render.py sets
+            # the heading from the kind ("cert" -> "Certifications"). Leave it
+            # in the body and the printed sheet shows two stacked lines:
             #     Certifications
             #     Certifications — CFA Level I, October 2024, …
-            # Tách nhãn ra làm tiêu đề khối, đúng cách khối kỹ năng đang làm
-            # với 'Programming — Python…'. Tiêu đề cũng là thứ write_block cần
-            # để ghi ngược lại đúng hình dạng cũ.
+            # The label becomes the block's title, exactly as the skills
+            # blocks do with 'Programming — Python…'. The title is also what
+            # write_block needs to write it back in the original shape.
             label, rest = _label(line)
             blocks.append(Block("cert", label, "", [rest]))
             continue
-        # kỹ năng: mỗi nhóm ('Programming — ...') là một khối riêng
+        # skills: each group ('Programming — ...') is its own block
         if section == "skill":
             label = re.match(r"^([A-Z][A-Za-z /]{2,28})\s+[—–-]\s+(.+)$", line)
             if label:
@@ -272,18 +277,20 @@ def parse(cv_text: str) -> list[Block]:
     return blocks
 
 
-# Bao nhiêu ký tự thì coi là "một CV thật", không phải vài dòng gõ thử.
+# How many characters count as "a real CV" rather than a few test lines.
 DU_DAI = 500
 
 
 def khong_hieu(cv_text: str, blocks: list) -> bool:
-    """CV có chữ mà máy không dựng nổi khối kinh nghiệm lẫn project nào.
+    """A CV with text from which the machine built no experience or project
+    block at all.
 
-    ĐÂY MỚI LÀ CHỐT HỆ THỐNG, không phải cái bảng tên mục ở trên.
-    Bảng tên mục chỉ biết những cách viết ĐÃ NGHĨ RA; ngày mai có người viết
-    "BERUFSERFAHRUNG" hay "工作经历" thì nó lại câm. Chốt này không cần biết
-    tên mục là gì — nó chỉ hỏi một câu không thể sai: CV dài thế này mà
-    không ra khối nào thì chắc chắn có chuyện.
+    THIS is the systemic guard, not the heading table above. The heading
+    table only knows the spellings SOMEONE THOUGHT OF; tomorrow someone
+    writes "BERUFSERFAHRUNG" or "工作经历" and it goes quiet again. This guard
+    does not need to know what the heading is — it asks one question that
+    cannot be wrong: a CV this long producing no blocks means something is
+    definitely wrong.
     """
     if len((cv_text or "").strip()) < DU_DAI:
         return False
@@ -291,13 +298,14 @@ def khong_hieu(cv_text: str, blocks: list) -> bool:
 
 
 def _keu_neu_khong_hieu(cv_text: str, blocks: list) -> None:
-    """Không hiểu thì KÊU. Hỏng câm là kiểu hỏng tệ nhất: điểm tụt từ 92
-    xuống 22 mà màn hình vẫn xanh, và người dùng đi sửa nhầm chỗ."""
+    """Not understanding means SHOUTING. A silent failure is the worst kind:
+    the score falls from 92 to 22 while the screen stays green, and the user
+    goes off fixing the wrong thing."""
     if not khong_hieu(cv_text, blocks):
         return
     try:
         from ..core.journal import CV, log as jlog
-        jlog.warn(CV, "KHÔNG nhận ra mục nào trong CV — tên mục cần là "
+        jlog.warn(CV, "NO section recognised in the CV — the headings should be "
                       "EXPERIENCE / PROJECTS / EDUCATION… Mọi tin sẽ bị chấm "
                       "thiếu bằng chứng cho tới khi sửa.")
     except Exception:                       # noqa: BLE001
@@ -305,32 +313,34 @@ def _keu_neu_khong_hieu(cv_text: str, blocks: list) -> None:
 
 
 def sentences(block: Block) -> list[str]:
-    """Bẻ văn xuôi trong khối thành từng câu — đơn vị nhỏ nhất để chọn.
+    """Break a block's prose into sentences — the smallest unit to pick from.
 
-    Không viết lại câu nào. Câu nào lên CV cũng là câu Vin đã viết.
+    It rewrites nothing. Every sentence on the CV is one Vin wrote.
     """
-    # PDF ngắt dòng giữa câu ("...institutions combine\nthousands of simple alphas"),
-    # nên phải nối hết lại rồi mới bẻ theo dấu câu.
+    # PDFs break lines mid-sentence ("...institutions combine\nthousands of
+    # simple alphas"), so everything is rejoined before splitting on
+    # punctuation.
     joined = re.sub(r"\s+", " ", " ".join(block.lines)).strip()
     return [part.strip() for part in SENTENCE.split(joined) if len(part.strip()) > 25]
 
 
-# ---------------------------------------------------------------- ghi ngược
+# --------------------------------------------------------- writing it back
 
 SECTION_FOR = {"experience": "EXPERIENCE", "project": "SELECTED PROJECTS"}
 
 
 def _bounds(lines: list[str], title: str) -> tuple[int, int] | None:
-    """Khối mang tiêu đề này nằm từ dòng nào tới dòng nào.
+    """Which lines the block with this title spans.
 
-    Định vị bằng DÒNG TIÊU ĐỀ chứ không dựng lại cả tệp từ blocks: parse() bỏ
-    dòng trống và cắt khoảng trắng cuối, nên dựng lại là mất định dạng của
-    những khối mình không hề đụng tới.
+    Located by ITS TITLE LINE rather than rebuilding the whole file from
+    blocks: parse() drops blank lines and trims trailing whitespace, so
+    rebuilding loses the formatting of blocks that were never touched.
     """
-    # Khớp theo TIỀN TỐ. Không dùng bằng-nhau: khối kinh nghiệm có đuôi ngày
-    # tháng ('… Startup Jan 2026 – Present') mà title đã cắt bỏ, và khối
-    # project có phần mô tả nối sau ' — '. Không khớp được thì write_block rơi
-    # vào nhánh thêm mới và đẻ ra một khối trùng tên.
+    # Matched by PREFIX. Not equality: an experience block carries a date
+    # tail ('… Startup Jan 2026 – Present') that the title has already cut,
+    # and a project block carries a description after ' — '. Failing to match
+    # sends write_block down the add-new branch and produces a duplicate
+    # block with the same name.
     head = title.strip()
     start = next((i for i, l in enumerate(lines) if l.strip().startswith(head)), None)
     if start is None:
@@ -341,11 +351,11 @@ def _bounds(lines: list[str], title: str) -> tuple[int, int] | None:
         line = lines[i].strip()
         if not line:
             continue
-        if SECTION.match(line):                       # sang mục khác
+        if SECTION.match(line):                       # a different section
             stop = i
             break
-        # Ranh giới khối kế tiếp — DÙNG CHUNG luật với parse(). Đoán riêng
-        # một kiểu ở đây là chỗ đã nuốt mất mọi project bên dưới.
+        # The next block's boundary — SHARES the rule with parse(). Guessing
+        # separately here is what swallowed every project below.
         if mo_khoi_project(line, truoc) or _looks_like_role(line):
             stop = i
             break
@@ -353,26 +363,29 @@ def _bounds(lines: list[str], title: str) -> tuple[int, int] | None:
     return start, stop
 
 
-# Dấu kết CÂU. Một dòng thân khối thiếu nó thì `parse` không phân biệt được
-# nó với một TIÊU ĐỀ project — xem `_cau_tron`.
+# SENTENCE-ending punctuation. A body line without it cannot be told apart
+# from a project TITLE by `parse` — see `_cau_tron`.
 _KET = (".", "!", "?", ":", ";")
 
 
 def _cau_tron(chu: str) -> str:
-    """Dòng thân khối phải KẾT NHƯ MỘT CÂU, nếu không nó bị đọc lại thành TÊN.
+    """A body line must END LIKE A SENTENCE, or it gets read back as a NAME.
 
-    LỖI THẬT, mất dữ liệu. Người dùng lưu câu "Improved research frameworks,
-    data pipelines" vào khối `Quant Trading Studio`. Đọc lại, `parse` thấy một
-    dòng ngắn, viết hoa đầu, KHÔNG kết thúc như một câu, đứng sau chỗ câu
-    trước đã hết — đúng hình một tiêu đề project. Kết quả: khối bị cắt đôi,
-    đẻ ra một project rỗng mang tên chính câu đó, và câu ấy KHÔNG BAO GIỜ in
-    ra nữa. Người viết mất một câu mà không có gì báo.
+    A REAL BUG, with data loss. The user saved "Improved research frameworks,
+    data pipelines" into the `Quant Trading Studio` block. Reading it back,
+    `parse` saw a short line, capitalised, NOT ending like a sentence, after
+    the previous sentence had ended — exactly the shape of a project title.
+    The result: the block was cut in two, an empty project named after that
+    very sentence appeared, and the sentence NEVER printed again. The writer
+    lost a sentence with nothing to warn them.
 
-    Hai dòng chữ giống hệt nhau thì không luật đọc nào gỡ được. Nên gỡ ở đầu
-    GHI: thêm dấu chấm cho dòng thân còn thiếu. Dấu câu không phải một từ —
-    máy vẫn không viết thêm chữ nào của người dùng.
+    Two identical-looking lines cannot be told apart by any reading rule. So
+    it is fixed at the WRITING end: a body line missing one gets a full stop.
+    Punctuation is not a word — the machine still adds none of the user's
+    words.
 
-    Dòng quá ngắn thì để nguyên: nó không phải câu, và chấm vào cũng vô nghĩa.
+    A very short line is left alone: it is not a sentence, and a full stop
+    would mean nothing.
     """
     t = " ".join((chu or "").split())
     if len(t) < 12 or t.endswith(_KET):
@@ -382,16 +395,17 @@ def _cau_tron(chu: str) -> str:
 
 def write_block(cv_text: str, kind: str, title: str, meta: str,
                 body: list[str]) -> str:
-    """Thay khối `title`, hoặc thêm mới nếu chưa có. Trả về cv_text mới.
+    """Replace the `title` block, or add it if absent. Returns the new cv_text.
 
-    Chỉ đụng đúng khối đó. Không có khối nào bị dựng lại, nên không khối nào
-    bị đổi định dạng ngoài ý muốn.
+    It touches only that block. Nothing is rebuilt, so no block has its
+    formatting changed unintentionally.
     """
     lines = (cv_text or "").splitlines()
     body = [_cau_tron(b) for b in body if b.strip()]
 
-    # Thân rỗng = XOÁ khối. Giữ lại một khối không hợp tin nào chỉ làm bẩn CV
-    # gốc; đo được: `Compress EA` hợp 0/117 tin mà vẫn nằm đó.
+    # An empty body = DELETE the block. Keeping a block that fits no posting
+    # only dirties the original CV; measured: `Compress EA` fitted 0 of 117
+    # postings and was still sitting there.
     if not body:
         found = _bounds(lines, title)
         if not found:
@@ -399,18 +413,15 @@ def write_block(cv_text: str, kind: str, title: str, meta: str,
         start, stop = found
         return "\n".join(lines[:start] + lines[stop:]).rstrip() + "\n"
 
-    # Mỗi loại khối có HÌNH DẠNG riêng, và parse() nhận ra khối mới bằng chính
-    # hình dạng đó. Viết sai hình dạng thì khối vừa ghi bị nuốt vào khối trước
-    # và biến mất — đã xảy ra khi ghi "Compress EA" trơ trọi, vì khối project
-    # bắt buộc phải có " — " trên dòng tiêu đề.
-    # Mỗi loại khối có HÌNH DẠNG riêng, và parse() nhận ra khối mới bằng chính
-    # hình dạng đó. Viết sai hình dạng thì khối vừa ghi bị nuốt vào khối trước
-    # và biến mất — đã xảy ra hai lần: khối project ghi trơ trọi "Compress EA"
-    # (thiếu " — "), và khối kinh nghiệm ghi thiếu đuôi ngày tháng.
+    # Each block kind has its own SHAPE, and parse() recognises a new block
+    # by that shape. Write the wrong shape and the block just written is
+    # swallowed by the one before it and disappears — which happened twice: a
+    # project block written as a bare "Compress EA" (missing " — "), and an
+    # experience block written without its date tail.
     if kind == "experience":
         # 'Chức danh — Tổ chức  Jan 2025 – Sep 2025'
-        # KHÔNG thêm "· ": parse() không bóc dấu đó ra, nó dính nguyên vào
-        # câu và đi thẳng lên CV.
+        # Do NOT add "· ": parse() does not strip it, so it sticks to the
+        # sentence and goes straight onto the CV.
         head = f"{title.strip()} {meta.strip()}".strip()
         chunk = [head] + body
     elif meta.strip():
@@ -418,13 +429,14 @@ def write_block(cv_text: str, kind: str, title: str, meta: str,
     else:
         # TÊN PROJECT ĐỨNG RIÊNG MỘT DÒNG.
         #
-        # Bản cũ ghép 'Tên — câu đầu' vì parse() ngày đó CHỈ nhận ra tiêu đề
-        # project khi dòng có dấu " — ". Luật đó đã bỏ (nó hỏng trên 4/5 kiểu
-        # viết thường gặp), và giữ lại cách ghi này thì round-trip gãy: ghi ra
-        # 'Tên — Câu đầu.' rồi đọc lại, dòng kết thúc bằng dấu chấm nên không
-        # còn là tiêu đề, và khối mất tên.
+        # The old version wrote 'Name — first sentence' because parse() back
+        # then ONLY recognised a project title on a line containing " — ".
+        # That rule is gone (it broke on 4 of 5 common writing styles), and
+        # keeping this way of writing breaks the round trip: write 'Name —
+        # First sentence.' and read it back, and the line ends in a full stop
+        # so it is no longer a title, and the block loses its name.
         #
-        # Tên riêng một dòng cũng đúng cách CV thật viết mục project.
+        # A name on its own line is also how real CVs write a project section.
         chunk = [title.strip()] + body
 
     found = _bounds(lines, title)
@@ -434,6 +446,6 @@ def write_block(cv_text: str, kind: str, title: str, meta: str,
 
     name = SECTION_FOR.get(kind, "SELECTED PROJECTS")
     at = next((i for i, l in enumerate(lines) if l.strip().upper() == name), None)
-    if at is None:                                    # chưa có mục thì mở mục
+    if at is None:                                    # no section yet -> open one
         return "\n".join(lines + ["", name] + chunk).rstrip() + "\n"
     return "\n".join(lines[:at + 1] + chunk + lines[at + 1:]).rstrip() + "\n"
