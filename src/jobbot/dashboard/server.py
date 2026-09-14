@@ -1,6 +1,6 @@
-"""Web server chạy local — thư viện chuẩn, không cài gì thêm.
+"""The local web server — standard library, nothing installed.
 
-Chỉ định tuyến. Vẽ là việc của views/, dữ liệu là việc của core/ và live.py.
+Routing only. Drawing is views/'s job, data is core/'s and live.py's.
 """
 
 from __future__ import annotations
@@ -24,32 +24,34 @@ from . import upload
 from .views import cv as cvview
 from .views import cvhealth, importcv
 from .filters import JobFilter
-# `trackcho`, KHÔNG phải `queue`: dòng 9 đã `import queue` của thư viện
-# chuẩn, và luồng SSE bắt `queue.Empty`. Một cái tên đè lên nhau ở đây
-# là màn hình đứng im, không phải lỗi nổ ra cho ai thấy.
+# `trackcho`, NOT `queue`: line 9 already imports the standard library's
+# `queue`, and the SSE loop catches `queue.Empty`. One name shadowing another
+# here means the screen freezes, not an error anybody gets to see.
 from .views import (cvlist, cvsoan, home, jobs, profile, search,
                     settings, track, trackcho)
 
-HOST = "127.0.0.1"          # chỉ máy này truy cập được. Không mở ra mạng.
+HOST = "127.0.0.1"          # this machine only. Never exposed to the network.
 
-# Các KHÚC của dây chuyền. Tên khúc là tham số của /api/stage/*, nên thêm một
-# chức năng mới thì không đẻ thêm route. Khúc nào chưa nối nút Chạy thì route
-# nói thẳng, không im lặng.
-STAGES = {"search": "Search", "cv": "CV", "track": "Quản lí"}
+# The pipeline's STAGES. The stage name is a parameter of /api/stage/*, so a
+# new feature adds no new route. A stage with no Run button wired yet gets
+# said outright by the route, never silently.
+STAGES = {"search": "Search", "cv": "CV", "track": "Track"}
 DEFAULT_PORT = 8765
 
 
-# Đang có một lượt dựng lại chạy nền hay chưa. Sửa năm khối liền tay thì
-# không được xếp năm lượt dựng 5 giây chồng lên nhau — lượt cuối mới là lượt
-# đúng, bốn lượt kia chỉ đốt CPU rồi bị ghi đè.
+# Whether a rebuild is already running in the background. Edit five blocks in
+# a row and five 5-second builds must not stack up — only the last one is the
+# right one, the other four just burn CPU and get overwritten.
 _DANG_DUNG = threading.Lock()
 
 
 def _tu_dung(conn) -> None:
-    """Chữ trên CV vừa đổi -> dựng lại mọi bản, NẾU người dùng đã bật.
+    """The words on the CV just changed -> rebuild every version, IF the user
+    turned it on.
 
-    Mặc định TẮT. Dựng mất ~5 giây; ép nó lên người vừa sửa một chữ là lấy
-    mất của họ quyền quyết định, đúng thứ tấm Điều chỉnh sinh ra để trả lại.
+    OFF by default. A build takes ~5 seconds; forcing it on someone who just
+    corrected one word takes their decision away from them — exactly what the
+    Adjust panel exists to give back.
     """
     from ..core import prefs
     if not prefs.flag(conn, prefs.CV_TU_LO):
@@ -57,7 +59,7 @@ def _tu_dung(conn) -> None:
 
     def _chay():
         if not _DANG_DUNG.acquire(blocking=False):
-            return                      # đã có lượt đang chạy, nó sẽ ăn cả
+            return                      # one is already running, it takes all
         try:
             from ..cv import batch
             c = db.connect()
@@ -67,7 +69,8 @@ def _tu_dung(conn) -> None:
                 c.close()
         except Exception as exc:                    # noqa: BLE001
             journal.log.error(journal.CV,
-                              f"tự dựng lại hỏng — {type(exc).__name__}: {exc}")
+                              f"auto rebuild failed — "
+                              f"{type(exc).__name__}: {exc}")
         finally:
             _DANG_DUNG.release()
 
@@ -75,14 +78,15 @@ def _tu_dung(conn) -> None:
 
 
 def _dap_tron(conn, answers: dict) -> int:
-    """Bao nhiêu TIN mà hồ sơ đáp TRỌN — mọi dòng must đều nói được.
+    """How many POSTINGS the profile answers IN FULL — every must line covered.
 
-    Đơn vị của cả tầng CV. Đếm theo LƯỢT khớp thì một kỹ năng xuất hiện 50 lần
-    trông như việc quan trọng nhất trong khi nó chỉ mở khoá thêm 19 tin; đếm
-    theo tin hết hụt thì xếp đúng thứ tự việc (xem scoring/gap.py).
+    The whole CV layer's unit. Counted by MATCHES, a skill appearing 50 times
+    looks like the most important job while unlocking only 19 more postings;
+    counted by postings cleared, the work comes out in the right order (see
+    scoring/gap.py).
 
-    Gọi HAI LẦN quanh mỗi phép ghi vào CV, để nhật ký nói được "129 -> 141"
-    bằng số đo thật chứ không phải lời hứa trước khi viết.
+    Called TWICE around every write into the CV, so the journal can say "129
+    -> 141" from a real measurement rather than a promise made before writing.
     """
     from ..scoring.gap import _tin, tin_tron
     from ..scoring.score import build_index
@@ -94,23 +98,24 @@ def _dap_tron(conn, answers: dict) -> int:
 
 
 def _segments(path: str) -> list[str]:
-    """Tách path thành từng mảnh rồi giải mã TỪNG mảnh.
+    """Split the path into parts, then decode EACH part.
 
-    Trình duyệt mã hoá khoảng trắng thành %20, nên khoá cụm 'machine learning'
-    tới đây là 'machine%20learning' — không khớp với gì cả. Phải giải mã.
+    The browser encodes a space as %20, so the key 'machine learning' arrives
+    as 'machine%20learning' — matching nothing at all. It has to be decoded.
 
-    Giải mã cả chuỗi RỒI mới tách là sai: '%2F' sẽ hoá thành '/' và tự đẻ ra
-    một mảnh mới. Tách trước, giải mã sau thì không đẻ được.
+    Decoding the whole string AND THEN splitting is wrong: '%2F' would become
+    '/' and invent a new part. Split first, decode after, and nothing can be
+    invented.
     """
     return [unquote(part) for part in path.strip("/").split("/") if part]
 
 
 def _ghi_khoi(form: dict[str, list[str]], question, cv_text: str) -> str:
-    """Các hàng trên form -> khối trong cv_text.
+    """The form's rows -> blocks inside cv_text.
 
-    Đổi tên một khối = khối cũ KHÔNG còn ai trỏ tới, nên phải xoá nó đi; nếu
-    không thì mỗi lần sửa tên là CV mọc thêm một khối mồ côi. Xoá = ghi khối
-    rỗng, đúng luật sẵn có của write_block.
+    Renaming a block means NOTHING points at the old one any more, so it has
+    to be deleted; otherwise every rename grows the CV another orphan block.
+    Deleting = writing an empty block, which is write_block's existing rule.
     """
     from ..cv.blocks import parse as parse_cv, write_block
 
@@ -139,13 +144,15 @@ def _ghi_khoi(form: dict[str, list[str]], question, cv_text: str) -> str:
 
 
 def _split_other(raw: str) -> list[str]:
-    """Ô 'add your own' của câu CHỌN-NHIỀU -> danh sách, ngăn bằng phẩy hoặc xuống dòng."""
+    """A MULTI question's 'add your own' field -> a list, split on commas or
+    newlines."""
     return [part.strip() for part in raw.replace("\n", ",").split(",") if part.strip()]
 
 
 def _form_to_answers(form: dict[str, list[str]], section_id: str,
                      current: dict | None = None) -> dict:
-    """Đọc form theo ĐỊNH NGHĨA trong schema, không tin những gì trình duyệt gửi lên."""
+    """Read the form according to the SCHEMA's definition, never trusting what
+    the browser sent."""
     section = section_by_id(section_id)
     answers: dict = {}
     if section is None:
@@ -161,14 +168,16 @@ def _form_to_answers(form: dict[str, list[str]], section_id: str,
             extra = _split_other(other_raw)
             answers[question.id] = picked + [e for e in extra if e not in picked]
         elif question.kind == BLOCKS:
-            # Ghi thẳng vào cv_text — MỘT nguồn sự thật. Hồ sơ là nơi SỬA;
-            # bộ chấm điểm và bộ dựng CV vẫn đọc khối ở đó, không có bản sao.
+            # Written straight into cv_text — ONE source of truth. The
+            # profile is where it is EDITED; the scorer and the CV builder
+            # still read the blocks from there, with no copy anywhere.
             answers["cv_text"] = _ghi_khoi(
                 form, question, str((current or {}).get("cv_text") or ""))
         elif question.kind == ROWS:
-            # Các ô cùng tên gửi lên thành MẢNG SONG SONG theo thứ tự hàng.
-            # Dựng lại bằng answer.line() — đúng ngữ pháp answer.educations()
-            # đọc vào, nên form ghi ra thứ máy chắc chắn hiểu.
+            # Fields sharing a name arrive as PARALLEL ARRAYS in row order.
+            # Rebuilt with answer.line() — exactly the grammar
+            # answer.educations() reads back, so the form writes something the
+            # machine is certain to understand.
             from ..apply.answer import line as edu_line
             cot = [form.get(f"edu_{k}", []) for k in
                    ("degree", "discipline", "school", "start", "end", "note")]
@@ -179,8 +188,9 @@ def _form_to_answers(form: dict[str, list[str]], section_id: str,
                     dong.append(txt)
             answers[question.id] = "\n".join(dong)
         elif question.tags:
-            # Ô thẻ gửi MỘT input ẩn cho mỗi thẻ, cùng tên. Lấy values[0] như
-            # ô chữ thường thì mọi thẻ trừ cái đầu lặng lẽ biến mất.
+            # A tag box sends ONE hidden input per tag, all sharing a name.
+            # Take values[0] as if it were an ordinary text field and every
+            # tag but the first silently disappears.
             sach, thay = [], set()
             for v in values:
                 v = v.strip()
@@ -191,7 +201,8 @@ def _form_to_answers(form: dict[str, list[str]], section_id: str,
         elif question.kind in (TEXT, LONGTEXT):
             answers[question.id] = values[0].strip() if values else ""
         else:                                       # SINGLE
-            # Câu chọn-một lấy NGUYÊN VĂN ô tự do — không cắt theo dấu phẩy.
+            # A SINGLE question takes the free-text field VERBATIM — never
+            # split on commas.
             chosen = values[0] if values and values[0] in allowed else ""
             answers[question.id] = chosen or other_raw.strip()
     return answers
@@ -200,7 +211,7 @@ def _form_to_answers(form: dict[str, list[str]], section_id: str,
 class Handler(BaseHTTPRequestHandler):
     server_version = "jobbot"
 
-    # --- tiện ích ---------------------------------------------------------
+    # --- helpers ----------------------------------------------------------
     def _send(self, body: bytes, status: int = 200,
               ctype: str = "text/html; charset=utf-8", no_cache: bool = False):
         self.send_response(status)
@@ -224,17 +235,19 @@ class Handler(BaseHTTPRequestHandler):
         self._html(layout.page("Not found", "<h1>404</h1>"
                                "<p class=lead>No such page.</p>"), 404)
 
-    def log_message(self, fmt, *args):            # bớt ồn
+    def log_message(self, fmt, *args):            # quieter
         return
 
-    # --- định tuyến -------------------------------------------------------
-    # --- dòng sự kiện đẩy xuống trình duyệt --------------------------------
+    # --- routing -----------------------------------------------------------
+    # --- the event stream pushed to the browser ----------------------------
     def _events(self):
-        """SSE: một kết nối sống lâu, server đẩy xuống, trình duyệt không hỏi.
+        """SSE: one long-lived connection, the server pushes, the browser
+        never asks.
 
-        Chọn SSE chứ không polling: nhật ký chỉ đi MỘT chiều từ máy xuống màn
-        hình. Polling mỗi giây thì 24/7 là 86.400 lượt/ngày cho phần lớn là
-        "chưa có gì mới". WebSocket thì thừa nguyên chiều ngược lại.
+        SSE rather than polling: the journal travels ONE way, from the machine
+        to the screen. Polling once a second, running 24/7, is 86,400 requests
+        a day mostly answering "nothing new". A WebSocket would add a whole
+        return direction nobody needs.
         """
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -244,8 +257,9 @@ class Handler(BaseHTTPRequestHandler):
 
         chan = journal.log.subscribe()
         try:
-            # Gửi ngay trạng thái hiện tại — mở tab giữa chừng vẫn thấy đúng,
-            # không phải chờ sự kiện kế tiếp mới biết máy đang làm gì.
+            # Send the current state at once — a tab opened mid-run still
+            # sees the truth, rather than waiting for the next event to learn
+            # what the machine is doing.
             self._send_event({"type": "hello", **_state_payload(),
                               "events": [e.as_dict()
                                          for e in journal.log.tail(limit=40)][::-1]})
@@ -253,10 +267,10 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     self._send_event(chan.get(timeout=20))
                 except queue.Empty:
-                    self.wfile.write(b": ping\n\n")     # giữ kết nối, proxy không cắt
+                    self.wfile.write(b": ping\n\n")     # keep-alive, so no proxy cuts it
                     self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError, ValueError):
-            pass                     # đóng tab là chuyện thường, không phải lỗi
+            pass                     # closing a tab is normal, not an error
         finally:
             journal.log.unsubscribe(chan)
 
@@ -271,10 +285,12 @@ class Handler(BaseHTTPRequestHandler):
 
     @staticmethod
     def _start_apply(self, row: dict, pdf) -> None:
-        """Mở trang nộp và điền phần chứng minh được, ở NỀN.
+        """Open the application page and fill in what can be proved, IN THE
+        BACKGROUND.
 
-        Cửa sổ Chrome ở lại. Máy không bấm Gửi — xem `apply/run.py`: trong đó
-        không có lệnh bấm nào, nên không thể lỡ tay.
+        The Chrome window stays. The machine does not press Submit — see
+        `apply/run.py`: there is no click for it anywhere in there, so it
+        cannot happen by accident.
         """
         def _run():
             from ..apply import run as apply_run
@@ -284,20 +300,24 @@ class Handler(BaseHTTPRequestHandler):
             who = f"{row['company']}: {row['title'][:38]}"
             conn = db.connect()
             try:
-                journal.log.emit(journal.SEARCH, f"mở form nộp — {who}")
+                journal.log.emit(journal.SEARCH,
+                                 f"opening the application form — {who}")
                 report, _tab = apply_run.open_and_fill(
                     row["url"], book(pstore.load(conn)),
                     pdf if pdf and pdf.exists() else None, job=row["id"])
                 if report.needs_login:
-                    site = report.needs_login.split("/")[2] if "//" in report.needs_login else "trang này"
+                    site = (report.needs_login.split("/")[2]
+                            if "//" in report.needs_login else "this site")
                     journal.log.error(
                         journal.SEARCH,
-                        f"{who} — CHƯA ĐĂNG NHẬP {site}. Cửa sổ Chrome nộp đang "
-                        f"mở sẵn trang đó: đăng nhập một lần rồi bấm Nộp lại.")
+                        f"{who} — NOT LOGGED IN to {site}. The apply Chrome "
+                        f"window already has that page open: log in once, then "
+                        f"press Apply again.")
                     return
-                # MÁY BÓ TAY THÌ GIAO LẠI CHO NGƯỜI, đừng để lần nộp đó rơi.
-                # Dòng đã dựng sẵn ở /api/apply; đổi nhãn để bảng Quản lí xếp
-                # nó vào "phải tự nộp tay", kèm đường nộp và đường tải CV.
+                # THE MACHINE CANNOT, SO HAND IT BACK TO THE PERSON — do not
+                # let that application drop. The row was already created at
+                # /api/apply; relabel it so the Track table files it under
+                # "apply by hand", with the application link and the CV link.
                 if report.tu_lam:
                     conn.execute(
                         "UPDATE application SET origin = 'tay'"
@@ -307,36 +327,39 @@ class Handler(BaseHTTPRequestHandler):
                     live.quen()
                     journal.log.warn(
                         journal.SEARCH,
-                        f"{who} — máy không nộp được, đã chuyển sang "
-                        f"«phải tự nộp tay» ở tab Quản lí")
+                        f"{who} — the machine could not apply; moved to "
+                        f"«apply by hand» on the Track tab")
                 journal.log.ok(journal.SEARCH, f"{who} — {report.line()}")
                 if report.note:
                     journal.log.emit(journal.SEARCH, f"  {report.note}")
                 for label, why, must in report.asks[:8]:
                     journal.log.warn(
                         journal.SEARCH,
-                        f"  cần bạn{' (bắt buộc)' if must else ''}: "
+                        f"  needs you{' (required)' if must else ''}: "
                         f"{label[:60]}" + (f" — {why}" if why else ""))
                 for key in dict.fromkeys(report.missing):
                     journal.log.warn(journal.SEARCH,
-                                     f"  hồ sơ thiếu {key} — điền ở tab Hồ sơ, "
-                                     f"lần sau máy tự điền")
+                                     f"  the profile has no {key} — fill it in "
+                                     f"on the Profile tab and the machine "
+                                     f"fills it next time")
                 if not pdf or not pdf.exists():
                     journal.log.warn(journal.SEARCH,
-                                     "  chưa in PDF cho tin này — bấm In hàng loạt")
+                                     "  no PDF printed for this posting — press "
+                                     "Print all")
                 elif self._stale_pdf(conn, pdf):
-                    # Đổi email hay số điện thoại xong mà quên in lại thì lá
-                    # đơn mang bản CV cũ — sai chính chỗ nhà tuyển dụng dùng
-                    # để liên lạc.
+                    # Change the email or the phone number and forget to
+                    # reprint, and the application carries the old CV — wrong
+                    # in exactly the place the employer uses to get in touch.
                     journal.log.warn(journal.SEARCH,
-                                     "  PDF in TRƯỚC lần sửa hồ sơ gần nhất — "
-                                     "in lại trước khi gửi")
+                                     "  the PDF was printed BEFORE the last "
+                                     "profile edit — reprint before sending")
                 journal.log.emit(journal.SEARCH,
-                                 "  cửa sổ đang mở — trả nốt mấy ô trên, rồi bấm "
-                                 "Gửi ở tab Quản lí (máy kiểm lại trước khi bấm)")
+                                 "  the window is open — answer the fields "
+                                 "above, then press Send on the Track tab (the "
+                                 "machine checks again before it clicks)")
             except Exception as exc:                # noqa: BLE001
                 journal.log.error(journal.SEARCH,
-                                  f"{who} — mở form hỏng: "
+                                  f"{who} — opening the form failed: "
                                   f"{type(exc).__name__}: {exc}")
             finally:
                 journal.log.done(journal.SEARCH)
@@ -346,7 +369,7 @@ class Handler(BaseHTTPRequestHandler):
 
     @staticmethod
     def _stale_pdf(conn, pdf) -> bool:
-        """Bản in có cũ hơn hồ sơ không."""
+        """Is the printed copy older than the profile."""
         from datetime import datetime, timezone
         row = conn.execute(
             "SELECT created_at FROM profile_version ORDER BY id DESC LIMIT 1"
@@ -363,10 +386,11 @@ class Handler(BaseHTTPRequestHandler):
         return printed < saved
 
     def _start_send(self, row: dict) -> None:
-        """Bấm Gửi cho một lá đơn, ở NỀN.
+        """Press Submit on one application, IN THE BACKGROUND.
 
-        Chuyển dòng sang "đã nộp" CHỈ KHI thật sự bấm được. Bấm hụt mà vẫn đổi
-        trạng thái thì bảng nói dối, đúng cái đã tránh khi thêm chặng nháp.
+        The row moves to "applied" ONLY IF the click really landed. Move the
+        state on a failed click and the table lies — exactly what adding the
+        draft stage was meant to avoid.
         """
         def _run():
             from ..apply import send as apply_send
@@ -380,24 +404,31 @@ class Handler(BaseHTTPRequestHandler):
                     board.unclaim(conn, int(row["id"]))
                     journal.log.error(
                         journal.SEARCH,
-                        f"{who} — không thấy cửa sổ form. Bấm Nộp lại ở tab Search.")
+                        f"{who} — the form window is gone. Press Apply again "
+                        f"on the Search tab.")
                     return
                 done = apply_send.submit(tab, int(row["posting_id"]))
                 if not done.ok:
                     board.unclaim(conn, int(row["id"]))
-                    journal.log.warn(journal.SEARCH, f"{who} — KHÔNG gửi: {done.why}")
+                    journal.log.warn(journal.SEARCH,
+                                     f"{who} — NOT sent: {done.why}")
                     for gap in done.missing[:8]:
-                        journal.log.warn(journal.SEARCH, f"  còn trống: {gap[:70]}")
+                        journal.log.warn(journal.SEARCH,
+                                         f"  still empty: {gap[:70]}")
                     return
-                board.set_stage(conn, int(row["id"]), board.SENT, "bấm gửi từ app")
+                board.set_stage(conn, int(row["id"]), board.SENT,
+                                "submitted from the app")
                 journal.log.ok(journal.SEARCH,
-                               f"{who} — {done.why} (nút \"{done.button}\")")
+                               f"{who} — {done.why} "
+                               f"(button \"{done.button}\")")
                 if done.landed:
-                    journal.log.emit(journal.SEARCH, f"  trang sau khi gửi: {done.landed}")
+                    journal.log.emit(journal.SEARCH,
+                                     f"  the page after sending: {done.landed}")
             except Exception as exc:                # noqa: BLE001
                 board.unclaim(conn, int(row["id"]))
                 journal.log.error(journal.SEARCH,
-                                  f"{who} — gửi hỏng: {type(exc).__name__}: {exc}")
+                                  f"{who} — sending failed: "
+                                  f"{type(exc).__name__}: {exc}")
             finally:
                 journal.log.done(journal.SEARCH)
                 conn.close()
@@ -405,11 +436,11 @@ class Handler(BaseHTTPRequestHandler):
         threading.Thread(target=_run, daemon=True, name="send").start()
 
     def _start_stage(self, stage: str) -> str | None:
-        """Khởi động một khúc. Thêm chức năng mới = thêm MỘT nhánh ở đây,
-        không phải thêm một route.
+        """Start one stage. A new feature adds ONE branch here, not a route.
 
-        Trả None nếu đã chạy, hoặc CÂU LÝ DO nếu không chạy được. Không đáp
-        "đang chạy…" cho một việc vừa bị cổng chặn — đó là nói dối người dùng.
+        Returns None once it is running, or A REASON when it cannot run. It
+        never answers "running…" for something the gate just blocked — that
+        would be lying to the user.
         """
         if stage == "search":
             conn = db.connect()
@@ -419,19 +450,19 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
             if thieu:
-                # Cùng một cổng mà tab Profile đang dùng — hỏi một chỗ, không
-                # chép luật sang đây.
+                # The same gate the Profile tab uses — asked in one place,
+                # never copied here as a rule of its own.
                 hoi = all_questions()
                 ten = " · ".join(hoi[q].text for q in thieu if q in hoi)
-                return f"hồ sơ còn thiếu: {ten}"
+                return f"the profile is still missing: {ten}"
             runner = sched.current()
             threading.Thread(target=runner.scan_once, daemon=True,
                              name="scan-manual").start()
             return None
 
         if stage == "track":
-            # Nút Chạy của khúc Quản lí LÀ nút Quét thư — một khúc một nút,
-            # đúng như Search và CV.
+            # The Track stage's Run button IS the Scan mail button — one
+            # stage, one button, exactly like Search and CV.
             def _quet():
                 conn2 = db.connect()
                 try:
@@ -440,7 +471,8 @@ class Handler(BaseHTTPRequestHandler):
                     tscan.noi_lai(conn2)
                 except Exception as exc:            # noqa: BLE001
                     journal.log.error(journal.SEARCH,
-                                      f"quét thư hỏng — {type(exc).__name__}: {exc}")
+                                      f"the mail scan failed — "
+                                      f"{type(exc).__name__}: {exc}")
                 finally:
                     conn2.close()
                     live.quen()
@@ -449,13 +481,15 @@ class Handler(BaseHTTPRequestHandler):
             return None
 
         if stage == "cv":
-            # Dựng bản CV cho 364 tin mất 5,3 giây — quá lâu để chạy trong
-            # lúc trả lời HTTP, nên ở NỀN, tiến độ xem ở nhật ký luồng cv.
+            # Building CVs for 364 postings takes 5.3 seconds — far too long
+            # to run inside an HTTP response, so it runs IN THE BACKGROUND,
+            # with progress in the cv journal stream.
             conn = db.connect()
             try:
                 answers = store.load(conn)
                 if not (answers.get("cv_text") or "").strip():
-                    return "hồ sơ chưa có CV — nhập CV ở tab Profile trước"
+                    return ("the profile has no CV yet — import one on the "
+                            "Profile tab first")
             finally:
                 conn.close()
 
@@ -466,14 +500,15 @@ class Handler(BaseHTTPRequestHandler):
                     batch.run(conn2)
                 except Exception as exc:            # noqa: BLE001
                     journal.log.error(journal.CV,
-                                      f"dựng hỏng — {type(exc).__name__}: {exc}")
+                                      f"the build failed — "
+                                      f"{type(exc).__name__}: {exc}")
                 finally:
                     journal.log.done(journal.CV)
                     conn2.close()
 
             threading.Thread(target=_dung_cv, daemon=True, name="cv-build").start()
             return None
-        return f"{STAGES.get(stage, stage)} chưa nối nút Chạy"
+        return f"{STAGES.get(stage, stage)} has no Run button wired yet"
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -484,9 +519,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._send((web_dir() / "app.css").read_bytes(),
                               ctype="text/css; charset=utf-8")
         if path == "/static/mau.css":
-            # KHÔNG CHO CACHE. Đây là tấm chỉ vài trăm byte, mà cache nó thì
-            # đổi màu xong phải xoá cache trình duyệt mới thấy — người dùng
-            # sẽ kết luận cái nút hỏng.
+            # NEVER CACHED. This sheet is a few hundred bytes, and caching it
+            # means a colour change is only visible after clearing the browser
+            # cache — the user would conclude the button is broken.
             from . import mau as _mau
             conn = db.connect()
             try:
@@ -505,24 +540,26 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/state":
             return self._json(_state_payload())
         if path == "/api/alive":
-            # DẤU NHẬN DẠNG cho người NGOÀI tiến trình (start.command, vỏ
-            # .app). Cổng không còn cố định, và một cổng có ai đó trả lời
-            # 200 KHÔNG có nghĩa jobbot đang chạy — sau khi jobbot chết,
-            # cổng đó có thể đã thuộc về app khác. Dòng này nói rõ ai
-            # đang trả lời, kèm PID để đối chiếu với data/dang-chay.txt.
+            # AN IDENTITY MARK for anyone OUTSIDE the process (start.command,
+            # the .app wrapper). The port is no longer fixed, and a port where
+            # somebody answers 200 does NOT mean jobbot is running — after
+            # jobbot dies that port may belong to another app. This line says
+            # who is answering, with the PID to check against
+            # data/dang-chay.txt.
             import os as _os
             return self._send(f"jobbot {_os.getpid()}\n".encode("utf-8"),
                               ctype="text/plain; charset=utf-8", no_cache=True)
 
-        # --- ĐÃ NỐI DỮ LIỆU THẬT (bước 1) ---
+        # --- WIRED TO REAL DATA (step 1) ---
         if path == "/" or path.startswith("/jobs/"):
             conn = db.connect()
             try:
                 if path == "/":
-                    # MỘT lượt đọc cho cả trang (tongquan.tat_ca) — đo 0,4s
-                    # trên kho 5.166 tin. Tách ra gọi từng ô thì mỗi ô lại
-                    # quét lại bảng application, và bốn ô có thể nói bốn con
-                    # số khác nhau vì đọc ở bốn thời điểm.
+                    # ONE read for the whole page (tongquan.tat_ca) —
+                    # measured at 0.4s on a 5,166-posting store. Called per
+                    # panel instead, each panel rescans the application table,
+                    # and four panels can report four different numbers
+                    # because they read at four different moments.
                     from . import tongquan
                     return self._html(home.render(
                         live.onboarding(conn),
@@ -538,7 +575,8 @@ class Handler(BaseHTTPRequestHandler):
                     from ..profile import store as pstore
                     answers = pstore.load(conn)
                     explain = _json.loads(found["score_json"]) if found.get("score_json") else None
-                                        # LỰA CHỌN CỦA VIN thắng cách máy xếp — xem cv/build.picks
+                    # VIN'S PICKS beat the machine's ordering — see
+                    # cv/build.picks
                     from ..cv.build import picks as _picks
                     tailored = build_cv(answers, explain, found['jd'],
                                         pick=_picks(conn, int(found['id'])))
@@ -583,11 +621,13 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
 
         if path == "/track/queue":
-            # MÀN CON của Quản lí — mọi thứ máy KHÔNG TỰ CHỐT ĐƯỢC.
+            # TRACK'S OWN SCREEN — everything the machine CANNOT SETTLE BY
+            # ITSELF.
             #
-            # Trước đây nó là ô thứ hai ngay trên tab Quản lí, và 16 thẻ thư
-            # đẩy cái bảng xuống dưới một màn hình. Bảng là thứ đã xong, hàng
-            # chờ là thứ chưa xong — hai nhịp khác nhau, nên hai màn.
+            # It used to be the second panel on the Track tab, where 16 mail
+            # cards pushed the table below the fold. The table is what is
+            # finished, the queue is what is not — two different rhythms, so
+            # two screens.
             conn = db.connect()
             try:
                 from ..track import board, scan
@@ -599,14 +639,17 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
 
         if path == "/cv/soan":
-            # MÀN CON của tab CV — chỗ soạn khối. Thay cho tấm phủ /cv/block
-            # cũ: tấm phủ rộng 380px và câm, màn này rộng cả cửa sổ và chấm
-            # từng câu. Xem views/cvsoan.py.
+            # THE CV TAB'S OWN SCREEN — the block editor. It replaces the old
+            # /cv/block overlay: that overlay was 380px wide and mute, this
+            # screen is the full window and judges every sentence. See
+            # views/cvsoan.py.
             #
-            # KHÔNG gọi cv_versions ở đây. Tấm phủ cũ gọi nó chỉ để lấy danh
-            # sách kỹ năng còn câm — mà đó là lượt dựng 5,3 giây, trả giá mỗi
-            # lần mở chỗ soạn. Thang HỤT (0,6 giây, có nhớ) trả lời đúng câu
-            # đó và trả lời rõ hơn: viết về cái gì thì thêm bao nhiêu tin.
+            # cv_versions is NOT called here. The old overlay called it only
+            # to get the list of skills still unspoken — and that is a
+            # 5.3-second build, paid every time the editor opens. The GAP
+            # ladder (0.6 seconds, cached) answers the same question and
+            # answers it better: write about what, and how many more postings
+            # clear.
             conn = db.connect()
             try:
                 from ..cv import batch
@@ -631,9 +674,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/cv":
             conn = db.connect()
             try:
-                # ĐỌC BẢN ĐÃ LƯU, không dựng ở đây. Dựng lúc vẽ trang là bắt
-                # người vừa search xong chờ 5,3 giây để xem một thứ họ chưa
-                # yêu cầu làm. Bấm thì mới chạy — xem cv/batch.py.
+                # READ THE SAVED BUILD, never build here. Building while
+                # drawing the page makes somebody who just finished a search
+                # wait 5.3 seconds for something they never asked for. It runs
+                # when it is pressed — see cv/batch.py.
                 from ..cv import batch
                 luu = batch.saved(conn) or {}
                 return self._html(cvlist.render(
@@ -641,26 +685,27 @@ class Handler(BaseHTTPRequestHandler):
                     jobs=luu.get("jobs") or 0,
                     gaps=luu.get("gaps") or [],
                     core=luu.get("core") or 0,
-                    # KHỐI thì vẽ ngay, không chờ nút: đó là chữ Vin vừa gõ,
-                    # và nó chỉ tốn một lần đọc hồ sơ.
+                    # BLOCKS are drawn at once, with no button: they are the
+                    # words Vin just typed, and they cost one profile read.
                     blocks=live.cv_blocks(conn),
                     stage=batch.stage(conn),
                     q=(query.get("q") or [""])[0].strip()[:80],
-                    # ĐỌC TỪ BẢN ĐÃ DỰNG, không tính lại. Cả tab một mốc thời
-                    # gian: dựng cùng lúc, cũ cùng lúc, xoá cùng lúc.
+                    # READ FROM THE SAVED BUILD, never recomputed. The whole
+                    # tab shares one moment in time: built together, stale
+                    # together, deleted together.
                     gap=luu.get("hut") or {},
-                    # Bản nháp NẰM TRONG bản dựng, nhưng chỉ HIỆN khi công tắc
-                    # đang bật. Tắt xong mà nháp cũ còn nằm đó thì công tắc
-                    # không tắt được cái gì.
+                    # The drafts LIVE INSIDE the build, but only SHOW while
+                    # the switch is on. Turn it off and leave the old drafts
+                    # sitting there and the switch turns nothing off.
                     nhap=(luu.get("nhap") or {})
                     if live.cv_nut(conn).get("tu_lo") else {}))
             finally:
                 conn.close()
 
         if path.startswith("/adjust/"):
-            # ĐIỀU CHỈNH — khác Cài đặt: Cài đặt đổi thứ APP LÀM (nhịp quét,
-            # khung giờ, hộp thư); Điều chỉnh đổi thứ MÀN HÌNH NÀY làm việc
-            # trên. Cùng tấm phủ, khác nội dung.
+            # ADJUST — different from Settings: Settings changes what THE APP
+            # DOES (scan pace, time window, mailbox); Adjust changes what THIS
+            # SCREEN works on. The same overlay, different contents.
             stage = _segments(path)[-1]
             if stage == "home":
                 conn = db.connect()
@@ -681,14 +726,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self._html(track.adjust(
                         d.get("nop"), d.get("nguong") or 20, d.get("do")))
                 return self._html(
-                    f"<div class=sheethead>Điều chỉnh · {STAGES[stage]}</div>"
-                    "<div class=sheetwait>chưa có gì để chỉnh ở khúc này</div>")
+                    f"<div class=sheethead>Adjust · {STAGES[stage]}</div>"
+                    "<div class=sheetwait>nothing to adjust on this stage "
+                    "yet</div>")
             finally:
                 conn.close()
 
         if path == "/onboarding":
-            # Chu trình dựng hồ sơ — MẢNH HTML cho tấm phủ. Không phải một tab:
-            # việc của nó chỉ có lúc đầu.
+            # The profile-building run — an HTML FRAGMENT for the overlay.
+            # Not a tab: it has a job only at the start.
             conn = db.connect()
             try:
                 return self._html(home.sheet(live.onboarding(conn)))
@@ -696,15 +742,15 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
 
         if path == "/settings":
-            # Trả MẢNH HTML, không phải cả trang: live.js nạp nó vào tấm phủ.
-            # Cài đặt là menu bấm ra rồi đóng lại, không phải một tab.
+            # Returns an HTML FRAGMENT, not a page: live.js loads it into the
+            # overlay. Settings is a menu you open and close, not a tab.
             conn = db.connect()
             try:
                 return self._html(settings.render(**live.settings(conn)))
             finally:
                 conn.close()
 
-        # --- profile: đã nối backend thật ---
+        # --- profile: wired to the real backend ---
         conn = db.connect()
         try:
             answers = store.load(conn)
@@ -732,10 +778,11 @@ class Handler(BaseHTTPRequestHandler):
                 done = {s.id for s in SECTIONS if store.is_section_done(answers, s)}
                 nxt = store.next_section(section.id)
                 thieu = store.missing_for_ingest(answers)
-                # Chưa đủ chạy thì nút KHÔNG hứa "đi tiếp" — lưu xong vẫn bị
-                # giữ lại đây. Nhãn nút phải nói đúng việc nó sắp làm.
+                # Not yet enough to run, so the button does NOT promise
+                # "continue" — after saving you are still kept here. A button
+                # label has to name the job it is about to do.
                 if thieu:
-                    label = "Lưu — còn %d câu nữa" % len(thieu)
+                    label = "Save — %d answers still needed" % len(thieu)
                 elif nxt:
                     label = f"Save and continue → {nxt.title}"
                 else:
@@ -750,22 +797,23 @@ class Handler(BaseHTTPRequestHandler):
             conn.close()
 
     def cung_nha(self) -> bool:
-        """Yêu cầu này có ĐẾN TỪ CHÍNH APP không, hay từ một trang web khác.
+        """Did this request COME FROM THE APP ITSELF, or from another website.
 
-        NGHE Ở 127.0.0.1 KHÔNG PHẢI LÀ BẢO VỆ. Bất kỳ trang web nào người
-        dùng mở cũng gọi được vào đây bằng fetch() — trình duyệt chặn họ ĐỌC
-        kết quả, nhưng VIỆC VẪN XẢY RA. Đo thật trên chính app này: một trang
-        lạ đổi được màu, bật được trạm trực, và gọi được cả /api/reset lẫn
-        /api/apply/send. Cái thứ hai là phá thẳng luật nền số 4 — máy không
-        bao giờ được bấm Gửi hộ.
+        LISTENING ON 127.0.0.1 IS NOT PROTECTION. Any website the user has
+        open can call in here with fetch() — the browser stops them READING
+        the result, but THE WORK STILL HAPPENS. Really measured on this app: a
+        foreign page could change the colour, turn the watch station on, and
+        call both /api/reset and /api/apply/send. The second of those breaks
+        founding law 4 outright — the machine must never press Send.
 
-        Luật, theo đúng thứ tự trình duyệt nói thật:
-          · `Sec-Fetch-Site` có thì tin nó — trình duyệt tự điền, trang web
-            không sửa được.
-          · Không có thì xét `Origin`, phải trùng đúng nhà mình.
-          · Không có cả hai thì KHÔNG phải trình duyệt (curl, script trên
-            chính máy này) — cho qua. Trình duyệt LUÔN gửi `Origin` cho POST
-            khác nguồn, nên vắng cả hai không thể là tấn công từ trang web.
+        The rules, in the order the browser tells the truth:
+          · If `Sec-Fetch-Site` is present, trust it — the browser fills it in
+            and a website cannot alter it.
+          · Otherwise examine `Origin`, which has to be exactly our own.
+          · With neither, it is NOT a browser (curl, a script on this same
+            machine) — let it through. A browser ALWAYS sends `Origin` on a
+            cross-origin POST, so the absence of both cannot be an attack from
+            a website.
         """
         site = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
         if site:
@@ -782,15 +830,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
-        # CHỐT ĐẶT Ở ĐÂY, TRƯỚC MỌI ĐƯỜNG. Đặt ở từng route thì thêm một
-        # route mới là phải nhớ thêm chốt, và sẽ có lần quên — mà lần quên đó
-        # có thể là đường xoá sạch dữ liệu.
+        # THE LATCH SITS HERE, BEFORE EVERY ROUTE. Put it on each route and
+        # every new route has to remember to add it, and one day somebody
+        # forgets — and that once might be the route that wipes all the data.
         if not self.cung_nha():
             journal.log.warn(journal.SYSTEM,
-                             f"CHẶN yêu cầu từ ngoài app tới {path} — "
-                             f"origin lạ")
-            return self._json({"ok": False, "note": "chỉ nhận yêu cầu từ "
-                                                    "chính app"}, status=403)
+                             f"BLOCKED a request from outside the app to "
+                             f"{path} — unknown origin")
+            return self._json({"ok": False,
+                               "note": "requests are only accepted from the "
+                                       "app itself"}, status=403)
         length = int(self.headers.get("Content-Length") or 0)
         ctype = self.headers.get("Content-Type", "")
         raw = self.rfile.read(length)
@@ -813,26 +862,29 @@ class Handler(BaseHTTPRequestHandler):
             conn = db.connect()
             try:
                 from ..core import prefs
-                # MỖI FORM CHỈ SỬA PHẦN CỦA NÓ. Tấm Cài đặt có nhiều form gửi
-                # về cùng một đường; đọc mù thì form Nguồn (không mang ô nhịp
-                # quét) sẽ ghi mặc định 60 phút đè lên con số người dùng đặt.
+                # EACH FORM EDITS ONLY ITS OWN PART. The Settings overlay has
+                # several forms posting to one path; read blindly, the Sources
+                # form (which carries no scan-interval field) would write the
+                # 60-minute default over the number the user set.
                 phan = form.get("phan", ["chay"])[0]
                 if phan == "gmail":
                     prefs.put(conn, prefs.MAIL_DAYS,
                               form.get("mail_days", ["30"])[0])
-                    journal.log.emit(journal.SYSTEM, "đổi số ngày đọc lại thư")
+                    journal.log.emit(journal.SYSTEM,
+                                     "changed how many days of mail to reread")
                     return self._html(settings.render(**live.settings(conn),
                                                       mo="gmail"))
                 if phan == "telegram":
-                    # TOKEN VÀO config.toml, KHÔNG vào DB: cùng chỗ với app
-                    # password Gmail (chmod 600, đã gitignore). Kiểm ngay lúc
-                    # lưu — xem bao.luu().
+                    # THE TOKEN GOES INTO config.toml, NOT the DB: the same
+                    # place as the Gmail app password (chmod 600, gitignored).
+                    # Checked at save time — see bao.luu().
                     from .. import bao as _bao
                     kq = _bao.luu(form.get("token", [""])[0].strip())
                     if form.get("test"):
-                        # TEST chạy SAU khi lưu: người dùng dán token rồi bấm
-                        # thẳng Test là chuyện thường, và test bằng token cũ
-                        # thì nó báo sai về cái vừa dán.
+                        # TEST runs AFTER the save: pasting a token and
+                        # pressing Test straight away is normal, and testing
+                        # with the old token reports wrongly on the one just
+                        # pasted.
                         kq = _bao.thu(conn)
                     return self._html(settings.render(
                         **live.settings(conn), tin_test=kq, mo="bao"))
@@ -840,7 +892,8 @@ class Handler(BaseHTTPRequestHandler):
                     prefs.put(conn, prefs.BAO_NGUONG,
                               form.get("bao_nguong", ["10"])[0])
                     prefs.put(conn, prefs.BAO_GIO, form.get("bao_gio", ["20"])[0])
-                    journal.log.emit(journal.SYSTEM, "đổi ngưỡng/giờ thông báo")
+                    journal.log.emit(journal.SYSTEM,
+                                     "changed the notification threshold/hour")
                     return self._html(settings.render(**live.settings(conn),
                                                       mo="bao"))
                 if phan == "nguon":
@@ -848,47 +901,54 @@ class Handler(BaseHTTPRequestHandler):
                     for ats, key in prefs.SRC_ATS.items():
                         prefs.set_flag(conn, key, ats in bat)
                     prefs.set_flag(conn, prefs.SRC_ALERT, "alert" in bat)
-                    journal.log.emit(journal.SYSTEM,
-                                     "nguồn API: " + (", ".join(sorted(bat)) or "TẮT HẾT"))
+                    journal.log.emit(
+                        journal.SYSTEM,
+                        "API sources: " + (", ".join(sorted(bat)) or "ALL OFF"))
                     return self._html(settings.render(**live.settings(conn),
                                                       mo="nguon"))
                 prefs.put(conn, prefs.SCAN_EVERY, form.get("every", ["60"])[0])
                 prefs.put(conn, prefs.HOURS_FROM, form.get("from", ["8"])[0])
                 prefs.put(conn, prefs.HOURS_TO, form.get("to", ["22"])[0])
-                # Chỉ nhận ba giá trị có thật. Gõ bừa vào URL thì về mặc định,
-                # không được để một chuỗi lạ chui xuống thành nhịp gọi.
+                # Only the three real values are accepted. Junk typed into
+                # the URL falls back to the default; a stray string must never
+                # slip through and become the call pace.
                 from ..ingest.web.linkedin import NHIP
                 chon = form.get("pace", ["thuong"])[0]
                 prefs.put(conn, prefs.PACE, chon if chon in NHIP else "thuong")
-                journal.log.emit(journal.SYSTEM, "cài đặt đã đổi")
+                journal.log.emit(journal.SYSTEM, "settings changed")
                 return self._html(settings.render(**live.settings(conn),
                                                   mo="chay"))
             finally:
                 conn.close()
 
         if path == "/api/sieve":
-            # Lưới GIỮ/BỎ nằm trong HỒ SƠ. Lưu xong thì mọi tin tự thành cần
-            # phán lại (judged_profile lệch phiên bản) — derive lo phần đó.
-            # Lưới RỖNG thì KHÔNG lưu. Một POST không mang trường nào — form
-            # gửi hụt, hay một yêu cầu lạc — sẽ ghi rỗng đè lên và xoá sạch
-            # danh sách chức danh; lúc đó MỌI tin lọt lưới (đo được: 197 -> 4660)
-            # và Vin không biết vì sao tab Search đầy rác. Đường phá hoại không
-            # được là đường mặc định.
+            # The KEEP/DROP sieve lives in THE PROFILE. Once saved, every
+            # posting becomes due for re-judging by itself (judged_profile
+            # falls behind the version) — derive handles that.
+            #
+            # AN EMPTY SIEVE IS NOT SAVED. A POST carrying no fields — a form
+            # that failed to submit fully, or a stray request — would write
+            # empty over the top and wipe the job title list; every posting
+            # would then pass the sieve (measured: 197 -> 4,660) and Vin would
+            # have no idea why the Search tab is full of junk. The destructive
+            # path must not be the default path.
             titles = "\n".join(dict.fromkeys(
                 t.strip() for t in form.get("job_titles", []) if t.strip()))
             if not titles:
-                return self._json({"ok": False,
-                                   "note": "lưới lọc rỗng — cần ít nhất một chức danh"},
-                                  status=400)
+                return self._json(
+                    {"ok": False,
+                     "note": "the sieve is empty — at least one job title is "
+                             "needed"},
+                    status=400)
             conn = db.connect()
             try:
                 store.save(conn, {
-                    # Ô thẻ gửi lên MỘT DANH SÁCH giá trị, mỗi thẻ một cái.
-                    # Bỏ trùng, giữ thứ tự người dùng xếp.
+                    # A tag box posts A LIST of values, one per tag.
+                    # Duplicates dropped, the user's order kept.
                     "job_titles": titles,
                     "seniority": form.get("seniority", []),
                     "markets": form.get("markets", []),
-                }, note="lưới lọc sửa ở tab Search")
+                }, note="sieve edited on the Search tab")
             finally:
                 conn.close()
 
@@ -896,24 +956,28 @@ class Handler(BaseHTTPRequestHandler):
                 from ..core.derive import derive
                 conn = db.connect()
                 try:
-                    journal.log.emit(journal.SEARCH, "lưới lọc đổi — phán lại tất cả")
+                    journal.log.emit(journal.SEARCH,
+                                     "the sieve changed — re-judging everything")
                     derive(conn)
                 except Exception as exc:            # noqa: BLE001
                     journal.log.error(journal.SEARCH,
-                                      f"phán lại hỏng: {type(exc).__name__} — {exc}")
+                                      f"re-judging failed: "
+                                      f"{type(exc).__name__} — {exc}")
                 finally:
                     journal.log.done(journal.SEARCH)
                     journal.log.done(journal.SCORE)
                     conn.close()
 
-            # Chạy nền rồi quay lại ngay: 1,1 giây vẫn là 1,1 giây trình duyệt
-            # đứng hình, mà nhật ký hiện tiến độ rồi nên không cần chờ.
+            # Run it in the background and return at once: 1.1 seconds is
+            # still 1.1 seconds of a frozen browser, and the journal already
+            # shows the progress, so there is nothing to wait for.
             threading.Thread(target=_rejudge, daemon=True, name="rejudge").start()
             return self._redirect("/search")
 
         if path == "/api/cv/pick":
-            # ĐỔI CÂU cho MỘT tin. Ghim câu mới vào, gạt câu cũ ra — cả hai
-            # đều là câu Vin ĐÃ VIẾT, nên đây vẫn là CHỌN, không phải viết.
+            # SWAP A SENTENCE on ONE posting. Pin the new one in, drop the
+            # old one out — both are sentences Vin HAS ALREADY WRITTEN, so
+            # this is still SELECTING, not writing.
             job = form.get("job", [""])[0].strip()
             vao = form.get("text", [""])[0]
             ra = form.get("out", [""])[0]
@@ -925,18 +989,20 @@ class Handler(BaseHTTPRequestHandler):
                 set_pick(conn, int(job), vao, "pin")
                 if ra and ra != vao:
                     set_pick(conn, int(job), ra, "drop")
-                journal.log.ok(journal.CV, f"tin #{job}: đổi câu trên CV")
+                journal.log.ok(journal.CV,
+                               f"posting #{job}: swapped a sentence on the CV")
             finally:
                 conn.close()
             return self._redirect(f"/jobs/{job}/cv")
 
         if path == "/api/search/xoa":
-            # DỌN KHO TIN để quét lại từ đầu. Chốt hai lớp như nút bên CV,
-            # nhưng nặng hơn nhiều: bản CV dựng lại mất 15 giây, kho tin dựng
-            # lại mất một lượt quét đầy đủ có mở Chrome. Tin đã có đơn thì
-            # GIỮ — đó là việc người dùng đã làm, quét lại không lấy lại được.
+            # CLEAR THE POSTING STORE to scan again from scratch. A two-layer
+            # latch like the CV button, but far heavier: rebuilding the CVs
+            # takes 15 seconds, rebuilding the posting store takes a full scan
+            # with Chrome open. Postings with an application are KEPT — that
+            # is work the user did, and a rescan cannot bring it back.
             if form.get("arg", [""])[0].strip() != "xoa":
-                return self._json({"ok": False, "note": "cần xác nhận"},
+                return self._json({"ok": False, "note": "confirmation needed"},
                                   status=400)
             conn = db.connect()
             try:
@@ -946,19 +1012,20 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
             live.quen()
             journal.log.ok(journal.SEARCH,
-                           f"đã dọn kho: bỏ {ket['tin']:,} tin, "
-                           f"giữ {ket['giu']:,} tin đã có đơn · "
-                           f"bỏ {ket['ban_cv']} bản CV dựng từ kho đó")
+                           f"store cleared: dropped {ket['tin']:,} postings, "
+                           f"kept {ket['giu']:,} with an application · "
+                           f"dropped {ket['ban_cv']} CVs built from that store")
             return self._json({"ok": True, "reload": True,
-                               "note": f"đã bỏ {ket['tin']:,} tin"})
+                               "note": f"dropped {ket['tin']:,} postings"})
 
         if path == "/api/cv/xoa":
-            # XOÁ BẢN ĐÃ DỰNG. Chốt hai lớp: trình duyệt bắt bấm hai nhịp
-            # (live.js), máy chủ đòi arg="xoa". Không bao giờ tin mỗi phía
-            # trình duyệt — bài thử ném rác vào mọi route từng xoá mất app
-            # password thật 12 lần liền.
+            # DELETE THE BUILT VERSIONS. A two-layer latch: the browser makes
+            # it a two-beat press (live.js), the server demands arg="xoa".
+            # Never trust the browser side alone — the fuzzing test that threw
+            # junk at every route once destroyed the real app password 12
+            # times in a row.
             if form.get("arg", [""])[0].strip() != "xoa":
-                return self._json({"ok": False, "note": "cần xác nhận"},
+                return self._json({"ok": False, "note": "confirmation needed"},
                                   status=400)
             conn = db.connect()
             try:
@@ -968,20 +1035,21 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
             live.quen()
             journal.log.ok(journal.CV,
-                           f"đã xoá {n} bản CV đã dựng — bấm Chạy để dựng lại"
-                           if n else "chưa có bản nào để xoá")
+                           f"deleted {n} built CVs — press Run to rebuild"
+                           if n else "there was no version to delete")
             return self._json({"ok": True, "reload": True,
-                               "note": f"đã xoá {n} bản CV"})
+                               "note": f"deleted {n} CVs"})
 
         if path == "/api/cv/num":
-            # BA NÚM của tầng CV. Bấm là lưu ngay, KHÔNG tự dựng lại: dựng mất
-            # 5 giây và người vừa xoay thử chưa chắc muốn trả giá đó. Nút Chạy
-            # tự đổi thành "Cập nhật" — xem cv/batch.stage.
+            # The CV layer's KNOBS. Pressing saves at once and does NOT
+            # rebuild by itself: a build takes 5 seconds and somebody just
+            # trying a setting may not want to pay that. The Run button turns
+            # itself into "Update" — see cv/batch.stage.
             from ..core import prefs
             ma, _, gia = form.get("arg", [""])[0].partition(":")
-            # NÚM nhiều mức và CÔNG TẮC bật/tắt đi chung một đường: cả hai đều
-            # là "đổi một quyết định của tầng CV", và đẻ hai route cho cùng một
-            # việc là đẻ hai chỗ có thể lệch nhau.
+            # Multi-level KNOBS and on/off SWITCHES share one route: both are
+            # "change a decision of the CV layer", and giving one job two
+            # routes creates two places that can drift apart.
             NHIEU = {"rieng": (prefs.CV_RIENG, prefs.RIENG)}
             TAT_BAT = {"tu_lo": prefs.CV_TU_LO}
             if ma in NHIEU and gia in NHIEU[ma][1]:
@@ -989,39 +1057,41 @@ class Handler(BaseHTTPRequestHandler):
             elif ma in TAT_BAT and gia in ("0", "1"):
                 khoa, val = TAT_BAT[ma], gia
             else:
-                return self._json({"ok": False, "note": "núm lạ"}, status=400)
+                return self._json({"ok": False, "note": "unknown knob"},
+                                  status=400)
             conn = db.connect()
             try:
                 prefs.put(conn, khoa, val)
                 live.quen()
-                # MÁY TỰ LO thì lo luôn cả lượt này: xoay núm xong mà màn hình
-                # y nguyên cho tới khi tự đi bấm Chạy thì cái tên công tắc là
-                # lời nói suông.
+                # MACHINE HANDLES IT handles this pass too: turn the knob and
+                # have the screen stay unchanged until Run is pressed by hand,
+                # and the switch's name is just talk.
                 _tu_dung(conn)
-                journal.log.emit(journal.CV, f"núm {ma} -> {val}")
+                journal.log.emit(journal.CV, f"knob {ma} -> {val}")
             finally:
                 conn.close()
             return self._json({"ok": True, "reload": True})
 
         if path in ("/api/stage/start", "/api/stage/stop"):
-            # HAI route cho MỌI khúc, không phải mỗi tab một route. Tên khúc
-            # là tham số — thêm một chức năng mới thì không phải thêm đường.
+            # TWO routes for EVERY stage, not one route per tab. The stage
+            # name is a parameter — a new feature adds no new path.
             from ..core import halt
 
             stage = form.get("arg", [""])[0].strip()
             if stage not in STAGES:
-                return self._json({"ok": False, "note": "khúc lạ"}, status=400)
+                return self._json({"ok": False, "note": "unknown stage"},
+                                  status=400)
             if path.endswith("/stop"):
                 halt.ask(stage)
                 journal.log.warn(journal.SEARCH,
-                                 f"xin dừng {STAGES[stage]} — sẽ dừng ở "
-                                 f"điểm ngắt gần nhất")
-                return self._json({"ok": True, "note": "đang dừng…"})
+                                 f"asked {STAGES[stage]} to stop — it will "
+                                 f"stop at the next break point")
+                return self._json({"ok": True, "note": "stopping…"})
             halt.clear(stage)
             ly_do = self._start_stage(stage)
             if ly_do:
                 return self._json({"ok": False, "note": ly_do}, status=400)
-            return self._json({"ok": True, "note": "đang chạy…"})
+            return self._json({"ok": True, "note": "running…"})
 
         if path == "/api/apply":
             job = form.get("arg", [""])[0].strip()
@@ -1035,8 +1105,9 @@ class Handler(BaseHTTPRequestHandler):
                 if row is None:
                     return self._404()
                 if not row["url"]:
-                    return self._json({"ok": False, "note": "tin này không có link"},
-                                      status=400)
+                    return self._json(
+                        {"ok": False, "note": "this posting has no link"},
+                        status=400)
                 pdf = live.cv_pdf_for(conn, row["id"])
                 from ..track import board
                 board.add(conn, row["company"], row["title"], posting_id=row["id"],
@@ -1045,56 +1116,64 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
             self._start_apply(dict(row), pdf)
-            return self._json({"ok": True, "note": "đang mở form…"})
+            return self._json({"ok": True, "note": "opening the form…"})
 
         if path == "/api/source":
-            # BẬT/TẮT một nguồn. Nút tự mang trạng thái mới về, nên không phải
-            # nạp lại cả trang — tấm phủ Điều chỉnh vẫn mở, bấm tiếp được.
+            # TURN a source ON/OFF. The button carries the new state back, so
+            # the page is never reloaded — the Adjust overlay stays open and
+            # can be pressed again.
             from ..core import prefs
             which = form.get("arg", [""])[0].strip()
-            # Bảng, không phải mấy nhánh if: thêm nguồn thứ tư thì sửa một
-            # dòng, và luật "phải còn ít nhất một nguồn" tự đúng theo.
+            # A lookup, not a chain of ifs: a fourth source changes one line,
+            # and the "at least one source must stay on" rule follows by
+            # itself.
             KHOA = {"board": prefs.SRC_BOARD, "linkedin": prefs.SRC_LINKEDIN,
                     "alert": prefs.SRC_ALERT}
             khoa = KHOA.get(which)
             if khoa is None:
-                return self._json({"ok": False, "note": "nguồn lạ"}, status=400)
+                return self._json({"ok": False, "note": "unknown source"},
+                                  status=400)
             conn = db.connect()
             try:
                 dang = prefs.flag(conn, khoa)
-                # TẮT NỐT CÁI CUỐI = quét mà không lấy ở đâu cả. Đường đó
-                # không được là đường bấm nhầm một cái là vào.
+                # TURNING THE LAST ONE OFF = scanning with nowhere to scan.
+                # That path must not be one stray press away.
                 #
-                # Đếm mấy nguồn CÒN LẠI chứ không so với đúng một nguồn kia:
-                # bản cũ chỉ biết hai nguồn, thêm nguồn thứ ba là nó cho tắt
-                # sạch mà vẫn tưởng còn.
+                # It counts THE SOURCES LEFT rather than comparing against one
+                # other source: the old version knew only two sources, so
+                # adding a third let everything be turned off while it still
+                # believed one remained.
                 con_lai = [k for k in KHOA.values()
                            if k != khoa and prefs.flag(conn, k)]
                 if dang and not con_lai:
-                    return self._json({"ok": False, "again": True,
-                                       "note": "phải bật ít nhất một nguồn"})
+                    return self._json(
+                        {"ok": False, "again": True,
+                         "note": "at least one source has to stay on"})
                 prefs.set_flag(conn, khoa, not dang)
             finally:
                 conn.close()
             bat = not dang
             journal.log.emit(journal.SEARCH,
-                             f"nguồn {which}: {'BẬT' if bat else 'TẮT'}")
-            # Chữ mới cho nút phải mang cả KÝ HIỆU, không thì bấm một cái là
-            # nút rụng mất dấu ◆/⌕ trong khi nút kia vẫn còn. Lấy ký hiệu từ
-            # đúng chỗ đang giữ nó, không gõ lại lần thứ ba.
+                             f"source {which}: {'ON' if bat else 'OFF'}")
+            # The button's new text has to carry THE SYMBOL too, or one press
+            # strips the ◆/⌕ off that button while the other keeps its own.
+            # The symbol comes from the one place that holds it, never typed a
+            # third time.
             from .views.jobs import NGUON_DAU
             return self._json({"ok": True, "again": True, "on": bat,
                                "note": f"{NGUON_DAU.get(which, '')} {which}"
-                                       f" · {'bật' if bat else 'tắt'}"})
+                                       f" · {'on' if bat else 'off'}"})
 
         if path == "/api/keep":
-            # GIỮ LẠI một tin máy đã loại — hoặc bỏ giữ. Một nút, hai chiều.
+            # KEEP a posting the machine dropped — or unkeep it. One button,
+            # both ways.
             #
-            # KHÔNG sửa thẳng `kept`: đó là cột suy ra, derive() sẽ ghi đè lần
-            # sau. Ở đây chỉ ghi Ý MUỐN vào cột riêng rồi đánh dấu tin là cũ,
-            # và để derive() — chỗ DUY NHẤT được quyền phán — tự tính lại.
-            # Nhờ vậy tin vừa giữ cũng được CHẤM ĐIỂM ngay trong cùng lượt đó,
-            # không phải chờ lần quét sau.
+            # `kept` is NEVER written directly: it is a derived column and
+            # derive() would overwrite it next time. Here only THE INTENT is
+            # written to a column of its own and the posting is marked stale,
+            # leaving derive() — the ONE place allowed to judge — to recompute
+            # it. That also means the posting just kept is SCORED in the same
+            # pass, rather than waiting for the next scan.
             job = form.get("arg", [""])[0].strip()
             if not job.isdigit():
                 return self._json({"ok": False}, status=400)
@@ -1113,9 +1192,10 @@ class Handler(BaseHTTPRequestHandler):
                 derive(conn)
             finally:
                 conn.close()
-            journal.log.emit(journal.SEARCH,
-                             f"tin #{job}: " + ("bạn GIỮ LẠI dù máy đã loại"
-                                                if moi_gia else "bạn bỏ giữ"))
+            journal.log.emit(
+                journal.SEARCH,
+                f"posting #{job}: " + ("you KEPT it though the machine dropped "
+                                       "it" if moi_gia else "you unkept it"))
             return self._json({"ok": True, "reload": True})
 
         if path == "/api/track/state":
@@ -1123,7 +1203,7 @@ class Handler(BaseHTTPRequestHandler):
             conn = db.connect()
             try:
                 from ..track import board
-                board.set_stage(conn, int(pid or 0), stage, "sửa tay")
+                board.set_stage(conn, int(pid or 0), stage, "edited by hand")
             except ValueError:
                 return self._json({"ok": False}, status=400)
             finally:
@@ -1131,9 +1211,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "reload": True})
 
         if path == "/api/apply/send":
-            # BẤM GỬI. Đây là đường DUY NHẤT tới `apply/send.py`, và nó chỉ
-            # chạy khi Vin bấm đúng dòng đó. Máy đọc lại form trước khi bấm và
-            # từ chối nếu còn ô bắt buộc trống — xem send.submit.
+            # PRESS SUBMIT. This is the ONLY route into `apply/send.py`, and
+            # it runs only when Vin presses that exact row. The machine
+            # rereads the form before clicking and refuses while a required
+            # field is empty — see send.submit.
             try:
                 app_id = int(form.get("arg", ["0"])[0] or 0)
             except ValueError:
@@ -1146,27 +1227,31 @@ class Handler(BaseHTTPRequestHandler):
                     "SELECT a.id, a.company, a.role, a.posting_id, a.stage"
                     " FROM application a WHERE a.id = ?", (app_id,)).fetchone()
                 if row is None or not row["posting_id"]:
-                    return self._json({"ok": False, "note": "không có tin gốc"},
-                                      status=400)
-                # GIÀNH QUYỀN, nguyên tử. So `row["stage"] != DRAFT` rồi mới
-                # gửi là đọc-rồi-ghi: hai cú bấm cách nhau hai giây đều đọc
-                # thấy 'draft' vì việc đổi chặng xảy ra ở luồng nền, vài giây
-                # sau. Một câu UPDATE ... WHERE stage='draft' thì chỉ một cú
-                # bấm giành được.
+                    return self._json(
+                        {"ok": False, "note": "there is no original posting"},
+                        status=400)
+                # CLAIM IT, atomically. Comparing `row["stage"] != DRAFT` and
+                # then sending is read-then-write: two presses two seconds
+                # apart both read 'draft', because the stage change happens on
+                # a background thread seconds later. A single
+                # UPDATE ... WHERE stage='draft' lets only one press win.
                 if not board.claim(conn, int(row["id"])):
-                    return self._json({"ok": False,
-                                       "note": "đơn này đang gửi hoặc đã gửi rồi"},
-                                      status=400)
+                    return self._json(
+                        {"ok": False,
+                         "note": "this application is being sent, or was sent "
+                                 "already"},
+                        status=400)
                 row = dict(row)
             finally:
                 conn.close()
             self._start_send(row)
-            return self._json({"ok": True, "note": "đang kiểm form…"})
+            return self._json({"ok": True, "note": "checking the form…"})
 
         if path == "/api/track/nop-tiep":
-            # NỘP TIN KẾ TIẾP — cây cầu từ bảng theo dõi sang tab Search.
-            # Chọn tin điểm cao nhất CHƯA nộp chỗ nào, và chỉ trong mấy nguồn
-            # người dùng đã bật ở ⚟ (xem prefs.NOP).
+            # APPLY TO THE NEXT ONE — the bridge from the tracking table to
+            # the Search tab. It picks the highest-scoring posting NOT YET
+            # applied to anywhere, and only from the sources the user turned
+            # on at ⚟ (see prefs.NOP).
             from ..core import prefs
             from ..track import board as tboard
             conn = db.connect()
@@ -1175,9 +1260,10 @@ class Handler(BaseHTTPRequestHandler):
                        (("board", prefs.NOP_BOARD), ("linkedin", prefs.NOP_LINKEDIN),
                         ("alert", prefs.NOP_ALERT)) if prefs.flag(conn, k)]
                 if not bat:
-                    return self._json({"ok": False,
-                                       "note": "đã tắt cả ba nguồn nộp ở ⚟"},
-                                      status=400)
+                    return self._json(
+                        {"ok": False,
+                         "note": "all three apply sources are off at ⚟"},
+                        status=400)
                 row = None
                 for r in conn.execute(
                         "SELECT id, title, company, url, source FROM posting"
@@ -1190,10 +1276,11 @@ class Handler(BaseHTTPRequestHandler):
                         row = r
                         break
                 if row is None:
-                    return self._json({"ok": False,
-                                       "note": "không còn tin đáng nộp nào "
-                                               "trong mấy nguồn đang bật"},
-                                      status=400)
+                    return self._json(
+                        {"ok": False,
+                         "note": "no posting worth applying to is left in the "
+                                 "sources that are on"},
+                        status=400)
                 pdf = live.cv_pdf_for(conn, row["id"])
                 tboard.add(conn, row["company"], row["title"],
                            posting_id=row["id"],
@@ -1203,21 +1290,24 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
             self._start_apply(dict(row), pdf)
             live.quen()
-            return self._json({"ok": True,
-                               "note": f"đang mở form — {row['company']}"})
+            return self._json(
+                {"ok": True,
+                 "note": f"opening the form — {row['company']}"})
 
         if path == "/api/bao":
-            # Bốn công tắc báo + ba mức điều khiển. Một đường cho cả tab.
+            # Four notification switches plus three control levels. One route
+            # for the whole tab.
             from ..core import prefs, tele as _tele
             khoa, _, gia = form.get("arg", [""])[0].partition(":")
             if khoa in prefs.BAO and gia in ("0", "1"):
-                ghi = (f"báo «{prefs.BAO[khoa][0]}» -> "
-                       + ("bật" if gia == "1" else "tắt"))
+                ghi = (f"notification «{prefs.BAO[khoa][0]}» -> "
+                       + ("on" if gia == "1" else "off"))
             elif khoa == "muc" and gia in _tele.MUC_DIEU_KHIEN:
                 khoa = prefs.BAO_MUC
-                ghi = f"điều khiển từ xa -> {_tele.MUC_DIEU_KHIEN[gia][0]}"
+                ghi = f"remote control -> {_tele.MUC_DIEU_KHIEN[gia][0]}"
             else:
-                return self._json({"ok": False, "note": "núm lạ"}, status=400)
+                return self._json({"ok": False, "note": "unknown knob"},
+                                  status=400)
             conn = db.connect()
             try:
                 prefs.put(conn, khoa, gia)
@@ -1227,26 +1317,29 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "reload": True})
 
         if path == "/api/chung":
-            # CÀI ĐẶT CỦA CẢ APP — màu nhấn và tự-trực-khi-mở. Một đường cho
-            # cả tab, cùng khuôn với /api/cv/num và /api/track/num.
+            # WHOLE-APP SETTINGS — the accent colour and go-on-watch-at-open.
+            # One route for the whole tab, the same shape as /api/cv/num and
+            # /api/track/num.
             from . import mau as _mau
             from ..core import prefs
             khoa, _, gia = form.get("arg", [""])[0].partition(":")
             if khoa == "mau" and gia in _mau.BANG:
-                khoa, ghi = prefs.MAU, f"màu nhấn -> {_mau.BANG[gia][0]}"
+                khoa, ghi = prefs.MAU, f"accent colour -> {_mau.BANG[gia][0]}"
             elif khoa == "truc" and gia in ("0", "1"):
                 khoa, ghi = (prefs.AUTORUN,
-                             "tự trực khi mở app -> "
-                             + ("bật" if gia == "1" else "tắt"))
+                             "go on watch when the app opens -> "
+                             + ("on" if gia == "1" else "off"))
             else:
-                return self._json({"ok": False, "note": "núm lạ"}, status=400)
+                return self._json({"ok": False, "note": "unknown knob"},
+                                  status=400)
             conn = db.connect()
             try:
                 prefs.put(conn, khoa, gia)
             finally:
                 conn.close()
-            # ĐỔI TỰ-TRỰC THÌ BÁO LUÔN CHO VÒNG NỀN, đừng đợi mở lại app: cái
-            # công tắc nói "từ giờ", không phải "lần sau".
+            # CHANGING GO-ON-WATCH TELLS THE BACKGROUND LOOP AT ONCE, rather
+            # than waiting for the app to be reopened: the switch says "from
+            # now", not "next time".
             if khoa == prefs.AUTORUN:
                 runner = sched.current()
                 runner.resume() if gia == "1" else runner.pause()
@@ -1254,29 +1347,32 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "reload": True})
 
         if path == "/api/home/num":
-            # BA CÔNG TẮC của PHIÊN. Cùng khuôn với /api/cv/num và
-            # /api/track/num: một tầng một đường.
+            # THE SESSION's three switches. The same shape as /api/cv/num and
+            # /api/track/num: one layer, one route.
             from ..core import prefs
             khoa, _, gia = form.get("arg", [""])[0].partition(":")
             if khoa not in prefs.PHIEN or gia not in ("0", "1"):
-                return self._json({"ok": False, "note": "núm lạ"}, status=400)
+                return self._json({"ok": False, "note": "unknown knob"},
+                                  status=400)
             conn = db.connect()
             try:
                 prefs.put(conn, khoa, gia)
             finally:
                 conn.close()
             journal.log.ok(journal.SYSTEM,
-                           f"phiên · {prefs.PHIEN[khoa][1]} -> "
-                           + ("bật" if gia == "1" else "tắt"))
+                           f"session · {prefs.PHIEN[khoa][1]} -> "
+                           + ("on" if gia == "1" else "off"))
             return self._json({"ok": True, "reload": True})
 
         if path in ("/api/session/start", "/api/session/stop"):
-            # PHIÊN, không phải khúc. Nút này bật cả TRẠM TRỰC: chạy một vòng
-            # ngay, rồi để vòng nền lặp lại 24/7 (scheduler.phien_once).
+            # THE SESSION, not a stage. This button also turns THE WATCH
+            # STATION on: it runs one round at once, then lets the background
+            # loop repeat 24/7 (scheduler.phien_once).
             #
-            # Bật trạm trực mà không chạy ngay là sai: người vừa bấm phải đợi
-            # tới nhịp sau — có thể một tiếng — mới thấy gì xảy ra, và họ sẽ
-            # tưởng nút hỏng.
+            # Turning the watch station on without running at once is wrong:
+            # whoever just pressed it would have to wait for the next tick —
+            # possibly an hour — before anything happened, and would think the
+            # button was broken.
             from ..core import halt
             runner = sched.current()
             if path.endswith("/stop"):
@@ -1284,32 +1380,35 @@ class Handler(BaseHTTPRequestHandler):
                 for khuc in STAGES:
                     halt.ask(khuc)
                 return self._json({"ok": True, "reload": True,
-                                   "note": "đã tắt trạm trực"})
+                                   "note": "the watch station is off"})
             for khuc in STAGES:
                 halt.clear(khuc)
             runner.resume()
             threading.Thread(target=runner.phien_once, daemon=True,
                              name="phien").start()
             return self._json({"ok": True, "reload": True,
-                               "note": "phiên đang chạy…"})
+                               "note": "the session is running…"})
 
         if path == "/api/track/num":
-            # MỌI NÚM CỦA TẦNG QUẢN LÍ, MỘT ĐƯỜNG — như /api/cv/num bên CV.
-            # Ba công tắc nguồn và mốc im lặng đều là "đổi một quyết định của
-            # tầng này"; đẻ hai route cho cùng một việc là đẻ hai chỗ có thể
-            # lệch nhau.
+            # EVERY KNOB OF THE TRACK LAYER, ONE ROUTE — like /api/cv/num on
+            # the CV side. The three source switches and the silence mark are
+            # all "change a decision of this layer"; giving one job two routes
+            # creates two places that can drift apart.
             #
-            # Khác hẳn /api/source bên Search: bên đó bật/tắt việc QUÉT, đây
-            # bật/tắt việc NỘP. Hai câu hỏi, hai đường.
+            # Quite different from /api/source on Search: that one turns
+            # SCANNING on and off, this one turns APPLYING on and off. Two
+            # questions, two routes.
             from ..core import prefs
             khoa, _, gia = form.get("arg", [""])[0].partition(":")
             if khoa in prefs.NOP and gia in ("0", "1"):
-                ghi = (f"nộp từ {prefs.NOP[khoa][0]} -> "
-                       + ("bật" if gia == "1" else "tắt"))
+                ghi = (f"apply from {prefs.NOP[khoa][0]} -> "
+                       + ("on" if gia == "1" else "off"))
             elif khoa == "im_qua" and gia in prefs.IM_MUC:
-                khoa, ghi = prefs.IM_QUA, f"coi như trượt sau {gia} ngày im"
+                khoa, ghi = (prefs.IM_QUA,
+                             f"treat as rejected after {gia} silent days")
             else:
-                return self._json({"ok": False, "note": "núm lạ"}, status=400)
+                return self._json({"ok": False, "note": "unknown knob"},
+                                  status=400)
             conn = db.connect()
             try:
                 prefs.put(conn, khoa, gia)
@@ -1319,10 +1418,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "reload": True})
 
         if path == "/api/track/xoa":
-            # XOÁ BẢNG — chỉ mấy dòng DỰNG TỪ THƯ. Đơn người dùng tự nộp qua
-            # app là việc họ đã làm, quét lại không dựng lại được.
+            # CLEAR THE TABLE — only the rows RECONSTRUCTED FROM MAIL. An
+            # application the user made through the app is work they did, and
+            # a rescan cannot rebuild it.
             if form.get("arg", [""])[0].strip() != "xoa":
-                return self._json({"ok": False, "note": "cần xác nhận"},
+                return self._json({"ok": False, "note": "confirmation needed"},
                                   status=400)
             conn = db.connect()
             try:
@@ -1337,15 +1437,16 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
             live.quen()
             journal.log.ok(journal.SEARCH,
-                           f"đã xoá {n} lần nộp dựng từ thư — bấm Quét thư "
-                           f"để dựng lại")
+                           f"deleted {n} applications reconstructed from mail "
+                           f"— press Scan mail to rebuild them")
             return self._json({"ok": True, "reload": True,
-                               "note": f"đã xoá {n} dòng"})
+                               "note": f"deleted {n} rows"})
 
         if path == "/api/track/mail/gan":
-            # GÁN một lá thư vào đúng lần nộp. Nửa còn thiếu của "không lá nào
-            # biến mất": máy đọc được kết cục mà không đoán ra công ty thì
-            # người dùng chỉ tay, chứ không phải chỉ được Bỏ qua.
+            # ATTACH a message to the right application. The missing half of
+            # "no message disappears": when the machine reads an outcome but
+            # cannot work out the company, the user points at it rather than
+            # being offered only Ignore.
             ma, _, app = form.get("arg", [""])[0].partition(":")
             conn = db.connect()
             try:
@@ -1355,14 +1456,15 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
             if not xong:
-                return self._json({"ok": False, "note": "không gán được"},
+                return self._json({"ok": False, "note": "could not attach it"},
                                   status=400)
             live.quen()
             return self._json({"ok": True, "reload": True})
 
         if path == "/api/track/mail/ignore":
-            # BỎ QUA một lá máy không hiểu: nó không thuộc lần nộp nào thật,
-            # hoặc chỉ là thư quảng cáo. Không xoá thư — chỉ thôi hỏi.
+            # IGNORE a message the machine could not read: it belongs to no
+            # real application, or it is just marketing. The message is not
+            # deleted — it simply stops being asked about.
             ma = form.get("arg", [""])[0].strip()
             if not ma.isdigit():
                 return self._json({"ok": False}, status=400)
@@ -1376,9 +1478,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "reload": True})
 
         if path == "/api/track/mail/xep":
-            # NGƯỜI DÙNG TỰ XẾP một lá thư máy không hiểu. Đây là nửa còn lại
-            # của lời hứa "không lá nào biến mất": máy chỉ ra chỗ nó bó tay,
-            # người dùng quyết, và trạng thái đổi ngay.
+            # THE USER FILES a message the machine could not read. This is
+            # the other half of the promise that no message disappears: the
+            # machine points at where it is stuck, the user decides, and the
+            # state changes at once.
             ma, _, loai = form.get("arg", [""])[0].partition(":")
             conn = db.connect()
             try:
@@ -1387,13 +1490,13 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
             if not xong:
-                return self._json({"ok": False, "note": "không xếp được"},
+                return self._json({"ok": False, "note": "could not file it"},
                                   status=400)
             live.quen()
             return self._json({"ok": True, "reload": True})
 
         if path == "/api/track/drop":
-            # Chỉ xoá được bản nháp — xem board.drop.
+            # Only a draft can be deleted — see board.drop.
             conn = db.connect()
             try:
                 from ..track import board
@@ -1417,25 +1520,29 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "reload": True})
 
         if path == "/api/mail/setup":
-            # Vin dán app password ở đây thay vì mở tệp bằng tay. Mật khẩu đi
-            # THẲNG vào config.toml (chmod 600, đã gitignore) và KHÔNG bao giờ
-            # được vẽ ngược ra HTML — trang chỉ hiện địa chỉ và trạng thái.
+            # Vin pastes the app password here rather than opening the file
+            # by hand. The password goes STRAIGHT into config.toml (chmod 600,
+            # gitignored) and is NEVER drawn back out into HTML — the page
+            # shows the address and the state only.
             from ..core import config as cfg
             from ..track import mail as tmail
 
             address = form.get("address", [""])[0].strip()
-            # Google hiện app password theo nhóm 4 có dấu cách cho dễ chép.
-            # Bỏ dấu cách NGAY LÚC LƯU, để thứ đem đi kiểm đúng bằng thứ đem
-            # đi đăng nhập — trước đây vòng kiểm bỏ dấu cách còn vòng đăng
-            # nhập thì không, hai đường nhìn vào hai chuỗi khác nhau.
+            # Google shows app passwords in groups of 4 with spaces, to make
+            # copying easier. The spaces are stripped AT SAVE TIME, so what is
+            # checked is exactly what is used to log in — the check used to
+            # strip them while the login did not, leaving the two paths
+            # looking at two different strings.
             secret = form.get("password", [""])[0].strip().replace(" ", "")
-            # CHỐT: hộp thư quét phải ĐÚNG hộp thư khai trong hồ sơ.
+            # THE LATCH: the mailbox scanned has to be EXACTLY the mailbox
+            # declared in the profile.
             #
-            # Địa chỉ trong hồ sơ là địa chỉ in lên CV và điền vào form nộp —
-            # tức là chỗ nhà tuyển dụng bấm Trả lời. Nối nhầm một hộp thư
-            # khác thì app quét một nơi mà thư về một nơi: bảng Quản lí báo
-            # "đang chờ" mãi cho những đơn đã có hồi âm, và không có dấu hiệu
-            # nào cho thấy sai — đúng kiểu hỏng im lặng tệ nhất.
+            # The profile's address is the one printed on the CV and filled
+            # into applications — i.e. the one employers press Reply to.
+            # Connect a different mailbox and the app watches one place while
+            # the mail arrives at another: the Track table reports "waiting"
+            # forever for applications that were answered, with no sign
+            # anything is wrong — exactly the worst kind of silent failure.
             conn_ho_so = db.connect()
             try:
                 trong_ho_so = (store.load(conn_ho_so).get("email") or "").strip()
@@ -1444,39 +1551,48 @@ class Handler(BaseHTTPRequestHandler):
             if trong_ho_so and address.lower() != trong_ho_so.lower():
                 return self._json(
                     {"ok": False,
-                     "note": f"hộp thư này ({address}) khác địa chỉ trong hồ sơ "
-                             f"({trong_ho_so}) — thư trả lời sẽ về hồ sơ, không "
-                             f"về đây. Sửa một trong hai cho khớp."},
+                     "note": f"this mailbox ({address}) differs from the "
+                             f"profile's address ({trong_ho_so}) — replies "
+                             f"will arrive at the profile's, not here. Change "
+                             f"one of the two so they match."},
                     status=400)
             if not address:
-                return self._json({"ok": False, "note": "thiếu địa chỉ"},
+                return self._json({"ok": False, "note": "the address is missing"},
                                   status=400)
-            # KIỂM TRƯỚC, GHI SAU. Bản cũ ghi rồi mới kiểm, nên một mật khẩu
-            # tài khoản dán nhầm đã kịp nằm trong config.toml dù bị từ chối —
-            # mật khẩu thật của Vin nằm trên đĩa mà chẳng dùng được việc gì.
-            # Bộ lọc "16 chữ cái thường" LÀ CỦA GOOGLE. Áp cho mọi nhà cung
-            # cấp thì người dùng Outlook/iCloud/hộp thư công ty bị chặn ngay
-            # cửa, bằng một câu chẳng liên quan gì tới lý do thật.
+            # CHECK FIRST, WRITE AFTER. The old version wrote and then
+            # checked, so an account password pasted by mistake had already
+            # landed in config.toml despite being rejected — Vin's real
+            # password sitting on disk and useful for nothing.
+            #
+            # The "16 lowercase letters" filter IS GOOGLE'S. Applied to every
+            # provider it turns Outlook/iCloud/company mailbox users away at
+            # the door with a sentence that has nothing to do with the real
+            # reason.
             if (secret and tmail._la_google(tmail.may_chu(address))
                     and not tmail.APP_PASSWORD.fullmatch(secret)):
-                return self._json({"ok": False, "reload": False, "note":
-                                   "đây không phải app password (16 chữ cái thường)"})
+                return self._json(
+                    {"ok": False, "reload": False,
+                     "note": "that is not an app password (16 lowercase "
+                             "letters)"})
             cfg.write_value("mail", "address", address)
             if secret:
                 cfg.write_value("mail", "password", secret)
             saved = tmail.account()
-            why = tmail.check(*saved) if all(saved) else "chưa có app password"
+            why = (tmail.check(*saved) if all(saved)
+                   else "there is no app password yet")
             if why:
-                journal.log.warn(journal.SEARCH, f"hộp thư chưa dùng được — {why}")
+                journal.log.warn(journal.SEARCH,
+                                 f"the mailbox is not usable — {why}")
                 return self._json({"ok": False, "note": why[:70], "reload": False})
             journal.log.ok(journal.SEARCH,
-                           f"hộp thư {address} đã nối được — bấm Quét thư")
+                           f"mailbox {address} connected — press Scan mail")
             return self._json({"ok": True, "reload": True})
 
         if path == "/api/titles/refresh":
-            # Đọc board công ty lấy chức danh THẬT. Không cần hồ sơ (cổng chỉ
-            # chặn quét CÓ LỌC), không cần Chrome — thuần HTTP. Đo được: 21
-            # board -> 2.226 tin -> 60 cụm nghề, ~13 giây.
+            # Read the company boards for REAL job titles. No profile needed
+            # (the gate only blocks FILTERED scans), no Chrome — plain HTTP.
+            # Measured: 21 boards -> 2,226 postings -> 60 title phrases, ~13
+            # seconds.
             from ..profile import titles as tvocab
             from ..scan_runner import load_boards
             conn = db.connect()
@@ -1486,52 +1602,55 @@ class Handler(BaseHTTPRequestHandler):
                     log=lambda m: journal.log.warn(journal.SEARCH, m))
                 cum = tvocab.extract(tieu_de)
                 if not cum:
-                    # KHÔNG ghi kho rỗng đè lên kho đang có — mạng hỏng một
-                    # lần không được làm mất thứ đã lấy được.
-                    return self._json({"ok": False,
-                                       "note": "không lấy được chức danh nào"},
-                                      status=502)
+                    # NEVER write an empty store over the existing one — one
+                    # network failure must not lose what was already fetched.
+                    return self._json(
+                        {"ok": False, "note": "no job title could be fetched"},
+                        status=502)
                 n = tvocab.save(conn, cum)
             finally:
                 conn.close()
             journal.log.ok(journal.SEARCH,
-                           f"kho chức danh: {n} cụm từ {len(tieu_de)} tin thật")
+                           f"title store: {n} phrases from {len(tieu_de)} real "
+                           f"postings")
             return self._json({"ok": True, "reload": True,
-                               "note": f"{n} chức danh"})
+                               "note": f"{n} job titles"})
 
         if path == "/api/reset":
-            # LÀM LẠI TỪ ĐẦU. Cùng chốt với /api/mail/forget: phải gửi kèm
-            # "xoa", một POST rỗng không xoá được gì. Bài thử ném rác vào mọi
-            # route từng xoá mất app password thật 12 lần liền — đường phá
-            # hoại không được là đường mặc định.
+            # START OVER. The same latch /api/mail/forget had: "xoa" must be
+            # sent along, and an empty POST deletes nothing. The fuzzing test
+            # that threw junk at every route once destroyed the real app
+            # password 12 times in a row — the destructive path must not be
+            # the default path.
             if form.get("arg", [""])[0].strip() != "xoa":
-                return self._json({"ok": False, "note": "cần xác nhận"},
+                return self._json({"ok": False, "note": "confirmation needed"},
                                   status=400)
             from ..core import reset as reset_mod
             conn = db.connect()
             try:
                 ket = reset_mod.run(conn)
-                db.migrate(conn)      # dựng lại schema trống, giữ user_version
+                db.migrate(conn)      # rebuild the empty schema, keep user_version
             except OSError as exc:
-                # Sao lưu hỏng thì KHÔNG xoá gì — reset_mod.run() ném ra
-                # trước khi đụng tới dòng nào.
+                # If the backup fails, NOTHING is deleted — reset_mod.run()
+                # raises before touching a single row.
                 return self._json({"ok": False,
-                                   "note": f"không sao lưu được: {exc}"},
+                                   "note": f"could not back up: {exc}"},
                                   status=500)
             finally:
                 conn.close()
             journal.log.warn(journal.SYSTEM,
-                             f"đã làm lại từ đầu — sao lưu ở {ket['backup']}")
+                             f"started over — backup at {ket['backup']}")
             return self._json({"ok": True, "reload": True, "wipe_local": True,
-                               "note": f"đã sao lưu vào {ket['backup']}"})
+                               "note": f"backed up to {ket['backup']}"})
 
-        # /api/mail/forget ĐÃ BỎ. Nối hộp thư là việc làm MỘT LẦN, và chỉ có
-        # MỘT đường xoá: "Làm lại từ đầu". Hai đường phá hoại cho cùng một
-        # thứ nghĩa là hai chỗ có thể bấm nhầm — mà app password này đã mất
-        # ba lần trong một ngày.
+        # /api/mail/forget IS GONE. Connecting a mailbox is a ONE-OFF, and
+        # there is exactly ONE way to remove it: "Start over". Two destructive
+        # paths to one thing means two places to press by mistake — and this
+        # app password was lost three times in one day.
         #
-        # Không mất gì: dán mật khẩu mới thì /api/mail/setup ghi đè lên, nên
-        # đổi mật khẩu vẫn làm được mà không cần đường xoá riêng.
+        # Nothing is lost: pasting a new password has /api/mail/setup
+        # overwrite it, so changing the password still works without a delete
+        # path of its own.
 
         if path == "/api/track/mail/scan":
             def _mail():
@@ -1541,17 +1660,19 @@ class Handler(BaseHTTPRequestHandler):
                     scan.run(conn)
                 except Exception as exc:            # noqa: BLE001
                     journal.log.error(journal.SEARCH,
-                                      f"quét thư hỏng — {type(exc).__name__}: {exc}")
+                                      f"the mail scan failed — "
+                                      f"{type(exc).__name__}: {exc}")
                 finally:
                     journal.log.done(journal.SEARCH)
                     conn.close()
 
             threading.Thread(target=_mail, daemon=True, name="mail").start()
-            return self._json({"ok": True, "note": "đang đọc…"})
+            return self._json({"ok": True, "note": "reading…"})
 
         if path == "/cv/pdf":
-            # In NỀN: mở Chrome headless, tải trang, in, tắt — tính bằng giây.
-            # Làm trong lúc vẽ trang là trình duyệt đứng hình.
+            # Printed IN THE BACKGROUND: open headless Chrome, load the page,
+            # print, close — measured in seconds. Doing it while drawing the
+            # page freezes the browser.
             job = form.get("arg", [""])[0].strip()
             if not job.isdigit():
                 return self._json({"ok": False}, status=400)
@@ -1564,37 +1685,44 @@ class Handler(BaseHTTPRequestHandler):
                     row = conn.execute(
                         "SELECT title, company FROM posting WHERE id = ?",
                         (int(job),)).fetchone()
-                    # MỘT nguồn tên tệp, dùng chung với máy in hàng loạt và với
-                    # phần nộp. Tự ghép tên ở đây là in ra tệp mà phần nộp
-                    # không tìm.
+                    # ONE source of filenames, shared with the batch printer
+                    # and with the applying code. Building a name here would
+                    # print a file the applying code never looks for.
                     out = live.cv_pdf_for(conn, int(job))
                     if row is None or out is None:
                         return
-                    journal.log.progress(journal.CV, f"in PDF — {row['title'][:40]}")
+                    journal.log.progress(journal.CV,
+                                         f"printing PDF — {row['title'][:40]}")
                     render(f"{base}/jobs/{job}/cv", out)
-                    # GIAO TẬN TAY. In xong mà chỉ ghi đường dẫn vào nhật ký
-                    # thì người dùng phải đi mò trong data/cv — đó không phải
-                    # "tải về". Chép sang Downloads rồi mở Finder trỏ vào nó.
+                    # HANDED OVER. Printing and then only writing the path
+                    # into the journal leaves the user rummaging through
+                    # data/cv — that is not "downloaded". It is copied to
+                    # Downloads and Finder opened on it.
                     from ..cv.pdf import tai_ve
                     ve = tai_ve(out)
                     journal.log.ok(journal.CV,
-                                   f"PDF đã tải về: {ve}" if ve
-                                   else f"PDF: {out} (không chép được sang Downloads)")
+                                   f"PDF downloaded: {ve}" if ve
+                                   else f"PDF: {out} (could not copy to "
+                                        f"Downloads)")
                 except Exception as exc:            # noqa: BLE001
                     journal.log.error(journal.CV,
-                                      f"in PDF hỏng — {type(exc).__name__}: {exc}")
+                                      f"printing the PDF failed — "
+                                      f"{type(exc).__name__}: {exc}")
                 finally:
                     journal.log.done(journal.CV)
                     conn.close()
 
             threading.Thread(target=_print, daemon=True, name=f"pdf-{job}").start()
-            return self._json({"ok": True, "note": "đang in… sẽ hiện trong Finder"})
+            return self._json({"ok": True,
+                               "note": "printing… it will appear in Finder"})
 
         if path == "/cv/block":
-            # CHỈ GHI. Màn đọc là /cv/soan; đường này không còn trả trang nào.
-            # Ghi thẳng vào cv_text — MỘT nguồn sự thật. write_block chỉ đụng
-            # đúng khối đó, các khối khác giữ nguyên định dạng (có test khứ hồi
-            # trong test_cv.py, vì đây là chỗ dễ nuốt mất khối nhất).
+            # WRITING ONLY. The reading screen is /cv/soan; this route no
+            # longer returns a page. Written straight into cv_text — ONE
+            # source of truth. write_block touches only that one block, and
+            # every other block keeps its formatting (there is a round-trip
+            # test in test_cv.py, because this is the easiest place to swallow
+            # a block).
             conn = db.connect()
             try:
                 from ..cv.blocks import write_block
@@ -1604,11 +1732,13 @@ class Handler(BaseHTTPRequestHandler):
                 nen = form.get("nen", [""])[0].strip()[:400]
                 body = [l.strip() for l in form.get("line", []) if l.strip()]
                 if form.get("kill"):
-                    body = []                      # thân rỗng = xoá khối
-                # HAI LỐI GHI, MỘT ĐƯỜNG. Màn SỬA KHỐI gửi cả thân khối; màn
-                # VIẾT MỘT CÂU chỉ gửi đúng câu mới, kèm `them=1` — nó không
-                # thấy mấy câu cũ nên không được phép thay chúng. Cả hai cùng
-                # đi qua `write_block`, cùng chốt chặn, cùng phép đo.
+                    body = []                      # an empty body = delete the block
+                # TWO WRITE PATHS, ONE ROUTE. The BLOCK EDITOR sends the
+                # whole block body; the WRITE ONE SENTENCE screen sends only
+                # the new sentence, with `them=1` — it cannot see the old
+                # sentences, so it must not be allowed to replace them. Both
+                # go through `write_block`, the same latches, the same
+                # measurement.
                 if form.get("them") and title and body:
                     from ..cv.blocks import parse as parse_cv, sentences
                     cu = next((b for b in parse_cv(
@@ -1618,34 +1748,38 @@ class Handler(BaseHTTPRequestHandler):
                         body = [x.strip() for x in sentences(cu) if x.strip()] + body
                         form.setdefault("kind", [cu.kind])
                         form.setdefault("meta", [cu.meta])
-                # CHỐT CHẶN CỦA CẢ CƠ CHẾ GỢI Ý. Nền bản nháp là chữ nguyên văn
-                # của nhà tuyển dụng; để nguyên nó rồi Lưu là hai cái hại cùng
-                # lúc — người sàng CV đọc ra chữ trong tin tuyển của chính mình,
-                # và người dùng phải đỡ một khẳng định họ chưa từng đưa ra.
-                # Không cho lưu, nhưng GIỮ NGUYÊN chữ họ vừa gõ để sửa tiếp.
+                # THE GATE THE WHOLE SUGGESTION MECHANISM RESTS ON. The draft
+                # base is the employer's words verbatim; leaving them and
+                # pressing Save does two kinds of damage at once — whoever
+                # screens the CV reads the words from their own job ad, and
+                # the user has to defend a claim they never made. It refuses
+                # the save but KEEPS what they typed, to carry on editing.
                 if nen and not form.get("kill"):
                     from ..scoring.gap import CHO_TRONG, con_trong, qua_giong
                     xau = vi_sao = ""
                     for l in body:
                         if con_trong(l):
                             xau, vi_sao = l, (
-                                f"Câu còn chỗ trống «{CHO_TRONG}» máy chừa lại. "
-                                f"Đó là chỗ của BẰNG CHỨNG, và chỉ bạn mới có: "
-                                f"bao nhiêu cái, trên bao nhiêu dữ liệu, đổi "
-                                f"được mấy phần. Điền vào rồi Lưu lại.")
+                                f"The sentence still has the «{CHO_TRONG}» the "
+                                f"machine left. That is the place for THE "
+                                f"EVIDENCE, and only you have it: how many, "
+                                f"over how much data, how much it changed. "
+                                f"Fill it in and save again.")
                             break
                         if qua_giong(l, nen) >= 0.6:
                             xau, vi_sao = l, (
-                                "Câu này vẫn gần như nguyên văn dòng của nhà "
-                                "tuyển dụng — chưa phải việc BẠN làm. Kể việc "
-                                "thật của bạn, kèm con số: bao nhiêu cái, trên "
-                                "bao nhiêu dữ liệu, đổi được mấy phần.")
+                                "This sentence is still almost word for word "
+                                "the employer's line — not yet work YOU did. "
+                                "Tell your own real work, with a number: how "
+                                "many, over how much data, how much it "
+                                "changed.")
                             break
                     if xau:
-                        # MỐC SO SÁNH (`nen`) giữ nguyên là dòng gốc của họ;
-                        # chữ người dùng gõ dở đi riêng ở `soan`. Trộn hai thứ
-                        # thì mỗi lần bị chặn là mốc trôi theo bản sửa, và lần
-                        # sau chép nguyên văn cũng lọt.
+                        # THE COMPARISON MARK (`nen`) stays their original
+                        # line; what the user half-typed travels separately in
+                        # `soan`. Fold the two together and every refusal
+                        # drags the mark along with the edit, so next time a
+                        # verbatim copy passes.
                         cho = "/cv/soan?khoi=" + quote(title or was, safe="")
                         if ky:
                             cho += "&ky=" + quote(ky, safe="")
@@ -1658,47 +1792,53 @@ class Handler(BaseHTTPRequestHandler):
                 if title and (body or form.get("kill")):
                     answers = store.load(conn)
                     text = answers.get("cv_text") or ""
-                    # ĐO TRƯỚC KHI GHI. "Hồ sơ đáp trọn 129 -> 141 tin" là số
-                    # thật đo hai lần, không phải lời hứa — và nó là câu trả
-                    # lời duy nhất cho "viết câu này có đáng không".
+                    # MEASURE BEFORE WRITING. "the profile fully answers 129
+                    # -> 141 postings" is a real figure measured twice, not a
+                    # promise — and it is the only answer to "was writing that
+                    # sentence worth it".
                     truoc = _dap_tron(conn, answers)
-                    # ĐỔI TÊN khối: xoá khối tên CŨ trước. write_block tìm theo
-                    # tên MỚI, không thấy, nên chỉ thêm khối mới — CV còn CẢ
-                    # HAI, và mọi bản in ra có hai mục trùng nội dung.
+                    # RENAMING a block: delete the OLD name first.
+                    # write_block looks up the NEW name, does not find it, and
+                    # so only adds a new block — leaving the CV with BOTH, and
+                    # every printed copy carrying two identical sections.
                     if was and was != title:
                         text = write_block(text, form.get("kind", ["project"])[0],
                                            was, "", [])
                     store.save(conn, {"cv_text": write_block(
                         text, form.get("kind", ["project"])[0],
                         title, form.get("meta", [""])[0].strip(), body)},
-                        note=f"soạn khối: {title[:40]}")
+                        note=f"block edited: {title[:40]}")
                     live.quen()
                     _tu_dung(conn)
                     sau = _dap_tron(conn, store.load(conn))
-                    viec = (f"{len(body)} câu" if body else "đã xoá")
-                    # IN ĐỘ PHỦ CẢ KHI KHÔNG ĐỔI. "Viết xong mà không mở khoá
-                    # thêm tin nào" chính là thứ người viết cần biết ngay —
-                    # im lặng ở đúng chỗ đó là để họ tưởng câu vừa viết có ăn.
-                    doi = (f" — hồ sơ đáp trọn {truoc} -> {sau} tin"
-                           if sau != truoc else
-                           f" — hồ sơ vẫn đáp trọn {sau} tin")
-                    # LUỒNG `CV`, không phải `SCORE`. Ô nhật ký trên chính màn
-                    # soạn lọc theo stream="cv"; ghi sang luồng khác thì dòng
-                    # báo "đáp trọn 129 -> 141 tin" rơi vào chỗ người vừa bấm
-                    # Lưu không nhìn thấy — tức là đo mà không ai đọc.
+                    viec = (f"{len(body)} sentences" if body else "deleted")
+                    # PRINT THE COVERAGE EVEN WHEN IT DOES NOT MOVE. "you
+                    # wrote it and it unlocked no further posting" is exactly
+                    # what the writer needs to know at once — silence at that
+                    # point lets them believe the sentence landed.
+                    doi = (f" — the profile fully answers {truoc} -> {sau} "
+                           f"postings" if sau != truoc else
+                           f" — the profile still fully answers {sau} postings")
+                    # THE `CV` STREAM, not `SCORE`. The journal panel on the
+                    # editor screen itself filters on stream="cv"; write it to
+                    # another stream and the line "fully answers 129 -> 141
+                    # postings" lands where whoever just pressed Save cannot
+                    # see it — measured, and read by nobody.
                     journal.log.ok(journal.CV,
-                                   f"khối «{title[:40]}» — {viec}{doi}")
+                                   f"block «{title[:40]}» — {viec}{doi}")
             finally:
                 conn.close()
-            # VỀ ĐÚNG CHỖ VỪA ĐỨNG. Lưu xong mà bị hất sang danh sách bản CV
-            # thì sửa ba khối là ba lần đi tìm lại khối thứ tư — và dải chấm
-            # vừa tính lại cho câu vừa sửa không ai nhìn thấy. Giữ cả `ky`:
-            # brief đang mở phải còn đó, vì người ta thường viết hai câu về
-            # cùng một chỗ hụt.
+            # BACK TO WHERE THEY WERE STANDING. Saving and being thrown to
+            # the CV list means editing three blocks is three hunts for the
+            # fourth — and the verdict strip just recomputed for the edited
+            # sentence is seen by nobody. `ky` is kept too: the open brief has
+            # to stay, because people usually write two sentences about the
+            # same gap.
             if form.get("kill") or not title:
                 return self._redirect("/cv/soan")
-            # Lưu XONG thì bỏ nền đi: chữ của nhà tuyển dụng đã xong việc của
-            # nó, giữ lại là mời người dùng lưu nhầm nó lần nữa.
+            # ONCE SAVED the base is dropped: the employer's words have done
+            # their job, and keeping them invites the user to save them by
+            # mistake a second time.
             tiep = "/cv/soan?khoi=" + quote(title, safe="")
             return self._redirect(tiep + ("&ky=" + quote(ky, safe="") if ky else ""))
 
@@ -1713,10 +1853,11 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 store.save(conn, _form_to_answers(form, section_id, store.load(conn)),
                            note=f"section: {section_id}")
-                # CHU TRÌNH KHỞI TẠO: chưa đủ để app chạy thì quay lại đúng
-                # chỗ còn thiếu, không đi tiếp sang phần sau. Bỏ luật này thì
-                # người dùng lướt hết 5 phần, bỏ trống ba câu quan trọng nhất,
-                # rồi ngồi thắc mắc vì sao bấm Chạy không ra gì.
+                # THE SETUP RUN: while the app cannot run yet, go back to
+                # what is still missing rather than on to the next section.
+                # Drop this rule and the user skims all 5 sections, leaves the
+                # three most important answers blank, and then wonders why
+                # pressing Run produces nothing.
                 giu_lai = store.next_gate_stop(store.load(conn))
                 if giu_lai:
                     return self._redirect(giu_lai)
@@ -1728,9 +1869,10 @@ class Handler(BaseHTTPRequestHandler):
         self._404()
 
 
-    # --- nhập CV ----------------------------------------------------------
+    # --- importing a CV ----------------------------------------------------
     def _import_cv(self, ctype: str, raw: bytes):
-        """Đọc file hoặc chữ dán vào rồi hiện ĐỀ XUẤT — chưa ghi gì cả."""
+        """Read a file or pasted text and show PROPOSALS — nothing is written
+        yet."""
         from ..profile.import_cv import ReadError, propose, read
         try:
             fields = upload.parse(ctype, raw) if "multipart" in ctype else {}
@@ -1752,7 +1894,8 @@ class Handler(BaseHTTPRequestHandler):
         self._html(importcv.render_review(found, text))
 
     def _save_import(self, form: dict):
-        """Chỉ ghi những ô người dùng để tick. Không đè ô đã có sẵn."""
+        """Write only the fields the user left ticked. Never overwrite a
+        field that already has a value."""
         from ..profile.import_cv import propose
         text = form.get("text", [""])[0]
         wanted = set(form.get("accept", []))
@@ -1762,9 +1905,10 @@ class Handler(BaseHTTPRequestHandler):
             picked = {k: v for k, v in found.items() if k in wanted}
             if picked:
                 store.save(conn, picked, note=f"imported CV ({len(picked)} fields)")
-            # Nhập CV xong KHÔNG thả về trang tổng kết: máy không đoán được
-            # quyền làm việc, nên gần như chắc chắn vẫn còn câu phải tự trả
-            # lời. Đưa thẳng tới đó, đừng bắt người dùng tự đi tìm.
+            # After importing, do NOT drop the user on the summary page: the
+            # machine cannot guess right to work, so there is almost certainly
+            # still a question they must answer themselves. Take them straight
+            # there rather than making them go looking.
             tiep = store.next_gate_stop(store.load(conn))
         finally:
             conn.close()
@@ -1780,15 +1924,18 @@ def find_port(start: int = DEFAULT_PORT, tries: int = 20) -> int:
 
 
 def serve(port: int | None = None) -> tuple[ThreadingHTTPServer, str]:
-    """Dựng server. `port=0` -> để HỆ ĐIỀU HÀNH cấp một cổng trống.
+    """Build the server. `port=0` -> let THE OPERATING SYSTEM hand out a free
+    port.
 
-    Địa chỉ trả về đọc NGƯỢC từ socket đã bind, không dựng từ con số truyền
-    vào: với port=0 thì con số truyền vào là 0, mà 0 không phải cổng nào cả.
+    The address returned is read BACK from the bound socket rather than built
+    from the number passed in: with port=0 the number passed in is 0, and 0 is
+    not a port at all.
 
-    Vì sao có port=0: `find_port()` hỏi "cổng này có ai nghe không" rồi mới
-    bind — giữa hai bước đó có khe. Hai tiến trình cùng chạy (hai lượt test
-    chồng nhau) cùng thấy trống, cùng bind, và một cái chết với "Address
-    already in use". Để hệ cấp thì không có khe nào để đua.
+    Why port=0 exists: `find_port()` asks "is anybody listening on this port"
+    and only then binds — and there is a gap between those two steps. Two
+    processes running at once (two overlapping test runs) both see it free,
+    both bind, and one dies with "Address already in use". Letting the OS hand
+    one out leaves no gap to race in.
     """
     httpd = ThreadingHTTPServer((HOST, find_port() if port is None else port),
                                 Handler)
@@ -1796,12 +1943,13 @@ def serve(port: int | None = None) -> tuple[ThreadingHTTPServer, str]:
 
 
 def _state_payload() -> dict:
-    """Trạng thái THẬT của vòng chạy, không phải chuỗi cứng.
+    """The loop's REAL state, not a hardcoded string.
 
-    live.run_status() cũ trả 'idle' kể cả lúc đang quét, vì nó chỉ nhìn bảng
-    source_run chứ không hỏi scheduler. Đây là chỗ duy nhất biết sự thật.
+    The old live.run_status() returned 'idle' even mid-scan, because it looked
+    only at the source_run table rather than asking the scheduler. This is the
+    one place that knows the truth.
     """
     runner = sched.current()
     return {"state": runner.state(),
-            "next_in": runner.next_in() // 60,      # phút
+            "next_in": runner.next_in() // 60,      # minutes
             "running": journal.log.running()}

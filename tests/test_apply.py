@@ -391,9 +391,9 @@ check("báo cáo nói rõ lý do, không nói 'không thấy form'",
       "login" in _wall.line(), _wall.line())
 _routes = (Path(__file__).resolve().parent.parent
            / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
-check("máy chủ ghi LỖI ra nhật ký", "CHƯA ĐĂNG NHẬP" in _routes)
+check("máy chủ ghi LỖI ra nhật ký", "NOT LOGGED IN" in _routes)
 check("và dừng, không ghi tiếp như thể đã điền",
-      _routes.index("CHƯA ĐĂNG NHẬP") < _routes.index('journal.log.ok(journal.SEARCH, f"{who} — {report.line()}")'))
+      _routes.index("NOT LOGGED IN") < _routes.index('journal.log.ok(journal.SEARCH, f"{who} — {report.line()}")'))
 
 print("\n== LinkedIn: moi đường nộp thật ==")
 from jobbot.apply import linkedin as lk

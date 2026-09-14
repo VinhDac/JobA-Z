@@ -469,7 +469,8 @@ with tempfile.TemporaryDirectory() as tmp:
     # Trang đó phải NÓI vì sao giữ lại.
     _, _sec = get("/profile/muc_tieu")
     check("và nói rõ còn mấy câu", "and the app can run" in _sec)
-    check("nhãn nút không hứa đi tiếp", "còn" in _sec and "câu nữa</button>" in _sec)
+    check("nhãn nút không hứa đi tiếp",
+          "Save —" in _sec and "answers still needed</button>" in _sec)
     # Điền đủ -> thả ra, đi tiếp bình thường.
     _ma2, _di2 = _post_lay_dich(
         "/profile/muc_tieu",
@@ -1183,7 +1184,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check("nối hộp thư KHÁC hồ sơ thì bị từ chối", _ma_sai == 400, str(_ma_sai))
     check("và nói rõ cả hai địa chỉ",
           "nham@x.y" in _than_sai and PROFILE["email"] in _than_sai, _than_sai[:90])
-    check("kèm cách sửa", "cho khớp" in _than_sai)
+    check("kèm cách sửa", "so they match" in _than_sai)
 
     # TAB GMAIL — cấu hình hộp thư về đúng chỗ cấu hình.
     check("có tab Gmail", "data-stab='gmail'" in panel and ">Gmail<" in panel)
@@ -1607,7 +1608,7 @@ with tempfile.TemporaryDirectory() as tmp:
     _cuoi = _bat("alert")
     check("còn đúng một nguồn thì KHÔNG cho tắt nốt", _cuoi["ok"] is False,
           str(_cuoi))
-    check("và nói rõ vì sao", "ít nhất một nguồn" in _cuoi["note"])
+    check("và nói rõ vì sao", "at least one source" in _cuoi["note"])
     _bat("linkedin")
     _bat("board")
     check("bật lại được", "srcbtn board off" not in get("/adjust/search")[1])
@@ -3015,7 +3016,7 @@ with tempfile.TemporaryDirectory() as tmp:
           _ma == 303 and "loi=" in _ve, f"{_ma} {_ve}")
     _, _sau_ct = get(_ve)
     check("và nói rõ chỗ trống là chỗ của BẰNG CHỨNG",
-          "chỗ của BẰNG CHỨNG" in _sau_ct)
+          "the place for THE EVIDENCE" in _sau_ct)
     # MỐC SO SÁNH không được trôi theo bản sửa: trôi thì lần sau chép nguyên
     # văn cũng lọt.
     check("mốc so sánh vẫn là dòng GỐC của họ, không phải bản vừa gõ",
@@ -3035,7 +3036,8 @@ with tempfile.TemporaryDirectory() as tmp:
     _c7.close()
     _, _sau_loi = get(_ve)
     check("chữ vừa gõ còn nguyên để sửa tiếp", _nen7 in _sau_loi)
-    check("và lời từ chối đứng ngay trên ô", "chưa phải việc BẠN làm" in _sau_loi)
+    check("và lời từ chối đứng ngay trên ô",
+          "not yet work YOU did" in _sau_loi)
 
     # Viết lại thành việc của mình thì qua.
     _that = ("Rebuilt the nightly research pipeline in Python, cutting a "
@@ -3167,7 +3169,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check("nhật ký ghi việc vừa làm",
           any("Thu Nghiem 2" in t for t in _dong7), " | ".join(_dong7[:3]))
     check("và ĐO LẠI ĐỘ PHỦ, không chỉ báo đã lưu",
-          any("đáp trọn" in t and " tin" in t for t in _dong7),
+          any("fully answers" in t and "postings" in t for t in _dong7),
           " | ".join(_dong7[:3]))
     # Câu viết ra mà KHÔNG mở khoá thêm tin nào cũng phải nói — im lặng ở đúng
     # chỗ đó là để người viết tưởng câu vừa viết có ăn.
