@@ -1,21 +1,24 @@
-"""Dựng CV riêng cho một JD — CV LÀ TỜ TRẢ LỜI.
+"""Build a CV tailored to one JD — THE CV IS AN ANSWER SHEET.
 
-Mọi câu trên CV đều là câu Vin đã viết trong hồ sơ. Không có LLM ở đây.
+Every sentence on the CV is a sentence Vin wrote in his profile. No LLM here.
 
-ĐỔI GỐC (10/09): trước đây đây là bộ máy chọn THỨ HAI. Tầng chấm điểm tra hồ
-sơ theo yêu cầu JD ra một con số; tầng này lại đi cân trọng số từ đầu rồi lấp
-cho đủ `BUDGET`. Hai đường độc lập, nên lệch nhau — đo được: một tin 92 điểm
-nhận bản CV mà **76% số câu không chạm gì tới nó**, và 2/18 câu là rác bóc từ
-PDF ("·", "Sep 2025") vẫn đi ra ngoài vì có ô trống phải lấp.
+CHANGED AT THE ROOT (10/09): this used to be a SECOND selection engine. The
+scoring layer looked the profile up against the JD's requirements and produced
+a number; this layer then weighed everything again from scratch and padded out
+to `BUDGET`. Two independent paths, so they drifted apart — measured: a
+92-point posting got a CV where **76% of the sentences touched none of it**,
+and 2 of 18 sentences were PDF scrapings ("·", "Sep 2025") that went out
+anyway because there was an empty slot to fill.
 
-Giờ chỉ còn MỘT bộ máy. `score.build_index` gom hồ sơ thành bằng chứng ở mức
-CÂU; tầng này chỉ hỏi lại đúng chỉ số đó:
+Now there is only ONE engine. `score.build_index` gathers the profile into
+evidence at SENTENCE level; this layer only asks that same index:
 
-    họ hỏi gì  ->  câu nào của mình trả lời  ->  in ra, theo thứ tự họ hỏi
+    what they ask  ->  which of my sentences answers it  ->  print, in their order
 
-Câu không trả lời gì thì không lên. Không còn ngân sách, nên độ dài CV là SỐ
-ĐO của hồ sơ chứ không phải một cái đích: năm câu nghĩa là hồ sơ trả được năm
-thứ. Muốn dài hơn thì làm thêm project, không phải lấp thêm câu.
+A sentence that answers nothing does not go on. There is no budget any more,
+so CV length is a MEASUREMENT of the profile rather than a target: five
+sentences means the profile answers five things. To make it longer, do another
+project, do not pad with more sentences.
 """
 
 from __future__ import annotations
@@ -32,26 +35,28 @@ from .blocks import Block, parse, sentences
 class Line:
     text: str
     weight: float = 0.0
-    hits: list[str] = field(default_factory=list)   # kỹ năng JD đòi mà câu này trúng
-    review: str = ""                                # giữ nhưng cần Vin xem lại
-    # BẢN SO SÁNH sống ở đây. `goc` là câu Vin viết, `text` là câu sẽ in ra —
-    # khác nhau thì `sua` nói rõ phép nào đã áp và vì sao. Không giữ `goc` thì
-    # không có "trước" nào để mà so, và người dùng phải tin lời máy.
+    hits: list[str] = field(default_factory=list)   # JD skills this sentence hits
+    review: str = ""                                # kept, but Vin should look
+    # THE BEFORE/AFTER lives here. `goc` is the sentence Vin wrote, `text` is
+    # the one that will be printed — when they differ, `sua` says which rule
+    # was applied and why. Without `goc` there is no "before" to compare
+    # against, and the user has to take the machine's word for it.
     goc: str = ""
     sua: list = field(default_factory=list)         # [rewrite.Sua]
-    yeu: list = field(default_factory=list)         # [rewrite.Yeu] — máy chỉ, Vin sửa
-    # VẾT = chỗ nào TRONG câu, không phải câu nào. Gạch cả dòng thì người đọc
-    # vẫn phải tự dò; gạch đúng cụm chữ thì mắt tới thẳng chỗ phải sửa.
+    yeu: list = field(default_factory=list)         # [rewrite.Yeu] — machine points, Vin fixes
+    # A MARK is WHERE IN THE SENTENCE, not which sentence. Underline the whole
+    # line and the reader still has to hunt; underline the exact phrase and the
+    # eye goes straight to what needs changing.
     vet: list = field(default_factory=list)         # [rewrite.Vet]
 
 
 def dang_ke(line: Line) -> bool:
-    """Câu này có gì để GIẢI TRÌNH không.
+    """Does this sentence have anything TO ACCOUNT FOR.
 
-    MỘT chỗ quyết. Bút đỏ trên bài và khối chi tiết ở dưới phải hỏi CÙNG một
-    câu hỏi: hỏi ở hai chỗ thì chúng trôi khỏi nhau, và dấu bấm được trên bài
-    trỏ xuống một cái neo không tồn tại — bấm vào không nhảy đi đâu cả, im
-    lặng. Đã xảy ra với câu 6 và 7.
+    ONE place decides. The red pen on the page and the detail block below it
+    must ask THE SAME question: ask in two places and they drift apart, and a
+    clickable mark on the page points at an anchor that does not exist —
+    clicking goes nowhere, silently. It happened to sentences 6 and 7.
     """
     return bool(line.sua or line.yeu or line.review or line.hits)
 
@@ -69,29 +74,30 @@ class TailoredCV:
     header: list[str]
     summary: str
     sections: list[Section]
-    dropped: list[tuple[str, str]]      # (câu, lý do bỏ)
-    wanted: list[str]                   # kỹ năng JD quan tâm (rộng — để xếp thứ tự)
-    covered: list[str]                  # trong đó CV này nói được
-    missing: list[str]                  # JD đòi mà hồ sơ không có
-    # HAI TRƯỜNG CHO CON SỐ HIỆN RA. Tách khỏi wanted/covered vì chúng đo
-    # thứ khác: wanted rộng để xếp câu, asked hẹp để làm mẫu số thật thà.
-    asked: list[str] = field(default_factory=list)    # tin THẬT SỰ đòi
-    on_paper: list[str] = field(default_factory=list) # TỜ GIẤY nói ra được
+    dropped: list[tuple[str, str]]      # (sentence, why it was dropped)
+    wanted: list[str]                   # skills the JD cares about (wide — for ordering)
+    covered: list[str]                  # of those, what this CV can speak to
+    missing: list[str]                  # the JD asks, the profile has not got it
+    # TWO FIELDS FOR THE NUMBER ON SCREEN. Separate from wanted/covered
+    # because they measure something else: wanted is wide so sentences can be
+    # ordered, asked is narrow so the denominator is honest.
+    asked: list[str] = field(default_factory=list)    # what the posting REALLY asks
+    on_paper: list[str] = field(default_factory=list) # what THE PAGE can say
 
 
 def skills_in(text: str) -> set[str]:
-    """Kỹ năng có mặt trong đoạn chữ. Luật khớp nằm ở vocab.alias_hits —
-    MỘT chỗ, vì trước đây score._signals giữ một bản sao và hai bên phải tự
-    nhớ mà sửa cùng nhau."""
+    """Skills present in a stretch of text. The matching rule lives in
+    vocab.alias_hits — ONE place, because score._signals used to keep a copy
+    and both sides had to remember to change together."""
     return set(alias_hits(norm(text)))
 
 
 def wanted_skills(explain: dict | None, jd_text: str = "") -> set[str]:
-    """Kỹ năng tin này quan tâm.
+    """Skills this posting cares about.
 
-    Quét CẢ tin, không chỉ mấy dòng gạch đầu dòng: Jane Street nhắc
-    "time series analysis, feature engineering" ở đoạn mở đầu chứ không
-    nằm trong phần "About You".
+    Scans THE WHOLE posting, not just the bullet lines: Jane Street mentions
+    "time series analysis, feature engineering" in the opening paragraph, not
+    under "About You".
     """
     out: set[str] = set(skills_in(jd_text))
     for req in (explain or {}).get("requirements", []):
@@ -99,14 +105,14 @@ def wanted_skills(explain: dict | None, jd_text: str = "") -> set[str]:
     return out
 
 
-# Dấu ngăn giữa các MÓN trong một dòng kỹ năng. Không cắt trong ngoặc:
-# "Python (pandas, NumPy, PyTorch)" là MỘT món, cắt ra là ra "Python (pandas"
-# và "PyTorch)" — chữ vỡ ngay trên tờ giấy gửi nhà tuyển dụng.
+# Separators between ITEMS on a skills line. Never cut inside brackets:
+# "Python (pandas, NumPy, PyTorch)" is ONE item, and cutting it gives
+# "Python (pandas" and "PyTorch)" — broken text on the page sent to employers.
 _NGAN = ",;·"
 
 
 def _ky_cua_muc(block) -> set:
-    """Mục kỹ năng này nhắc tới những kỹ năng nào — kể cả trong TIÊU ĐỀ."""
+    """Which skills this skills section mentions — including in its TITLE."""
     ra = skills_in(block.title)
     for l in block.lines:
         ra |= skills_in(l)
@@ -114,7 +120,7 @@ def _ky_cua_muc(block) -> set:
 
 
 def _tach_mon(chu: str) -> list:
-    """Cắt một dòng kỹ năng thành từng MÓN. Đếm ngoặc, không cắt bên trong."""
+    """Split a skills line into ITEMS. Counts brackets, never cuts inside."""
     ra, dem, cuoi = [], 0, 0
     for i, c in enumerate(chu):
         if c in "([":
@@ -128,22 +134,23 @@ def _tach_mon(chu: str) -> list:
     return [m.strip() for m in ra if m.strip()]
 
 
-# Món trong một DANH SÁCH thì ngắn: "SQL", "Python (pandas, NumPy)". Dài hơn
-# thế là MỆNH ĐỀ, và dòng đó là VĂN XUÔI chứ không phải danh sách.
-_MON_DAI_NHAT = 5          # số từ
+# An item in a LIST is short: "SQL", "Python (pandas, NumPy)". Longer than
+# that and it is a CLAUSE, and the line is PROSE rather than a list.
+_MON_DAI_NHAT = 5          # words
 
 
 def _la_danh_sach(mon: list) -> bool:
-    """Dòng này là DANH SÁCH hay VĂN XUÔI — xếp lại được hay không.
+    """Is this line a LIST or PROSE — i.e. may it be reordered.
 
-    ĐÂY LÀ CHỐT CHẶN, và tôi đã cần tới nó: bản đầu xếp lại mọi dòng kỹ năng,
-    và mục "Compute" của hồ sơ thật là một câu văn — "a GPU is fast at many
-    simple operations at once, which suits deep learning; most classical ML
-    models run slower…". Xếp lại nó là ĐẢO LỘN MỘT LẬP LUẬN thành vô nghĩa,
-    trên tờ giấy gửi nhà tuyển dụng. 80/120 bản dính.
+    THIS IS A GATE, and it was needed: the first version reordered every
+    skills line, and the real profile's "Compute" section is a piece of prose
+    — "a GPU is fast at many simple operations at once, which suits deep
+    learning; most classical ML models run slower…". Reordering it TURNS AN
+    ARGUMENT INSIDE OUT into nonsense, on the page sent to employers. 80 of
+    120 CVs were hit.
 
-    Phân biệt bằng HÌNH DẠNG, không bằng từ vựng: món của danh sách thì ngắn
-    và không có dấu kết câu bên trong.
+    Told apart by SHAPE, not vocabulary: list items are short and carry no
+    sentence-ending punctuation inside them.
     """
     if len(mon) < 3:
         return False
@@ -151,36 +158,38 @@ def _la_danh_sach(mon: list) -> bool:
 
 
 def _xep_mon(chu: str, wanted: set) -> str:
-    """Đưa món tin này hỏi lên ĐẦU dòng. Chữ y nguyên, chỉ đổi chỗ.
+    """Move the items this posting asks for to the FRONT. Same words, new order.
 
-    CHỈ đụng vào dòng là DANH SÁCH — xem `_la_danh_sach`. Giữ nguyên dấu chấm
-    cuối dòng: nó là dấu câu của DÒNG, không phải của món cuối cùng.
+    ONLY touches lines that are LISTS — see `_la_danh_sach`. The full stop at
+    the end stays put: it is the LINE's punctuation, not the last item's.
     """
     het = chu.rstrip()
     cham = het.endswith(".")
     mon = _tach_mon(het[:-1] if cham else het)
     if not _la_danh_sach(mon):
         return chu
-    # ỔN ĐỊNH: món không trúng gì giữ nguyên thứ tự cũ, chỉ món trúng nhảy lên.
+    # STABLE: items that hit nothing keep their old order, only hits move up.
     xep = sorted(range(len(mon)), key=lambda i: (-len(skills_in(mon[i]) & wanted), i))
     ra = ", ".join(mon[i] for i in xep)
     return ra + ("." if cham else "")
 
 
 def asked_skills(explain: dict | None) -> set[str]:
-    """Kỹ năng tin này THẬT SỰ ĐÒI — chỉ từ DÒNG YÊU CẦU, không từ cả tin.
+    """Skills the posting REALLY ASKS FOR — from REQUIREMENT LINES only.
 
-    Khác `wanted_skills` ở đúng một chỗ, và chỗ đó quyết định con số hiện ra:
+    It differs from `wanted_skills` in exactly one way, and that way decides
+    the number on screen:
 
-        wanted  quét cả tin  -> dùng để XẾP THỨ TỰ câu. Rộng là tốt: bắt nhầm
-                một chữ thì cùng lắm xếp sai chỗ, không ai thấy.
-        asked   chỉ dòng yêu cầu -> dùng làm MẪU SỐ của phân số hiện ra. Rộng
-                ở đây là NÓI DỐI.
+        wanted  scans the whole posting -> used to ORDER sentences. Wide is
+                good: a false catch at worst misplaces a line, nobody sees it.
+        asked   requirement lines only -> used as the DENOMINATOR of the
+                fraction on screen. Wide here is A LIE.
 
-    Đo trên kho thật: NXP "đòi" cloud — chữ `cloud` chỉ nằm ở đoạn công ty tự
-    giới thiệu. Bank of America: 3/4 chữ trong mẫu số là từ đoạn giới thiệu.
-    Hậu quả: màn hình báo phủ 29% trong khi tờ giấy thật mang 63%, và nó
-    khuyên Vin đừng nộp những tin tờ giấy đang trả lời tốt.
+    Measured on the real store: NXP "asks for" cloud — the word `cloud`
+    appears only in the company's own blurb. Bank of America: 3 of the 4 words
+    in the denominator came from the blurb. The result: the screen reported
+    29% coverage while the actual page carried 63%, and it advised Vin not to
+    apply to postings the page was answering well.
     """
     out: set[str] = set()
     for req in (explain or {}).get("requirements", []):
@@ -197,66 +206,74 @@ def build(profile: dict, explain: dict | None, jd_text: str = "",
     index = build_index(profile)
     header, summary = _identity(profile, blocks, wanted)
 
-    # Câu nào TRẢ LỜI được thứ tin này hỏi — dùng CHUNG chỉ số với tầng chấm
-    # điểm, nên hai bên không thể hiểu khác nhau về cùng một câu nữa.
+    # Which sentences ANSWER what this posting asks — sharing the index with
+    # the scoring layer, so the two can no longer read the same sentence
+    # differently.
     answers: dict[str, list[str]] = {}
     for signal in wanted:
         for ev in _matches(signal, index):
             if ev.kind:
                 answers.setdefault(ev.text, []).append(signal)
 
-    # ĐÃ THỬ VÀ BỎ (10/09): lọc bỏ mọi câu không trả lời gì. Đo được thì hỏng
-    # hai lần. (1) Số câu trả lời được KHÔNG đo độ hợp — nó đo JD có tình cờ
-    # gọi tên nhiều kỹ năng không; tin `unlikely` trung bình 10,1 câu còn tin
-    # `likely` chỉ 6,9, và Millennium 84 điểm chỉ ra ĐÚNG MỘT câu. (2) Lọc
-    # theo "có chứng minh kỹ năng nào không" thì cắt mất đúng những câu hay
-    # nhất: "self-funded, across 17 instruments and five years of data",
-    # "I never budgeted the time a proof would take". Quy mô, vết xước và
-    # phán đoán không nằm trong vocab.SKILLS, mà đó mới là thứ thuyết phục.
+    # TRIED AND DROPPED (10/09): filtering out every sentence that answers
+    # nothing. Measured, it fails twice over. (1) The number of answering
+    # sentences does NOT measure fit — it measures whether the JD happens to
+    # name a lot of skills; `unlikely` postings average 10.1 sentences while
+    # `likely` ones only 6.9, and Millennium at 84 points yielded EXACTLY ONE.
+    # (2) Filtering on "does it prove a skill" cuts precisely the best
+    # sentences: "self-funded, across 17 instruments and five years of data",
+    # "I never budgeted the time a proof would take". Scale, scars and
+    # judgement are not in vocab.SKILLS, and those are what persuade.
     #
-    # Nên TRẢ LỜI ĐƯỢC quyết định THỨ TỰ và quyết định khối nào bị cắt, chứ
-    # không quyết định từng câu có được sống hay không.
-    # KHỐI NÀO KHÔNG HỢP TIN NÀY THÌ KHÔNG LÊN. `cap` là TRẦN, không phải hạn
-    # ngạch phải lấp cho đủ — đó là chỗ `Compress EA` (0 kỹ năng, hợp 0/117
-    # tin) vẫn có mặt trên 115 bản CV, chỉ vì có đúng bốn project và ô cho ba.
+    # So ANSWERING decides the ORDER and decides which blocks get cut, not
+    # whether an individual sentence lives.
+    # A BLOCK THAT DOES NOT FIT THIS POSTING DOES NOT GO ON. `cap` is a
+    # CEILING, not a quota to fill — that is how `Compress EA` (0 skills,
+    # fitting 0 of 117 postings) still appeared on 115 CVs, purely because
+    # there were four projects and three slots.
     #
-    # Lọc ở mức KHỐI, không ở mức CÂU: lọc câu theo từ khoá đã thử và bỏ, vì
-    # nó cắt mất "self-funded, across 17 instruments" và "I never budgeted the
-    # time a proof would take" — quy mô và vết xước không nằm trong từ vựng.
+    # Filtered at BLOCK level, not SENTENCE level: sentence filtering by
+    # keyword was tried and dropped, because it cut "self-funded, across 17
+    # instruments" and "I never budgeted the time a proof would take" — scale
+    # and scars are not in the vocabulary.
     sections: list[Section] = []
-    # Câu bị LUẬT cấm, kèm lý do thật. Gom ở đây chứ không suy ra sau: suy ra
-    # thì mọi câu vắng mặt đều nhận chung một lý do "yếu hơn thứ tin này hỏi",
-    # và đó là lý do SAI cho câu bị cấm — nó không yếu, nó không thuộc CV.
+    # Sentences the RULES forbid, with the real reason. Collected here rather
+    # than inferred later: inferred, every absent sentence gets the same
+    # reason "weaker than what this posting asks for", and that is the WRONG
+    # reason for a forbidden one — it is not weak, it does not belong on a CV.
     bi_cam: list[tuple[str, str]] = []
     for kind, cap in (("experience", rules.BUDGET["experience"]),
                       ("project", rules.BUDGET["project"])):
         chosen = [b for b in blocks if b.kind == kind and set(b.tags) & wanted]
         chosen.sort(key=lambda b: -len(set(b.tags) & wanted))
-        # KINH NGHIỆM KHÔNG BAO GIỜ BỊ BỎ CẢ KHỐI — chỉ project mới được bỏ.
+        # AN EXPERIENCE BLOCK IS NEVER DROPPED WHOLE — only projects may be.
         #
-        # Lọc khối theo "có trúng thứ tin này đòi không" là đúng với project
-        # (project là tự chọn, bỏ một cái không để lại dấu vết). Với KINH
-        # NGHIỆM thì nó đục một lỗ trên dòng thời gian: đo trên kho thật, 6/12
-        # bản CV đầu bảng rơi mất hẳn khối "Research Consultant — WorldQuant,
-        # Jan–Sep 2025", tức là bản gửi đi tự khai một khoảng trống 9 tháng.
+        # Filtering blocks on "does it hit what this posting asks" is right
+        # for projects (a project is optional, dropping one leaves no trace).
+        # For EXPERIENCE it punches a hole in the timeline: measured on the
+        # real store, 6 of the top 12 CVs lost the block "Research Consultant
+        # — WorldQuant, Jan–Sep 2025" entirely, i.e. the page being sent
+        # declared a 9-month gap about itself.
         #
-        # Khoảng trống đắt hơn nhiều so với một dòng kém liên quan: khảo sát
-        # HBS/Accenture 2021 (8.000 lao động, 2.250 lãnh đạo tuyển dụng, có cả
-        # UK) ghi nhận gần một nửa nhà tuyển dụng tự loại CV có khoảng trống
-        # quá 6 tháng. Khối ít liên quan chỉ tốn ba dòng giấy.
+        # A gap costs far more than one loosely-related line: the HBS/
+        # Accenture 2021 survey (8,000 workers, 2,250 hiring leaders, UK
+        # included) found nearly half of employers screen out CVs with gaps
+        # over 6 months. A loosely-related block costs three lines of paper.
         #
-        # Vẫn XẾP theo độ liên quan: khối trúng nhiều đứng trước. Chỉ khác ở
-        # chỗ khối không trúng gì thì xuống cuối, không biến mất.
-        # LUÔN GIỮ MỌI KHỐI KINH NGHIỆM. Từng là công tắc; bỏ đi vì tắt nó
-        # luôn sai: đo được 6/12 bản rơi hẳn khối WorldQuant Jan–Sep 2025,
-        # tức bản gửi đi tự khai một lỗ 9 tháng trên dòng thời gian.
+        # Still ORDERED by relevance: blocks that hit more come first. The
+        # only difference is that a block hitting nothing goes last rather
+        # than disappearing.
+        # ALWAYS KEEP EVERY EXPERIENCE BLOCK. This was once a switch; dropped
+        # because turning it off is always wrong: measured, 6 of 12 CVs lost
+        # the WorldQuant Jan–Sep 2025 block entirely, i.e. the page being sent
+        # declared a 9-month hole in its own timeline.
         if kind == "experience":
             con_lai = [b for b in blocks if b.kind == kind and b not in chosen]
             con_lai.sort(key=lambda b: -len(b.tags))
             chosen = chosen + con_lai
         if not chosen:
-            # Không khối nào hợp — 9/117 tin rơi vào đây. CV rỗng thì không
-            # gửi được, nên lấy khối mạnh nhất và để nguyên sự thật đó hiện ra.
+            # No block fits — 9 of 117 postings land here. An empty CV cannot
+            # be sent, so take the strongest block and let that truth show.
             chosen = sorted((b for b in blocks if b.kind == kind),
                             key=lambda b: -len(b.tags))[:1]
         for block in chosen[:cap]:
@@ -273,22 +290,27 @@ def build(profile: dict, explain: dict | None, jd_text: str = "",
     certs = [l for b in blocks if b.kind == "cert" for l in b.lines if _worth(l)]
     if certs:
         sections.append(Section("cert", "", "", [Line(l) for l in certs]))
-    # MỤC KỸ NĂNG — và đây là chỗ app từng tự trói mình chặt nhất.
+    # THE SKILLS SECTIONS — and this is where the app once tied its own hands
+    # tightest.
     #
-    # Đo trên kho thật: 98 tập yêu cầu KHÁC NHAU trên 120 tin, mà chỉ ra 19
-    # bản CV. 12 câu nằm trên 120/120 bản, trong đó 6 câu là mục kỹ năng —
-    # vì mục kỹ năng được đổ ra NGUYÊN XI theo thứ tự trong hồ sơ, không bao
-    # giờ đụng tới. Mà đó lại là phần dày từ khoá nhất của tờ giấy.
+    # Measured on the real store: 98 DIFFERENT requirement sets across 120
+    # postings, producing only 19 distinct CVs. 12 sentences appeared on
+    # 120/120 CVs, 6 of them from skills sections — because skills sections
+    # were poured out VERBATIM in profile order and never touched. And that
+    # is the densest part of the page for keywords.
     #
-    # XẾP LẠI THỨ TỰ là phép may đo TRUNG THỰC NHẤT còn lại: không thêm chữ
-    # nào, không bỏ chữ nào, chỉ đưa thứ tin này hỏi lên trước. Người sàng CV
-    # đọc dòng đầu của mỗi mục; `SQL` nằm cuối dòng thứ tư thì coi như không
-    # có. Đo được: 19 -> 46 bản khi xếp mục, -> 72 bản khi xếp cả món trong
-    # mục. Đúng luật gốc: máy CHỌN và SẮP XẾP, không viết mới.
+    # REORDERING is the most HONEST tailoring left: no word added, no word
+    # removed, only what this posting asks moved to the front. A CV screener
+    # reads the first line of each section; `SQL` sitting at the end of the
+    # fourth line may as well not be there. Measured: 19 -> 46 distinct CVs
+    # when sections are ordered, -> 72 when items inside sections are too.
+    # True to the founding rule: the machine SELECTS and ORDERS, it does not
+    # write.
     muc_ky = []
     for block in blocks:
-        # Mục kỹ năng toàn tính từ, không tên công nghệ nào. Từng là công
-        # tắc; đo được giữ lại thì +0 tin, nên nó chạy cố định.
+        # A skills section of nothing but adjectives, naming no technology.
+        # This was once a switch; measured, keeping them adds +0 postings, so
+        # it runs unconditionally.
         bo = rules.bo_muc_ky_nang(block.title, " ".join(block.lines))
         if block.kind == "skill" and not bo:
             muc_ky.append(block)
@@ -307,9 +329,12 @@ def build(profile: dict, explain: dict | None, jd_text: str = "",
     have |= skills_in(profile.get("skills_strong", "") + " "
                       + profile.get("skills_weak", ""))
 
-    # BỎ VÌ SAO — hai lý do khác hẳn nhau, và người dùng cần đọc ra được:
-    #   bị CẤM   luật không cho lên CV (kể thất bại, ý kiến) -> sửa câu cũng vô ích
-    #   YẾU HƠN  hợp lệ, nhưng tin này hỏi thứ khác          -> tin khác sẽ dùng
+    # WHY IT WAS DROPPED — two very different reasons, and the user needs to
+    # be able to tell them apart:
+    #   FORBIDDEN  the rules keep it off a CV (telling a failure, an opinion)
+    #              -> rewriting the sentence will not help
+    #   WEAKER     perfectly valid, but this posting asks about something else
+    #              -> another posting will use it
     shown = {l.text for s in sections for l in s.lines}
     goc_hien = {l.goc or l.text for s in sections for l in s.lines}
     cam_text = {t for t, _ in bi_cam}
@@ -321,15 +346,17 @@ def build(profile: dict, explain: dict | None, jd_text: str = "",
                 and rules.clean(t) not in goc_hien
                 and rules.clean(t) not in cam_text and _worth(t)]
 
-    # TỜ GIẤY NÓI ĐƯỢC GÌ — đọc từ chính thứ sắp in ra, gồm CẢ mục kỹ năng.
-    # Bản cũ chỉ đếm kỹ năng chứng minh được bởi mấy câu được chọn, nên mục
-    # TECHNICAL SKILLS đang in trên chính tờ giấy đó không được tính.
+    # WHAT THE PAGE CAN SAY — read off what is about to be printed, skills
+    # sections INCLUDED. The old version only counted skills proved by the
+    # chosen sentences, so the TECHNICAL SKILLS section printed on that very
+    # page did not count.
     tren_giay: set[str] = set()
     for sec in sections:
-        # TIÊU ĐỀ MỤC CŨNG IN RA GIẤY. `render.paper` in nó dưới dạng
-        # "<b>Git and GitHub</b> — every project version-controlled…", nên bỏ
-        # tiêu đề khỏi phép đếm là tự báo thiếu: đo được `git` bị coi là rơi
-        # ở 14/287 tin, trong khi chữ đó nằm ngay trên tờ giấy.
+        # SECTION TITLES ARE PRINTED TOO. `render.paper` prints them as
+        # "<b>Git and GitHub</b> — every project version-controlled…", so
+        # leaving titles out of the count under-reports: measured, `git` was
+        # counted as missing on 14 of 287 postings while the word sat right
+        # there on the page.
         tren_giay |= skills_in(sec.title)
         for line in sec.lines:
             tren_giay |= skills_in(line.text)
@@ -342,18 +369,19 @@ def build(profile: dict, explain: dict | None, jd_text: str = "",
 
 
 def _real_missing(explain: dict | None, wanted: set[str], have: set[str]) -> set[str]:
-    """Kỹ năng THẬT SỰ thiếu — bỏ qua danh sách 'hoặc'.
+    """Skills REALLY missing — "any of" lists do not count.
 
-    JD viết "Programming in any of the following: C++, Java, MATLAB, R, Python"
-    mà mình có C++ và Python thì Java/MATLAB/R KHÔNG phải là thiếu. Báo thiếu ở
-    đây là báo động giả, và báo động giả thì lần sau không ai đọc nữa.
+    The JD says "Programming in any of the following: C++, Java, MATLAB, R,
+    Python" and you have C++ and Python, so Java/MATLAB/R are NOT missing.
+    Reporting them here is a false alarm, and after a false alarm nobody reads
+    the next one.
     """
     missing = wanted - have
     if not explain:
         return missing
     for req in explain.get("requirements", []):
         in_line = skills_in(req["text"])
-        if in_line & have:                 # dòng này đã có ít nhất một cái đáp ứng
+        if in_line & have:                 # this line already has an answer
             missing -= in_line
     return missing
 
@@ -361,31 +389,33 @@ def _real_missing(explain: dict | None, wanted: set[str], have: set[str]) -> set
 def _pick(block: Block, wanted: set[str], answers: dict, cap: int,
           bo: list | None = None, num: dict | None = None,
           chon: dict | None = None) -> list[Line]:
-    """Câu trong một khối: trả lời được đứng trước, câu bị CẤM bỏ hẳn.
+    """Sentences within a block: answering ones first, FORBIDDEN ones dropped.
 
-    HỎI `rules.sentence_ok` — trước đây KHÔNG hỏi, và đó là lỗ thật. Luật cấm
-    câu kể thất bại và câu ý kiến lên CV, `cvhealth` báo đúng, nhưng bộ dựng
-    này chưa bao giờ tra nên chúng vẫn đi ra ngoài. Đo trên hồ sơ thật ngày
-    12/09: bản gửi Man Group mang 3 câu bị cấm, gồm cả "drawdown ran roughly
-    30% deeper than the model predicted".
+    IT ASKS `rules.sentence_ok` — it used to NOT ask, and that was a real
+    hole. The rules forbid sentences telling a failure and sentences of
+    opinion, `cvhealth` reported them correctly, but this builder never
+    consulted them so they went out anyway. Measured on the real profile on
+    12/09: the Man Group CV carried 3 forbidden sentences, including "drawdown
+    ran roughly 30% deeper than the model predicted".
 
-    Ba mảnh — luật, bộ chấm từng dòng, bộ dựng — nằm rời nhau thì luật chỉ là
-    lời nói. Chỗ này là chỗ nối.
+    Three pieces — the rules, the per-line checker, the builder — sitting
+    apart means the rules are only talk. This is the join.
     """
     num = num or {}
     kept: list[Line] = []
     for raw in sentences(block):
         goc = rules.clean(raw)
         if not _worth(goc):
-            continue                      # "·", "Sep 2025" — rác bóc từ PDF
+            continue                      # "·", "Sep 2025" — PDF scrapings
         tags = sorted(skills_in(goc))
         phan, ly_do = rules.sentence_ok(goc, tags)
         if phan == "drop":
             if bo is not None:
                 bo.append((goc, ly_do))
             continue
-        # SỬA bằng chính chữ của Vin — xem cv/rewrite.py. Sửa SAU khi phán để
-        # luật vẫn đọc đúng câu Vin viết, không đọc bản máy vừa chỉnh.
+        # FIXED USING VIN'S OWN WORDS — see cv/rewrite.py. Fixed AFTER
+        # judging, so the rules still read the sentence Vin wrote rather than
+        # the machine's adjusted version.
         text, da_sua = rewrite.sua(goc)
         hits = sorted(set(answers.get(raw, [])) | set(answers.get(goc, [])))
         kept.append(Line(
@@ -394,13 +424,14 @@ def _pick(block: Block, wanted: set[str], answers: dict, cap: int,
             goc=goc, sua=da_sua,
             yeu=rewrite.diem_yeu(text, tags, wanted),
             vet=rewrite.vet(text, tags, wanted, da_sua)))
-    # NGƯỜI CHỌN THẮNG MÁY. Vin ghim một câu thì nó lên, dù trọng số thấp;
-    # Vin gạt một câu thì nó xuống, dù trọng số cao. Máy xếp bằng luật chung,
-    # còn Vin biết thứ luật chung không biết — tin này nghiêng về đâu, vừa
-    # nói chuyện với ai.
+    # THE PERSON BEATS THE MACHINE. Vin pins a sentence and it goes on, low
+    # weight or not; Vin drops one and it goes off, high weight or not. The
+    # machine orders by a general rule, and Vin knows what a general rule
+    # cannot — which way this posting leans, who he just spoke to.
     #
-    # Ghim KHÔNG phá trần `cap`: một tờ giấy vẫn là một tờ giấy. Ghim quá số
-    # ô thì câu ghim chiếm hết ô, và đó là ý Vin.
+    # Pinning does NOT break the `cap` ceiling: one page is still one page.
+    # Pin more than there are slots and the pins take every slot, which is
+    # exactly what Vin meant.
     ghim = set((chon or {}).get("pin") or ())
     gat = set((chon or {}).get("drop") or ())
     kept = [l for l in kept if (l.goc or l.text) not in gat]
@@ -410,9 +441,9 @@ def _pick(block: Block, wanted: set[str], answers: dict, cap: int,
 
 
 def _worth(text: str) -> bool:
-    """Rác bóc từ PDF: dấu chấm trơ trọi, mẩu ngày tháng cụt. Trước đây chúng
-    lên CV vì `BUDGET` có ô trống phải lấp — "·" và "Sep 2025" đi ra ngoài
-    trong cả 117 bản."""
+    """PDF scrapings: a lone bullet, a truncated date fragment. These used to
+    reach the CV because `BUDGET` had empty slots to fill — "·" and "Sep 2025"
+    went out on all 117 CVs."""
     body = text.strip().strip("·-–—• ")
     return len(body) >= 12 and any(c.isalpha() for c in body)
 
@@ -447,10 +478,10 @@ def _identity(profile: dict, blocks: list[Block],
     return header, " · ".join(f for f in facts if f)
 
 
-# --- NGƯỜI CHỌN LẠI: ghim / gạt, và băng ghế dự bị --------------------
+# --- THE PERSON RE-PICKS: pin / drop, and the bench -------------------
 
 def picks(conn, posting_id: int) -> dict:
-    """Lựa chọn của Vin cho MỘT tin: {'pin': [...], 'drop': [...]}."""
+    """Vin's picks for ONE posting: {'pin': [...], 'drop': [...]}."""
     ra: dict = {"pin": [], "drop": []}
     for row in conn.execute(
             "SELECT text, mode FROM cv_pick WHERE posting_id = ?", (posting_id,)):
@@ -459,7 +490,8 @@ def picks(conn, posting_id: int) -> dict:
 
 
 def set_pick(conn, posting_id: int, text: str, mode: str) -> None:
-    """Ghim / gạt một câu. `mode=''` là bỏ lựa chọn, về lại cách máy xếp."""
+    """Pin / drop a sentence. `mode=''` clears the pick, back to the machine's
+    own ordering."""
     if not mode:
         conn.execute("DELETE FROM cv_pick WHERE posting_id = ? AND text = ?",
                      (posting_id, text))
@@ -474,18 +506,20 @@ def set_pick(conn, posting_id: int, text: str, mode: str) -> None:
 
 
 def bench(profile: dict, cv: TailoredCV, block_title: str = "") -> list[dict]:
-    """Câu DỰ BỊ — câu hợp luật trong hồ sơ mà bản này không chọn.
+    """THE BENCH — rule-abiding sentences in the profile this CV did not pick.
 
-    Đây là thứ làm "chọn lại" thành chọn THẬT chứ không phải lời hứa: máy
-    không viết câu mới, nó đưa ra mấy câu Vin ĐÃ VIẾT mà lần này không được
-    gọi, xếp theo mức trúng thứ TIN NÀY đòi.
+    This is what makes "re-pick" a REAL choice rather than a promise: the
+    machine writes no new sentence, it puts forward sentences Vin HAS ALREADY
+    WRITTEN that were not called this time, ordered by how well they hit what
+    THIS POSTING asks.
 
-    Đo trên hồ sơ thật: 10 câu dự bị cho một tin — đủ để đổi có nghĩa.
+    Measured on the real profile: 10 bench sentences for one posting — enough
+    for a swap to mean something.
     """
     in_ra = {l.goc or l.text for s in cv.sections for l in s.lines}
-    # Dùng tập RỘNG: đây là gợi ý "đổi sang câu này thì trúng thêm gì", chứ
-    # không phải con số chấm điểm. Hẹp quá thì mọi câu dự bị đều hiện "không
-    # trúng thêm gì" và người dùng không có căn cứ nào để chọn.
+    # Uses the WIDE set: this is a "swap to this and you gain what" hint, not
+    # a scoring number. Too narrow and every bench sentence reads "gains
+    # nothing", leaving the user no grounds to choose.
     doi = set(cv.wanted)
     ra = []
     for block in parse(str(profile.get("cv_text") or "")):
@@ -504,6 +538,7 @@ def bench(profile: dict, cv: TailoredCV, block_title: str = "") -> list[dict]:
             ra.append({"text": text, "khoi": block.title, "trung": trung,
                        "diem": rules.sentence_weight(text, doi,
                                                      sorted(skills_in(text)))})
-    # Câu trúng thứ tin này đòi đứng trước — đó là lý do để đổi sang nó.
+    # Sentences that hit what this posting asks come first — that is the
+    # reason to swap to them.
     ra.sort(key=lambda x: (-len(x["trung"]), -x["diem"]))
     return ra
