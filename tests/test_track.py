@@ -288,7 +288,7 @@ _on = _tv.render(rows=[], asks=[], counts={}, mail_ready=True,
 check("nút quét nằm trên thanh khúc", "data-arg='track'" in _on)
 check("trong ô chỉ còn TÌNH TRẠNG hộp thư, không nút thứ hai",
       "/api/track/mail/scan" not in _on)
-check("và vẫn nói đúng số ngày đang đặt", "45 ngày" in _on)
+check("và vẫn nói đúng số ngày đang đặt", "last 45 days" in _on)
 
 # Form nối giờ nằm trong Cài đặt — mọi lời hứa về mật khẩu vẫn phải giữ.
 from jobbot.dashboard.views import settings as _sv
@@ -685,7 +685,7 @@ _on = _tv.render(rows=[], asks=[], counts={}, mail_ready=True,
 check("nút quét nằm trên thanh khúc", "data-arg='track'" in _on)
 check("trong ô chỉ còn TÌNH TRẠNG hộp thư, không nút thứ hai",
       "/api/track/mail/scan" not in _on)
-check("và vẫn nói đúng số ngày đang đặt", "45 ngày" in _on)
+check("và vẫn nói đúng số ngày đang đặt", "last 45 days" in _on)
 
 # Form nối giờ nằm trong Cài đặt — mọi lời hứa về mật khẩu vẫn phải giữ.
 from jobbot.dashboard.views import settings as _sv
@@ -947,7 +947,7 @@ check("lọc theo AI NỘP -> chỉ còn dòng khớp",
 _loc3 = _tkD.render(rows=_hai, asks=[], counts={}, mail_ready=False,
                     mail_address="", thu={}, loc={"q": "zzz"})
 check("tìm không ra thì NÓI RA, không trả bảng trống câm",
-      "không dòng nào lọt lưới lọc" in _loc3)
+      "no row passes the filters" in _loc3)
 
 # CHI TIẾT: thư, bản CV, tin gốc — và nói thẳng khi không có.
 _ct = _tkD.render(rows=[_r(posting_id=9, nguon="linkedin", co_cv=True,
@@ -956,13 +956,14 @@ _ct = _tkD.render(rows=[_r(posting_id=9, nguon="linkedin", co_cv=True,
                   thu={1: [dict(id=5, subject="Interview", snippet="hi",
                                 kind="interview", received_at="2026-08-24",
                                 from_addr="a@b.c")]}, loc={})
-check("mở ra thấy thư đã nhận", "1 thư đã nhận" in _ct and "Interview" in _ct)
+check("mở ra thấy thư đã nhận",
+      "1 messages received" in _ct and "Interview" in _ct)
 check("và đường tới bản CV", "/jobs/9/cv?tu=/track" in _ct)
 check("và đường tới tin gốc", "/jobs/9?tu=/track" in _ct)
 _trong = _tkD.render(rows=[_r()], asks=[], counts={}, mail_ready=False,
                      mail_address="", thu={1: []}, loc={})
 check("nộp ngoài app thì NÓI THẲNG vì sao trống",
-      "nộp ngoài app" in _trong and "chưa lá thư nào" in _trong)
+      "applied outside the app" in _trong and "not one message" in _trong)
 
 print("\n[máy bó tay thì giao lại cho NGƯỜI, đừng để lần nộp đó rơi]")
 # GIAO Ở QUEUE, không ở bảng: đây là VIỆC PHẢI LÀM, mà bảng chỉ chứa fact.
@@ -988,18 +989,19 @@ _bar = _tkD.render(rows=[_r()], asks=[], counts={}, mail_ready=False,
                    mail_address="", thu={}, loc={},
                    stage={"da_nop": 9, "di_tiep": 1, "truot": 2, "cho_ban": 3,
                           "hang_doi": 12, "state": "x"})
-for _s in ("đã nộp", "đi tiếp", "trượt", "chờ bạn"):
+for _s in ("applied", "taken further", "rejected", "waiting on you"):
     check(f"thanh có số «{_s}»", f">{_s}<" in _bar or _s in _bar)
 # Trượt là họ ĐÃ NÓI, im lặng là họ CHƯA NÓI GÌ — gộp là mất phân biệt duy
 # nhất giữa "đã chết" và "chưa biết".
-check("TRƯỢT tách khỏi IM LẶNG", "trượt" in _bar)
+check("TRƯỢT tách khỏi IM LẶNG", "rejected" in _bar)
 check("có nút Nộp trên thanh", "/api/track/nop-tiep" in _bar)
-check("và nút đó nói còn bao nhiêu tin đáng nộp", "12 tin đáng nộp" in _bar)
+check("và nút đó nói còn bao nhiêu tin đáng nộp",
+      "12 postings worth applying to" in _bar)
 
 # 4. BẢNG KIỂU EXCEL: có hàng tiêu đề, mỗi cột một nhãn.
 check("bảng có hàng tiêu đề cột", "class=thead" in _bar)
-for _c in ("công ty", "vị trí", "nguồn", "ai nộp", "lần chạm cuối",
-           "thư", "bản CV", "trạng thái"):
+for _c in ("company", "role", "source", "applied by", "last contact",
+           "mail", "CV", "state"):
     check(f"có nhãn cột «{_c}»", f">{_c}<" in _bar)
 check("công ty và vị trí là HAI cột, không dồn một ô",
       "class=c1" in _bar and "class=c2" in _bar)
@@ -1129,12 +1131,13 @@ _adj = _tkD.adjust({}, 20, {"tra_loi": 9, "tong": 37, "lau": 18, "ai": "Maven",
                             "so": 58, "khoang": [3, 14, 18]})
 for _m in ("10", "14", "20", "30", "45"):
     check(f"có mức {_m} ngày", f"im_qua:{_m}'" in _adj)
-check("mức đang dùng có dấu tích", "✓ 20 ngày" in _adj)
-check("mức khác thì không tích", "✓ 30 ngày" not in _adj)
-check("khai thẳng cái giá: mốc 10 đóng oan 2 lá", "đóng oan 2" in _adj)
-check("mốc 20 không đóng oan thì không bịa ra số", "đóng oan 0" not in _adj)
-check("nói rõ số đo lấy từ đâu", "18</b> ngày (Maven)" in _adj)
-check("và nói rõ nó KHÔNG ghi vào bảng", "PHÉP SUY, không ghi vào bảng" in _adj)
+check("mức đang dùng có dấu tích", "✓ 20 days" in _adj)
+check("mức khác thì không tích", "✓ 30 days" not in _adj)
+check("khai thẳng cái giá: mốc 10 đóng oan 2 lá", "2 closed wrongly" in _adj)
+check("mốc 20 không đóng oan thì không bịa ra số", "0 closed wrongly" not in _adj)
+check("nói rõ số đo lấy từ đâu", "18</b> days (Maven)" in _adj)
+check("và nói rõ nó KHÔNG ghi vào bảng",
+      "AN INFERENCE, never written into" in _adj)
 check("ba công tắc nguồn vẫn còn", _adj.count("data-post='/api/track/num'") == 8)
 # Số đếm được PHẢI hiện trên mặt nút, không giấu trong tooltip: rê chuột từng
 # nút mới biết mình đánh đổi gì thì coi như không có thông tin.
@@ -1154,10 +1157,11 @@ _r20 = _tkD.render(rows=[dict(id=1, stage=_bdK.SENT, company="Im Lâu", role="",
                    thu={}, loc={},
                    stage={"nguong": 20, "do": {"lau": 18}, "truot": 1,
                           "di_tiep": 0, "da_nop": 1, "cho_ban": 0})
-check("nhóm gọi thẳng tên kết cục", "Coi như trượt" in _r20)
-check("nhưng không nói dối: họ CHƯA nói gì", "họ CHƯA nói gì" in _r20)
-check("bảng dùng đúng mốc đang đặt, không hằng số cũ", "quá 20 ngày" in _r20)
-check("và đúng số đo thật", "từng có thư về là 18 ngày" in _r20)
+check("nhóm gọi thẳng tên kết cục", "Treated as rejected" in _r20)
+check("nhưng không nói dối: họ CHƯA nói gì",
+      "they have NOT said anything" in _r20)
+check("bảng dùng đúng mốc đang đặt, không hằng số cũ", "over 20 days" in _r20)
+check("và đúng số đo thật", "ended in one was 18 days" in _r20)
 # Thanh chỉ có chỗ cho một số "trượt". Gộp 2 lời từ chối thật với 32 phép suy
 # mà không nói ra thì người đọc tưởng 34 công ty đã nói không.
 from jobbot.dashboard import live as _lvK
@@ -1214,12 +1218,12 @@ import re as _reP
 def _huy(html):
     return _reP.findall(r"<span class='pill ([a-z]+)'[^>]*>([^<]*)", html)
 check("dòng quá mốc: huy hiệu nói 'coi như trượt'",
-      _huy(_q21) == [("suy", "coi như trượt")])
+      _huy(_q21) == [("suy", "treated as rejected")])
 # Nhưng không được giả là họ từ chối — "từ chối" là họ ĐÃ NÓI.
 check("không mượn lớp của huy hiệu thật", "pill rejected" not in _q21)
 check("nói rõ đây là suy ra, và nới mốc thì mở lại",
-      "họ chưa nói gì" in _q21 and "Nới mốc" in _q21)
-check("nhắc đúng con số mốc đang đặt", "quá 20 ngày" in _q21)
+      "they have said nothing" in _q21 and "Loosen the mark" in _q21)
+check("nhắc đúng con số mốc đang đặt", "over 20 days" in _q21)
 _q5 = _rim(5, song="cho")
 check("dòng còn trong cửa sổ vẫn là huy hiệu thật",
       _huy(_q5) == [("applied", "applied")])

@@ -1782,7 +1782,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # KHÔNG DÒNG NÀO ĐƯỢC BIẾN MẤT. Bảng xếp theo nhóm sức sống; dòng thiếu
     # trường đó phải rơi vào nhóm cuối chứ không được lặng lẽ mất khỏi màn.
     check("dòng chưa xếp được nhóm vẫn hiện ra",
-          "X" in _trk and "Chưa xếp được nhóm" in _trk)
+          "X" in _trk and "Could not be grouped" in _trk)
     # QUÁ CỬA SỔ HỒI ÂM THÌ PHẢI ĐỎ, kể cả dòng đang phỏng vấn: một lời mời
     # 20 ngày trước chưa ai nhắc lại là chuyện đáng lo nhất trên bảng.
     _nong = _tk.render(
