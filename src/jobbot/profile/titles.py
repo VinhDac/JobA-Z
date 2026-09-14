@@ -48,7 +48,7 @@ def extract(titles: list[str], least: int = 3, top: int = 60) -> list[tuple[str,
     """
     dem: Counter = Counter()
     for raw in titles:
-        t = re.sub(r"\s*[\(\[].*?[\)\]]", "", raw or "")      # bỏ ngoặc
+        t = re.sub(r"\s*[\(\[].*?[\)\]]", "", raw or "")      # drop brackets
         t = re.split(r"\s+[-–—,|/]\s+", t)[0]                 # drop the location tail
         w = WORD.findall(t)
         for n in (2, 3):

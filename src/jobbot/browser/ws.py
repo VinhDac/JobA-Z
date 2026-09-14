@@ -36,7 +36,7 @@ class WebSocket:
         self._buf = b""
         self._handshake(parts.path or "/", parts.hostname, parts.port)
 
-    # --- bắt tay -----------------------------------------------------------
+    # --- the handshake -----------------------------------------------------
     def _handshake(self, path: str, host: str, port: int | None) -> None:
         key = base64.b64encode(os.urandom(16)).decode()
         request = (
@@ -53,10 +53,10 @@ class WebSocket:
                 raise WSError("Chrome closed the connection mid-handshake")
             head += chunk
         if b" 101 " not in head.split(b"\r\n", 1)[0]:
-            raise WSError(f"Bắt tay hỏng: {head.split(chr(13).encode())[0][:80]!r}")
+            raise WSError(f"handshake failed: {head.split(chr(13).encode())[0][:80]!r}")
         self._buf = head.split(b"\r\n\r\n", 1)[1]
 
-    # --- gửi ---------------------------------------------------------------
+    # --- sending -----------------------------------------------------------
     def send(self, text: str) -> None:
         payload = text.encode()
         header = bytearray([0x80 | TEXT])
@@ -69,12 +69,12 @@ class WebSocket:
         else:
             header.append(0x80 | 127)
             header += struct.pack(">Q", length)
-        mask = os.urandom(4)                       # client BẮT BUỘC phải mask
+        mask = os.urandom(4)                       # a client MUST mask
         header += mask
         masked = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
         self.sock.sendall(bytes(header) + masked)
 
-    # --- nhận --------------------------------------------------------------
+    # --- receiving ---------------------------------------------------------
     def _read(self, n: int) -> bytes:
         while len(self._buf) < n:
             chunk = self.sock.recv(65536)

@@ -28,7 +28,7 @@ DRAFT = "draft"
 SENT, INTERVIEW, REJECTED, OFFER = "applied", "interview", "rejected", "offer"
 STAGES = (DRAFT, SENT, INTERVIEW, REJECTED, OFFER)
 STAGE_LABEL = {DRAFT: "filling in", SENT: "applied", INTERVIEW: "interview",
-               REJECTED: "từ chối", OFFER: "nhận"}
+               REJECTED: "rejected", OFFER: "offer"}
 # Waiting for an OUTCOME. A draft waits on nobody else — it waits on Vin, so
 # it is excluded here and is never called "silent".
 OPEN = (SENT, INTERVIEW)
@@ -189,7 +189,7 @@ SONG_XONG = "xong"        # it has an outcome
 
 # WHO APPLIED — and the user needs all of these kept apart.
 #     mail   you applied yourself BEFORE using the app; rebuilt from mail
-#     apply  bạn nộp qua app
+#     apply  you applied through the app
 #     tay    the machine meant to apply and could not (LinkedIn locked) —
 #            you do it yourself
 AI_NOP = {"mail": "applied before the app", "apply": "applied through the app",
@@ -213,7 +213,7 @@ def nguon_cua(source: str) -> str:
 def all(conn: sqlite3.Connection, im_qua: int | None = None) -> list[dict]:
     """The whole table, with MEASUREMENTS of time and mail.
 
-    IM LẶNG ĐO TỪ LÁ THƯ CUỐI, KHÔNG TỪ `last_event_at`. `last_event_at` chỉ
+    SILENCE IS MEASURED FROM THE LAST MAIL, NOT FROM `last_event_at`, which
     is only written when the user ACCEPTS a proposal; so a company that has
     replied four times while the user has not pressed anything was still
     counted as "silent". Measured on the real mailbox: the table reported 35

@@ -29,7 +29,7 @@ SKILLS: dict[str, set[str]] = {
     "kdb": {"kdb", "kdb+", "q language"},
     "javascript": {"javascript", "typescript", "js"},
     "excel": {"excel", "vba"},
-    # dữ liệu / ML
+    # data / ML
     "pandas": {"pandas"},
     "numpy": {"numpy"},
     "scipy": {"scipy"},
@@ -70,7 +70,7 @@ SKILLS: dict[str, set[str]] = {
     "factor models": {"factor model", "factor models", "fama"},
     "cfa": {"cfa"},
     "frm": {"frm"},
-    # hạ tầng
+    # infrastructure
     "linux": {"linux", "unix", "bash", "shell scripting"},
     "docker": {"docker", "container"},
     "kubernetes": {"kubernetes", "k8s"},
@@ -145,7 +145,7 @@ def alias_map() -> dict[str, str]:
 ALIASES = alias_map()
 
 
-# --------------------------------------------------------------- khớp alias
+# -------------------------------------------------------- matching aliases
 # SUBSTRING matching is wrong, and badly wrong: 'excel' is inside
 # 'excellent', so 70 kept postings were tagged with the skill Excel purely
 # because the JD said "excellent communication" — and the largest project
@@ -178,9 +178,9 @@ def _alias_pattern(alias: str) -> re.Pattern:
     (?<!\\w) and (?!\\w) say exactly what is meant: "no word character glued
     to it". For an ordinary alias ("python") they behave identically to \\b.
     """
-    # ĐUÔI CHIA CHỈ GẮN CHO ALIAS ĐỦ DÀI.
+    # A SUFFIX IS ONLY ALLOWED ON A LONG ENOUGH ALIAS.
     #
-    # "r" + "ed" = "red", "r" + "ing" = "ring", "go" + "ing" = "going". Đo
+    # "r" + "ed" = "red", "r" + "ing" = "ring", "go" + "ing" = "going".
     # real: "the red car is going fast" yields the skills {Go, R}, and "a
     # ring of trust during the day" yields {R}. Any posting containing
     # "red"/"ring"/"going" scored for two languages the JD never mentions —

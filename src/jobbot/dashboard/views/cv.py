@@ -38,7 +38,7 @@ def render(job: dict, cv: TailoredCV, profile: dict | None = None,
         f"CV — {job['title']}",
         f"<a class=back href='{esc(ve)}'>← {esc(ten)}</a>"
         + h1("The CV for this posting",
-             f"Dựng cho {job['company']} — {job['title']}.")
+             f"Built for {job['company']} — {job['title']}.")
         + head(cv, xem)
         + paper(cv, cham=True, du_bi=du_bi, job=str(job['id']))
         + chi_tiet(cv),

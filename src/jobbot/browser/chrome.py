@@ -1,6 +1,6 @@
 """Launch and manage a SEPARATE Chrome.
 
-BA RÀNG BUỘC, cố ý:
+FOUR CONSTRAINTS, deliberately:
 
 1. **Its own profile.** Chrome will not let two processes open one profile,
    so using the main profile would mean closing every browsing window each
@@ -31,7 +31,7 @@ from pathlib import Path
 from ..core.paths import data_dir
 
 PORT = 9333          # the scan — visible window, Vin can watch
-PDF_PORT = 9334      # in CV — ẩn
+PDF_PORT = 9334      # printing CVs — headless
 APPLY_PORT = 9335    # filling the application form — visible, Vin clicks last
 
 # One port, one profile. See constraint 4 at the top of this file.

@@ -527,7 +527,7 @@ check("đếm được chỗ cần xem trên cả tờ", isinstance(_ds4, list))
 check("đếm theo CHỖ, không theo câu — một câu có thể có hai việc",
       all(len(x) == 3 and isinstance(x[2], int) for x in _ds4))
 _h4 = _hd(ml)
-check("thanh đầu nói thẳng còn mấy chỗ cần xem", "chỗ cần bạn xem" in _h4)
+check("thanh đầu nói thẳng còn mấy chỗ cần xem", "spots to look at" in _h4)
 check("và có chú giải, không để mấy đường gạch thành câu đố",
       "glegend" in _h4 or not _ds4)
 

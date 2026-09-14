@@ -125,7 +125,7 @@ _DUOI_TEN = re.compile(
     re.I | re.S)
 
 # THIS TEXT IS A ROLE, NOT A COMPANY. The most important remaining guard:
-# "we've received your application for Quantitative Trading Analyst" — bắt
+# "we've received your application for Quantitative Trading Analyst" —
 # captures a job title, and the table grows a "company" called "Quantitative
 # Trading Analyst". Only trusted when the sentence has an `at` separating
 # role from company; without one it is better not to guess.
@@ -298,7 +298,7 @@ def company_of(msg: dict) -> str:
 
     # 3. THE BODY — noisier than the subject, but it rescues mail whose
     #    subject only says
-    #    chức danh: "we've received your application for Quantitative Trading
+    #    only a job title: "we've received your application for Quantitative
     #    Analyst" / body: "Thanks for applying to Maven."
     ten = _tu_chu(msg.get("snippet") or "")
     if ten:

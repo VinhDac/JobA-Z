@@ -109,10 +109,10 @@ def run(conn: sqlite3.Connection, days: int | None = None) -> dict:
         # the app did not know about. Rebuild it at EXACTLY the stage the
         # mail states; do not force it to "applied": a rejection turned into
         # a "waiting" row makes the table wrong the moment it is created.
-        # DỊCH VỤ CÔNG KHÔNG PHẢI VIỆC LÀM. "Your application for a National
+        # PUBLIC SERVICES ARE NOT JOBS. "Your application for a National
         # Insurance number" matched the `applied` rule and created a row on
         # the job-tracking table — measured on the real mailbox.
-        # BẰNG CHỨNG THẮNG SUY ĐOÁN.
+        # EVIDENCE BEATS INFERENCE.
         #
         # The domain filter is an INFERENCE ("mail from here is probably not
         # about a job"). `sort.kind()` reading "interview" is EVIDENCE taken

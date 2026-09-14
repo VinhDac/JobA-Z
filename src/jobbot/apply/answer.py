@@ -47,7 +47,7 @@ COUNTRY = {"uk": ("United Kingdom", "GB", "UK", "United Kingdom of Great Britain
 
 @dataclass(frozen=True)
 class Ans:
-    """Một sự thật.
+    """One fact.
 
     `value`   what goes into a text field
     `aliases` other wordings, for finding it in a dropdown
@@ -141,11 +141,11 @@ def line(degree: str, discipline: str, school: str,
          start: str, end: str, note: str = "") -> str:
     """The separate fields -> EXACTLY the line `educations()` can read back.
 
-    Dạng: "MSc Computational Finance — Royal Holloway, Sep 2025 – Sep 2026"
+    Shape: "MSc Computational Finance — Royal Holloway, Sep 2025 – Sep 2026"
     The note (module marks) goes on its own INDENTED line — that is how it
     says "this is a sub-line of the degree above", and it is also what keeps
     it from being misread as another
-    bằng thứ hai.
+    a second degree.
     """
     trai = " ".join(x for x in (degree.strip(), discipline.strip()) if x)
     phai = school.strip()
@@ -173,7 +173,7 @@ def education(text: str) -> Education:
     hang = educations(text)
     if not hang:
         trong = Education()
-        trong.missing = ["học vấn"]
+        trong.missing = ["education"]
         return trong
     return hang[0]
 

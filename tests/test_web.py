@@ -1728,7 +1728,7 @@ with tempfile.TemporaryDirectory() as tmp:
     _jid = str(job_id)
     _ma, _ct = get(f"/jobs/{_jid}")       # get() trả (mã, thân), không phải chuỗi
     check("trang chi tiết mở được", _ma == 200, str(_ma))
-    check("trang chi tiết có ô Mở tin gốc", "Mở tin gốc" in _ct)
+    check("trang chi tiết có ô Mở tin gốc", "Open the original posting" in _ct)
     # KHÔNG ĐƯỢC CÓ NÚT VẼ. Mọi trình nghe trong live.js đều bắt theo data-*,
     # nên một <button> không mang data-* nào là nút bấm vào không có gì xảy ra
     # — và không báo lỗi, nên người dùng tưởng app hỏng. Trang này từng có hai

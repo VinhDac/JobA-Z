@@ -38,7 +38,7 @@ class Tab:
     port: int = PORT
     _next: int = 1
 
-    # --- nền ---------------------------------------------------------------
+    # --- plumbing ----------------------------------------------------------
     def call(self, method: str, params: dict | None = None, timeout: float = 30.0) -> dict:
         self._next += 1
         message_id = self._next
@@ -59,7 +59,7 @@ class Tab:
                            {"expression": expression, "returnByValue": True,
                             "awaitPromise": True}, timeout)
         if result.get("exceptionDetails"):
-            raise CDPError(result["exceptionDetails"].get("text", "lỗi JS"))
+            raise CDPError(result["exceptionDetails"].get("text", "JS error"))
         return result.get("result", {}).get("value")
 
     # --- actions -----------------------------------------------------------
@@ -143,7 +143,7 @@ def attach(target_id: str, port: int = PORT) -> Tab:
 
 
 def open_tab(url: str = "about:blank", port: int = PORT) -> Tab:
-    """Mở tab mới qua Target.createTarget.
+    """Open a new tab through Target.createTarget.
 
     Does NOT use the /json/new HTTP endpoint: newer Chrome requires PUT
     instead of GET and returns 405, so that route breaks per version. The CDP

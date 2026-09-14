@@ -7,7 +7,7 @@ two.
 This page IS STILL ALIVE at /jobs/<id> — it is where the new list points, and
 where you read why a posting scored what it scored.
 
-CHỈ VẼ.
+DRAWING ONLY.
 """
 
 from __future__ import annotations
@@ -129,7 +129,7 @@ def render_detail(job: dict, tu: str = "") -> str:
         + h1(job["title"], f"{job['company']} · {job['location']} · {job['salary']}")
         + f"<div class=jmeta>{_score(job)}"
           f"<span class=spacer></span><span class=muted>{esc(job['posted'])}</span></div>"
-        + "<h2>Mở tin gốc</h2>"
+        + "<h2>Open the original posting</h2>"
         + _mo_tin_goc(job)
         + "<h2>Why this score</h2>"
         + _breakdown(job)

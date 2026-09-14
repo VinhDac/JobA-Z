@@ -27,7 +27,7 @@ from .vocab import (DEGREE_WORDS, QUANT_FIELD, SKILLS, YEARS,
                     alias_hits)
 
 YEARS_BAND = {"0-1": 0.5, "1-3": 2, "3-5": 4, "5-8": 6.5, "8+": 10}
-# ---------------------------------------------------------------- cấp bậc
+# ------------------------------------------------------------------ level
 #
 # ONE NUMBER LINE, not a "is this junior" flag.
 #
@@ -138,7 +138,7 @@ def build_index(answers: dict) -> list[Evidence]:
         ("your certifications", "certifications", True),
         ("skills you're still learning", "skills_weak", False),
     ]
-    # BỎ `search_keywords` VÀ `stack_want` KHỎI BẰNG CHỨNG.
+    # `search_keywords` AND `stack_want` ARE EXCLUDED FROM THE EVIDENCE.
     #
     # Their own labels declare "(not proof)" — and they were still loaded
     # into the evidence index, so a requirement line counted as MET off words
@@ -166,7 +166,7 @@ def _signals(text: str) -> list[str]:
     The matching rule lives in vocab.alias_hits — shared with
     cv.build.skills_in, so the scoring layer and the CV builder can never
     understand the same
-    một chữ.
+    a single word.
     """
     return alias_hits(norm(text))
 

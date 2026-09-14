@@ -1225,7 +1225,7 @@ check("dòng còn trong cửa sổ vẫn là huy hiệu thật",
       _huy(_q5) == [("applied", "applied")])
 _qtu = _rim(30, stage=_bdK.REJECTED, song="xong")
 check("họ ĐÃ nói từ chối thì vẫn là huy hiệu thật",
-      _huy(_qtu) == [("rejected", "từ chối")])
+      _huy(_qtu) == [("rejected", "rejected")])
 _cssP = (Path(__file__).resolve().parent.parent
          / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
 check("và hai loại huy hiệu KHÁC MẶT thật, không chỉ khác chữ",

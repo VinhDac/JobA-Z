@@ -5,7 +5,7 @@ live.js, and every external library is a CDN reaching out to the network —
 the app working offline is a property, not luck. The charts here are bars and
 columns, and for bars and columns `<rect>` is enough.
 
-BA LUẬT CHO MỌI HÌNH TRONG FILE NÀY:
+THREE RULES FOR EVERY SHAPE IN THIS FILE:
 
   1. NEVER DRAW WHAT WAS NOT MEASURED. A day before the app existed has no
      column, not a column of 0 — "that day produced 0" and "the app did not
@@ -16,7 +16,7 @@ BA LUẬT CHO MỌI HÌNH TRONG FILE NÀY:
   3. READABLE WITHOUT COLOUR. Every shape carries its number in text; colour
      only groups things quickly, it never carries information.
 
-CHỈ VẼ.
+DRAWING ONLY.
 """
 
 from __future__ import annotations
@@ -108,7 +108,7 @@ def dai_viec(v: dict) -> str:
     # the right answer is WHEN IT LAST HAPPENED.
     cuoi_co = next((d for d, x in reversed(cot) if x), "")
     if round(v["tb"]) < 1 and v["tong"]:
-        phu = (f"lần cuối {esc(cuoi_co[5:].replace('-', '/'))}"
+        phu = (f"last on {esc(cuoi_co[5:].replace('-', '/'))}"
                if cuoi_co else f"peak {_so(v['dinh'])}")
     else:
         phu = f"avg {_so(round(v['tb']))}/day · peak {_so(v['dinh'])}"

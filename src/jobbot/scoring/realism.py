@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
-# Dấu hiệu tin TUYỂN NGƯỜI MỚI RA TRƯỜNG — cửa rộng nhất
+# Signals of an EARLY-CAREERS posting — the widest door
 OPEN_DOOR = re.compile(
     r"\b(graduate (?:programme|program|scheme|role|opportunit)|"
     r"campus (?:hire|recruit)|entry[- ]level|no (?:prior )?experience (?:is )?"
@@ -26,7 +26,7 @@ OPEN_DOOR = re.compile(
     r"final[- ]year (?:student|undergraduate)|recent graduate|"
     r"we welcome applications from students)\b", re.I)
 
-# Dấu hiệu CỬA HẸP
+# Signals of a NARROW door
 PHD_HARD = re.compile(r"\b(phd (?:is )?(?:required|essential)|must have a phd|"
                       r"phd in|doctorate (?:required|in))\b", re.I)
 PHD_SOFT = re.compile(r"\bph\.?d\b", re.I)
@@ -37,7 +37,7 @@ SENIOR_TITLE = re.compile(r"\b(senior|snr|lead|principal|staff|head of|vp|"
 
 YEARS_HAVE = {"0-1": 0.5, "1-3": 2, "3-5": 4, "5-8": 6.5, "8+": 10}
 
-# Hạn nộp viết trong JD
+# A deadline stated in the JD
 DEADLINE = re.compile(
     r"(?:deadline|closing date|applications? close|apply by|closes on|"
     r"last day to apply)\D{0,24}"

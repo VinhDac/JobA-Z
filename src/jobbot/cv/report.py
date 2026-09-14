@@ -147,7 +147,7 @@ def head(cv: TailoredCV, xem_tin: str = "") -> str:
 
     o = ("<div class=gsum>"
          f"<span class='gstat {'act' if can else ''}'><b>{can}</b>"
-         f"chỗ cần bạn xem</span>"
+         f"spots to look at</span>"
          f"<span class=gstat><b>{ty}</b>of what this posting asks, the CV answers</span>"
          f"<span class=gstat><b>{d['vao']}</b>sentences on this version</span>"
          f"<span class=gstat><b>{len(cv.missing)}</b>things the profile cannot answer</span>"
@@ -166,7 +166,7 @@ def head(cv: TailoredCV, xem_tin: str = "") -> str:
           if xem_tin else "")
     nut = ("<input type=checkbox id=cvtruoc class=gswitch hidden>"
            "<div class=gtoggle>"
-           "<label for=cvtruoc><span class=gt1>Sau khi sửa</span>"
+           "<label for=cvtruoc><span class=gt1>After rewording</span>"
            "<span class=gt2>Before rewording</span></label>"
            "<span class=muted>click to see your original wording</span>"
            f"{di}</div>")

@@ -3,7 +3,7 @@
 The founding rule of the whole CV layer (see build.py): *every sentence on
 the CV is one Vin wrote*. This module does not break that rule; it makes it
 explicit as two different
-hẳn nhau:
+jobs:
 
     TRANSFORM  cut and reorder existing words -> the machine does it,
                                                   adding 0 facts
@@ -30,7 +30,7 @@ from dataclasses import dataclass
 
 from . import rules
 
-# --- BIẾN ĐỔI -----------------------------------------------------------
+# --- TRANSFORMS ----------------------------------------------------------
 
 # Common IRREGULAR past tenses in a CV. This table is needed because the
 # "-ed suffix" rule does not catch "built", "wrote", "chose". This is

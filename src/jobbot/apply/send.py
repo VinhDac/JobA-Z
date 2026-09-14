@@ -19,7 +19,7 @@ REFUSES to send if:
 Why re-read rather than trust the report from filling time: between filling
 and clicking, Vin sat and answered the remaining fields. The true state is on
 the page, not
-trong bộ nhớ.
+in memory.
 
 The right tab is found again by the `data-jbjob` marker stamped on the page
 at fill time — no handle is kept in server memory, so restarting the web
@@ -40,7 +40,7 @@ PORT = chrome.APPLY_PORT
 
 # The submit-button wording of the measured ATSes: Greenhouse "Submit
 # Ashby "Submit Application", Lever "Submit application".
-SUBMIT_TEXT = re.compile(r"^(submit|apply|send|nộp|gửi)\b", re.I)
+SUBMIT_TEXT = re.compile(r"^(submit|apply|send)\b", re.I)
 
 # FIND and AIM in ONE call. This used to be two JS blocks repeating the same
 # button-selection logic: one to approve, one to read the coordinates. Two

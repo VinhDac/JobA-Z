@@ -197,8 +197,8 @@ def run(conn: sqlite3.Connection, log=None) -> dict:
 
     n_ban = len(data.get("versions") or [])
     n_tin = sum(len(v.get("jobs") or []) for v in data.get("versions") or [])
-    tom = f"{n_ban} bản cho {n_tin:,} tin"
-    jlog.ok(CV, f"dựng xong — {tom}")
+    tom = f"{n_ban} versions for {n_tin:,} postings"
+    jlog.ok(CV, f"build finished — {tom}")
     jlog.done(CV)
     say(f"  CV: {tom}")
     return data

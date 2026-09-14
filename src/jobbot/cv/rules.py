@@ -5,7 +5,7 @@ These are rules that APPLY TO EVERY JD, not a one-off manual fix.
 The layering principle:
     the CV        -> matching evidence, scannable  -> gets past the filter
     project page  -> depth, including what went wrong -> gets the interview
-    Phỏng vấn     -> triết lý
+    the interview -> the philosophy
 
 So a self-critical sentence is NOT deleted — it moves to the project page in
 step 4.
@@ -23,7 +23,7 @@ import re
 #
 # The distinction matters:
 #   "A random train/test split leaks"        -> KNOWLEDGE, keep. The strongest thing there is.
-#   "Live drawdown ran 30% deeper"           -> KẾT QUẢ HỎNG, chuyển sang trang project
+#   "Live drawdown ran 30% deeper"           -> A BAD OUTCOME, moves to the project page
 #
 # My first version caught the word "leaks" too and dropped the most valuable
 # expertise on the page.
