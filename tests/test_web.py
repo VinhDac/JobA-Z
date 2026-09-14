@@ -1,13 +1,14 @@
-"""Smoke test tầng web — thứ đáng lẽ phải có từ đầu.
+"""A smoke test for the web layer — what should have existed from the start.
 
-Trong một phiên làm việc, tầng web sập trắng BỐN lần:
-    settings 500  cột attempted/failed thiếu trong câu GROUP BY
-    jobs 500      biến `chance` dùng trước khi gán
-    jobs 500      job['cv_changes'] đã bị bỏ khỏi tầng dữ liệu
-    projects 500  view gọi hàm chưa tồn tại
+In one working session the web layer went white FOUR times:
+    settings 500  the attempted/failed columns missing from the GROUP BY
+    jobs 500      the `chance` variable used before it was assigned
+    jobs 500      job['cv_changes'] had been dropped from the data layer
+    projects 500  a view calling a function that did not exist
 
-Không lần nào bị test bắt, vì KHÔNG test nào gọi hàm render và KHÔNG test nào
-bấm vào server. Cả bốn đều là lỗi một dòng, và một smoke test bắt được cả bốn.
+Not one was caught by a test, because NO test called a render function and NO
+test pressed the server. All four were one-line bugs, and one smoke test catches
+all four.
 
     python3 tests/test_web.py
 """
@@ -18,14 +19,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-# CHẠY LẺ CŨNG PHẢI ĐÚNG.
+# RUNNING THIS FILE ALONE HAS TO BE RIGHT TOO.
 #
-# run_all.py dựng một gốc dự án giả + khoá mạng cho mọi bài. Nhưng chạy lẻ
-# một file (python3 tests/test_web.py) thì không có chốt đó, và mấy bài
-# khẳng định "chưa nối bot" sẽ đỏ — đỏ vì máy này có cấu hình, không vì code
-# sai. Tệ hơn: chạy lẻ có thể gửi tin thật về điện thoại người dùng.
+# run_all.py builds a fake project root and locks the network for every file. But
+# running one file alone (python3 tests/test_web.py) has none of those catches, and
+# the checks asserting "no bot connected" go red — red because this machine has a
+# config, not because the code is wrong. Worse: running it alone could send a real
+# message to the user's phone.
 #
-# Đặt NGAY ĐÂY, trước mọi import jobbot, để không có lối vòng.
+# Placed RIGHT HERE, before any jobbot import, so there is no way round it.
 import os as _os, tempfile as _tf, pathlib as _pl
 _os.environ.setdefault("JOBBOT_OFFLINE", "1")
 if "JOBBOT_ROOT" not in _os.environ:
@@ -48,8 +50,8 @@ PROFILE = {
     "markets": ["uk_onsite"], "work_auth": "citizen",
     "seniority": ["grad", "junior"], "years_real": "0-1",
     "full_name": "Test User", "email": "t@example.com",
-    # Nơi ở: bộ lọc nơi chốn nay tính theo ô này, nên hồ sơ thử phải có nó —
-    # hồ sơ thật của ai cũng có.
+    # Location: the place filter now works off this field, so the test profile has to
+    # carry it — every real profile does.
     "location": "London, UK",
     "education": "MSc Computational Finance — Somewhere, 2026",
     "certifications": "CFA Level I",
@@ -78,9 +80,9 @@ def seeded(path: Path):
                             "· Time series analysis\n· SQL\n" + "detail " * 80),
         Posting(source_id="c", title="Product Manager", company="Acme",
                 location="Berlin", url="https://x/c", description="unrelated " * 60),
-        # Ba tin dưới đây có mặt để tầng project ĐẺ RA nhóm: dưới MIN_JOBS thì
-        # cluster.build trả về rỗng, trang /projects không in liên kết nào, và
-        # bài test đi-theo-liên-kết ở dưới sẽ không kiểm được gì cả.
+        # The three postings below exist so the project layer PRODUCES a cluster: under
+        # MIN_JOBS, cluster.build returns nothing, /projects prints no links, and the
+        # follow-every-link test below would check nothing at all.
         Posting(source_id="d", title="Data Scientist", company="Wintermute",
                 location="London", url="https://x/d",
                 description="Requirements:\n· Machine learning in production\n"
@@ -107,7 +109,7 @@ ROUTES = ["/", "/search", "/cv", "/cv/soan", "/profile",
           "/profile/muc_tieu", "/profile/import", "/profile/health",
           "/settings", "/api/profile", "/api/state", "/api/alive"]
 
-print("\n[mọi route phải trả 200 và KHÔNG có traceback]")
+print("\n[every route has to return 200 and carry NO traceback]")
 with tempfile.TemporaryDirectory() as tmp:
     import os
     os.environ["JOBBOT_DATA_DIR"] = tmp
@@ -115,11 +117,11 @@ with tempfile.TemporaryDirectory() as tmp:
     job_id = conn.execute("SELECT id FROM posting WHERE kept=1 LIMIT 1").fetchone()[0]
     conn.close()
 
-    # CỔNG TỰ TÌM, không đóng cứng. Đóng cứng 8791 thì hai lượt test chạy
-    # chồng nhau (hoặc một cái gì khác đang nghe ở đó) là "Address already in
-    # use" — bài test đỏ vì lý do chẳng liên quan gì tới code, và đỏ KHÔNG
-    # ĐỀU nên càng khó tin. Bắt đầu từ 8791 để tránh cổng của app đang chạy
-    # (8765), rồi nhích lên nếu bận.
+    # THE PORT FINDS ITSELF, never hard-coded. Hard-code 8791 and two overlapping test
+    # runs (or anything else listening there) give "Address already in use" — the test
+    # goes red for a reason unconnected to the code, and INTERMITTENTLY, which makes it
+    # even harder to trust. Start at 8791 to stay clear of the running app's port
+    # (8765), and step up if it is busy.
     from jobbot.dashboard.server import serve
     httpd, base = serve(port=0)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -138,35 +140,36 @@ with tempfile.TemporaryDirectory() as tmp:
         status, body = get(path)
         check(f"{path:24} {status}", status == 200, body[:90])
         if status == 200 and path != "/api/profile":
-            check(f"{path:24} không lộ traceback",
+            check(f"{path:24} leaks no traceback",
                   "Traceback" not in body and "<class '" not in body)
 
-    print("\n[/api/alive — dấu nhận dạng cho người NGOÀI tiến trình]")
-    # start.command hỏi đúng route này để phân biệt "jobbot đang chạy" với
-    # "cổng cũ giờ là app khác". Nó phải nói TÊN và PID, không chỉ trả 200.
+    print("\n[/api/alive — an identity mark for whoever is OUTSIDE the process]")
+    # start.command asks this exact route to tell "jobbot is running" apart from "that
+    # old port belongs to another app now". It has to state A NAME and A PID, not merely
+    # return 200.
     _st, _than = get("/api/alive")
-    check("/api/alive trả 200", _st == 200, _than[:80])
-    check("nói rõ jobbot đang trả lời", _than.startswith("jobbot "), _than[:80])
-    check("kèm PID của chính tiến trình này",
+    check("/api/alive returns 200", _st == 200, _than[:80])
+    check("it says outright that jobbot is answering", _than.startswith("jobbot "), _than[:80])
+    check("with this very process's PID",
           _than.split()[1].strip() == str(os.getpid()), _than[:80])
-    check("`grep -q '^jobbot '` của start.command khớp được",
+    check("start.command's `grep -q '^jobbot '` matches it",
           bool(__import__("re").match(r"^jobbot \d+", _than)), _than[:80])
 
-    print("\n[404 đúng cách, không sập]")
+    print("\n[404 properly, with no crash]")
     for path in ["/nope", "/jobs/999999", "/profile/khong-co", "/projects/khong-co",
-                 "/queue", "/pipeline", "/stats",      # trang giả đã xoá hẳn
-                 "/jobs", "/score"]:                   # tab đã bỏ, đang dựng lại
+                 "/queue", "/pipeline", "/stats",      # placeholder pages, deleted for good
+                 "/jobs", "/score"]:                   # tabs dropped, being rebuilt
         status, _ = get(path)
         check(f"{path:24} -> 404", status == 404)
 
-    # Khối "mọi tổ hợp lọc đều phải sống" đã bỏ cùng trang /jobs. Logic lọc
-    # KHÔNG mất kiểm: tests/test_filters.py gọi thẳng live.jobs() với đủ tổ
-    # hợp, kể cả chuỗi độc và phân trang. Khi danh sách quay lại trong Search,
-    # dựng lại khối này để kiểm qua HTTP.
+    # The "every filter combination has to stay alive" block went with the /jobs page.
+    # The filter logic is NOT left unguarded: tests/test_filters.py calls live.jobs()
+    # directly with every combination, hostile strings and paging included. When the
+    # list returns inside Search, rebuild this block to check it over HTTP.
 
-    print("\n[POST không được sập]")
+    print("\n[a POST must not crash]")
     def _post_raw(path, data=b""):
-        """POST và trả về THÂN phản hồi — post() chỉ trả mã."""
+        """POST and return THE RESPONSE BODY — post() returns only the status."""
         req = urllib.request.Request(base.rstrip("/") + path, data=data)
         try:
             with urllib.request.urlopen(req, timeout=25) as r:
@@ -189,62 +192,62 @@ with tempfile.TemporaryDirectory() as tmp:
     check("POST /profile/muc_tieu",
           post("/profile/muc_tieu", b"job_titles=Analyst&markets=uk_onsite") == 200)
 
-    print("\n[CHU TRÌNH dựng hồ sơ — Home phải dẫn đường, không chỉ báo cáo]")
-    # Đây là cửa vào app. Người dùng mới đáp xuống đây trước tiên; trước đây
-    # nó chỉ nói "Trang này đang trống".
-    # Chu trình dựng hồ sơ là TẤM PHỦ, không phải tab Home: việc của nó chỉ có
-    # lúc đầu, còn tab Home là chỗ của bảng điều khiển pipeline.
+    print("\n[THE PROFILE-BUILDING RUN — Home has to lead the way, not merely report]")
+    # This is the front door. A new user lands here first; it used to say only "This page
+    # is empty."
+    # The profile-building run is AN OVERLAY, not the Home tab: its work happens at the
+    # beginning only, and the Home tab belongs to the pipeline dashboard.
     _, _hm = get("/onboarding")
     _, _trang = get("/")
-    check("chu trình là mảnh HTML cho tấm phủ, không phải cả trang",
+    check("the run is an HTML fragment for the overlay, not a whole page",
           "<!doctype" not in _trang.lower() or "<!doctype" not in _hm.lower())
-    check("chưa đủ thì Home bật tấm phủ ngay khi vào",
+    check("not enough answered -> Home opens the overlay on arrival",
           "data-setup='/onboarding'" in _trang)
-    check("nói hồ sơ đang thiếu gì", "Nothing can run yet" in _hm)
-    check("và có nút đi thẳng tới chỗ điền", "href='/profile/muc_tieu'" in _hm)
-    check("có thanh tiến độ", "class=obar" in _hm)
-    check("liệt kê đủ 6 phần", _hm.count("class='blk ostep") == 6)
-    check("phần bắt buộc được đánh dấu", "REQUIRED" in _hm)
-    # Home KHÔNG được tự nghĩ luật: nó phải đọc đúng cổng mà Search đang đọc.
+    check("it says what the profile is missing", "Nothing can run yet" in _hm)
+    check("and there is a button straight to where to fill it in", "href='/profile/muc_tieu'" in _hm)
+    check("there is a progress bar", "class=obar" in _hm)
+    check("it lists all 6 sections", _hm.count("class='blk ostep") == 6)
+    check("the required sections are marked", "REQUIRED" in _hm)
+    # Home must NOT invent its own rule: it has to read the same gate Search reads.
     from jobbot.dashboard import live as _live
     from jobbot.core import db as _db
     _c = _db.connect()
     _ob = _live.onboarding(_c)
     from jobbot.profile import store as _st
-    check("Home đọc CÙNG cổng với Search",
+    check("Home reads THE SAME gate as Search",
           [q["id"] for q in _ob["gate_missing"]]
           == _st.missing_for_ingest(_st.load(_c)))
-    print("\n[ô thẻ + gõ-để-tìm — MỘT ô nhập, không phải hai]")
+    print("\n[the tag box + type-to-search — ONE input, not two]")
     _, _mt = get("/profile/muc_tieu")
-    check("câu chức danh là ô THẺ, không phải ô gõ chay",
+    check("the job titles question is A TAG BOX, not a plain text area",
           "data-tags='job_titles'" in _mt and "<textarea" not in _mt.split(
               "job_titles")[1][:400])
-    check("không còn ô lọc riêng thứ hai", "sugfind" not in _mt)
-    check("có danh sách gợi ý rơi xuống", "data-sugdrop" in _mt)
-    # ĐỌC RỘNG, GHI CHẶT. Dữ liệu cũ lưu "A · B · C" trên một dòng; chỉ cắt
-    # theo dấu nối mới thì cả cụm thành MỘT thẻ khổng lồ, mà cv/build.py đọc
-    # theo dòng nên vẫn tưởng chỉ có một chứng chỉ.
+    check("there is no second filter box", "sugfind" not in _mt)
+    check("there is a drop-down of suggestions", "data-sugdrop" in _mt)
+    # READ WIDE, WRITE STRICT. Older data saved "A · B · C" on one line; splitting on the
+    # new separator alone turns the whole run into ONE enormous tag, while cv/build.py
+    # reads line by line and still believes there is a single certification.
     from jobbot.dashboard.views.profile import _tach as _tach2
-    check("ô thẻ đọc được hình dạng CŨ (một dòng, ngăn bằng ·)",
+    check("the tag box reads the OLD shape (one line, separated by ·)",
           _tach2("CFA Level I · IBM Data Science · IBM ML", "\n")
           == ["CFA Level I", "IBM Data Science", "IBM ML"])
-    check("và hình dạng mới", _tach2("A\nB", "\n") == ["A", "B"])
-    check("dấu phẩy vẫn đúng", _tach2("python, sql", ", ") == ["python", "sql"])
-    check("lúc nghỉ chỉ mời gõ, không bày cả kho", "type to search" in _mt)
-    print("\n[RESET = về trạng thái ban đầu, KHÔNG sót chỗ nào]")
-    # Chạy trên thư mục RIÊNG, kể cả HOME — reset.backup() ghi ra ~/Desktop,
-    # để nguyên thì mỗi lần chạy test là rơi một tệp lên Desktop thật.
+    check("and the new shape", _tach2("A\nB", "\n") == ["A", "B"])
+    check("commas still work", _tach2("python, sql", ", ") == ["python", "sql"])
+    check("at rest it only invites typing, it does not lay out the whole set", "type to search" in _mt)
+    print("\n[RESET = back to the starting state, with NOTHING left behind]")
+    # Run it in ITS OWN directory, HOME included — reset.backup() writes to ~/Desktop,
+    # and left alone every test run would drop a file onto the real Desktop.
     import os as _osr, shutil as _shr, tempfile as _tfr
     _rtmp = _tfr.mkdtemp()
     _cu_home, _cu_data = _osr.environ.get("HOME"), _osr.environ.get("JOBBOT_DATA_DIR")
     _cu_root = _osr.environ.get("JOBBOT_ROOT")
     _osr.environ["HOME"] = _rtmp
     _osr.environ["JOBBOT_DATA_DIR"] = _rtmp
-    # JOBBOT_ROOT — thiếu dòng này, bài test đã XOÁ config/config.toml THẬT
-    # của Vin ở MỌI lần chạy suốt ngày 12/09, và nuốt mất app password Gmail
-    # anh vừa dán vào. `reset.USER_FILES` là đường dẫn tương đối so với GỐC
-    # REPO, mà gốc repo hồi đó là hằng số tính từ vị trí tệp nguồn: đổi HOME
-    # và JOBBOT_DATA_DIR chỉ dời được data/, không dời nổi config/.
+    # JOBBOT_ROOT — without this line the test DELETED the REAL config/config.toml on
+    # EVERY run through 12 September, swallowing the Gmail app password that had just
+    # been pasted in. `reset.USER_FILES` holds paths relative to THE REPO ROOT, and the
+    # repo root was then a constant derived from the source file's location: changing
+    # HOME and JOBBOT_DATA_DIR moved data/ only, never config/.
     (Path(_rtmp) / "config").mkdir(exist_ok=True)
     _osr.environ["JOBBOT_ROOT"] = _rtmp
     try:
@@ -253,57 +256,57 @@ with tempfile.TemporaryDirectory() as tmp:
         importlib.reload(_pr)
         from jobbot.core import reset as _rs
         importlib.reload(_rs)
-        # CHỐT: không bao giờ chạy đường phá hoại trỏ vào repo thật. Cùng một
-        # luật với chốt "test đang trỏ vào DB THẬT" — và chốt này có vì đã
-        # mất một app password thật.
+        # THE CATCH: never run a destructive route pointed at the real repo. The same
+        # rule as the "this test is pointed at the REAL DB" catch — and this one exists
+        # because a real app password was lost.
         assert str(_pr.project_root()).startswith(_rtmp), \
-            f"test reset đang trỏ vào REPO THẬT: {_pr.project_root()}"
+            f"the reset test is pointed at THE REAL REPO: {_pr.project_root()}"
         assert str(_rs.backup_dir()).startswith(_rtmp), \
-            f"sao lưu test đang ghi ra chỗ THẬT: {_rs.backup_dir()}"
+            f"the test backup is writing to A REAL place: {_rs.backup_dir()}"
         _cr = _dbr.connect(Path(_rtmp) / "jobbot.db")
         _dbr.migrate(_cr)
         _cr.execute("INSERT INTO pref(key,value) VALUES('x','1')")
         _cr.execute("INSERT INTO audit(at,kind,detail) VALUES('t','k','d')")
         _cr.commit()
-        (Path(_rtmp) / "app.log").write_text("rác")
+        (Path(_rtmp) / "app.log").write_text("junk")
         (Path(_rtmp) / "cv").mkdir(exist_ok=True)
         (Path(_rtmp) / "cv" / "a.pdf").write_text("x")
         _truoc = _rs.inventory(_cr)["total_rows"]
         _kq = _rs.run(_cr)
         _dbr.migrate(_cr)
         _sau = _rs.inventory(_cr)
-        check("trước reset có dữ liệu", _truoc >= 2)
-        check("sau reset KHÔNG bảng nào còn dòng", _sau["total_rows"] == 0)
-        check("và không tệp người dùng nào còn lại", _sau["files"] == 0)
-        check("nhật ký app cũng bị dọn", not (Path(_rtmp) / "app.log").exists())
-        check("sao lưu có thật và đọc được",
+        check("there was data before the reset", _truoc >= 2)
+        check("after the reset NO table has a row left", _sau["total_rows"] == 0)
+        check("and no user file is left", _sau["files"] == 0)
+        check("the app log is cleared too", not (Path(_rtmp) / "app.log").exists())
+        check("the backup exists and can be read",
               Path(_kq["backup"]).exists() and Path(_kq["backup"]).stat().st_size > 0)
-        check("sao lưu chỉ chủ máy đọc được",
+        check("only the machine's owner can read the backup",
               oct(Path(_kq["backup"]).stat().st_mode)[-3:] == "600")
-        check("schema giữ nguyên, không phải dựng lại",
+        check("the schema stands, it is not rebuilt",
               _cr.execute("PRAGMA user_version").fetchone()[0] > 0)
-        # CV của người dùng cũng phải đi hết. "Làm lại từ đầu" mà chừa lại
-        # hồ sơ thì lần chạy sau vẫn đứng trên dữ liệu cũ.
+        # The user's CV has to go too. A "start over" that spares the profile leaves the
+        # next run standing on the old data.
         from jobbot.profile import store as _st2
-        _st2.save(_cr, {"cv_text": "SELECTED PROJECTS\nTự Viết — y\n"}, "t")
+        _st2.save(_cr, {"cv_text": "SELECTED PROJECTS\nSelf Written — y\n"}, "t")
         _cr.commit()
         _rs.run(_cr)
         _dbr.migrate(_cr)
-        check("reset xoá cả CV trong hồ sơ",
+        check("the reset clears the CV in the profile too",
               not str(_st2.load(_cr).get("cv_text") or "").strip())
-        # PERSONAL PROJECT ĐÃ BỎ HẲN. Máy không nghĩ đề bài nữa, nên không còn
-        # "khối máy đẻ" để mà đánh dấu — và bảng chứa chúng phải biến mất chứ
-        # không nằm lại rỗng. Một bảng chết còn sống trong lược đồ là thứ
-        # người sau sẽ tưởng còn dùng.
-        check("bảng project đã bị bỏ khỏi lược đồ",
+        # PERSONAL PROJECTS ARE GONE ENTIRELY. The machine invents no briefs any more, so
+        # there is no "machine-made block" left to mark — and the table holding them has
+        # to disappear, not sit there empty. A dead table still alive in the schema is
+        # something whoever comes next will assume is in use.
+        check("the project table is gone from the schema",
               not [r for r in _cr.execute(
                   "SELECT name FROM sqlite_master WHERE type='table'"
                   " AND name='project'")])
         from jobbot.dashboard.views.profile import _o_khoi as _ok2
         from jobbot.profile.schema import all_questions as _aq2
         _h2 = _ok2(_aq2()["project_blocks"],
-                   {"cv_text": "SELECTED PROJECTS\nTự Viết — y\n"}, {})
-        check("mọi khối project giờ là của người dùng — không dấu máy đẻ",
+                   {"cv_text": "SELECTED PROJECTS\nSelf Written — y\n"}, {})
+        check("every project block is now the user's — no machine-made mark",
               "maybadge" not in _h2 and "blockrow machine" not in _h2)
         _cr.close()
     finally:
@@ -319,137 +322,137 @@ with tempfile.TemporaryDirectory() as tmp:
         _il.reload(_pr2); _il.reload(_rs2)
     _jsr = (Path(__file__).resolve().parent.parent
             / "src/jobbot/dashboard/web/live.js").read_text(encoding="utf-8")
-    check("và quên cả thứ trình duyệt đang nhớ", "wipe_local" in _jsr)
+    check("and it forgets what the browser is remembering too", "wipe_local" in _jsr)
 
     _js2 = (Path(__file__).resolve().parent.parent
             / "src/jobbot/dashboard/web/live.js").read_text(encoding="utf-8")
-    check("Enter lấy gợi ý khớp, không lấy chữ gõ dở",
+    check("Enter takes the matching suggestion, not the half-typed text",
           "data-sugdrop] [data-addtag]:not([hidden])" in _js2)
     _css3 = (Path(__file__).resolve().parent.parent
              / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
-    # BẪY ĐÃ DÍNH HAI LẦN: đặt display cho một phần tử là CSS của mình thắng
-    # luật [hidden]{display:none} của trình duyệt — chip bị JS ẩn vẫn hiện,
-    # flex bóp mỗi dòng còn 14px và cắt cụt chữ, nhìn như lỗi phông.
-    check("chip bị ẩn PHẢI thật sự biến mất",
+    # A TRAP FALLEN INTO TWICE: setting display on an element makes our own CSS beat the
+    # browser's [hidden]{display:none} — a chip JS had hidden still showed, flex squeezed
+    # each row down to 14px and cut the text off, and it looked like a font bug.
+    check("a hidden chip MUST really disappear",
           ".sugdrop > .addtag[hidden]{display:none}" in _css3)
-    check("và chip không bị flex bóp", ".sugdrop > .addtag{flex:none" in _css3)
-    # Cùng cái bẫy, ở cấp CHA. Chọn hết gợi ý xong JS ẩn cả vùng, mà .sugdrop
-    # khai display:flex nên nó vẫn chiếm 96px khoảng trống.
-    check("vùng gợi ý ẩn đi PHẢI biến mất hẳn",
+    check("and a chip is not squeezed by flex", ".sugdrop > .addtag{flex:none" in _css3)
+    # The same trap, one level up. With every suggestion taken, JS hides the whole area,
+    # but .sugdrop declares display:flex so it still occupied 96px of empty space.
+    check("a hidden suggestion area MUST disappear completely",
           ".sugdrop[hidden]{display:none}" in _css3)
-    check("hàng tìm cũng vậy", ".findrow[hidden]{display:none}" in _css3)
-    # "Chọn tất cả" CHỈ cho kho nhỏ. Chọn cả 60 chức danh là tự tay vô hiệu
-    # hoá bộ lọc — giữ lại mọi tin thì lọc để làm gì.
-    check("kho ngành (7) có nút chọn tất cả", "data-addall" in _mt)
-    # Luật là NGƯỠNG, nên kiểm thẳng vào luật chứ không đếm nút trên một trang
-    # mà kho to nhỏ tuỳ dữ liệu. Chọn cả 60 chức danh là tự tay vô hiệu hoá bộ
-    # lọc — giữ lại mọi tin thì lọc để làm gì.
+    check("and so does the search row", ".findrow[hidden]{display:none}" in _css3)
+    # "Select all" ONLY for a small set. Taking all 60 job titles is disabling the filter
+    # by hand — if every posting is kept, what is the filter for?
+    check("the industries set (7) has a select-all button", "data-addall" in _mt)
+    # The rule is A THRESHOLD, so check the rule directly rather than counting buttons on
+    # a page whose set size depends on the data.
     from jobbot.dashboard.views.profile import _o_the as _othe, _CHON_HET
     from jobbot.profile.schema import all_questions
     _q_ind = all_questions()["industries"]
     _nho = _othe(_q_ind, {}, {"industries": [f"n{i}" for i in range(_CHON_HET)]})
     _to = _othe(_q_ind, {}, {"industries": [f"n{i}" for i in range(_CHON_HET + 1)]})
-    check(f"kho <= {_CHON_HET} mục thì có nút chọn tất cả", "data-addall" in _nho)
-    check("kho lớn hơn thì KHÔNG", "data-addall" not in _to)
+    check(f"a set of <= {_CHON_HET} items has the select-all button", "data-addall" in _nho)
+    check("a larger set does NOT", "data-addall" not in _to)
 
-    print("\n[LÀM LẠI TỪ ĐẦU — đường phá hoại phải có chốt]")
-    # Bài thử ném rác vào mọi route từng xoá mất app password thật 12 lần liền.
-    # Route xoá sạch còn nguy hơn, nên nó phải TỪ CHỐI khi không có xác nhận.
-    check("POST rỗng KHÔNG xoá được gì", post("/api/reset", b"") == 400)
-    check("sai chữ xác nhận cũng không", post("/api/reset", b"arg=x") == 400)
-    # Và chốt đó phải thật sự chặn — DB còn nguyên bảng sau hai cú trên.
+    print("\n[START OVER — a destructive route has to have a catch]")
+    # The test that threw junk at every route once deleted a real app password 12 times
+    # in a row. The wipe-everything route is more dangerous still, so it has to REFUSE
+    # without a confirmation.
+    check("an empty POST deletes NOTHING", post("/api/reset", b"") == 400)
+    check("and neither does the wrong confirmation word", post("/api/reset", b"arg=x") == 400)
+    # And that catch has to really block — the DB still has its tables after those two.
     from jobbot.core import db as _dbm
     _cc = _dbm.connect()
-    check("DB vẫn còn nguyên schema sau hai cú POST đó",
+    check("the DB still has its whole schema after those two POSTs",
           _cc.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'"
                       ).fetchone()[0] > 5)
     _cc.close()
     _, _set = get("/settings")
-    check("Cài đặt có tab Làm lại", "data-pane='lam-lai'" in _set)
-    check("nói trước sẽ mất gì", "Will be lost:" in _set)
-    check("nói trước sao lưu nằm ở đâu", "tar.gz" in _set)
-    # NÚM NHỊP phải nói ra cái ĐÁNH ĐỔI ngay trên màn hình. Một núm ghi
-    # "Nhanh" mà không nói nhanh bằng giá gì là núm mời người ta bấm rồi lãnh
-    # hậu quả.
+    check("Settings has a Start over tab", "data-pane='lam-lai'" in _set)
+    check("it says in advance what will be lost", "Will be lost:" in _set)
+    check("and where the backup will be", "tar.gz" in _set)
+    # THE PACE KNOB has to state THE TRADE-OFF on screen. A knob labelled "Fast" that
+    # does not say what the speed costs is a knob inviting a press and a consequence.
     _, _st = get("/settings")
-    check("cài đặt có núm nhịp gọi",
+    check("Settings has a call-pace knob",
           "name=pace" in _st and "call pace" in _st)
-    check("ba mức, không hơn", _st.count("type=radio name=pace") == 3)
-    check("và nói thẳng cái đánh đổi", "easier to throttle" in _st)
-    check("mặc định đang chọn 'thường'", "value='thuong' checked" in _st)
-    # Gõ bừa vào form thì rơi về mặc định — không để chuỗi lạ thành nhịp gọi.
+    check("three levels, no more", _st.count("type=radio name=pace") == 3)
+    check("and it states the trade-off plainly", "easier to throttle" in _st)
+    check("'normal' is chosen by default", "value='thuong' checked" in _st)
+    # Junk typed into the form falls back to the default — no stray string becomes a call pace.
     post("/settings", b"every=60&from=8&to=22&pace=bi%E1%BB%8Fa")
     from jobbot.core import prefs as _pf
     _cc = db.connect()
-    check("nhịp lạ bị vứt, về mặc định",
+    check("an unknown pace is thrown away, back to the default",
           _pf.get(_cc, _pf.PACE) == "thuong", _pf.get(_cc, _pf.PACE))
     post("/settings", b"every=60&from=8&to=22&pace=nhanh")
-    check("nhịp hợp lệ thì lưu được", _pf.get(_cc, _pf.PACE) == "nhanh")
+    check("a valid pace saves", _pf.get(_cc, _pf.PACE) == "nhanh")
     post("/settings", b"every=60&from=8&to=22&pace=thuong")
     _cc.close()
 
-    check("nút khoá sẵn, phải gõ chữ mới mở",
+    check("the button starts locked, it opens only once the word is typed",
           "disabled>Delete everything" in _set and "data-needword" in _set)
     _js = (Path(__file__).resolve().parent.parent
            / "src/jobbot/dashboard/web/live.js").read_text(encoding="utf-8")
-    check("và trình duyệt có trình nghe mở khoá", "wireDangerWord" in _js)
-    # CHỮ MỜI GÕ và CHỮ ĐEM SO phải LÀ MỘT. Chúng nằm ở hai tệp khác ngôn
-    # ngữ, nên không có gì buộc chúng đi cùng nhau: đổi lời mời mà quên
-    # live.js thì nút không bao giờ mở, và người dùng gõ đúng thứ màn hình
-    # bảo mà vẫn bị từ chối — hỏng câm.
+    check("and the browser has the listener that unlocks it", "wireDangerWord" in _js)
+    # THE WORD ASKED FOR and THE WORD COMPARED must BE THE SAME. They live in two files
+    # in two different languages, so nothing makes them travel together: change the
+    # prompt and forget live.js and the button never unlocks — the user types exactly
+    # what the screen asked for and is still refused. A silent failure.
     import re as _re0
     _moi = _re0.search(r"placeholder='type (\w+) to unlock'", _set)
     _so = _re0.search(r"toUpperCase\(\) === '(\w+)'", _js)
-    check("chữ màn hình mời gõ ĐÚNG BẰNG chữ live.js đem so",
+    check("the word the screen asks for IS EXACTLY the word live.js compares",
           bool(_moi and _so) and _moi.group(1) == _so.group(1),
           f"{_moi and _moi.group(1)} vs {_so and _so.group(1)}")
 
-    print("\n[TỰ VẼ LẠI — đúng lúc, và KHÔNG cướp việc đang làm dở]")
+    print("\n[SELF-REDRAW — at the right moment, and NOT stealing work in progress]")
     import re as _re
-    # Hai câu hỏi khác nhau từng bị gộp làm một biến, và cả hai đều sai:
+    # Two different questions were once merged into one variable, and both were wrong:
     #
-    #   Home khai stream="" (ô nhật ký nhận MỌI luồng). live.js đọc chuỗi
-    #   rỗng là "sai" -> nhánh vẽ lại KHÔNG BAO GIỜ chạy. Trang tự nhận là
-    #   "live 24/7" mà số chỉ đổi khi người dùng bấm F5.
+    #   Home declared stream="" (a journal box taking EVERY stream). live.js reads an
+    #   empty string as false -> the redraw branch NEVER ran. The page claimed to be
+    #   "live 24/7" while its numbers changed only when the user pressed F5.
     #
-    #   Quản lí khai stream="search" để xem nhật ký vòng quét -> quét xong
-    #   là trang NHẢY, đóng sập cả 37 dòng chi tiết đang mở.
+    #   Manage declared stream="search" to watch the scan journal -> the moment a scan
+    #   finished the page JUMPED, slamming all 37 open detail rows shut.
     _mong = {"/": "*", "/search": "search", "/track": "track",
              "/track/queue": "track", "/cv": "cv"}
     for _p, _v in _mong.items():
         _st, _b = get(_p)
         _the = _re.search(r"<body[^>]*>", _b).group(0)
         _co = (_re.search(r"data-reload='([^']*)'", _the) or [None, ""])[1]
-        check(f"{_p:14} tự vẽ lại theo «{_v}»", _co == _v, f"thấy «{_co}»")
-    # Màn SOẠN CV thì KHÔNG: ở đó người ta đang gõ chữ.
+        check(f"{_p:14} redraws on «{_v}»", _co == _v, f"found «{_co}»")
+    # The CV COMPOSE screen does NOT: someone is typing there.
     _jid = conn2 = None
     _st, _b = get("/cv/soan")
     if _st == 200:
-        check("/cv/soan KHÔNG tự vẽ lại — đang gõ chữ ở đó",
+        check("/cv/soan does NOT self-redraw — someone is typing there",
               "data-reload" not in _re.search(r"<body[^>]*>", _b).group(0))
-    # live.js phải đọc CỜ CỦA TRANG, không hỏi lại ô nhật ký.
-    check("live.js đọc data-reload của <body>", "dataset.reload" in _js)
-    check("và KHÔNG còn suy ra từ ô nhật ký nữa",
+    # live.js has to read THE PAGE'S FLAG, not ask the journal box again.
+    check("live.js reads <body>'s data-reload", "dataset.reload" in _js)
+    check("and it no longer infers it from the journal box",
           "box.dataset.journal" not in _js.split("data-reload")[1][:900]
           if "data-reload" in _js else False)
-    check("«*» nghĩa là mọi khúc", "=== '*'" in _js)
-    # Dòng chi tiết đang mở = đang làm dở. Đây là cái vừa thiếu.
-    check("dòng chi tiết đang MỞ thì hoãn vẽ lại",
+    check("«*» means every stage", "=== '*'" in _js)
+    # An open detail row = work in progress. This is what was missing.
+    check("an OPEN detail row postpones the redraw",
           "details[open]" in _js)
-    check("ô đang gõ vẫn được bảo vệ như cũ",
+    check("a field being typed into is still protected as before",
           "input, textarea, select" in _js)
-    check("tấm phủ đang mở vẫn được bảo vệ như cũ", "data-sheet" in _js)
-    # HOÃN THÌ PHẢI NHỚ. Nuốt luôn thì trang đứng im vĩnh viễn — hỏng câm.
-    check("hoãn rồi thì NHỚ, không nuốt", "choLamMoi" in _js)
-    check("và trả nốt khi người dùng đóng dòng",
+    check("an open overlay is still protected as before", "data-sheet" in _js)
+    # POSTPONED MEANS REMEMBERED. Swallow it and the page freezes for ever — a silent failure.
+    check("postponed means REMEMBERED, not swallowed", "choLamMoi" in _js)
+    check("and delivered once the user closes the row",
           "'toggle'" in _js and "choLamMoi" in _js.split("'toggle'")[1][:200])
-    check("hoặc khi rời ô gõ",
+    check("or once they leave the field",
           "'focusout'" in _js and "choLamMoi" in _js.split("'focusout'")[1][:220])
 
-    print("\n[VÒNG GIỮ — chưa đủ thì không cho đi tiếp]")
-    # Lưu một phần mà cổng vẫn đóng -> phải quay LẠI đúng chỗ còn thiếu, không
-    # được đi tiếp sang phần sau. Bỏ luật này thì người dùng lướt hết 5 phần,
-    # bỏ trống ba câu quan trọng nhất, rồi thắc mắc vì sao bấm Chạy không ra gì.
+    print("\n[THE HOLDING LOOP — not enough answered means no way forward]")
+    # Save one section while the gate is still shut -> it has to go BACK to what is still
+    # missing, never on to the next section. Drop this rule and the user skims all 5
+    # sections, leaves the three most important questions blank, and then wonders why
+    # pressing Run produces nothing.
     def _post_lay_dich(path, body):
         import urllib.request as _u
         class _NoRedirect(_u.HTTPRedirectHandler):
@@ -462,11 +465,11 @@ with tempfile.TemporaryDirectory() as tmp:
         except urllib.error.HTTPError as e:
             return e.code, e.headers.get("Location", "")
 
-    # Lưu phần "What you won't take" trong khi cổng còn đóng -> bị kéo ngược.
+    # Saving "What you won't take" while the gate is shut -> pulled back.
     _ma, _di = _post_lay_dich("/profile/rang_buoc", b"deal_breakers=none")
-    check("lưu phần phụ khi chưa đủ -> bị đưa về chỗ còn thiếu",
+    check("saving a side section while not enough is answered -> sent back to what is missing",
           _di.endswith("/profile/muc_tieu"), f"{_ma} -> {_di}")
-    # Trang đó phải NÓI vì sao giữ lại.
+    # And that page has to SAY why it held them back.
     _, _sec = get("/profile/muc_tieu")
     check("and it says how many answers are left", "and the app can run" in _sec)
     check("the button's label promises no way forward",
