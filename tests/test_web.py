@@ -959,10 +959,10 @@ with tempfile.TemporaryDirectory() as tmp:
     post_form("/api/cv/num", "arg=rieng:rieng")
     post_form("/api/cv/num", "arg=tu_lo:0")
 
-    print("\n[bản chấm điểm: máy phải GIẢI TRÌNH, không chỉ quyết]")
-    # Luật cấm câu kể thất bại lên CV từ đầu, nhưng bộ dựng chưa bao giờ tra —
-    # 3 câu bị cấm đi ra ngoài trên MỌI bản. Không ai thấy vì không có bản
-    # giải trình nào để mà đọc.
+    print("\n[the scoring report: the machine has to SHOW ITS WORKING, not just decide]")
+    # The rules have barred failure sentences from a CV since the beginning, but the
+    # builder never consulted them — 3 barred sentences went out on EVERY build. Nobody
+    # saw, because there was no report to read.
     _s, _bcv_html = get("/jobs/1/cv")
     if _s == 200:
         from jobbot.cv import rules as _rl
@@ -976,14 +976,15 @@ with tempfile.TemporaryDirectory() as tmp:
                 if s2.kind in ("experience", "project")
                 for l in s2.lines
                 if _rl.sentence_ok(l.goc or l.text, l.hits)[0] == "drop"]
-        check("KHÔNG còn câu bị luật cấm lọt ra bản CV", not _lot, str(_lot[:1]))
+        check("NO sentence the rules bar reaches a built CV", not _lot, str(_lot[:1]))
         _cvr.close()
-        check("bản chấm điểm có mục trước/sau", "REWORD" in _bcv_html.upper()
+        check("the report has a before/after section", "REWORD" in _bcv_html.upper()
               or "gsua" in _bcv_html)
-        check("nói ra máy chỉ cắt chữ, không viết thêm",
+        check("it says the machine only cuts words, it writes nothing new",
               "cuts and reorders" in _bcv_html)
-    # HAI NHÓM BỎ phải tách, vì hai nhóm cần hai hành động khác nhau: câu bị
-    # luật cấm thì sửa chữ cũng vô ích, câu yếu hơn thì không phải sửa gì.
+    # THE TWO DROPPED GROUPS have to be kept apart, because they call for two different
+    # actions: a sentence the rules bar is not helped by rewording, while a weaker
+    # sentence needs no fixing at all.
     from jobbot.cv.build import TailoredCV as _TCV
     from jobbot.cv import report as _rp
     _gia = _TCV(header=[], summary="", sections=[],
@@ -993,16 +994,16 @@ with tempfile.TemporaryDirectory() as tmp:
                           "weaker than what this posting asks for")],
                 wanted=["python"], covered=[], missing=["c++"])
     _rh = _rp.chi_tiet(_gia)
-    check("nhóm 'luật không cho lên CV' hiện riêng",
+    check("the 'the rules do not allow these' group shows separately",
           "The rules do not allow these on a CV (1)" in _rh)
-    check("nhóm 'để dành cho tin khác' hiện riêng",
+    check("the 'saved for another posting' group shows separately",
           "Saved for another posting (1)" in _rh)
-    check("lý do dịch thành câu người đọc được, không để mã nội bộ",
+    check("the reason is turned into a readable sentence, not left as an internal code",
           "tells a failure" in _rh and "outcome failure" not in _rh)
-    check("nói ra chỗ hồ sơ CÂM",
+    check("it says where the profile IS SILENT",
           "the profile cannot answer" in _rh and "c++" in _rh)
 
-    print("\n[BACKEND ↔ FRONTEND: một luật, một kho nhớ, một chỗ quên]")
+    print("\n[BACKEND ↔ FRONTEND: one rule, one store of memory, one place to forget]")
     import ast as _ast5, pathlib as _pl5
     _live_src = (_pl5.Path(__file__).resolve().parent.parent
                  / "src/jobbot/dashboard/live.py").read_text(encoding="utf-8")
@@ -1010,53 +1011,53 @@ with tempfile.TemporaryDirectory() as tmp:
         f.read_text(encoding="utf-8")
         for f in (_pl5.Path(__file__).resolve().parent.parent / "src").rglob("*.py"))
 
-    # MỘT KHO NHỚ. Trước đây ba cache (_CV_CACHE, _BLOCK_CACHE, _HUT_CACHE)
-    # cùng dựng trên một khoá nhưng bị xoá ở BA TẬP CHỖ khác nhau: reset quên
-    # _HUT_CACHE, route xoay núm quên _BLOCK_CACHE, batch chỉ xoá _CV_CACHE.
-    # Ba thứ cùng đầu vào mà hết hạn theo ba lịch thì màn hình trộn số cũ với
-    # số mới, và không ai lần ra được.
-    # Bỏ CHÚ THÍCH trước khi soi: lời chú giải thích vì sao mấy cache đó biến
-    # mất có nhắc tên chúng, và bắt chính lời chú của mình là test vô dụng.
+    # ONE STORE OF MEMORY. There used to be three caches (_CV_CACHE, _BLOCK_CACHE,
+    # _HUT_CACHE) built on one key but cleared in THREE DIFFERENT SETS of places: reset
+    # forgot _HUT_CACHE, the knob route forgot _BLOCK_CACHE, batch cleared only
+    # _CV_CACHE. Three things with the same input expiring on three schedules means the
+    # screen mixes old numbers with new, and nobody can trace it.
+    # STRIP the comments before inspecting: the comment explaining why those caches went
+    # away names them, and a test that catches its own comment is useless.
     _code = "\n".join(
         l.split("#")[0] for l in _all_src.splitlines())
     for _c in ("_CV_CACHE", "_BLOCK_CACHE", "_HUT_CACHE"):
-        check(f"không còn cache rời {_c}", _c not in _code)
-    check("có đúng MỘT kho nhớ cho tầng CV", _all_src.count("_NHO: dict = {}") == 1)
-    check("và đúng MỘT chỗ quên", "def quen()" in _live_src)
-    # Mọi chỗ đụng tới hồ sơ/núm phải gọi quen(), không tự xoá tay.
-    check("mọi chỗ xoá đều đi qua quen()",
+        check(f"the loose {_c} cache is gone", _c not in _code)
+    check("there is exactly ONE store of memory for the CV layer", _all_src.count("_NHO: dict = {}") == 1)
+    check("and exactly ONE place that forgets", "def quen()" in _live_src)
+    # Everything that touches the profile or a knob has to call quen(), never clear by hand.
+    check("every clearing goes through quen()",
           _all_src.count(".clear()") == _all_src.count("_NHO.clear()")
           + _all_src.count("opened.clear()") + _all_src.count("vua_phu.clear()")
           or ".quen()" in _all_src)
 
-    # MỘT LUẬT. `cv_gia` (tấm Điều chỉnh) và `build` (bộ dựng) phải hỏi CÙNG
-    # một hàm về "mục kỹ năng này có bị bỏ không". Trước đây cv_gia tra một
-    # tập hằng đã bị làm rỗng, nên panel báo "không bỏ mục nào" trong khi bộ
-    # dựng vẫn bỏ thật — hai tầng nói hai điều về cùng một việc.
-    check("tấm Điều chỉnh và bộ dựng dùng CHUNG luật bỏ mục kỹ năng",
+    # ONE RULE. `cv_gia` (the Adjust panel) and `build` (the builder) have to ask THE
+    # SAME function whether a skill group is dropped. cv_gia used to consult a constant
+    # set that had been emptied, so the panel reported "no group dropped" while the
+    # builder really was dropping them — two layers saying two things about one act.
+    check("the Adjust panel and the builder SHARE the skill-group drop rule",
           _all_src.count("bo_muc_ky_nang(") >= 2)
-    check("và không còn tra bảng hằng đã chết",
+    check("and nothing consults the dead constant table any more",
           "DROP_SKILL_GROUPS" not in _code)
 
-    print("\n[tấm phủ KHÔNG được chắn cả trang khi đang đóng]")
-    # LỖI THẬT, và là loại tệ nhất: cả app không bấm được gì.
-    # `hidden` chỉ là luật [hidden]{display:none} của trình duyệt.
-    # `.sheet{display:flex}` cùng độ ưu tiên nhưng là CSS của mình nên THẮNG —
-    # tấm phủ nằm trên cùng vĩnh viễn, phủ đen cả trang, nuốt mọi cú bấm.
+    print("\n[a CLOSED overlay must NOT block the whole page]")
+    # A REAL BUG, and the worst kind: nothing in the app could be clicked.
+    # `hidden` is only the browser's [hidden]{display:none} rule.
+    # `.sheet{display:flex}` has the same specificity but is our own CSS, so it WINS —
+    # the overlay sat on top for ever, blacking out the page and swallowing every click.
     css = get("/static/app.css")[1]
-    check("có luật .sheet[hidden] để hidden thật sự ăn",
+    check("there is a .sheet[hidden] rule, so hidden really takes effect",
           ".sheet[hidden]{display:none}" in css)
-    # Đặt display trên .sheet mà KHÔNG có luật [hidden] đi kèm là tái hiện lỗi.
+    # Setting display on .sheet WITHOUT the accompanying [hidden] rule reproduces the bug.
     body_rule = css.split(".sheet{")[1].split("}")[0]
-    check("và luật đó đứng SAU luật .sheet gốc",
+    check("and that rule comes AFTER the plain .sheet rule",
           css.index(".sheet[hidden]") > css.index(".sheet{"))
-    check("tấm phủ có nền che thật (nên nếu hở là chắn cả trang)",
+    check("the overlay really does have a covering ground (so a gap would block the page)",
           "rgba(0,0,0,.5)" in body_rule or "z-index:60" in body_rule)
 
-    print("\n[sắc độ — thang xám kiểu VS Code]")
-    # Lỗi cũ: --mute (màu chữ dùng nhiều nhất app, 84 chỗ) chỉ đạt 3.1:1 trên
-    # --panel-2, dưới ngưỡng 4.5 của chữ thường mà lại toàn cỡ 10-12px. Chốt
-    # luật ở đây để không ai hạ bậc chữ xuống dưới ngưỡng nữa.
+    print("\n[tone — a VS Code style grey scale]")
+    # The old bug: --mute (the app's most used text colour, 84 places) reached only
+    # 3.1:1 on --panel-2, under the 4.5 bar for body text while being 10-12px
+    # everywhere. Pinned here so nobody drops a text level below the bar again.
     def _cr(a, b):
         def _lin(c):
             c /= 255
@@ -1076,26 +1077,28 @@ with tempfile.TemporaryDirectory() as tmp:
     _var = dict(_rec.findall(r"--([a-z0-9-]+):\s*(#[0-9A-Fa-f]{6})", _root.group(1)))
     _mat = [v for v in ("side", "bg", "panel", "panel-2") if v in _var]
     _txt = [v for v in ("ink", "dim", "mute", "acc", "warn", "bad") if v in _var]
-    check("đọc được đủ 4 mặt nền và 6 bậc chữ", len(_mat) == 4 and len(_txt) == 6)
-    _low = [f"{t} trên {m} = {_cr(_var[t], _var[m]):.2f}"
+    check("all 4 grounds and 6 text levels were read", len(_mat) == 4 and len(_txt) == 6)
+    _low = [f"{t} on {m} = {_cr(_var[t], _var[m]):.2f}"
             for t in _txt for m in _mat if _cr(_var[t], _var[m]) < 4.5]
-    check("mọi bậc chữ đọc được trên mọi mặt nền (>=4.5:1)", not _low, str(_low))
-    # Tự chứng: đắp lại giá trị CŨ thì luật trên PHẢI gãy. Không có dòng này
-    # thì một hôm nào đó :root đổi tên biến, vòng lặp quét 0 cặp và vẫn xanh.
-    check("luật này bắt được đúng lỗi cũ (#717976)",
+    check("every text level is readable on every ground (>=4.5:1)", not _low, str(_low))
+    # Self-proof: put the OLD value back and the rule above MUST break. Without this
+    # line, the day :root renames a variable the loop scans 0 pairs and still goes green.
+    check("this rule really catches the old bug (#717976)",
           _cr("#717976", _var["panel-2"]) < 4.5)
-    # Xám phải TRUNG TÍNH — xám ngả màu thì cãi nhau với màu nhấn.
+    # The greys have to be NEUTRAL — a grey with a cast argues with the accent colour.
     _amm = {k: max(int(_var[k][i:i + 2], 16) for i in (1, 3, 5))
             - min(int(_var[k][i:i + 2], 16) for i in (1, 3, 5)) for k in _mat}
-    check("mặt nền là xám trung tính, không ám màu", max(_amm.values()) == 0, str(_amm))
+    check("the grounds are neutral greys, with no cast", max(_amm.values()) == 0, str(_amm))
 
-    # KHUNG NÓI NHỎ, NỘI DUNG NÓI TO. Trước đây ngược: thanh bên 8.1:1 và
-    # thanh trạng thái 12.2:1 trong khi nội dung chỉ 6.8:1 — đồ phụ hét to hơn
-    # việc đang làm. Chữ khung đo trên --side, chữ nội dung đo trên --panel.
-    # BẬC NỀN: tương phản phải dồn vào chỗ LÀM VIỆC, không dồn vào đồ phụ.
-    # VS Code chỉ có hai mặt phẳng: khung nằm dưới editor 3.5 điểm L* (yếu),
-    # mặt nổi bật lên 8.6 điểm (mạnh). Bản cũ của ta chia đều +3.5 / +3.9 nên
-    # thanh bên nặng ngang nội dung — thẻ không nổi lên được.
+    # THE FRAME SPEAKS QUIETLY, THE CONTENT SPEAKS UP. It used to be the other way
+    # round: the sidebar at 8.1:1 and the status bar at 12.2:1 while the content was
+    # only 6.8:1 — the furniture shouting louder than the work. Frame text is measured
+    # on --side, content text on --panel.
+    # THE GROUND STEPS: the contrast has to be spent on THE PLACE OF WORK, not on the
+    # furniture. VS Code has only two planes: the frame sits 3.5 L* below the editor
+    # (weak), and a raised surface lifts 8.6 points (strong). Our old version split it
+    # evenly, +3.5 / +3.9, so the sidebar weighed as much as the content — a card could
+    # not lift.
     def _ls(h):
         def _lin(c):
             c /= 255
@@ -1106,108 +1109,112 @@ with tempfile.TemporaryDirectory() as tmp:
         return 116 * y ** (1 / 3) - 16 if y > 0.008856 else 903.3 * y
 
     def _luat(var):
-        """(nền main có đen không, khung có xám-sáng-hơn-main không, thẻ bật bao nhiêu)"""
+        """(is the main ground black, is the frame a grey lighter than main, how far a card lifts)"""
         return (_ls(var["bg"]) <= 5.0,
                 _ls(var["side"]) - _ls(var["bg"]) >= 3.0,
                 _ls(var["panel"]) - _ls(var["bg"]))
     _den, _xam, _bat = _luat(_var)
-    check(f"nền vùng main là ĐEN (L*{_ls(_var['bg']):.1f} <= 5)", _den)
-    check(f"khung phụ là XÁM, sáng hơn main "
+    check(f"the main area's ground is BLACK (L*{_ls(_var['bg']):.1f} <= 5)", _den)
+    check(f"the surrounding frame is GREY, lighter than main "
           f"(+{_ls(_var['side']) - _ls(_var['bg']):.1f})", _xam)
-    check(f"thẻ bật hẳn khỏi nền main (+{_bat:.1f} >= 8)", _bat >= 8.0)
-    # Tự chứng: bộ CŨ (khung tối hơn main, thẻ bật yếu) phải phá cả ba luật.
+    check(f"a card lifts clear of the main ground (+{_bat:.1f} >= 8)", _bat >= 8.0)
+    # Self-proof: the OLD set (frame darker than main, card barely lifting) has to break
+    # all three rules.
     _cu = {"side": "#161616", "bg": "#1D1D1D", "panel": "#252525"}
-    check("luật này bắt được đúng bộ cũ (khung tối hơn main)",
+    check("this rule really catches the old set (frame darker than main)",
           not any((_luat(_cu)[0], _luat(_cu)[1], _luat(_cu)[2] >= 8.0)))
 
     _sc = _rec.search(r"\.side,\.statusbar\{(.*?)\}", _cssv, _rec.S)
     _cvar = dict(_rec.findall(r"--([a-z0-9-]+):\s*(#[0-9A-Fa-f]{6})", _sc.group(1)))
-    check("khung app khai lại đủ ba bậc chữ của riêng nó",
+    check("the app frame redeclares all three of its own text levels",
           sorted(_cvar) == ["dim", "ink", "mute"])
     _khung = max(_cr(v, _var["side"]) for v in _cvar.values())
     _noidung = min(_cr(_var[t], _var["panel"]) for t in ("ink", "dim", "mute"))
-    check(f"chữ khung nhạt hơn chữ nội dung ({_khung:.2f} < {_noidung:.2f})",
+    check(f"frame text is quieter than content text ({_khung:.2f} < {_noidung:.2f})",
           _khung < _noidung)
-    check("nhưng chữ khung vẫn đọc được (>=4.5:1)",
+    check("but frame text is still readable (>=4.5:1)",
           min(_cr(v, _var["side"]) for v in _cvar.values()) >= 4.5)
-    # Tự chứng: bậc chữ khung CŨ (dùng chung --dim của nội dung) phải phá luật.
-    check("luật này bắt được đúng lỗi cũ (khung dùng chung --dim)",
+    # Self-proof: the OLD frame text level (sharing the content's --dim) has to break it.
+    check("this rule really catches the old bug (the frame sharing --dim)",
           not _cr(_var["dim"], _var["side"]) < _noidung)
 
-    print("\n[Cài đặt là MENU, không phải tab]")
+    print("\n[Settings is A MENU, not a tab]")
     _, home = get("/")
-    check("Settings không còn trong thanh bên", "href='/settings'" not in home)
-    check("có nút bánh răng ở đáy thanh bên", "data-appset" in home)
-    check("và có sẵn tấm phủ rỗng để nạp vào", "data-sheet" in home)
-    check("tấm phủ mặc định ĐANG ĐÓNG", "class=sheet hidden" in home)
+    check("Settings is no longer in the sidebar", "href='/settings'" not in home)
+    check("there is a gear button at the bottom of the sidebar", "data-appset" in home)
+    check("and an empty overlay is ready to be filled", "data-sheet" in home)
+    check("the overlay starts CLOSED", "class=sheet hidden" in home)
 
     code, panel = get("/settings")
-    check(f"/settings trả 200", code == 200)
-    # Trả MẢNH, không phải cả trang: nếu trả cả trang thì nhét vào tấm phủ sẽ
-    # lồng nguyên một trang trong trang.
-    check("/settings trả MẢNH html, không phải cả trang",
+    check(f"/settings returns 200", code == 200)
+    # It returns A FRAGMENT, not a whole page: a whole page dropped into the overlay
+    # would nest an entire page inside the page.
+    check("/settings returns an HTML FRAGMENT, not a whole page",
           panel.lstrip().startswith("<div") and "<!doctype" not in panel.lower())
-    # CHIA TAB. Trước đây một cột dài 782px trong hộp cao 660px — phần "Làm
-    # lại từ đầu" nằm dưới nếp gấp, phải cuộn mới thấy mà không ai biết là
-    # cuộn được. Chia theo VIỆC: chạy / nguồn / chỉ đọc / phá huỷ.
-    check("mỗi tab có đúng một khối nội dung",
+    # SPLIT INTO TABS. It used to be one 782px column inside a 660px box — the "Start
+    # over" section sat below the fold, reachable only by scrolling, with nothing to say
+    # it could be scrolled. Split BY JOB: running / sources / read-only / destructive.
+    check("each tab has exactly one content block",
           panel.count("data-stab=") == panel.count("data-pane=") > 3)
-    check("chỉ một tab mở sẵn", panel.count("stpane on") == 1)
+    check("exactly one tab is open to begin with", panel.count("stpane on") == 1)
 
-    # TAB NGUỒN — bật/tắt từng ATS. "API" là ba nhà cung cấp, không phải 34
-    # board công ty: giới thiệu từng công ty thì vô nghĩa, còn ba ATS thì khác
-    # nhau thật (cách trả dữ liệu, loại công ty, tỉ lệ dùng được).
-    check("có tab Nguồn", "data-stab='nguon'" in panel and ">Sources<" in panel)
+    # THE SOURCES TAB — each ATS switched on or off. "API" means three providers, not
+    # 34 company boards: introducing each company would be meaningless, while the three
+    # ATSs really do differ (how they return data, which companies use them, how much of
+    # it is usable).
+    check("there is a Sources tab", "data-stab='nguon'" in panel and ">Sources<" in panel)
     for _ats in ("greenhouse", "lever", "ashby"):
-        check(f"có công tắc cho {_ats}", f"name=ats value='{_ats}'" in panel)
-    # Giới thiệu bằng SỐ THẬT của chính kho này, không bằng tính từ: "hiện
-    # đại", "phổ biến" thì không ai chọn được gì.
-    check("có công tắc cho thư báo việc", "name=ats value='alert'" in panel)
-    check("mỗi nguồn kèm số thật, không chỉ lời khen",
+        check(f"there is a switch for {_ats}", f"name=ats value='{_ats}'" in panel)
+    # Introduce them with REAL NUMBERS from this very store, not with adjectives:
+    # "modern" and "popular" let nobody choose anything.
+    check("there is a switch for job alert mail", "name=ats value='alert'" in panel)
+    check("every source carries a real number, not just praise",
           panel.count("class=srcnum") == 4 and "postings in ·" in panel,
           str(panel.count("class=srcnum")))
-    # Thư báo không phải ATS: không có board nào để đếm, nên đừng ghi
-    # "0 board" — một con số 0 vô nghĩa đọc ra như đang hỏng.
+    # Alert mail is not an ATS: there are no boards to count, so do not write
+    # "0 boards" — a meaningless zero reads as something being broken.
     _dong_alert = panel.split("value='alert'")[1].split("</label>")[0]
-    check("thư báo KHÔNG ghi '0 board'", "0 board" not in _dong_alert)
-    # MỖI FORM CHỈ SỬA PHẦN CỦA NÓ. Nhiều form cùng gửi về /settings; đọc mù
-    # thì form Nguồn (không mang ô nhịp quét) ghi mặc định 60 đè lên số cũ.
-    check("mỗi form khai rõ mình là phần nào",
+    check("alert mail does NOT say '0 boards'", "0 board" not in _dong_alert)
+    # EACH FORM EDITS ONLY ITS OWN SECTION. Several forms post to /settings; read
+    # blindly, the Sources form (which carries no scan-interval field) writes the
+    # default 60 over the saved number.
+    check("each form declares which section it is",
           panel.count("name=phan") == panel.count("<form class=setform"))
 
-    # CHỐT EMAIL: hộp thư quét phải ĐÚNG hộp thư khai trong hồ sơ. Thử thật
-    # qua HTTP, không chỉ đọc mã nguồn.
+    # THE EMAIL CATCH: the mailbox scanned has to be THE mailbox declared in the
+    # profile. Tried for real over HTTP, not merely read out of the source.
     _ma_sai, _than_sai = (post("/api/mail/setup",
                                b"address=nham@x.y&password=abcdefghijklmnop"),
                           _post_raw("/api/mail/setup",
                                     b"address=nham@x.y&password=abcdefghijklmnop"))
-    check("nối hộp thư KHÁC hồ sơ thì bị từ chối", _ma_sai == 400, str(_ma_sai))
-    check("và nói rõ cả hai địa chỉ",
+    check("connecting a mailbox OTHER than the profile's is refused", _ma_sai == 400, str(_ma_sai))
+    check("and it names both addresses",
           "nham@x.y" in _than_sai and PROFILE["email"] in _than_sai, _than_sai[:90])
-    check("kèm cách sửa", "so they match" in _than_sai)
+    check("with the way to fix it", "so they match" in _than_sai)
 
-    # TAB GMAIL — cấu hình hộp thư về đúng chỗ cấu hình.
-    check("có tab Gmail", "data-stab='gmail'" in panel and ">Gmail<" in panel)
-    # Nút "Nối hộp thư…" bên Quản lí phải mở ĐÚNG tab Gmail. Chỉ đường nửa
-    # vời — mở Cài đặt rồi bỏ người ta ở tab Chạy — còn khó chịu hơn không chỉ.
-    check("openSheet nhận tên tab", "function openSheet(url, kind, tab)" in _js)
-    # Bấm tab NGAY KHI nội dung về, không hẹn giờ: nạp bằng fetch thì đặt
-    # setTimeout là đoán xem mạng nhanh hay chậm, và trên máy chậm thì lúc
-    # hẹn giờ nổ cái nút còn chưa tồn tại.
+    # THE GMAIL TAB — mailbox configuration belongs where configuration lives.
+    check("there is a Gmail tab", "data-stab='gmail'" in panel and ">Gmail<" in panel)
+    # The "Connect a mailbox…" button over in Manage has to open THE Gmail tab. Half
+    # directions — opening Settings and leaving the person on the Run tab — are more
+    # annoying than no directions at all.
+    check("openSheet takes a tab name", "function openSheet(url, kind, tab)" in _js)
+    # Click the tab THE MOMENT the content arrives, never on a timer: loaded by fetch, a
+    # setTimeout is a guess about whether the network is fast or slow, and on a slow
+    # machine the button does not exist yet when the timer fires.
     _mo = _js.split("function openSheet")[1].split("function closeSheet")[0]
-    # BỎ chú thích trước khi kiểm: chính chú thích giải thích vì sao KHÔNG
-    # dùng setTimeout lại chứa chữ "setTimeout", và bài test đọc nhầm lời
-    # giải thích thành đoạn mã nó đang cấm.
+    # STRIP the comments before checking: the very comment explaining why setTimeout is
+    # NOT used contains the word "setTimeout", and the test would read the explanation
+    # as the code it is banning.
     _ma = "\n".join(l for l in _mo.split("\n") if not l.strip().startswith("//"))
-    check("nhảy tab trong .then, không phải setTimeout",
+    check("the tab is clicked inside .then, not on a setTimeout",
           "nut.click()" in _ma and "setTimeout" not in _ma, "")
-    check("và ô đặt số ngày đọc lại thư", "name=mail_days" in panel)
+    check("and there is a field for how many days of mail to re-read", "name=mail_days" in panel)
     from jobbot.core import prefs as _pf2
     _c2 = db.connect()
     post("/settings", b"phan=gmail&mail_days=45")
-    check("lưu được số ngày", _pf2.num(_c2, _pf2.MAIL_DAYS, 1, 365) == 45,
+    check("the day count saves", _pf2.num(_c2, _pf2.MAIL_DAYS, 1, 365) == 45,
           str(_pf2.num(_c2, _pf2.MAIL_DAYS, 1, 365)))
-    check("và KHÔNG đụng tới nhịp quét",
+    check("and it does NOT touch the scan interval",
           _pf2.num(_c2, _pf2.SCAN_EVERY, 5, 1440) != 0)
     post("/settings", b"phan=gmail&mail_days=30")
     _c2.close()
@@ -1215,47 +1222,51 @@ with tempfile.TemporaryDirectory() as tmp:
     _c2 = db.connect()
     _pf2.put(_c2, _pf2.SCAN_EVERY, "45")
     post("/settings", b"phan=nguon&ats=greenhouse&ats=lever")
-    check("lưu tab Nguồn: tắt ashby", not _pf2.flag(_c2, _pf2.SRC_ATS["ashby"]))
-    check("và giữ nguyên greenhouse", _pf2.flag(_c2, _pf2.SRC_ATS["greenhouse"]))
-    check("KHÔNG đụng tới nhịp quét của tab Chạy",
+    check("saving the Sources tab: ashby switched off", not _pf2.flag(_c2, _pf2.SRC_ATS["ashby"]))
+    check("and greenhouse left as it was", _pf2.flag(_c2, _pf2.SRC_ATS["greenhouse"]))
+    check("it does NOT touch the Run tab's scan interval",
           _pf2.num(_c2, _pf2.SCAN_EVERY, 5, 1440) == 45,
           str(_pf2.num(_c2, _pf2.SCAN_EVERY, 5, 1440)))
     post("/settings", b"phan=nguon&ats=greenhouse&ats=lever&ats=ashby")
-    check("bật lại được", _pf2.flag(_c2, _pf2.SRC_ATS["ashby"]))
+    check("it can be switched back on", _pf2.flag(_c2, _pf2.SRC_ATS["ashby"]))
     _c2.close()
 
-    # Ba núm — và ĐÚNG ba. Trang cũ có 18 dòng mà chỉ 2 dòng là setting thật.
+    # Three knobs — and EXACTLY three. The old page had 18 rows of which only 2 were
+    # real settings.
     for name in ("every", "from", "to"):
-        check(f"có ô {name}", f"name={name}" in panel)
-    check("có nút Lưu", ">Save<" in panel)
-    check("nói rõ hậu quả: chỉ đổi CÁCH CHẠY, không đụng phán quyết",
+        check(f"there is an {name} field", f"name={name}" in panel)
+    check("there is a Save button", ">Save<" in panel)
+    check("it states the consequence: it changes HOW IT RUNS, it touches no judgement",
           "from the next scan" in panel and "touches neither" in panel)
-    # Số máy tự báo về mình KHÔNG phải cài đặt -> phải ở tab khác với mấy núm
-    # chỉnh được, không chỉ là một mục dưới cùng cùng màn.
+    # Numbers the machine reports about itself are NOT settings -> they belong on a
+    # different tab from the knobs that can be turned, not merely in a section further
+    # down the same screen.
     _tab_chay = panel.split("data-pane='xem'")[0]
-    check("số máy tự báo tách sang tab khác, không lẫn với núm chỉnh",
+    check("the self-reported numbers are on their own tab, not mixed in with the knobs",
           "strow" not in _tab_chay and "data-pane='xem'" in panel)
-    check("việc phá huỷ cũng ở tab riêng", "data-pane='lam-lai'" in panel)
-    # MỘT số đệm cho cả tấm phủ. Trước đây mỗi khối tự đặt (0 / 15px / 18px)
-    # nên tiêu đề CÀI ĐẶT dính đúng góc khung còn hàng dưới thì thụt vào.
+    check("the destructive work is on its own tab too", "data-pane='lam-lai'" in panel)
+    # ONE padding value for the whole overlay. Each block used to set its own
+    # (0 / 15px / 18px), so the SETTINGS heading sat hard against the frame's corner
+    # while the row below it was indented.
     _cssp = (Path(__file__).resolve().parent.parent
              / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
-    check("đệm tấm phủ khai MỘT chỗ", "--sheet-pad:18px" in _cssp)
-    for _ten, _r in (("tiêu đề", ".sheethead{"), ("hàng tab", ".stabs{"),
-                     ("khối nội dung", ".stpane{"), ("form", ".setform{"),
-                     ("hàng nút xoá", ".dangerrow{")):
+    check("the overlay padding is declared in ONE place", "--sheet-pad:18px" in _cssp)
+    for _ten, _r in (("the heading", ".sheethead{"), ("the tab row", ".stabs{"),
+                     ("a content block", ".stpane{"), ("a form", ".setform{"),
+                     ("the delete row", ".dangerrow{")):
         _blk = _cssp[_cssp.index("\n" + _r) + 1:]
         _blk = _blk[:_blk.index("}")]
-        check(f"{_ten} dùng chung đệm đó, không tự đặt số",
+        check(f"{_ten} shares that padding, it sets no number of its own",
               "var(--sheet-pad)" in _blk or "padding:0" in _blk, _blk[:70])
 
-    # Núm "Máy LLM" ĐÃ BỎ cùng cả đường sinh đề bài bằng LLM. Đề bài giờ do
-    # khuôn dựng, nên núm đó không điều khiển gì — mà một cái nút không điều
-    # khiển gì còn tệ hơn không có nút: người dùng bấm rồi tưởng app hỏng.
-    check("không còn núm giả nào trong Cài đặt",
+    # The "LLM engine" knob IS GONE, along with the whole route that generated briefs
+    # with an LLM. Briefs now come from a template, so that knob controlled nothing —
+    # and a button that controls nothing is worse than no button: the user presses it
+    # and concludes the app is broken.
+    check("no fake knob is left in Settings",
           "name=engine" not in panel and "JOBBOT_LLM" not in panel)
 
-    print("\n[Cài đặt: lưu xong phải ĂN NGAY, không cần mở lại app]")
+    print("\n[Settings: a save has to TAKE EFFECT AT ONCE, with no app restart]")
     from jobbot.core.scheduler import scan_every_min, human_window
     before = scan_every_min()
     body = b"every=25&from=9&to=21"
@@ -1263,13 +1274,13 @@ with tempfile.TemporaryDirectory() as tmp:
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
     with urllib.request.urlopen(req, timeout=25) as r:
         saved = r.read().decode("utf-8")
-    check("lưu xong trả lại mảnh có giá trị MỚI", "value='25'" in saved)
-    # Đọc lúc chạy, không phải lúc nạp module — nếu không thì đổi nhịp xong
-    # phải khởi động lại app mới ăn.
-    check("nhịp quét đổi ngay trong tiến trình", scan_every_min() == 25)
-    check("khung giờ cũng vậy", human_window() == (9, 21))
+    check("the save returns a fragment carrying the NEW value", "value='25'" in saved)
+    # Read at run time, not at import time — otherwise changing the interval needs an
+    # app restart before it takes effect.
+    check("the scan interval changes inside the running process", scan_every_min() == 25)
+    check("and so does the hour window", human_window() == (9, 21))
 
-    # Người dùng gõ gì cũng không được làm chết vòng quét nền.
+    # Whatever the user types must not kill the background scan loop.
     for junk in (b"every=abc&from=x&to=y",
                  b"every=-5&from=99&to=-1"):
         req = urllib.request.Request(base.rstrip("/") + "/settings", data=junk)
