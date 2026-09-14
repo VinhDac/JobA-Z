@@ -1,8 +1,8 @@
-"""Lọc tin theo hồ sơ — và LUÔN nói được vì sao bỏ.
+"""Filter postings against the profile — and ALWAYS be able to say why.
 
-Không bao giờ bỏ im lặng. Mỗi tin bị loại đều ghi drop_reason, để sau này
-nhìn lại biết bộ lọc quá chặt ở đâu. Bỏ im lặng là cách chắc chắn nhất để
-mất tin tốt mà không bao giờ biết.
+Nothing is ever dropped in silence. Every rejected posting records a
+drop_reason, so that looking back later shows where the filter is too tight.
+Dropping in silence is the surest way to lose good postings and never know.
 """
 
 from __future__ import annotations
@@ -11,27 +11,29 @@ import re
 
 from .base import Posting, norm
 
-# Dấu hiệu cấp cao. Chỉ loại khi thấy RÕ RÀNG — "Analyst" trong tài chính
-# thường là entry level, không phải cấp cao.
+# Seniority signals. Only rejected when CLEAR — "Analyst" in finance is
+# usually entry level, not senior.
 SENIOR_WORDS = {
     "senior", "snr", "sr", "lead", "principal", "staff", "head", "director",
     "chief", "vp", "vice president", "manager", "architect", "expert", "specialist ii",
 }
-# LỖI ĐÃ SỬA: "analyst" từng nằm ở đây, làm mọi tin "Senior ... Analyst" lọt qua
-# vì ngoại lệ luôn kích hoạt. Trong tài chính "Analyst" là chức danh phổ biến ở
-# MỌI cấp, nên nó không phải dấu hiệu junior.
+# A BUG THAT WAS FIXED: "analyst" used to be in here, letting every
+# "Senior ... Analyst" posting through because the exception always fired. In
+# finance "Analyst" is a common title at EVERY level, so it is not a junior
+# signal.
 JUNIOR_WORDS = {
     "graduate", "grad", "junior", "jr", "intern", "internship", "placement",
     "entry", "trainee", "apprentice", "campus", "early career",
 }
 
-# MỘT bảng nơi chốn cho cả app. Trước đây có HAI: `linkedin.MARKET_PLACE`
-# bảo TÌM ở đâu, `filter.UK_WORDS` bảo GIỮ cái gì — hai bảng rời nhau, và
-# chúng lệch nhau mà không ai biết cho tới lúc ngồi đếm.
+# ONE place table for the whole app. There used to be TWO:
+# `linkedin.MARKET_PLACE` said WHERE TO SEARCH and `filter.UK_WORDS` said
+# WHAT TO KEEP — two separate tables that drifted apart with nobody noticing
+# until someone sat down and counted.
 #
 #   place  chữ gửi cho LinkedIn
-#   manh   dấu hiệu CHẮC CHẮN thuộc vùng này
-#   thanh  tên thành phố — đúng, nhưng ĐỤNG TÊN với nơi khác
+#   manh   a CERTAIN signal of this region
+#   thanh  a city name — correct, but COLLIDES with names elsewhere
 NOI = {
     "uk": {
         "ten": "UK",
@@ -58,10 +60,11 @@ NOI = {
     },
 }
 
-# Mã bang Mỹ đứng sau dấu phẩy. CHỐT CHẶN cho tên thành phố đụng nhau:
-# "Birmingham, AL" là Alabama, không phải Birmingham của Anh — mà nó đang nằm
-# trong danh sách việc UK của Vin (đo ngày 12/09, tin Mission Pet Health).
-# Đo tác dụng: loại đúng 2 tin sai, giữ nguyên 313 tin đúng.
+# A US state code after a comma. THE GUARD for colliding city names:
+# "Birmingham, AL" is Alabama, not the English Birmingham — and it was
+# sitting in Vin's UK job list (measured 12 Sep, the Mission Pet Health
+# posting). Measured effect: it removes exactly 2 wrong postings and keeps
+# all 313 right ones.
 BANG_MY = re.compile(
     r",\s*(A[LKZR]|C[AOT]|DE|FL|GA|HI|I[DLNA]|K[SY]|LA|M[EDAINSOT]|N[EVHJMYCD]"
     r"|OH|OK|OR|PA|RI|S[CD]|TN|TX|UT|V[TA]|W[AVIY]|DC)\b")
@@ -70,10 +73,11 @@ EU_REMOTE_WORDS = {"europe", "emea", "anywhere", "worldwide", "global", "remote"
 
 
 def o_vung(text: str, key: str) -> bool:
-    """Chuỗi địa điểm này có thuộc vùng `key` không.
+    """Does this location string belong to region `key`.
 
-    Dấu hiệu MẠNH thì tin ngay. Tên THÀNH PHỐ thì tin, trừ khi trong chuỗi có
-    mã bang Mỹ — lúc đó nó là thành phố trùng tên ở Mỹ.
+    A STRONG signal is trusted outright. A CITY name is trusted unless the
+    string also carries a US state code — in which case it is the
+    same-named American city.
     """
     vung = NOI.get(key)
     if not vung:
@@ -84,15 +88,18 @@ def o_vung(text: str, key: str) -> bool:
 
 
 def noi_o(location: str) -> str:
-    """Bạn ĐANG Ở vùng nào — suy từ ô "Where you're based" trong hồ sơ.
+    """Which region you ARE IN — derived from the profile's "Where you're
+    based".
 
-    Đây là việc mà ô đó vẫn hứa ("Used to filter on-site and hybrid roles by
-    commute") nhưng chưa bao giờ làm: cho tới hôm nay không một dòng nào trong
-    tìm/lọc đọc nó, chỉ CV và điền form dùng. Còn "UK" thì bị đóng cứng ở ba
-    chỗ khác nhau trong mã nguồn, tức là app mặc định ai dùng cũng ở Anh.
+    This is the job that field always promised ("Used to filter on-site and
+    hybrid roles by commute") and never did: until today not one line of the
+    search or the filter read it, only the CV and form filling. Meanwhile
+    "UK" was hardcoded in three different places, which means the app assumed
+    every user lives in Britain.
 
-    Không đoán ra thì trả rỗng, và người gọi giữ nguyên nếp cũ — không được
-    tự ý đổi thứ đang giữ chỉ vì một ô hồ sơ viết lạ.
+    When it cannot tell it returns empty and the caller keeps the old
+    behaviour — it must not change what is being kept just because one
+    profile field is worded oddly.
     """
     text = norm(location or "")
     if not text:
@@ -109,48 +116,51 @@ def _titles(answers: dict) -> list[str]:
 
 
 def title_hit(posting: Posting, targets: list[str]) -> str | None:
-    """Chức danh tin có chứa chức danh nào mình nhắm không."""
+    """Does the posting's title contain any title you target."""
     text = norm(posting.title)
     return next((t for t in targets if t and t in text), None)
 
 
 def seniority_ok(posting: Posting, accepted: list[str]) -> bool:
-    """Nhắm junior mà tin ghi rõ Senior/Lead/Head thì bỏ."""
+    """Targeting junior while the posting says Senior/Lead/Head -> drop."""
     wants_junior = bool({"intern", "grad", "grad_scheme", "junior"} & set(accepted))
     if not wants_junior:
         return True
     text = norm(posting.title)
     if any(f" {w} " in f" {text} " for w in SENIOR_WORDS):
-        # Trừ khi tin ghi CẢ hai — "Graduate to Senior Analyst" thì vẫn nhận.
+        # Unless the posting says BOTH — "Graduate to Senior Analyst" stays.
         return any(f" {w} " in f" {text} " for w in JUNIOR_WORDS)
     return True
 
 
 def _names_in(text: str, names: set[str]) -> bool:
-    """Tên địa danh khớp theo TỪ, không theo chuỗi con.
+    """Place names match by WORD, not by substring.
 
-    'uk' nằm trong 'ukraine', 'gb' nằm trong 'gbagada' — trên DB thật có 17
-    tin ở Paris, Köln, Bremen lọt qua bộ lọc địa điểm kiểu này. norm() đã đổi
-    dấu câu thành khoảng trắng rồi, nên chỉ cần đệm hai đầu là đủ.
+    'uk' is inside 'ukraine', 'gb' is inside 'gbagada' — on the real DB, 17
+    postings in Paris, Köln and Bremen got through the location filter that
+    way. norm() has already turned punctuation into spaces, so padding both
+    ends is enough.
     """
     padded = f" {text} "
     return any(f" {name} " in padded for name in names)
 
 
-# Ô "thị trường" trong hồ sơ nói NGƯỜI DÙNG NHẬN VIỆC Ở ĐÂU. Mỗi lựa chọn
-# mở thêm một vùng; hai lựa chọn cuối bỏ hẳn chốt địa điểm.
+# The profile's "markets" field says WHERE THE USER WILL TAKE WORK. Each
+# choice opens one more region; the last two remove the location gate
+# entirely.
 #
-# MỘT CHỖ DỊCH, dùng chung với `NOI`. Bên LinkedIn có bảng MARKET_PLACE dịch
-# đúng mấy khoá này sang nơi để đi tìm ("us_remote" -> "United States") —
-# hai bảng thì có ngày app đi tìm ở Mỹ rồi tự vứt sạch kết quả, mà đó CHÍNH
-# LÀ chuyện đã xảy ra.
+# ONE TRANSLATION, shared with `NOI`. The LinkedIn side has a MARKET_PLACE
+# table translating exactly these keys into places to search ("us_remote" ->
+# "United States") — two tables means the app eventually searches in the US
+# and then throws every result away, which is EXACTLY what happened.
 THI_TRUONG = {"uk_onsite": {"uk"}, "uk_remote": {"uk"},
               "eu_remote": {"eu"}, "us_remote": {"us"},
               "global_remote": set(NOI), "relocate": set(NOI)}
 
 
 def vung_nhan(markets: list[str], nha: str = "uk") -> set:
-    """Những vùng người dùng chịu nhận việc: chỗ đang ở + mọi thị trường đã chọn."""
+    """The regions the user will take work in: where they are + every market
+    they chose."""
     ra = {nha}
     for m in markets or ():
         ra |= THI_TRUONG.get(str(m).strip().lower(), set())
@@ -158,25 +168,26 @@ def vung_nhan(markets: list[str], nha: str = "uk") -> set:
 
 
 def location_ok(posting: Posting, markets: list[str], nha: str = "uk") -> bool:
-    """Việc này có ở CHỖ MÌNH KHÔNG — "chỗ mình" gồm cả thị trường đã chọn.
+    """Is this job WHERE I AM — where "I am" includes the chosen markets.
 
-    `nha` là vùng người dùng đang ở, suy từ ô "Where you're based".
+    `nha` is the region the user is in, derived from "Where you're based".
 
-    `markets` LÀ THAM SỐ CÓ THẬT, không phải trang trí. Bản trước nhận nó rồi
-    không đọc một lần nào: hồ sơ chọn "US — remote" mà tin New York vẫn bị
-    vứt với lý do "outside your area (UK)". Tệ hơn, LinkedIn dịch đúng mấy
-    khoá đó thành nơi đi tìm — nên app đi tìm ở Mỹ rồi tự ném sạch kết quả
-    về, và người dùng chỉ thấy "không có việc nào".
+    `markets` IS A REAL PARAMETER, not decoration. The previous version took
+    it and never read it once: a profile choosing "US — remote" still had New
+    York postings thrown away with the reason "outside your area (UK)".
+    Worse, LinkedIn translated those same keys into places to search — so the
+    app searched in the US and then threw every result away, and the user
+    just saw "no jobs".
     """
     nhan = vung_nhan(markets, nha)
     text = norm(f"{posting.location} {posting.company}")
-    # Mã bang Mỹ thì chặn phần khớp theo TÊN THÀNH PHỐ: "Birmingham, AL" là
-    # Alabama. Dấu hiệu MẠNH vẫn được tin — "London, New York" có chữ
-    # "london" là tên thành phố, nhưng nếu đâu đó ghi "United Kingdom" thì
-    # đó là chắc chắn.
-    # Mã bang Mỹ chỉ là dấu hiệu nhiễu KHI người dùng không nhận việc ở Mỹ:
-    # "Birmingham, AL" là Alabama, không phải Birmingham của Anh. Ai đã chọn
-    # us_remote thì đó lại chính là thứ họ muốn.
+    # A US state code blocks the CITY-NAME match: "Birmingham, AL" is
+    # Alabama. A STRONG signal is still trusted — "London, New York" contains
+    # the city name "london", but if something also says "United Kingdom"
+    # that is certain.
+    # A US state code is only noise WHEN the user does not take US work:
+    # "Birmingham, AL" is Alabama, not the English Birmingham. For someone
+    # who chose us_remote it is exactly what they wanted.
     if "us" not in nhan and BANG_MY.search(posting.location or ""):
         vung = NOI.get(nha) or {}
         if not _names_in(text, vung.get("manh", set())):
@@ -184,8 +195,9 @@ def location_ok(posting: Posting, markets: list[str], nha: str = "uk") -> bool:
     for v in nhan:
         if o_vung(text, v):
             return True
-    # Tin ghi "Remote" trống trơn: giữ nếu người dùng có nhận việc từ xa ở
-    # BẤT KỲ vùng nào ngoài chỗ đang ở — không thì nó chỉ là tin remote nội địa.
+    # A posting saying only "Remote": keep it if the user takes remote work
+    # in ANY region beyond where they are — otherwise it is just a domestic
+    # remote posting.
     if posting.remote and _names_in(text, EU_REMOTE_WORDS):
         return True
     if len(nhan) > 1 and (posting.remote or _names_in(text, EU_REMOTE_WORDS)):
@@ -194,7 +206,7 @@ def location_ok(posting: Posting, markets: list[str], nha: str = "uk") -> bool:
 
 
 def judge(posting: Posting, answers: dict) -> tuple[bool, str]:
-    """Trả về (giữ, lý do). Lý do luôn có, kể cả khi giữ."""
+    """Returns (keep, reason). There is always a reason, even when kept."""
     targets = _titles(answers)
     if not targets:
         return True, "no job_titles set — keeping everything"
@@ -204,8 +216,9 @@ def judge(posting: Posting, answers: dict) -> tuple[bool, str]:
         return False, "title does not match any target title"
     if not seniority_ok(posting, answers.get("seniority") or []):
         return False, "title is senior level — you target graduate/junior"
-    # Nơi ở suy từ hồ sơ; không đoán được thì giữ nếp cũ (UK) chứ không tự ý
-    # đổi thứ đang giữ chỉ vì một ô viết lạ.
+    # Where they live comes from the profile; when it cannot be told, keep
+    # the old behaviour (UK) rather than changing what is kept over one
+    # oddly worded field.
     nha = noi_o(answers.get("location") or "") or "uk"
     if not location_ok(posting, answers.get("markets") or [], nha):
         return False, (f"location '{posting.location or 'unknown'}' outside"

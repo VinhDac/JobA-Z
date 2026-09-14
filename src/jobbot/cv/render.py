@@ -1,9 +1,9 @@
-"""Vẽ CV đã tuỳ biến ra HTML — phần trông giống TỜ GIẤY thật.
+"""Render the tailored CV as HTML — the part that looks like a real SHEET.
 
-CHỈ tờ giấy. Phần giải trình — bỏ gì, vì sao, câu nào đã sửa chữ — nằm ở
-`cv/report.py`: nó nói chuyện với người, còn chỗ này dựng thứ đem đi gửi.
-Trước đây `audit()` nằm lẫn ở đây và chỉ nói được một nửa (bỏ gì), bằng tiếng
-Anh, không có trước/sau.
+The sheet ONLY. The explanation — what was dropped, why, which sentence was
+reworded — lives in `cv/report.py`: that talks to a person, while this builds
+the thing that gets sent. `audit()` used to sit in here and could only say
+half of it (what was dropped), with no before/after.
 """
 
 from __future__ import annotations
@@ -18,15 +18,17 @@ LABEL = {"experience": "Experience", "project": "Selected projects",
 
 def paper(cv: TailoredCV, cham: bool = False,
           du_bi=None, job: str = "") -> str:
-    """Tờ CV. `cham=True` thì ĐÁNH DẤU ngay trên bài, như chữa bài.
+    """The CV sheet. `cham=True` MARKS IT UP in place, like marking work.
 
-    MỘT tờ giấy, không hai. Bản trước vẽ tờ CV ở trên rồi liệt kê lại từng
-    câu ở dưới — cùng một câu hiện hai lần, và người đọc phải tự ghép "câu số
-    3 ở dưới" với câu nào ở trên. Chữa bài thì bút đỏ nằm TRÊN bài.
+    ONE sheet, not two. The previous version drew the CV above and then
+    listed every sentence below — the same sentence twice, leaving the reader
+    to match "sentence 3 below" with one above. When you mark work, the red
+    pen goes ON the work.
 
-    Đánh dấu là CSS thuần (viền trái + nền lúc rê chuột), nên bản in vẫn là
-    tờ giấy sạch: @media print gỡ hết dấu. Chữ "trước" nằm sẵn trong DOM để
-    nút Trước/Sau bật tắt mà không phải gọi lại máy chủ.
+    The marking is pure CSS (a left border + a hover background), so the
+    printed version is still a clean sheet: @media print removes every mark.
+    The "before" text sits in the DOM already so the Before/After button can
+    toggle it without another server call.
     """
     head = "".join(f"<div class=cvline>{esc(h)}</div>" for h in cv.header if h)
     out = [f"<div class=cvhead>{head}</div>"]
@@ -44,16 +46,20 @@ def paper(cv: TailoredCV, cham: bool = False,
             if section.title:
                 out.append(f"<div class=cvrole><b>{esc(section.title)}</b>{meta}</div>")
             items = "".join(
-                # TÔ bằng tập RỘNG (`wanted`, quét cả tin), không bằng tập
-                # hẹp (`asked`, chỉ dòng yêu cầu). Hai việc khác nhau:
-                #   asked  -> MẪU SỐ của phân số. Rộng ở đây là nói dối.
-                #   wanted -> thứ MẮT nhìn. Hẹp ở đây thì tô được đúng 1 chữ
-                #             trên cả tờ giấy, và "tô từ khoá" thành vô nghĩa.
-                # Tô nhầm một chữ chỉ tốn một vệt xanh; không ai bị lừa.
+                # HIGHLIGHT from the WIDE set (`wanted`, the whole posting),
+                # not the narrow one (`asked`, the requirement lines only).
+                # Two different jobs:
+                #   asked  -> the DENOMINATOR of the fraction. Being wide
+                #             here would be a lie.
+                #   wanted -> what the EYE sees. Being narrow here highlights
+                #             exactly 1 word on the whole sheet, and
+                #             "highlight the keywords" becomes meaningless.
+                # A wrongly highlighted word costs one green streak; nobody
+                # is misled.
                 _muc(l, cham, set(cv.wanted),
-                     # BĂNG GHẾ CỦA CHÍNH KHỐI NÀY. Đổi một câu kinh nghiệm
-                     # sang một câu project là đổi sai chỗ — mỗi khối có
-                     # ngân sách dòng riêng.
+                     # THIS BLOCK'S OWN BENCH. Swapping an experience
+                     # sentence for a project sentence swaps the wrong
+                     # thing — each block has its own line budget.
                      [b for b in (du_bi or []) if b["khoi"] == section.title],
                      job)
                 for l in section.lines)
@@ -66,26 +72,27 @@ def paper(cv: TailoredCV, cham: bool = False,
     return f"<div class='{lop}'>{''.join(out)}</div>"
 
 
-# Số thứ tự câu, đếm xuyên suốt cả tờ — để "câu 3" ở phần chi tiết là đúng
-# câu 3 trên giấy. Dùng biến module thay vì truyền qua bốn tầng hàm.
+# The sentence number, counted across the whole sheet — so "sentence 3" in
+# the detail is sentence 3 on the paper. A module variable rather than
+# threading it through four layers of function.
 _DEM = [0]
 
 
 def _muc(line, cham: bool, doi=(), du_bi=(), job: str = "") -> str:
-    """Một dòng trên tờ CV — CHỮA BÀI NGAY TẠI CHỖ, kiểu Grammarly.
+    """One line of the CV — MARKED IN PLACE, Grammarly-style.
 
-    Bốn thứ, và tất cả nằm trên chính dòng đó, không ở phụ lục:
+    Four things, all on that line itself and not in an appendix:
 
-        tô        từ khoá tin này ĐÒI được bọc <mark> — nhìn phát biết tờ
-                  giấy có nói ra thứ họ hỏi không
-        bấm       mở thẻ ngay dưới dòng, không nhảy đi đâu
-        cách sửa  còn hổng gì, và việc cụ thể phải làm
-        chọn lại  mấy câu KHÁC Vin đã viết, xếp theo mức trúng tin này —
-                  bấm là đổi
+        highlight  the keywords this posting ASKS FOR, wrapped in <mark> —
+                   one glance says whether the sheet states what they asked
+        click      opens a card directly under the line, no navigation
+        how to fix what is still missing, and the specific thing to do
+        re-pick    OTHER sentences Vin has written, ordered by how well they
+                   hit this posting — click to swap
 
-    KHÔNG JAVASCRIPT: thẻ mở bằng <details>, đổi câu bằng <form> thật. Một
-    tính năng không có trình nghe thì không có gì để hỏng, và nó chạy y hệt
-    lúc in ra giấy (bản in tự đóng thẻ lại).
+    NO JAVASCRIPT: the card opens with <details>, the swap is a real <form>.
+    A feature with no listener has nothing to break, and it behaves
+    identically on paper (printing closes the cards).
     """
     if not cham:
         return (f"<li{' class=review' if line.review else ''}>{esc(line.text)}"
@@ -103,15 +110,15 @@ def _muc(line, cham: bool, doi=(), du_bi=(), job: str = "") -> str:
     if line.review:
         lop.append("dxem")
 
-    # --- thẻ chữa bài ---
+    # --- the marking card ---
     trung = sorted(set(line.hits) | (skills_in(line.text) & doi))
     kho = ("".join(f"<span class='badge ok'>{esc(h)}</span>" for h in trung)
            if trung else
-           "<span class=muted>không trúng thứ tin này đòi — câu này lên vì "
-           "nó mang quy mô hoặc phán đoán</span>")
+           "<span class=muted>hits nothing this posting asks for — this "
+           "line is here because it carries scale or judgement</span>")
 
-    # TỪNG CHỖ MỘT, kèm NGUYÊN VĂN đoạn chữ bị gạch — để mắt nối được thẻ
-    # với vệt trên câu mà không phải dò.
+    # ONE SPOT AT A TIME, quoting the underlined text VERBATIM — so the eye
+    # can connect the card to the streak on the sentence without hunting.
     vt = list(getattr(line, "vet", ()) or ())
     yeu = "".join(
         f"<div class='cspot v{esc(v.loai)}'>"
@@ -127,16 +134,16 @@ def _muc(line, cham: bool, doi=(), du_bi=(), job: str = "") -> str:
             f"<input type=hidden name=job value='{esc(job)}'>"
             f"<input type=hidden name=out value='{esc(goc)}'>"
             f"<input type=hidden name=text value='{esc(b['text'])}'>"
-            f"<button class='mbtn tiny'>đổi sang</button>"
+            f"<button class='mbtn tiny'>swap in</button>"
             f"<span class=calttext>{to_khoa(b['text'], doi)}</span>"
             + ("".join(f"<span class='badge ok'>{esc(t)}</span>"
                        for t in b["trung"]) if b["trung"] else
-               "<span class=muted>không trúng thêm gì</span>")
+               "<span class=muted>hits nothing extra</span>")
             + "</form>" for b in du_bi[:4])
-        doi_cau = (f"<div class=cswap><b>đổi sang câu khác bạn đã viết</b>"
+        doi_cau = (f"<div class=cswap><b>swap in another sentence you wrote</b>"
                    f"{nut}</div>")
 
-    the = (f"<div class=ccard><div class=ckw>tin này đòi: {kho}</div>"
+    the = (f"<div class=ccard><div class=ckw>this posting asks for: {kho}</div>"
            f"{sua}{yeu}{doi_cau}</div>")
 
     truoc = (f"<span class=ctruoc>{esc(goc)}</span>"
@@ -148,17 +155,19 @@ def _muc(line, cham: bool, doi=(), du_bi=(), job: str = "") -> str:
 
 
 def dem_lai() -> None:
-    """Đặt lại số đếm câu. Gọi TRƯỚC mỗi lần dựng một tờ."""
+    """Reset the sentence counter. Call BEFORE building each sheet."""
     _DEM[0] = 0
 
 # --- TÔ TỪ KHOÁ ---------------------------------------------------------
 
 def _vet(text: str, doi: set) -> list:
-    """Các đoạn chữ trong `text` là từ khoá tin này ĐÒI. [(đầu, cuối), …]
+    """The spans in `text` that are keywords this posting ASKS FOR.
+    [(start, end), …]
 
-    `alias_hits` chỉ trả về TÊN CHUẨN ("machine learning"), không nói chữ đó
-    nằm ở đâu trong câu. Muốn tô thì phải biết vị trí, nên dò lại bằng chính
-    mấy mẫu alias — cùng một luật khớp, không đẻ luật thứ hai.
+    `alias_hits` only returns the CANONICAL NAME ("machine learning"); it
+    does not say where in the sentence it sits. Highlighting needs the
+    position, so the alias patterns are re-run here — the same matching rule,
+    not a second one.
     """
     from ..scoring.vocab import _ALIAS_RE
     thap = text.lower()
@@ -170,8 +179,8 @@ def _vet(text: str, doi: set) -> list:
             ra.append((m.start(), m.end()))
     if not ra:
         return []
-    # Gộp đoạn chồng nhau: "machine learning" và "learning" chồng lên nhau thì
-    # tô hai lần là đẻ ra thẻ lồng nhau và HTML vỡ.
+    # Merge overlapping spans: "machine learning" and "learning" overlap,
+    # and highlighting both produces nested tags and broken HTML.
     ra.sort()
     gop = [ra[0]]
     for a, b in ra[1:]:
@@ -183,13 +192,15 @@ def _vet(text: str, doi: set) -> list:
 
 
 def to_khoa(text: str, doi: set, vet=()) -> str:
-    """Câu, đã escape, với TỪ KHOÁ tô xanh và VẾT VẤN ĐỀ gạch chân.
+    """The sentence, escaped, with KEYWORDS highlighted and PROBLEM SPOTS
+    underlined.
 
-    Vẽ theo TỪNG KÝ TỰ rồi mới gom lại thành đoạn, chứ không bọc từng vệt một.
-    Lý do: vệt chồng nhau là chuyện thường — một cụm vừa là từ khoá tin đòi,
-    vừa nằm trong đoạn "thiếu số đo", vừa nằm trong đoạn "quá dài". Bọc lần
-    lượt thì đẻ ra thẻ cắt chéo nhau và HTML vỡ; gom theo ký tự thì mọi tổ
-    hợp đều ra đúng một lớp thẻ phẳng.
+    Built CHARACTER BY CHARACTER and then grouped into runs, rather than
+    wrapping each streak in turn. The reason: overlapping streaks are normal
+    — one phrase can be a requested keyword, inside a "no measurement" span,
+    and inside a "too long" span at once. Wrapping in sequence produces tags
+    that cross and broken HTML; grouping per character produces exactly one
+    flat layer of tags for every combination.
     """
     n = len(text)
     if not n:
