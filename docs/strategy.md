@@ -1,114 +1,147 @@
-# Chiến lược — bản chất bài toán xin việc
+# Strategy — what the job-hunting problem actually is
 
-> Tài liệu này là *lý do* tồn tại của hệ thống. Đọc file này trước khi đọc `design.md`.
-> Mọi quyết định kỹ thuật phải truy ngược được về một mục ở đây. Không truy ngược được thì không làm.
+> This document is the *reason* the system exists. Read it before `design.md`.
+> Every technical decision has to trace back to a section here. If it cannot be
+> traced back, it does not get built.
 
 ---
 
-## 1. Tiền đề
+## 1. The premise
 
-Công ty tuyển người **làm được việc ngay**. Họ không nuôi người có tiềm năng.
+Companies hire people who **can do the job now**. They do not keep people on for
+their potential.
 
-Hệ quả trực tiếp: hồ sơ phải khớp JD. Không phải khớp "đại khái" — khớp theo đúng ngôn ngữ họ viết trong JD.
+The direct consequence: the application has to match the JD. Not "roughly" match
+— match in the exact language they wrote the JD in.
 
-## 2. Sai lầm đã nhận ra
+## 2. The mistake, named
 
-Apply vượt tầm, mong người ta nhận ra tài năng.
+Applying above your level and hoping someone notices the talent.
 
-Cái này hỏng vì nó bị loại ở vòng lọc, **trước khi** có ai đọc đến phần đáng đọc. Bị loại không phải vì kém — mà vì bộ lọc đang làm đúng việc của nó.
+It fails because it is cut at the filter, **before** anyone reaches the part
+worth reading. Cut not for being weak — cut because the filter is doing exactly
+its job.
 
-Nhưng phản xạ ngược lại cũng sai: hạ tầm xuống thì bị loại vì overqualified, hoặc vào được rồi mắc kẹt.
+But the opposite reflex is wrong too: aim lower and you are cut as
+overqualified, or you get in and get stuck.
 
-**Đích đúng:** apply đúng băng tần của mình, nhưng là hồ sơ có bằng chứng mạnh nhất trong băng tần đó.
+**The right target:** apply inside your own band, but as the application with
+the strongest evidence in that band.
 
-## 3. Hai cơ chế, đừng gộp làm một
+## 3. Two mechanisms — never merge them
 
-Một hồ sơ đi qua ba cửa:
+An application passes three gates:
 
-| Cửa | Ai đọc | Tiêu chí thật |
+| Gate | Who reads | The real criterion |
 |-----|--------|---------------|
-| 1. ATS / lọc từ khóa | Máy | Trùng chữ |
-| 2. Recruiter quét vài giây | Người, không đọc kỹ | *Nhận dạng*: người này có đúng làm nghề này không |
-| 3. Hiring manager đọc thật | Người, đọc kỹ | Bằng chứng làm được việc |
+| 1. ATS / keyword filter | A machine | Words that match |
+| 2. A recruiter's few-second scan | A person, not reading closely | *Recognition*: is this person actually in this line of work |
+| 3. The hiring manager reading properly | A person, reading closely | Evidence they can do the work |
 
-> **Matching là bộ lọc. Bằng chứng là thứ tạo khác biệt.**
+> **Matching is the filter. Evidence is what makes a difference.**
 
-Matching đưa bạn từ 200 người xuống nhóm 40. Từ 40 xuống 5 người được gọi thì matching vô dụng — cả 40 đều khớp. Thứ quyết định là **personal project**.
+Matching takes you from 200 people down to a group of 40. From 40 down to the 5
+who get called, matching is useless — all 40 match. What decides it is **the
+personal project**.
 
-Hệ thống phải phục vụ **cả hai**, và không nhầm lẫn giữa chúng.
+The system has to serve **both**, and never confuse one for the other.
 
-## 4. Vì sao link GitHub vô giá trị
+## 4. Why a GitHub link is worth nothing
 
-- **Không ai bấm.** Người đọc CV không clone repo. Không bao giờ.
-- **Chi phí đánh giá quá cao.** Đọc code người lạ để phán xét mất 20–30 phút. Không ai trả giá đó cho ứng viên chưa quyết định thích.
-- **Không phân biệt.** Ai cũng có GitHub, ai cũng có scraper / todo app / chatbot. Thứ ai cũng có thì không mang thông tin.
-- **Là lời tuyên bố, không phải bằng chứng.** "Đây là code tôi viết" — rồi sao? Có chạy không? Giải quyết được gì?
+- **Nobody clicks it.** Whoever reads the CV does not clone the repo. Ever.
+- **Evaluating it costs too much.** Reading a stranger's code well enough to
+  judge it takes 20–30 minutes. Nobody pays that for a candidate they have not
+  yet decided they like.
+- **It does not distinguish.** Everyone has a GitHub, everyone has a scraper, a
+  todo app, a chatbot. What everyone has carries no information.
+- **It is a claim, not evidence.** "Here is code I wrote" — and? Does it run?
+  What did it solve?
 
 | | |
 |---|---|
-| **Project** | "Tôi đã xây X" — một hiện vật |
-| **Bằng chứng** | "Gặp vấn đề P, làm X, số đo từ A xuống B, đo bằng cách này, chỗ này tôi làm sai" |
+| **A project** | "I built X" — an artefact |
+| **Evidence** | "Problem P, I did X, the number went from A to B, measured this way, and here is where I got it wrong" |
 
-Phần **"chỗ này tôi làm sai"** là phần ai cũng bỏ, và là phần người có kinh nghiệm tin nhất. Công việc thật luôn có đánh đổi. Một project toàn thắng, không vết xước — đọc là biết chưa chạy thật.
+The **"here is where I got it wrong"** part is the part everyone leaves out, and
+it is the part experienced readers trust most. Real work always has trade-offs.
+A project that wins everywhere, with no scratches on it, reads as one that never
+really ran.
 
-## 5. Hình dạng của bằng chứng
+## 5. The shape of evidence
 
-Không phải repo. Là **một trang kết quả**, đọc hết trong 90 giây:
+Not a repo. **One results page**, readable in 90 seconds:
 
 ```
-Vấn đề       — một câu, bằng đúng ngôn ngữ trong JD
-Cách làm     — 3-5 dòng, cơ chế thật, không buzzword
-Số đo        — trước -> sau, kèm CÁCH ĐO (thiếu cách đo thì số vô nghĩa)
-Đánh đổi     — cái đã hy sinh, và vì sao
-Link code    — cuối trang, cho 5% muốn xem
+The problem   — one sentence, in the JD's own language
+The approach  — 3-5 lines, a real mechanism, no buzzwords
+The numbers   — before -> after, plus HOW IT WAS MEASURED
+                (without the method, the number means nothing)
+The trade-off — what was sacrificed, and why
+The code      — at the foot of the page, for the 5% who want it
 ```
 
-Vừa một màn hình. Không tô hồng. Người có kinh nghiệm đọc xong biết ngay có làm thật hay không.
+One screen. No gloss. An experienced reader finishes it knowing whether the work
+was real.
 
-## 6. Phương án tổng quát cho personal project
+## 6. The general answer for personal projects
 
-Bài toán khó:
-- Không thể làm project riêng cho từng JD — không scale, kể cả chạy 24/7.
-- Không thể một project generic rải cho tất cả — quay lại vấn đề link GitHub.
+The hard part:
+- You cannot build a project per JD — it does not scale, not even running 24/7.
+- You cannot spread one generic project across all of them — that is the GitHub
+  link problem again.
 
-Lời giải:
+The answer:
 
-> **Một hệ thống thật + nhiều lát cắt theo JD.**
+> **One real system + many slices taken along the JD.**
 
-Xây **một** thứ duy nhất, thật, đang chạy. Chọn thứ chạm nhiều chiều, để cắt ra nhiều lát mà **lát nào cũng thật** — không bịa câu nào.
+Build **one** thing, real, running. Pick something that touches many dimensions,
+so that many slices can be cut and **every slice is true** — not one invented
+sentence.
 
-| JD thuộc mảng | Cắt lát nào |
+| If the JD is about | Cut this slice |
 |---|---|
-| Data engineering | ingest đa nguồn, dedup / entity resolution |
-| Backend | API, state machine vòng đời, scheduling |
-| Reliability | xử lý hỏng, retry, nguồn chết |
-| ML / IR | engine chấm điểm CV↔JD, phân tích false positive |
-| Analytics | đo tỉ lệ phản hồi theo nguồn và theo điểm |
+| Data engineering | multi-source ingest, dedup / entity resolution |
+| Backend | the API, the lifecycle state machine, scheduling |
+| Reliability | failure handling, retries, a dead source |
+| ML / IR | the CV↔JD scoring engine, false-positive analysis |
+| Analytics | reply rate measured by source and by score |
 
-Ba trang khác nhau, ba ngôn ngữ khác nhau, không câu nào nói dối.
+Three different pages, three different languages, not one sentence that lies.
 
-## 7. Chính hệ thống này là project đó
+## 7. This system IS that project
 
-Nhìn lại về mặt kỹ thuật, nó có: ingest đa nguồn dị thể · dedup / entity resolution · engine chấm điểm · scheduling & rate limit · state machine · xử lý hỏng · đo lường thật.
+Look at it technically and it has: heterogeneous multi-source ingest · dedup /
+entity resolution · a scoring engine · scheduling and rate limiting · a state
+machine · failure handling · real measurement.
 
-Và nó có thứ gần như không portfolio nào có: **kết quả thật, số thật, hệ quả thật.**
+And it has what almost no portfolio has: **real results, real numbers, real
+consequences.**
 
-> "1.240 tin trong 8 tuần → dedup còn 890 tin duy nhất → apply 60 tin match >75% → 9 phản hồi → 3 phỏng vấn. Ngưỡng 75% là kết quả sau khi thử 60% và 85%."
+> "1,240 postings in 8 weeks -> dedup left 890 unique -> applied to 60 matching
+> above 75% -> 9 replies -> 3 interviews. The 75% threshold is what came out of
+> trying 60% and 85%."
 
-Vòng lặp tự chứng minh: **thứ giúp có việc chính là lý lẽ để tuyển.**
+The loop proves itself: **the thing that gets the job is the argument for
+hiring.**
 
-## 8. Bẫy trình bày — nghiêm trọng
+## 8. The presentation trap — and it is serious
 
-- ❌ "Bot tự động apply việc hàng loạt" → hiring manager đọc ra: *người này rải spam*. Lùi lại ngay.
-- ✅ "Hệ thống dedup và chấm điểm tin tuyển dụng đa nguồn — và vì sao 80% match điểm cao lại là false positive"
+- ❌ "A bot that auto-applies to jobs in bulk" -> what a hiring manager reads:
+  *this person spams*. Instant step back.
+- ✅ "A system that dedups and scores job postings from many sources — and why
+  80% of the high-scoring matches are false positives"
 
-Kể **bài toán kỹ thuật khó**, không kể phần automation.
+Tell **the hard technical problem**, not the automation.
 
-Hệ quả kèm theo: **volume kèm match cao thì tốt; volume không match là spam**, và nó phá chính mình. Hệ thống phải chặn điều này bằng thiết kế, không bằng kỷ luật cá nhân.
+The consequence that comes with it: **volume with a high match is good; volume
+without a match is spam**, and it destroys itself. The system has to stop this
+by design, never by personal discipline.
 
 ---
 
-## Câu hỏi còn mở
+## Still open
 
-- [ ] **Băng tần thật:** mảng gì, bao nhiêu năm làm thật?
-- [ ] **2–3 JD thật** thấy "cái này tôi làm được thật" (không phải "cố thì được") — để ngược từ JD ra project, thay vì xây trước rồi tìm chỗ nhét vào.
+- [ ] **The real band:** which area, and how many years of real work?
+- [ ] **2–3 real JDs** where the reaction is "I can genuinely do this" (not "I
+      could if I stretched") — so the project is derived backwards from the JD,
+      rather than built first and then fitted in somewhere.

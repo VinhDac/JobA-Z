@@ -1,101 +1,105 @@
-# Chạy trên Windows
+# Running on Windows
 
-## Cần gì
+## What it needs
 
 | | |
 |---|---|
-| **Python 3.11+** | bắt buộc — app dùng `tomllib`, chỉ có từ 3.11. Tải ở python.org, **nhớ tick "Add python.exe to PATH"** lúc cài. |
-| **Google Chrome** | bắt buộc — vừa là vỏ cửa sổ, vừa là thứ đi đọc LinkedIn. Edge/Brave cũng chạy được (đều là Chromium). |
+| **Python 3.11+** | required — the app uses `tomllib`, which only exists from 3.11. Download it from python.org, and **tick "Add python.exe to PATH"** during the install. |
+| **Google Chrome** | required — it is both the window shell and the thing that reads LinkedIn. Edge and Brave work too (all Chromium). |
 
-Không cài gói Python nào. Không venv. Không `pip install`.
+No Python packages. No venv. No `pip install`.
 
-## Chạy
+## Running it
 
-Bấm đúp **`run.bat`** — mở cửa sổ app riêng, không thanh địa chỉ.
+Double-click **`run.bat`** — it opens the app in its own window, with no address
+bar.
 
-Muốn thấy log và dừng bằng Ctrl+C thì bấm **`run-console.bat`**.
+To see the log and stop with Ctrl+C, use **`run-console.bat`**.
 
-Hoặc trong terminal:
-
-```
-py -3 run.py             cửa sổ app
-py -3 run.py --window    chạy trong terminal, mở trình duyệt
-py -3 run.py --scan      quét một lần rồi thoát
-```
-
-## Chuyển từ máy Mac sang
-
-Chép **cả thư mục dự án**, trừ hai chỗ:
+Or from a terminal:
 
 ```
-data/jobbot.db        ← PHẢI chép. 61 MB. Toàn bộ tin, điểm, hồ sơ, nhật ký.
-data/chrome-profile/  ← ĐỪNG chép. 311 MB, tự sinh lại. Chép sang còn dễ hỏng.
-data/chrome-ui/       ← ĐỪNG chép. Tự sinh lại.
+py -3 run.py             the app window
+py -3 run.py --window    run in the terminal, open a browser
+py -3 run.py --scan      one scan, then exit
 ```
 
-`data/` nằm trong `.gitignore` nên `git clone` sẽ **không** mang DB theo — phải
-chép tay `data/jobbot.db`.
+## Moving over from a Mac
 
-Không có gì phụ thuộc đường dẫn tuyệt đối: mọi chỗ dùng `pathlib`, và thư mục
-dữ liệu tính từ vị trí repo. Đặt thư mục ở đâu cũng chạy.
+Copy **the whole project folder**, with two exceptions:
 
-Đổi chỗ chứa dữ liệu (ví dụ để lên ổ khác):
+```
+data/jobbot.db        <- MUST be copied. Every posting, score, profile and journal entry.
+data/chrome-profile/  <- DO NOT copy. Large, regenerates itself, and easily corrupted by copying.
+data/chrome-ui/       <- DO NOT copy. Regenerates itself.
+```
+
+`data/` is in `.gitignore`, so a `git clone` will **not** bring the DB — copy
+`data/jobbot.db` by hand.
+
+Nothing depends on an absolute path: everything uses `pathlib`, and the data
+directory is derived from where the repo sits. Put the folder anywhere.
+
+To keep the data somewhere else (on another drive, say):
 
 ```
 set JOBBOT_DATA_DIR=D:\jobbot-data
 py -3 run.py
 ```
 
-## Khác gì bản macOS
+## How it differs from the macOS build
 
 | | macOS | Windows |
 |---|---|---|
-| Cửa sổ app | `NSWindow` + `WKWebView`, có icon Dock, icon thanh menu | cửa sổ **Chrome `--app`** — không tab, không thanh địa chỉ, có icon riêng trên taskbar |
-| Thông báo | `osascript` | PowerShell toast (WinRT) — **chưa thử trên máy Windows thật** |
-| Đọc CV dạng PDF | PDFKit của hệ — đọc được cả font nhúng | bóc bằng thư viện chuẩn — **chỉ đọc được PDF chữ thường** |
-| Tự chạy khi bật máy | `scripts/install_agent.py` (launchd) | **chưa làm** |
+| The app window | `NSWindow` + `WKWebView`, a Dock icon, a menu-bar icon | a **Chrome `--app`** window — no tabs, no address bar, its own taskbar icon |
+| Notifications | `osascript` | a PowerShell toast (WinRT) — **not yet tried on a real Windows machine** |
+| Reading a CV from PDF | the system's PDFKit — it reads embedded fonts too | the standard library — **plain-text PDFs only** |
+| Starting with the machine | `scripts/install_agent.py` (launchd) | **not built** |
 
-### PDF: chỗ yếu thật
+### PDF: the real weak spot
 
-Bộ bóc PDF bằng thư viện chuẩn không đọc nổi PDF dùng **font nhúng có bảng mã
-riêng** — LaTeX, Canva, InDesign hay xuất kiểu này. Gặp loại đó, app **báo lỗi
-và bảo bạn dán chữ**, chứ không nhét ký tự rác vào hồ sơ.
+The standard-library PDF reader cannot read a PDF that uses an **embedded font
+with its own encoding** — LaTeX, Canva and InDesign all export that way. Given
+one, the app **says so and asks you to paste the text** rather than pushing
+garbage characters into the profile.
 
-Đường vòng: mở PDF, `Ctrl+A`, `Ctrl+C`, dán vào ô "paste" ở trang Import CV.
-Kết quả y hệt.
+The way round it: open the PDF, `Ctrl+A`, `Ctrl+C`, and paste into the "paste"
+box on the Import CV page. The result is identical.
 
-## Vỏ Chrome `--app` — nó là gì
+## The Chrome `--app` shell — what it is
 
-Chrome mở ở chế độ `--app=<url>`: một cửa sổ đứng riêng, **không tab, không
-thanh địa chỉ**, có mục riêng trên taskbar và Alt+Tab. Không phải cửa sổ native
-thật, nhưng là thứ gần nhất mà không phải cài gói nào — mà nguyên tắc của app
-này là không cài gì.
+Chrome opened in `--app=<url>` mode: a window standing on its own, with **no
+tabs and no address bar**, its own taskbar entry and its own Alt+Tab slot. Not a
+true native window, but the closest thing that needs no package installed — and
+installing nothing is this app's whole principle.
 
-Cửa sổ giao diện dùng **profile Chrome riêng** (`data/chrome-ui`), tách khỏi
-profile đi cào (`data/chrome-profile`). Chung profile thì đóng cửa sổ đang xem
-là giết luôn tab máy đang lái.
+The interface window uses **its own Chrome profile** (`data/chrome-ui`), kept
+apart from the scraping profile (`data/chrome-profile`). Share one profile and
+closing the window you are reading kills the tab the machine is driving.
 
-## Hỏng thì xem đâu
+## Where to look when it breaks
 
 ```
 py -3 run.py --window
 ```
 
-Log hiện thẳng ra terminal. Dòng `vỏ ->` cho biết đang chạy vỏ nào.
+The log prints straight to the terminal. The line `shell   ->` says which shell
+is in use.
 
-Trong app, mọi việc chạy nền đều ghi vào **Nhật ký** (tab Search / Score /
-Projects, và Home gộp tất cả). Nguồn hỏng hiện thành cảnh báo ngay trong tab
-của nó.
+Inside the app, every background job writes to the **Journal** — one strip per
+tab, with Home gathering them all. A broken source shows as a warning inside its
+own tab.
 
-Chrome không tìm thấy → lỗi ghi rõ đã dò bao nhiêu chỗ. Cài Chrome vào chỗ mặc
-định, hoặc thêm `chrome.exe` vào `PATH`.
+Chrome not found -> the error names every place that was searched. Install
+Chrome in the default location, or add `chrome.exe` to `PATH`.
 
-## Chưa làm
+## Not built yet
 
-- **Tự chạy khi bật máy.** Trên macOS có `scripts/install_agent.py` (launchd).
-  Trên Windows sẽ là Task Scheduler hoặc shortcut trong thư mục Startup —
-  chưa viết.
-- **Đóng gói thành `.exe`.** `scripts/make_app.py` chỉ dựng `.app` cho macOS.
-- **Thông báo Windows chưa chạy thử trên máy thật.** Viết theo tài liệu WinRT.
-  Hỏng thì `send()` trả `False` và scheduler ghi `notify_failed` vào nhật ký —
-  không im lặng, nhưng cũng chưa chắc đúng.
+- **Starting with the machine.** macOS has `scripts/install_agent.py` (launchd).
+  On Windows it would be Task Scheduler or a shortcut in the Startup folder —
+  not written.
+- **Packaging into an `.exe`.** `scripts/make_app.py` builds a macOS `.app` only.
+- **Windows notifications have never been run on a real machine.** They were
+  written from the WinRT documentation. If they fail, `send()` returns `False`
+  and the scheduler writes `notify_failed` into the journal — not silent, but
+  not proven either.
