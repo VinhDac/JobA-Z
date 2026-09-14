@@ -1,16 +1,16 @@
-"""Chạy TOÀN BỘ bài test bằng một lệnh, và không tin bài test nào cả.
+"""Run EVERY test with one command, and trust none of them.
 
     python3 tests/run_all.py
 
-Vì sao cần: mỗi file test là một script tự chạy, không có runner nào. Hậu quả
-thật là test_browser.py quên mất dòng sys.exit — nó in "48 ok, 0 fail" rồi
-thoát 0 dù có hỏng bao nhiêu đi nữa, và vòng lặp chạy-rồi-xem-mã-thoát không
-đời nào phát hiện ra.
+Why it is needed: each test file is a self-running script, with no runner at
+all. The real consequence was test_browser.py forgetting its sys.exit line —
+it printed "48 ok, 0 fail" and exited 0 however many had failed, and a
+run-and-check-the-exit-code loop would never have noticed.
 
-Nên ở đây kiểm CẢ HAI phía, và bên nào cũng phải khớp:
-    · mã thoát phải là 0
-    · dòng tổng kết cuối phải nói 0 fail
-    · phải CÓ dòng tổng kết — im lặng không phải là đạt
+So BOTH sides are checked here, and both have to agree:
+    · the exit code has to be 0
+    · the final summary line has to say 0 fail
+    · there has to BE a summary line — silence is not a pass
 """
 
 from __future__ import annotations
@@ -26,19 +26,20 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 SUMMARY = re.compile(r"^(\d+) ok, (\d+) fail\s*$", re.M)
 
-# TỆP CỦA NGƯỜI DÙNG — chạy test KHÔNG được đụng tới, dù chỉ một byte.
+# THE USER'S FILES — a test run must NOT touch them, not by one byte.
 #
-# Đây không phải lo xa. Ngày 12/09 bài test đường "làm lại từ đầu" XOÁ thật
-# config/config.toml của Vin ở mọi lần chạy, và một bài khác ghi đè địa chỉ
-# giả "a@b.c" vào đó — nuốt mất app password Gmail anh vừa dán. Cả hai đều
-# xanh lè, vì không bài test nào canh chính bài test.
+# This is not hypothetical. On 12/09 the test for the "start over" route
+# really DELETED Vin's config/config.toml on every run, and another test wrote
+# the fake address "a@b.c" over it — swallowing the Gmail app password he had
+# just pasted in. Both were bright green, because no test was watching the
+# tests.
 CANH = ("config/config.toml", "config/boards.toml", "config/companies.toml",
         "config/profile.seed.json")
 
 
 def _dau_van_tay() -> dict:
-    """Băm mấy tệp người dùng. Không đọc nội dung ra đâu cả — trong đó có
-    app password."""
+    """Hash the user's files. Their contents are never read out anywhere —
+    the app password is in there."""
     import hashlib
     out = {}
     for ten in CANH:
@@ -51,25 +52,26 @@ def _dau_van_tay() -> dict:
 def main() -> int:
     files = sorted(f for f in HERE.glob("test_*.py"))
     if not files:
-        print("không tìm thấy file test nào")
+        print("no test file found")
         return 1
 
     width = max(len(f.name) for f in files)
     total_ok = total_fail = broken = 0
     truoc = _dau_van_tay()
 
-    # BÀI TEST CHẠY TRONG MỘT THẾ GIỚI KHÔNG CÓ BÍ MẬT CỦA AI CẢ.
+    # TESTS RUN IN A WORLD THAT HOLDS NOBODY'S SECRETS.
     #
-    # Trước đây không truyền env nào, mà dấu vân tay ở trên chỉ canh việc GHI
-    # đè tệp người dùng — không canh việc ĐỌC. Hậu quả đo được: từ lúc nối
-    # Telegram, mỗi lượt chạy test gửi tin THẬT về điện thoại người dùng,
-    # trong đó có báo động giả "⚠️ Phiên hỏng" do chính bài test dựng ra. Và
-    # năm bài khẳng định "chưa nối bot" thì đỏ — đỏ vì máy này có cấu hình,
-    # không phải vì code sai.
+    # No env was passed before, and the fingerprint above only watches for
+    # WRITES over the user's files — not for READS. The measured consequence:
+    # from the moment Telegram was connected, every test run sent REAL
+    # messages to the user's phone, including a false alarm "⚠️ Session
+    # failed" the tests themselves had staged. And five tests asserting "the
+    # bot is not connected" went red — red because this machine has a config,
+    # not because the code was wrong.
     #
-    # JOBBOT_ROOT chuyển hướng config/ VÀ đường xoá của reset.run();
-    # JOBBOT_OFFLINE là khoá cứng ở tầng mạng (core/tele.py). Hai lớp, vì
-    # lớp nào cũng có thể bị một bài test tương lai đi vòng.
+    # JOBBOT_ROOT redirects config/ AND reset.run()'s delete path;
+    # JOBBOT_OFFLINE is a hard lock at the network layer (core/tele.py). Two
+    # layers, because either one could be walked around by a future test.
     gia = tempfile.mkdtemp(prefix="jobbot-test-")
     (Path(gia) / "config").mkdir(parents=True, exist_ok=True)
     moi_truong = {**os.environ, "JOBBOT_ROOT": gia, "JOBBOT_OFFLINE": "1"}
@@ -81,7 +83,7 @@ def main() -> int:
         found = SUMMARY.search(out)
 
         if not found:
-            print(f"  {path.name:<{width}}  KHÔNG CÓ DÒNG TỔNG KẾT (thoát {done.returncode})")
+            print(f"  {path.name:<{width}}  NO SUMMARY LINE (exit {done.returncode})")
             print("\n".join("      " + line for line in out.strip().splitlines()[-8:]))
             broken += 1
             continue
@@ -92,33 +94,33 @@ def main() -> int:
 
         note = ""
         if n_fail and done.returncode == 0:
-            # đây chính là lỗi test_browser.py: hỏng mà vẫn báo thành công
-            note = "  <-- CÓ HỎNG MÀ VẪN THOÁT 0 (thiếu sys.exit?)"
+            # this is exactly the test_browser.py bug: failures reported as success
+            note = "  <-- FAILURES BUT EXITED 0 (missing sys.exit?)"
             broken += 1
         elif not n_fail and done.returncode != 0:
-            note = f"  <-- 0 hỏng mà thoát {done.returncode}"
+            note = f"  <-- 0 failures but exited {done.returncode}"
             broken += 1
 
-        mark = "ok  " if not n_fail and done.returncode == 0 else "HỎNG"
+        mark = "ok  " if not n_fail and done.returncode == 0 else "BROKEN"
         print(f"  {mark} {path.name:<{width}}  {n_ok:>3} ok, {n_fail} fail{note}")
         if n_fail:
             for line in out.splitlines():
                 if line.lstrip().startswith("FAIL"):
                     print("       " + line.strip())
 
-    # Chạy xong, mấy tệp của người dùng phải y nguyên. Bài test nào đụng vào
-    # thì HỎNG CẢ LƯỢT — kể cả khi mọi câu check đều xanh.
+    # After the run, the user's files have to be untouched. A test that
+    # touches one FAILS THE WHOLE RUN — even with every check green.
     sau = _dau_van_tay()
     dung = [t for t in CANH if truoc[t] != sau[t]]
     for ten in dung:
         cu_co, moi_co = truoc[ten] is not None, sau[ten] is not None
-        sao = ("bị XOÁ" if cu_co and not moi_co else
-               "bị TẠO ra" if moi_co and not cu_co else "bị SỬA")
-        print(f"  HỎNG  tệp người dùng {ten} {sao} trong lúc chạy test")
+        sao = ("was DELETED" if cu_co and not moi_co else
+               "was CREATED" if moi_co and not cu_co else "was MODIFIED")
+        print(f"  BROKEN  the user file {ten} {sao} during the test run")
         broken += 1
 
-    print(f"\n{len(files)} file · {total_ok} ok · {total_fail} fail"
-          + (f" · {broken} file có vấn đề về chính nó" if broken else ""))
+    print(f"\n{len(files)} files · {total_ok} ok · {total_fail} fail"
+          + (f" · {broken} files with a problem of their own" if broken else ""))
     return 1 if (total_fail or broken) else 0
 
 

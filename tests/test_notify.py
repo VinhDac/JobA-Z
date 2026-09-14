@@ -1,11 +1,14 @@
-"""Test thông báo macOS — thứ đã HỎNG SUỐT mà không ai biết.
+"""Test the macOS notification — the thing that had BEEN BROKEN ALL ALONG
+without anybody knowing.
 
-Bản cũ dựng câu AppleScript bằng shlex.quote, tức là rào chuỗi cho SHELL:
+The old version built the AppleScript with shlex.quote, i.e. quoting for a
+SHELL:
 
     display notification '5 new matches' with title Jobbot
     -> 21:22: syntax error ... found unknown token. (-2741)
 
-Không một thông báo nào từng hiện lên. send() trả False, người gọi vứt đi.
+Not one notification ever appeared. send() returned False, and callers threw
+it away.
 
     python3 tests/test_notify.py
 """
@@ -25,49 +28,50 @@ def check(name, cond, extra=""):
 
 
 def compiles(script: str) -> tuple[bool, str]:
-    """AppleScript có DỊCH được không. Không hiện thông báo, chỉ dịch thử —
-    đây mới là bài kiểm tra thật: mắt thường nhìn chuỗi rào không ra lỗi."""
+    """Can AppleScript COMPILE it. No notification is shown, it is only
+    compiled — which is the real check: quoting mistakes are invisible to the
+    eye."""
     done = subprocess.run(["osascript", "-e", f"return 1"], capture_output=True)
-    if done.returncode != 0:                 # máy không có osascript -> bỏ qua
-        return True, "không có osascript"
+    if done.returncode != 0:                 # no osascript on this machine -> skip
+        return True, "no osascript"
     done = subprocess.run(["osacompile", "-o", "/dev/null", "-e", script],
                           capture_output=True)
     return done.returncode == 0, done.stderr.decode()[:120]
 
 
-print("[câu lệnh sinh ra phải là AppleScript hợp lệ]")
-built = notify.script("jobbot", "5 việc mới khớp hồ sơ", "Mở dashboard để xem")
-check("rào bằng nháy KÉP, không phải nháy đơn",
+print("[the command produced has to be valid AppleScript]")
+built = notify.script("jobbot", "5 new postings match the profile", "Open the dashboard to see")
+check("quoted with DOUBLE quotes, not single",
       '"jobbot"' in built and "'jobbot'" not in built)
 good, err = compiles(built)
-check("dịch được", good, err)
+check("it compiles", good, err)
 
-print("\n[chuỗi hiểm phải được thoát, không được làm hỏng câu lệnh]")
+print("\n[dangerous strings must be escaped, never break the command]")
 for title, message in [
         ('Job"bot', 'a "quoted" title'),
         ("back\\slash", "path C:\\temp"),
-        ("hai dòng", "dòng một\ndòng hai"),
-        ("chèn lệnh", '" & (do shell script "echo x") & "'),
-        ("tiếng Việt", "5 việc mới khớp hồ sơ của bạn"),
+        ("two lines", "line one\nline two"),
+        ("command injection", '" & (do shell script "echo x") & "'),
+        ("Vietnamese", "5 việc mới khớp hồ sơ của bạn"),
 ]:
     good, err = compiles(notify.script(title, message))
-    check(f"{title:12} -> vẫn dịch được", good, err)
+    check(f"{title:12} -> still compiles", good, err)
 
-check("dấu nháy trong nội dung bị thoát",
+check("a quote inside the body is escaped",
       '\\"' in notify.script("t", 'say "hi"'))
-check("xuống dòng không cắt đôi câu lệnh",
-      "\n" not in notify.script("t", "một\nhai"))
+check("a newline does not cut the command in half",
+      "\n" not in notify.script("t", "one\ntwo"))
 
-print("\n[send trả về THẬT, không phải luôn True]")
-check("gửi được thì trả True", notify.send("jobbot", "test suite") is True)
+print("\n[send returns THE TRUTH, not always True]")
+check("sent -> returns True", notify.send("jobbot", "test suite") is True)
 real = notify.subprocess
 class Dead:
     SubprocessError = subprocess.SubprocessError
     @staticmethod
     def run(*a, **k):
-        raise FileNotFoundError("không có osascript")
+        raise FileNotFoundError("no osascript")
 notify.subprocess = Dead
-check("gửi hỏng thì trả False", notify.send("jobbot", "x") is False)
+check("sending failed -> returns False", notify.send("jobbot", "x") is False)
 notify.subprocess = real
 
 print(f"\n{ok} ok, {fail} fail")
