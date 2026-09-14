@@ -2743,10 +2743,10 @@ with tempfile.TemporaryDirectory() as tmp:
     # KHO KHỐI KHÔNG CÒN Ở TAB CV. Nó có nhà riêng ở màn Sửa khối, nơi bấm
     # vào một khối là soạn được luôn; ở tab CV nó chỉ để nhìn, mà tab này trả
     # lời hai câu khác: tối nay viết gì, và gửi bản nào.
-    check("tab CV không còn ô kho khối", "Khối nguyên liệu" not in _sau_xoa)
+    check("tab CV không còn ô kho khối", "Raw material blocks" not in _sau_xoa)
     check("nhưng vẫn tới được từ thanh trên", "/cv/soan" in _sau_xoa)
     check("và kho khối sống ở màn Sửa khối — chữ bạn viết, không phải máy dựng",
-          "Khối nguyên liệu" in get("/cv/soan")[1])
+          "Raw material blocks" in get("/cv/soan")[1])
     _cX = db.connect(Path(tmp) / "jobbot.db")
     check("bản đã dựng không giữ lại thang HỤT nào", (_btX.saved(_cX) or {}) == {}
           or not (_btX.saved(_cX) or {}).get("hut"))
@@ -2805,7 +2805,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check("mỗi câu có dải chấm — luật nói gì về nó",
           _soan.count("class=sntfoot") == len(_d7["khoi"][0]["lines"]))
     check("và chấm bằng CHỮ đọc được, không phải mã luật",
-          any(x in _soan for x in ("lên CV", "xem lại", "luật bỏ")))
+          any(x in _soan for x in ("goes on", "look again", "rules forbid")))
     check("khối đang mở được đánh dấu trong danh sách bên trái",
           "blk on" in _soan or "blk dead on" in _soan)
     check("nút quay lại danh sách bản", "href='/cv'" in _soan)
@@ -2912,21 +2912,22 @@ with tempfile.TemporaryDirectory() as tmp:
     check("dòng tả phẩm chất KHÔNG được đưa ra làm nền",
           "&nen=" not in _br)
     check("nhưng vẫn đọc được, trong thẻ gấp",
-          "tả phẩm chất chứ không tả việc" in _br)
+          "describe a quality rather than work" in _br)
     check("brief in nguyên văn dòng yêu cầu thật của tin", "Comfortable with SQL" in _br)
     check("và nói rõ tin đó của công ty nào", "Man Group" in _br)
     check("chưa chọn khối thì bước 3 chỉ về bước 2",
-          "Chọn khối ở bước 2" in _br)
+          "Pick a block in step 2" in _br)
     check("luật gốc nói thẳng ra chỗ sắp gõ: máy KHÔNG viết hộ",
-          "không biết bạn đã làm gì" in _br)
+          "not what you did" in _br)
     # Thanh trên phải nói ĐỘ PHỦ HÔM NAY — con số duy nhất cho biết màn này có
     # ích không. Delta thuộc về nhật ký, nơi nó có dấu thời gian.
-    check("thanh điều khiển nói độ phủ hôm nay", "tin hồ sơ đáp trọn" in _br)
+    check("thanh điều khiển nói độ phủ hôm nay",
+          "postings fully answered" in _br)
 
     _, _vua = get("/cv/soan?khoi=" + urllib.parse.quote(_ten7, safe="") + "&ky=sql")
     check("chọn khối rồi thì bước 3 mở ra ô gõ",
           "class=cvdraft" in _vua and "name=them value=1" in _vua)
-    check("nút Lưu nói rõ câu này đi vào ĐÂU", "Thêm câu này vào" in _vua)
+    check("nút Lưu nói rõ câu này đi vào ĐÂU", "Add this sentence to" in _vua)
     check("chip kỹ năng đang nhắm được đánh dấu", "hmini on" in _vua or "ky=sql" in _vua)
     # MÀN VIẾT KHÁC MÀN SỬA KHỐI: vào để viết MỘT câu thì không đổ 16 câu cũ ra,
     # ô cần gõ sẽ bị chôn xuống dưới hai màn hình.
@@ -2966,13 +2967,13 @@ with tempfile.TemporaryDirectory() as tmp:
     _mo = ("/cv/soan?khoi=" + urllib.parse.quote(_ten7, safe="")
            + "&ky=data%20pipeline&nen=" + urllib.parse.quote(_nen7, safe=""))
     _, _co_nen = get(_mo)
-    check("bước 1 đã xong thì gập lại, đổi được", "Đổi dòng" in _co_nen)
+    check("bước 1 đã xong thì gập lại, đổi được", "Change line" in _co_nen)
     check("dòng đã chọn hiện nguyên văn ở bước 1", _nen7 in _co_nen)
     # Dòng nào KHÔNG rút gọn được thì ô mở ra là nguyên văn, và phải nói rõ
     # đó là chữ của ai — người dùng quay lại sau mười phút vẫn phải nhận ra.
     _, _tho7 = get(_mo + "&tho=1")
     check("dùng nguyên văn thì ghi rõ đó là chữ của NHÀ TUYỂN DỤNG",
-          "chữ của nhà tuyển dụng" in _tho7)
+          "the employer's words" in _tho7)
     # Cột trái là "viết vào ĐÂU"; bấm một khối không được vứt mất "viết CÁI GÌ".
     check("bấm khối khác vẫn giữ nguyên đích và nền",
           "ky=data%20pipeline&nen=Improve" in _co_nen.replace("&amp;", "&"))
@@ -2988,7 +2989,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check("có đường lật về nguyên văn dòng của họ", "tho=1" in _co_gy)
     _, _co_tho = get(_mo + "&tho=1")
     check("lật về thì ô là nguyên văn, và có đường quay lại gợi ý",
-          _nen7 in _co_tho and "Gợi ý câu CV" in _co_tho)
+          _nen7 in _co_tho and "Suggest a CV sentence" in _co_tho)
 
     # Chỗ trống còn nguyên = chưa viết xong. Lưu nguyên gợi ý là lưu một câu
     # RỖNG BẰNG CHỨNG — tệ hơn cả chép dòng của họ.

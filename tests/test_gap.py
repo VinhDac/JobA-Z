@@ -209,31 +209,33 @@ check("và giữ nguyên đích đang nhắm", "ky=data%20pipeline" in _bf)
 # BA BƯỚC ĐÁNH SỐ. Phản hồi thật của người dùng trên bản phẳng trước đó:
 # "tôi không biết phải bấm cái gì, viết như nào, confirm cái gì".
 check("màn viết chia BA BƯỚC có đánh số", _bf.count("class=buocso") == 3)
-check("bước 1 nói rõ phải bấm gì", "Dùng dòng này" in _bf)
+check("bước 1 nói rõ phải bấm gì", "Use this line" in _bf)
 check("bước 2 cho chọn khối ngay tại chỗ",
-      "Viết vào khối nào" in _bf and "Khối A" in _bf)
+      "Which block to write into" in _bf and "Khối A" in _bf)
 check("bước 3 nói rõ confirm cái gì",
-      "Viết lại thành việc BẠN đã làm" in _bf)
+      "Rewrite it as work YOU did" in _bf)
 # Chưa chọn khối thì chưa có ô gõ — nói ra, đừng để một ô chết nằm đó.
 check("chưa chọn khối -> bước 3 chỉ đường, không đưa ô chết",
-      "Chọn khối ở bước 2" in _bf and "name=line" not in _bf)
+      "Pick a block in step 2" in _bf and "name=line" not in _bf)
 
 # Chọn đủ thì bước 1-2 gập lại, bước 3 mở ra với ô và nút.
 _bf2 = _cs._viet(_d3, "Khối A", "Improve research frameworks", "", _kh3)
 check("chọn xong thì bước đã xong gập lại thành dòng đổi được",
-      "class=dachon" in _bf2 and "Đổi dòng" in _bf2)
+      "class=dachon" in _bf2 and "Change line" in _bf2)
 check("và ô gõ hiện ra, có sẵn nền", "name=line" in _bf2
       and "Improve research frameworks" in _bf2)
-check("nút Lưu nói rõ câu này đi vào ĐÂU", "Thêm câu này vào" in _bf2)
+check("nút Lưu nói rõ câu này đi vào ĐÂU", "Add this sentence to" in _bf2)
 check("và ghi rõ mấy câu đang có KHÔNG bị đụng",
-      "giữ nguyên" in _bf2 and "name=them value=1" in _bf2)
+      "already in the block are untouched" in _bf2
+      and "name=them value=1" in _bf2)
 check("nói thẳng vì sao máy không viết hộ",
-      "không biết bạn đã làm gì" in _bf)
+      "not what you did" in _bf)
 check("nhắc câu trên CV là câu phải ĐỠ ĐƯỢC lúc phỏng vấn",
-      "phòng phỏng vấn" in _bf)
+      "interview room" in _bf)
 check("KHÔNG có nút nào 'máy viết hộ'",
-      "tự viết" not in _bf.lower()
-      and "máy viết" not in _bf.lower().replace("máy không viết", ""))
+      "write it for you" not in _bf.lower()
+      and "machine writes" not in _bf.lower().replace(
+          "machine writes no sentence", ""))
 
 # Ô soạn phải TRỐNG. Gợi ý trong placeholder được phép — nó nói VIẾT VỀ CÁI
 # GÌ; điều cấm là đưa sẵn một CÂU để người ta sửa vài chữ rồi nộp.
@@ -243,26 +245,28 @@ _d4 = {"ky": "data pipeline", "chung": [], "rieng": [], "nen": []}
 _fn = _cs._viet(_d4, "Khối A", _ne, "", _kh3, _ne)
 check("nền rơi đúng vào ô soạn", _ne in _fn)
 check("và ghi rõ đây CHƯA phải câu của bạn",
-      "chữ của nhà tuyển dụng" in _fn and "chưa phải câu của bạn" in _fn)
+      "the employer's words" in _fn and "not your sentence yet" in _fn)
 check("nền đi theo form để lượt Lưu so lại được",
       "name=nen value=" in _fn)
 _fl = _cs._viet(_d4, "Khối A", _ne, "Câu này vẫn gần như nguyên văn", _kh3, _ne)
 # Có gợi ý thì ô mở ra là GỢI Ý, và có đường lật về nguyên văn dòng của họ.
 _fg = _cs._viet(_d4, "Khối A", _ne, "", _kh3, _gy, _gy)
 check("có gợi ý thì ô mở ra đã là gợi ý", _gy in _fg)
-check("và nói rõ ___ là chỗ điền bằng chứng", "để bạn điền bằng chứng" in _fg)
+check("và nói rõ ___ là chỗ điền bằng chứng",
+      "fill in the real evidence" in _fg)
 check("có đường lật về nguyên văn dòng của họ", "tho=1" in _fg)
 _ft = _cs._viet(_d4, "Khối A", _ne, "", _kh3, _ne, _gy, True)
-check("lật về nguyên văn thì có đường quay lại gợi ý", "Gợi ý câu CV" in _ft)
+check("lật về nguyên văn thì có đường quay lại gợi ý",
+      "Suggest a CV sentence" in _ft)
 check("dòng không rút gọn được thì nói thẳng, không để nút chết",
-      "không rút gọn được" in _cs._viet(_d4, "Khối A", _ne, "", _kh3, _ne))
+      "cannot be cut down" in _cs._viet(_d4, "Khối A", _ne, "", _kh3, _ne))
 check("bị từ chối thì lời từ chối đứng NGAY TRÊN ô, chữ vừa gõ còn nguyên",
       "Câu này vẫn gần như nguyên văn" in _fl and _ne in _fl)
 check("ô soạn để trống — không câu mẫu nào nằm sẵn trong ô",
       "<textarea class=cvdraft name=line rows=2 placeholder=" in _fm
       and "></textarea>" in _fm)
 check("gợi ý chỉ nói viết VỀ CÁI GÌ, không phải một câu sẵn",
-      "placeholder='viết một câu về data pipeline…'" in _fm)
+      "placeholder='write a sentence about data pipeline…'" in _fm)
 # autofocus ĐÃ BỎ: nó cuộn thẳng xuống ô gõ, cuốn mất phần brief ngay trên —
 # đúng thứ vừa đưa vào màn này để đọc TRƯỚC KHI viết.
 check("ô trống đầu có NEO để nhảy tới", "id=viet" in _fm)

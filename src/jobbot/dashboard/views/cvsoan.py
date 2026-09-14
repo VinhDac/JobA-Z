@@ -1,28 +1,33 @@
-"""SOẠN KHỐI — màn con của tab CV, chỗ ngồi viết.
+"""THE BLOCK EDITOR — the CV tab's own screen, the place to sit and write.
 
-VÌ SAO CÓ MÀN NÀY. Soạn khối trước đây nằm trong tấm phủ bên phải: rộng 380px,
-đè lên trang, đóng lại là mất. Tấm phủ hợp với mấy công tắc bật xong tắt —
-không hợp với việc ngồi viết mười lăm phút. Và nó câm: gõ xong bấm Lưu, rồi
-chỉ biết câu vừa viết bị luật bỏ nếu tự đi dựng lại cả loạt bản và đọc phần
-"câu không lên bài".
+WHY THIS SCREEN EXISTS. Block editing used to live in the right-hand overlay:
+380px wide, laid over the page, and gone the moment it closed. An overlay
+suits switches you flip and close — it does not suit sitting down to write for
+fifteen minutes. And it was mute: you typed, pressed Save, and only learned
+the sentence had been dropped by a rule if you went and rebuilt the whole run
+of CVs yourself and read the "sentences that did not make it" section.
 
-Nên màn này khác đúng hai chỗ, và cả hai đều là lý do nó tồn tại:
+So this screen differs in exactly two ways, and both are why it exists:
 
-    RỘNG   cả cửa sổ, khối bên trái, câu bên phải, có chỗ mà đọc
-    NÓI    mỗi câu kèm luật nói gì + bao nhiêu tin đang đòi thứ nó nhắc tới
+    WIDE   the whole window, blocks on the left, sentences on the right, room
+           to read
+    SPEAKS each sentence carries what the rules say about it + how many
+           postings are asking for what it mentions
 
-VÀ NÓ LÀ CHỖ DUY NHẤT ĐỂ VIẾT. Trước đây "viết một câu mới về X" có tấm phủ
-riêng (/cv/viet): đọc yêu cầu ở một màn, gõ ở màn khác, hai đường ghi vào cùng
-một `cv_text` phải trông nhau. Nhưng viết một câu mới CHÍNH LÀ sửa một khối —
-cùng phép ghi, cùng chỗ ngồi. Nên `?ky=` chỉ mở thêm phần BRIEF ngay trên ô
-soạn; không đẻ ra màn thứ hai.
+AND IT IS THE ONLY PLACE TO WRITE. "Write a new sentence about X" used to have
+an overlay of its own (/cv/viet): read the requirement on one screen, type on
+another, two write paths into the same `cv_text` having to watch each other.
+But writing a new sentence IS editing a block — the same write, the same
+chair. So `?ky=` only opens a BRIEF above the editing box; it does not spawn a
+second screen.
 
-Luật gốc không đổi: chữ ở đây là chữ NGƯỜI DÙNG gõ. Máy chấm, máy đếm, máy
-không viết hộ câu nào — xem cv/build.py.
+The founding rule stands: the words here are words THE USER typed. The machine
+scores, the machine counts, the machine writes no sentence — see cv/build.py.
 
-MỘT NGUỒN SỰ THẬT: ghi thẳng vào `cv_text`, không dựng bảng khối riêng.
+ONE SOURCE OF TRUTH: written straight into `cv_text`, with no separate block
+table.
 
-CHỈ VẼ.
+DRAWING ONLY.
 """
 
 from __future__ import annotations
@@ -32,22 +37,25 @@ from urllib.parse import quote
 
 from . import runtime
 
-KIND_TAG = {"experience": "việc", "project": "project"}
+KIND_TAG = {"experience": "experience", "project": "project"}
 
-# Phán quyết của luật -> (nhãn, lớp CSS). Ba mức, ba hành động khác nhau:
-# lên CV thì thôi, xem lại là việc của người viết, luật bỏ là câu này không
-# bao giờ in ra — sửa chữ hoặc để nó ở chỗ khác.
-PHAN = {"keep": ("lên CV", "ok"),
-        "review": ("xem lại", "warn"),
-        "drop": ("luật bỏ", "bad")}
+# A rule's verdict -> (label, CSS class). Three levels, three different
+# actions: goes on the CV, needs the writer's eye, or the rules forbid it — in
+# which case it will never be printed, so either reword it or keep it
+# somewhere else.
+PHAN = {"keep": ("goes on", "ok"),
+        "review": ("look again", "warn"),
+        "drop": ("rules forbid", "bad")}
 
 
 def _khoi_list(blocks: list[dict], dang: str, mang: str = "") -> str:
-    """Kho khối, xếp theo VỚI TỚI BAO NHIÊU TIN. Bấm là mở bên phải.
+    """The block store, ordered by HOW MANY POSTINGS IT REACHES. Click to open
+    it on the right.
 
-    `mang` = phần đuôi URL phải đi theo (đích đang nhắm + nền bản nháp). Cột
-    trái là chỗ trả lời "viết VÀO ĐÂU", nên bấm một khối không được vứt mất
-    câu trả lời của "viết CÁI GÌ" — người dùng sẽ phải chọn lại từ đầu.
+    `mang` = the URL tail that has to travel along (the target being aimed at
+    and the draft base). The left column answers "write WHERE", so clicking a
+    block must not throw away the answer to "write WHAT" — the user would have
+    to choose it all over again.
     """
     rows = ""
     for b in blocks:
@@ -57,8 +65,9 @@ def _khoi_list(blocks: list[dict], dang: str, mang: str = "") -> str:
             cls += " dead"
         if b["title"] == dang:
             cls += " on"
-        # quote(), KHÔNG esc(): đây là THAM SỐ URL. Tiêu đề "R & D" thoát HTML
-        # thành "R &amp; D" — dấu & vẫn cắt tham số và trang mở ra khối rỗng.
+        # quote(), NOT esc(): this is a URL PARAMETER. The title "R & D"
+        # HTML-escapes to "R &amp; D" — the & still cuts the parameter and the
+        # page opens an empty block.
         rows += (
             f"<a class='{cls}'"
             f" href='/cv/soan?khoi={quote(b['title'], safe='')}{mang}'>"
@@ -66,30 +75,32 @@ def _khoi_list(blocks: list[dict], dang: str, mang: str = "") -> str:
             f"<div class=blkhead><b>{esc(b['title'][:44])}</b>"
             f"<span class=blkkind>{esc(KIND_TAG.get(b['kind'], b['kind']))}</span>"
             f"</div>"
-            f"<div class=blktags>{skills or '<span class=muted>không kỹ năng nào</span>'}</div>"
+            f"<div class=blktags>{skills or '<span class=muted>no skill named</span>'}</div>"
             f"</div>"
-            f"<div class=blkreach><b>{b['reach']}</b><span>tin</span>"
-            f"<i>{len(b['lines'])} câu</i></div></a>")
+            f"<div class=blkreach><b>{b['reach']}</b><span>postings</span>"
+            f"<i>{len(b['lines'])} sentences</i></div></a>")
 
     if not rows:
-        rows = ("<div class=empty-box>Hồ sơ chưa có khối kinh nghiệm nào. "
-                "Bấm <b>+ Khối mới</b> để viết khối đầu tiên.</div>")
+        rows = ("<div class=empty-box>The profile has no experience block yet. "
+                "Press <b>+ New block</b> to write the first one.</div>")
     return (
-        f"<div class=gapnote>Xếp theo <b>số tin khối đó với tới</b>. "
-        f"Khối <b>0 tin</b> đang chiếm chỗ chứ không chứng minh gì.</div>"
+        f"<div class=gapnote>Ordered by <b>how many postings the block "
+        f"reaches</b>. A block at <b>0 postings</b> is taking up space without "
+        f"proving anything.</div>"
         f"<div class=blklist>{rows}</div>"
         f"<div class=blkfoot><a class='mbtn apply' href='/cv/soan?moi=1'>"
-        f"+ Khối mới</a></div>")
+        f"+ New block</a></div>")
 
 
 def _hut(rows: list, khoi: str = "", dang: str = "") -> str:
-    """Thị trường đang thiếu gì — chọn ĐÍCH cho câu sắp viết.
+    """What the market is short of — pick a TARGET for the sentence to come.
 
-    Soạn khối mà không biết thị trường hỏi gì thì chỉ là sửa chính tả. Chỉ in
-    mấy dòng VIẾT ĐƯỢC: dòng gọi đích danh tên sản phẩm là việc đi học, không
-    phải việc của màn này.
+    Editing blocks without knowing what the market asks is only proofreading.
+    Only the WRITABLE rows are printed: a row naming a product outright is
+    something to go and learn, not work for this screen.
 
-    Bấm một cái là Ở LẠI màn này, giữ nguyên khối đang mở, chỉ mở thêm brief.
+    Pressing one STAYS on this screen, keeps the open block, and only opens
+    the brief.
     """
     if not rows:
         return ""
@@ -100,21 +111,22 @@ def _hut(rows: list, khoi: str = "", dang: str = "") -> str:
         muc += (f"<a class='hmini{on}'"
                 f" href='/cv/soan?{giu}ky={quote(b['ky_nang'], safe='')}'>"
                 f"<span class=hmname>{esc(b['ky_nang'])}</span>"
-                f"<span class=hmplus>+{b['them']}<span>tin</span></span></a>")
+                f"<span class=hmplus>+{b['them']}<span>postings</span></span></a>")
     return (f"<div class=sntbrief>"
-            f"<div class=slab>Viết thêm câu về mấy thứ này thì bao nhiêu tin "
-            f"hết hụt<span>bấm một cái để xem nguyên văn dòng yêu cầu thật "
-            f"của các tin đang đòi nó</span></div>"
+            f"<div class=slab>Write a sentence about these and this many "
+            f"postings clear<span>press one to read, word for word, the real "
+            f"requirement lines of the postings asking for it</span></div>"
             f"<div class=hminis>{muc}</div></div>")
 
 
 def _buoc(so: int, ten: str, xong: bool, dang: bool, ruot: str) -> str:
-    """MỘT BƯỚC trong màn viết. Có số, có tên, có trạng thái.
+    """ONE STEP of the writing screen. It has a number, a name and a state.
 
-    VÌ SAO ĐÁNH SỐ. Bản trước đổ cả brief lẫn ô soạn ra một trang phẳng, và
-    phản hồi đầu tiên của người dùng là "tôi không biết phải bấm cái gì, viết
-    như nào, confirm cái gì". Trang có đủ mọi thứ cần thiết mà không nói thứ
-    tự — mà viết một câu CV là việc ba nhịp, không phải một.
+    WHY NUMBERED. The previous version poured the brief and the editing box
+    onto one flat page, and the user's first reaction was "I don't know what
+    to press, how to write, what I'm confirming". The page had everything
+    needed and never said the order — and writing a CV sentence is a
+    three-beat job, not a one-beat one.
     """
     lop = "buoc" + (" xong" if xong else "") + (" dang" if dang else "")
     dau = "✓" if xong else str(so)
@@ -126,22 +138,23 @@ def _buoc(so: int, ten: str, xong: bool, dang: bool, ruot: str) -> str:
 
 def _viet(d: dict, khoi: str, nen: str, loi: str, blocks: list,
           soan: str = "", gy: str = "", tho: bool = False) -> str:
-    """MÀN VIẾT MỘT CÂU — ba bước, đánh số, nhìn là biết đang ở đâu.
+    """WRITING ONE SENTENCE — three numbered steps, so you can see where you are.
 
-    Khác hẳn màn SỬA KHỐI ở dưới, và phải khác: người vào đây để viết MỘT câu
-    mới, không phải để đọc lại 16 câu cũ. Đổ cả khối ra là chôn cái ô cần gõ
-    xuống dưới hai màn hình.
+    Quite unlike the BLOCK EDITOR below, and it has to be: someone comes here
+    to write ONE new sentence, not to reread 16 old ones. Pouring out the whole
+    block buries the box they need two screens down.
 
-        1  chọn một dòng họ hỏi làm điểm xuất phát
-        2  chọn viết vào khối nào
-        3  viết lại thành việc MÌNH làm, rồi Lưu
+        1  pick one of their requirement lines as a starting point
+        2  pick which block to write into
+        3  rewrite it as work YOU did, then Save
 
-    Bước nào xong thì gập lại thành một dòng "đã chọn", đổi được. Bước đang
-    làm thì mở và sáng. Bước chưa tới vẫn hiện — khoá nó lại chỉ làm người
-    dùng hoang mang thêm chứ không dạy được gì.
+    A finished step folds to a one-line "chosen" row, still changeable. The
+    current step is open and lit. A step not yet reached still shows — locking
+    it only confuses the user without teaching them anything.
 
-    Máy vẫn KHÔNG viết câu nào. Chữ ở bước 3 là chữ NHÀ TUYỂN DỤNG nguyên văn,
-    và `gap.qua_giong` chặn lúc Lưu nếu người dùng không viết lại nó.
+    The machine still writes NO sentence. The words in step 3 are THE
+    EMPLOYER's, verbatim, and `gap.qua_giong` blocks Save if the user has not
+    rewritten them.
     """
     ky = d["ky"]
     dich = quote(ky, safe="")
@@ -154,87 +167,93 @@ def _viet(d: dict, khoi: str, nen: str, loi: str, blocks: list,
             f"<li><span class=wq>{esc(m['chu'])}</span>"
             f"<span class=wco>{esc(m['cong_ty'])}</span></li>" for m in rows)
 
-    # ---- BƯỚC 1 · chọn dòng --------------------------------------------
+    # ---- STEP 1 · pick a line ------------------------------------------
     if nen:
         r1 = (f"<div class=dachon><span class=wq>{esc(nen)}</span>"
               f"<a class='mbtn tiny' href='/cv/soan?ky={dich}{giu_khoi}'>"
-              f"Đổi dòng</a></div>")
+              f"Change line</a></div>")
     elif d["nen"]:
         r1 = "<div class=nenlist>"
         for m in d["nen"]:
-            # Dòng chiếm TRỌN bề ngang; tên công ty và lời mời bấm xuống hàng
-            # dưới. Nhét công ty vào cùng hàng thì cột của nó bị bóp còn "Bo…"
-            # — mà tên công ty chính là thứ nói đây là yêu cầu THẬT.
+            # The line takes THE FULL WIDTH; the company name and the
+            # invitation drop to the line below. Squeeze the company onto the
+            # same row and its column is crushed to "Bo…" — and the company
+            # name is precisely what shows this is a REAL requirement.
             r1 += (f"<a class=nenone href='/cv/soan?ky={dich}{giu_khoi}"
                    f"&nen={quote(m['chu'], safe='')}'>"
                    f"<span class=wq>{esc(m['chu'])}</span>"
                    f"<span class=nenfoot>"
-                   f"<span class=nengo>Dùng dòng này →</span>"
+                   f"<span class=nengo>Use this line →</span>"
                    f"<span class=wco>{esc(m['cong_ty'])}</span></span></a>")
         r1 += "</div>"
     else:
-        r1 = ("<div class=empty-box>Không tin nào đòi thứ này bằng một dòng "
-              "TẢ VIỆC — mấy dòng đòi nó chỉ tả phẩm chất. Bạn vẫn viết được, "
-              "cứ sang bước 2 rồi gõ câu của mình ở bước 3.</div>")
+        r1 = ("<div class=empty-box>No posting asks for this in a line that "
+              "DESCRIBES WORK — the lines asking for it only describe a "
+              "quality. You can still write it: go to step 2 and type your own "
+              "sentence in step 3.</div>")
 
     phu = ""
     con = [m for m in d["chung"] if m not in d["nen"]][:5]
     if con:
-        phu += (f"<details class=briefmore><summary>{len(con)} dòng nữa đòi "
-                f"{esc(ky)} — tả phẩm chất chứ không tả việc, đọc để biết"
-                f"</summary><ul class=wlist>{_list(con)}</ul></details>")
+        phu += (f"<details class=briefmore><summary>{len(con)} more lines ask "
+                f"for {esc(ky)} — they describe a quality rather than work, "
+                f"read them for context</summary>"
+                f"<ul class=wlist>{_list(con)}</ul></details>")
     if d["rieng"]:
-        phu += (f"<details class=briefmore><summary>{len(d['rieng'])} dòng gọi "
-                f"đích danh tên sản phẩm — không câu nào viết thay được"
+        phu += (f"<details class=briefmore><summary>{len(d['rieng'])} lines "
+                f"name a product outright — no sentence stands in for those"
                 f"</summary><ul class=wlist>{_list(d['rieng'])}</ul></details>")
 
-    # ---- BƯỚC 2 · chọn khối --------------------------------------------
+    # ---- STEP 2 · pick a block -----------------------------------------
     r2 = "<div class=khoichon>"
     for b in blocks:
         on = " on" if b["title"] == khoi else ""
         r2 += (f"<a class='khoione{on}' href='/cv/soan?ky={dich}{giu_nen}"
                f"&khoi={quote(b['title'], safe='')}'>"
                f"<b>{esc(b['title'][:34])}</b>"
-               f"<span>{len(b['lines'])} câu · {b['reach']} tin</span></a>")
+               f"<span>{len(b['lines'])} sentences · {b['reach']} postings</span></a>")
     r2 += (f"<a class=khoione href='/cv/soan?moi=1&ky={dich}{giu_nen}'>"
-           f"<b>+ Khối mới</b><span>đặt tên ở màn sửa khối</span></a></div>")
+           f"<b>+ New block</b><span>name it on the block editor</span></a></div>")
 
-    # ---- BƯỚC 3 · viết ---------------------------------------------------
+    # ---- STEP 3 · write --------------------------------------------------
     if not khoi:
-        r3 = ("<div class=empty-box>Chọn khối ở bước 2 trước — câu viết ra "
-              "phải nằm trong một khối.</div>")
+        r3 = ("<div class=empty-box>Pick a block in step 2 first — the sentence "
+              "has to live inside a block.</div>")
     else:
-        # BA TRẠNG THÁI của ô, và mỗi cái cần một lời khác nhau.
+        # THREE STATES of the box, each needing different words.
         dung_gy = bool(gy) and not tho and o == gy
         if loi:
             canh = f"<div class='sntwarn bad'>{esc(loi)}</div>"
         elif dung_gy:
-            canh = ("<div class='sntwarn ok'>Đây là <b>gợi ý</b>: máy cắt phần "
-                    "thừa trong dòng của họ và chia sang thì quá khứ — hình "
-                    "của một câu CV. Nó <b>không biết bạn đã làm gì</b>, nên "
-                    "chỗ <b>___</b> để bạn điền bằng chứng thật: bao nhiêu "
-                    "cái, trên bao nhiêu dữ liệu, đổi được mấy phần.</div>")
+            canh = ("<div class='sntwarn ok'>This is a <b>suggestion</b>: the "
+                    "machine cut the excess out of their line and put it into "
+                    "the past tense — the shape of a CV sentence. It <b>does "
+                    "not know what you did</b>, so the <b>___</b> is for you "
+                    "to fill in the real evidence: how many, over how much "
+                    "data, how much it changed.</div>")
         elif nen:
-            canh = ("<div class=sntwarn>Ô dưới đang là <b>chữ của nhà tuyển "
-                    "dụng</b>, chưa phải câu của bạn. Viết lại thành việc BẠN "
-                    "đã làm, kèm con số thật.</div>")
+            canh = ("<div class=sntwarn>The box below is still <b>the "
+                    "employer's words</b>, not your sentence yet. Rewrite it "
+                    "as work YOU did, with a real number.</div>")
         else:
             canh = ""
 
-        # ĐỔI QUA LẠI giữa gợi ý và nguyên văn. Là LIÊN KẾT, không JavaScript:
-        # trạng thái nằm trên URL nên Back được và lưu địa chỉ lại được.
+        # SWITCHING between the suggestion and the verbatim line. A LINK, not
+        # JavaScript: the state lives on the URL, so Back works and the
+        # address can be saved.
         lat = ""
         if gy and nen:
             if dung_gy:
                 lat = (f"<a class='mbtn tiny' href='/cv/soan?ky={dich}"
-                       f"{giu_khoi}{giu_nen}&tho=1'>Dùng nguyên văn dòng của "
-                       f"họ</a>")
+                       f"{giu_khoi}{giu_nen}&tho=1'>Use their line "
+                       f"verbatim</a>")
             else:
                 lat = (f"<a class='mbtn tiny apply' href='/cv/soan?ky={dich}"
-                       f"{giu_khoi}{giu_nen}'>↺ Gợi ý câu CV</a>")
+                       f"{giu_khoi}{giu_nen}'>↺ Suggest a CV sentence</a>")
         elif nen:
-            lat = ("<span class=muted>dòng này không rút gọn được thành hình "
-                   "câu CV — dùng nó làm đề bài, viết câu của bạn</span>")
+            lat = ("<span class=muted>this line cannot be cut down to the "
+                   "shape of a CV sentence — use it as the brief and write "
+                   "your own</span>")
 
         r3 = (
             f"<form class=vietform method=post action='/cv/block'>"
@@ -244,45 +263,49 @@ def _viet(d: dict, khoi: str, nen: str, loi: str, blocks: list,
             + (f"<input type=hidden name=nen value='{esc(nen)}'>" if nen else "")
             + canh
             + f"<textarea class=cvdraft name=line rows=4 id=viet"
-              f" placeholder='Một câu tiếng Anh, kể việc BẠN làm. Có con số "
-              f"thật thì thêm vào — đó là thứ hồ sơ thiếu nhất.'>{esc(o)}"
+              f" placeholder='One English sentence about work YOU did. Put in "
+              f"a real number if you have one — that is what the profile is "
+              f"shortest of.'>{esc(o)}"
               f"</textarea>"
             + (f"<div class=latrow>{lat}</div>" if lat else "")
             + f"<div class=vietfoot>"
-              f"<button class='mbtn apply big' type=submit>Thêm câu này vào "
+              f"<button class='mbtn apply big' type=submit>Add this sentence to "
               f"«{esc(khoi[:26])}»</button>"
-              f"<span class=applynote>ghi thẳng vào CV gốc · mấy câu đang có "
-              f"trong khối giữ nguyên</span></div>"
+              f"<span class=applynote>written straight into the original CV · "
+              f"the sentences already in the block are untouched</span></div>"
             + "</form>")
 
-    hd = (f"<div class=viethead><span>Viết một câu về · <b>{esc(ky)}</b></span>"
+    hd = (f"<div class=viethead><span>Write a sentence about · "
+          f"<b>{esc(ky)}</b></span>"
           f"<a class='mbtn tiny' href='/cv/soan{giu_khoi.replace('&', '?', 1)}'>"
-          f"× bỏ đích</a></div>")
+          f"× drop the target</a></div>")
     return (f"<div class=vietbox>{hd}"
-            + _buoc(1, "Chọn một dòng họ hỏi làm điểm xuất phát",
+            + _buoc(1, "Pick one of their lines as a starting point",
                     bool(nen), not nen, r1 + phu)
-            + _buoc(2, "Viết vào khối nào", bool(khoi), bool(nen) and not khoi, r2)
-            + _buoc(3, "Viết lại thành việc BẠN đã làm, rồi Lưu",
+            + _buoc(2, "Which block to write into", bool(khoi),
+                    bool(nen) and not khoi, r2)
+            + _buoc(3, "Rewrite it as work YOU did, then Save",
                     False, bool(khoi), r3)
-            + "<div class=note>Máy KHÔNG viết câu nào. Nó biết thị trường hỏi "
-              "gì, nhưng không biết bạn đã làm gì — và câu trên CV là câu bạn "
-              "phải đỡ được trong phòng phỏng vấn. Để nguyên chữ của họ thì "
-              "máy không cho lưu.</div></div>")
+            + "<div class=note>The machine writes NO sentence. It knows what "
+              "the market asks, but not what you did — and a sentence on a CV "
+              "is one you have to hold up in the interview room. Leave their "
+              "words as they are and it will not let you save.</div></div>")
 
 
 def _cau(c: dict) -> str:
-    """MỘT câu: ô soạn + dải chấm dưới chân nó.
+    """ONE sentence: the editing box plus the verdict strip under it.
 
-    Dải chấm là thứ tấm phủ cũ không có. Nó trả lời hai câu, không hơn:
-    luật có cho câu này in ra không, và thị trường có hỏi thứ nó nhắc tới
-    không. Cả hai đo được; cả hai đổi ngay khi Lưu xong.
+    The strip is what the old overlay had not got. It answers two questions,
+    no more: do the rules let this sentence be printed, and is the market
+    asking about what it mentions. Both are measured; both change the moment
+    you press Save.
     """
     from ...cv.report import vi
 
     nhan, lop = PHAN.get(c["phan"], PHAN["keep"])
     sk = "".join(f"<span class=sk>{esc(t)}</span>" for t in c["tags"][:5])
     if not sk:
-        sk = "<span class=muted>không nhắc kỹ năng nào có tên</span>"
+        sk = "<span class=muted>names no skill</span>"
     why = (f"<span class=svwhy>{esc(vi(c['vi_sao']))}</span>"
            if c["vi_sao"] else "")
     return (
@@ -291,44 +314,48 @@ def _cau(c: dict) -> str:
         f"<div class=sntfoot>"
         f"<span class='sv {lop}'>{nhan}</span>{why}"
         f"<span class=sntsk>{sk}</span>"
-        f"<span class=sntreach><b>{c['reach']}</b> tin</span>"
+        f"<span class=sntreach><b>{c['reach']}</b> postings</span>"
         f"</div></div>")
 
 
 def _form(chon: dict | None, cau: list[dict], ky: str = "",
           nen: str = "", loi: str = "", ten: str = "") -> str:
-    """Ô soạn một khối. Ghi thẳng vào `cv_text`.
+    """The editor for one block. Written straight into `cv_text`.
 
-    `nen` rơi vào ô trống đầu tiên. `loi` là lời từ chối của lượt Lưu vừa rồi
-    — hiện NGAY TRÊN ô, cạnh chữ người dùng vẫn còn nguyên, chứ không phải
-    một dòng báo lỗi ở đâu đó rồi mất trắng cái vừa gõ.
+    `nen` drops into the first empty box. `loi` is the last Save's refusal —
+    shown RIGHT ABOVE the box, next to the words the user still has, rather
+    than as an error line somewhere else with everything just typed lost.
     """
-    # `ten` = tên khối người dùng vừa gõ nhưng CHƯA lưu. Không giữ nó thì lượt
-    # Lưu bị từ chối là mất cả tên lẫn câu, và người dùng gõ lại từ đầu.
+    # `ten` = a block name the user has typed but NOT saved. Without keeping
+    # it, a refused Save loses both the name and the sentences, and the user
+    # types it all again.
     b = chon or {"kind": "project", "title": ten, "meta": "", "lines": [],
                  "skills": [], "reach": 0}
     kinds = "".join(
         f"<option value='{k}'{' selected' if k == b['kind'] else ''}>{esc(v)}"
         f"</option>" for k, v in KIND_TAG.items())
-    # Câu đã có thì kèm dải chấm; ô trống ở cuối để viết thêm — chúng chưa có
-    # gì để chấm nên không có dải. Khối MỚI được nhiều ô hơn: khối đang sửa
-    # thì hai ô là đủ chỗ nối thêm, còn khối mới bắt đầu từ tờ giấy trắng.
-    # Ô TRỐNG ĐẦU TIÊN mang NEO `#viet`, KHÔNG mang autofocus. autofocus cuộn
-    # thẳng xuống ô gõ — nghe thì tiện, nhưng nó cuộn mất phần brief ngay phía
-    # trên, đúng thứ vừa đưa vào đây để người ta đọc TRƯỚC KHI viết. Neo thì
-    # người dùng tự quyết: đọc xong, bấm một cái là xuống tới ô.
-    goi = (f"viết một câu về {ky}…" if ky else "viết thêm một câu…")
+    # An existing sentence comes with its verdict strip; the empty boxes at
+    # the end are for writing more, and having nothing to judge they have no
+    # strip. A NEW block gets more boxes: editing a block, two boxes is enough
+    # room to add on, while a new block starts from a blank page.
+    # THE FIRST EMPTY BOX carries the ANCHOR `#viet`, NOT autofocus. autofocus
+    # scrolls straight to the typing box — convenient in theory, but it
+    # scrolls away the brief just above, exactly the thing put there to be
+    # read BEFORE writing. With an anchor the user decides: read, then press
+    # once to jump to the box.
+    goi = (f"write a sentence about {ky}…" if ky else "write another sentence…")
     boxes = "".join(_cau(c) for c in cau)
     for i in range(2 if chon else 4):
         neo = " id=viet" if i == 0 else ""
-        # Ô ĐẦU nhận nền. Nền là chữ của nhà tuyển dụng, nên nó phải được gắn
-        # nhãn ngay tại chỗ — người dùng quay lại sau mười phút phải còn nhận
-        # ra đây chưa phải câu của mình.
+        # THE FIRST BOX takes the base. The base is the employer's words, so
+        # it has to be labelled right there — a user coming back ten minutes
+        # later must still recognise this is not their own sentence yet.
         if i == 0 and nen:
             xau = ("<div class='sntwarn bad'>" + esc(loi) + "</div>") if loi else (
-                "<div class=sntwarn>Đây là <b>chữ của nhà tuyển dụng</b>, chưa "
-                "phải câu của bạn. Viết lại thành việc BẠN đã làm — có con số "
-                "thật thì thêm vào, đó là thứ hồ sơ thiếu nhất.</div>")
+                "<div class=sntwarn>These are <b>the employer's words</b>, not "
+                "your sentence yet. Rewrite it as work YOU did — put in a real "
+                "number if you have one, that is what the profile is shortest "
+                "of.</div>")
             boxes += (f"<div class='snt nen{' bad' if loi else ''}'{neo}>{xau}"
                       f"<textarea class=cvdraft name=line rows=3"
                       f" placeholder='{esc(goi)}'>{esc(nen)}</textarea></div>")
@@ -340,44 +367,46 @@ def _form(chon: dict | None, cau: list[dict], ky: str = "",
     xem = sum(1 for c in cau if c["phan"] == "review")
     tom = ""
     if chon:
-        phan = [f"<b>{len(cau)}</b> câu"]
+        phan = [f"<b>{len(cau)}</b> sentences"]
         if bo:
-            phan.append(f"<b class=bad>{bo}</b> câu luật không cho in ra")
+            phan.append(f"<b class=bad>{bo}</b> the rules will not print")
         if xem:
-            phan.append(f"<b class=warn>{xem}</b> câu chờ bạn quyết")
-        tom = (f"<div class=gapnote>Khối này với tới <b>{b['reach']}</b> tin · "
-               + " · ".join(phan) + "</div>")
+            phan.append(f"<b class=warn>{xem}</b> waiting on your decision")
+        tom = (f"<div class=gapnote>This block reaches <b>{b['reach']}</b> "
+               f"postings · " + " · ".join(phan) + "</div>")
 
     return (
         "<form class=soanform method=post action='/cv/block'>"
         f"<input type=hidden name=was value='{esc(b['title'])}'>"
         + (f"<input type=hidden name=ky value='{esc(ky)}'>" if ky else "")
-        # Nền đi theo form để lượt Lưu so được câu vừa gõ với chữ gốc của họ.
+        # The base travels with the form so Save can compare what was typed
+        # against their original words.
         + (f"<input type=hidden name=nen value='{esc(nen)}'>" if nen else "")
         +
         f"{tom}"
         "<div class=soanhead>"
-        f"<label class=slab>Loại<select name=kind>{kinds}</select></label>"
-        "<label class=slab>Tên khối"
+        f"<label class=slab>Kind<select name=kind>{kinds}</select></label>"
+        "<label class=slab>Block name"
         f"<input class=dfthead type=text name=title value='{esc(b['title'])}'"
-        " placeholder='tên công ty, hoặc tên project' autocomplete=off>"
+        " placeholder='a company name, or a project name' autocomplete=off>"
         "</label>"
-        "<label class=slab>Ngày tháng / tổ chức<span>để trống nếu là project</span>"
+        "<label class=slab>Dates / organisation<span>leave empty for a project</span>"
         f"<input class=dfthead type=text name=meta value='{esc(b['meta'])}'"
-        " placeholder='2023 — nay' autocomplete=off></label>"
+        " placeholder='2023 — present' autocomplete=off></label>"
         "</div>"
-        "<div class=slab>Câu<span>mỗi ô một câu · ô trống thì bỏ qua · dải "
-        "dưới mỗi ô là luật nói gì, tính lại sau khi Lưu</span></div>"
+        "<div class=slab>Sentences<span>one per box · empty boxes are skipped · "
+        "the strip under each box is what the rules say, recomputed after "
+        "Save</span></div>"
         f"{boxes}"
         "<div class=setfoot>"
-        "<button class='mbtn apply' type=submit>Lưu vào CV gốc</button>"
-        + ("<button class='mbtn kill' type=submit name=kill value=1>Xoá khối"
+        "<button class='mbtn apply' type=submit>Save into the original CV</button>"
+        + ("<button class='mbtn kill' type=submit name=kill value=1>Delete block"
            "</button>" if chon else "")
-        + "<span class=applynote>ghi thẳng vào hồ sơ · bấm Cập nhật trên thanh "
-          "trên để dựng lại mọi bản CV từ đó</span></div>"
-        + (f"<div class=forced>Khối này không tin nào với tới. Không xoá cũng "
-           f"được — nhưng nó đang chiếm một chỗ trên tờ giấy mà không chứng "
-           f"minh gì.</div>" if chon and b["reach"] == 0 else "")
+        + "<span class=applynote>written straight into the profile · press "
+          "Update on the bar above to rebuild every CV from it</span></div>"
+        + (f"<div class=forced>No posting reaches this block. You do not have "
+           f"to delete it — but it is taking up a place on the page without "
+           f"proving anything.</div>" if chon and b["reach"] == 0 else "")
         + "</form>")
 
 
@@ -386,51 +415,58 @@ def render(*, khoi: list[dict], chon: dict | None, cau: list[dict],
            nen: str = "", soan: str = "", gy: str = "", tho: bool = False,
            loi: str = "", ten: str = "", dap: tuple = (0, 0), san: list = (),
            moi: bool = False, stage: dict | None = None) -> str:
-    """Màn con Soạn khối — MỘT chỗ cho mọi phép ghi vào CV gốc.
+    """The Block editor screen — ONE place for every write into the original CV.
 
-    Ba đường vào, một màn:
-        /cv/soan                 chọn khối để sửa
-        /cv/soan?khoi=X          sửa khối X
-        /cv/soan?ky=S            viết một câu về S — brief mở, chờ chọn khối
-        /cv/soan?khoi=X&ky=S     viết vào X, brief của S mở ngay trên ô soạn
+    Three ways in, one screen:
+        /cv/soan                 pick a block to edit
+        /cv/soan?khoi=X          edit block X
+        /cv/soan?ky=S            write a sentence about S — brief open, waiting
+                                 for a block
+        /cv/soan?khoi=X&ky=S     write into X, S's brief open above the box
 
-    Giữ nguyên thanh điều khiển của khúc CV có lý do: sửa khối xong thì nút
-    Chạy tự đổi thành "Cập nhật — chữ trên CV đã sửa" (xem cv/batch.stage).
-    Đó là lời nhắc đúng lúc đúng chỗ, không phải một dòng chữ dặn dò.
+    Keeping the CV stage's control bar has a reason: finish editing a block and
+    the Run button turns itself into "Update — the words on the CV changed"
+    (see cv/batch.stage). That is a reminder in the right place at the right
+    time, not a line of advice.
 
-    ĐỘ PHỦ HÔM NAY đứng trên thanh, KHÔNG phải "vừa tăng mấy tin". Delta thuộc
-    về nhật ký, nơi nó có dấu thời gian; in nó lên màn thì bấm F5 một cái là
-    con số biến thành lời nói dối.
+    TODAY'S COVERAGE sits on the bar, NOT "just gained N postings". A delta
+    belongs in the journal, where it has a timestamp; print it on screen and
+    one F5 turns the number into a lie.
     """
     from ..layout import deck
     info = stage or {}
     words = sum(len(b["lines"]) for b in khoi)
     dang = chon["title"] if chon else ""
 
-    # THỨ TỰ ĐỌC: họ hỏi gì -> mình viết gì. Brief lên trên ô soạn, luôn luôn.
-    # Cột trái phải MANG THEO đích và nền: bấm một khối là trả lời "viết vào
-    # đâu", không phải vứt bỏ câu trả lời của "viết cái gì".
+    # READING ORDER: what they ask -> what I write. The brief goes above the
+    # editing box, always. The left column has to CARRY the target and the
+    # base: clicking a block answers "write where", it must not discard the
+    # answer to "write what".
     mang = (f"&ky={quote(ky, safe='')}" if ky else "")
     mang += (f"&nen={quote(nen, safe='')}" if nen else "")
     mang += "&tho=1" if tho else ""
 
-    # KHỐI CHƯA TỒN TẠI VẪN PHẢI RA FORM. Gọi tên một khối chưa lưu — lượt Lưu
-    # vừa bị từ chối, hoặc vừa đổi tên khối — mà màn trả về "chưa chọn khối" thì
-    # chữ vừa gõ biến mất và người dùng không hiểu mình vừa mất cái gì.
+    # A BLOCK THAT DOES NOT EXIST YET STILL GETS A FORM. Name a block that was
+    # never saved — a Save just refused, or a block just renamed — and a screen
+    # answering "no block chosen" loses the words just typed, with the user
+    # unable to tell what they lost.
     moi = moi or bool(ten and chon is None)
 
-    # HAI VIỆC, HAI HÌNH — và đây là chỗ sửa phản hồi "không biết bấm cái gì".
+    # TWO JOBS, TWO SHAPES — and this is the fix for the "I don't know what to
+    # press" feedback.
     #
-    #   có `ky`   VIẾT MỘT CÂU MỚI  -> ba bước đánh số, một ô, một nút
-    #   không     SỬA KHỐI          -> cả khối ra, từng câu một, có dải chấm
+    #   `ky` set   WRITE A NEW SENTENCE -> three numbered steps, one box, one button
+    #   otherwise  EDIT A BLOCK         -> the whole block, sentence by sentence,
+    #                                      with verdict strips
     #
-    # Trước đây cả hai dùng chung một hình: vào để viết một câu mà nhận nguyên
-    # bộ soạn 16 câu, ô cần gõ bị chôn xuống dưới hai màn hình.
+    # Both used to share one shape: someone arriving to write one sentence got
+    # the full 16-sentence editor, with the box they needed buried two screens
+    # down.
     ruot = _hut(hut, dang, ky)
     if brief:
         ruot += _viet(brief, dang or (ten if moi else ""), nen, loi, khoi,
                       soan, gy, tho)
-        # Khối mới thì vẫn cần chỗ đặt TÊN — bước 2 không làm được việc đó.
+        # A new block still needs somewhere to be NAMED — step 2 cannot do it.
         if moi and not dang:
             ruot += _form(None, [], ky, nen, loi, ten)
     elif chon or moi:
@@ -438,55 +474,59 @@ def render(*, khoi: list[dict], chon: dict | None, cau: list[dict],
     else:
         ruot += _san(list(san)) or _chua_chon()
 
-    nhan = (f"viết về {ky}" if ky else
+    nhan = (f"about {ky}" if ky else
             chon["title"][:30] if chon else
-            (ten[:30] or "Khối mới") if moi else "chưa chọn")
+            (ten[:30] or "New block") if moi else "nothing chosen")
     nen, tong = dap
-    do = [(f"{len(khoi)}", "khối", "stock"), (f"{words}", "câu kho", "act")]
-    # Độ phủ là số DUY NHẤT nói được màn này có ích không: nó nhích lên mỗi
-    # lần viết thêm một câu đúng chỗ.
-    do.append((f"{nen}/{tong}" if tong else "—", "tin hồ sơ đáp trọn", "view"))
+    do = [(f"{len(khoi)}", "blocks", "stock"), (f"{words}", "sentences", "act")]
+    # Coverage is the ONE number that says whether this screen is doing any
+    # good: it ticks up every time a sentence lands in the right place.
+    do.append((f"{nen}/{tong}" if tong else "—", "postings fully answered", "view"))
     return runtime.render(
-        title="Soạn khối", active="/cv", stream="cv", journal="corner",
-        bar=deck("cv", "CV · soạn khối", info.get("state", "chưa dựng bản nào"),
+        title="Block editor", active="/cv", stream="cv", journal="corner",
+        bar=deck("cv", "CV · block editor",
+                 info.get("state", "nothing built yet"),
                  do,
                  adjust="/adjust/cv",
-                 run=info.get("label", "Chạy"),
+                 run=info.get("label", "Run"),
                  run_note=info.get("note", ""),
-                 sua=("/cv", "← Bản CV", "Quay lại danh sách bản sẽ gửi"),
-                 xoa=("/api/cv/xoa", "Xoá bản", "Xoá thật?",
-                      "Vứt mọi bản CV đã dựng. Chữ trên CV gốc KHÔNG bị đụng "
-                      "— bấm Chạy là dựng lại")),
+                 sua=("/cv", "← CVs", "Back to the list of what will be sent"),
+                 xoa=("/api/cv/xoa", "Delete versions", "Really delete?",
+                      "Throw away every CV built. The words on the original CV "
+                      "are NOT touched — press Run to rebuild")),
         cols=2, columns="minmax(330px, 1fr) 1.7fr",
         rows_tpl="1fr 150px", journal_at=(1, 2),
         panels=[
-            runtime.panel("Khối nguyên liệu", _khoi_list(khoi, dang, mang),
+            runtime.panel("Raw material blocks", _khoi_list(khoi, dang, mang),
                           at=(1, 1)),
-            runtime.panel(f"Soạn · {nhan}", ruot, rows=2, at=(2, 1)),
+            runtime.panel(f"Editing · {nhan}", ruot, rows=2, at=(2, 1)),
         ],
     )
 
 
 def _chua_chon() -> str:
-    """Chưa chọn gì. Nói ra VIỆC, không nói "chưa có dữ liệu"."""
+    """Nothing chosen. Name THE JOB, do not say "no data yet"."""
     return (
-        "<div class=empty-box><b>Chọn một khối bên trái để sửa</b>, bấm "
-        "<b>+ Khối mới</b>, hoặc bấm một thứ ở hàng trên để viết câu mới về "
-        "nó.<br>Mỗi câu bạn gõ ở đây được chấm ngay: luật có cho nó in ra "
-        "không, và bao nhiêu tin đang đòi thứ nó nhắc tới.</div>")
+        "<div class=empty-box><b>Pick a block on the left to edit</b>, press "
+        "<b>+ New block</b>, or press something on the row above to write a "
+        "new sentence about it.<br>Every sentence you type here is judged at "
+        "once: whether the rules let it be printed, and how many postings are "
+        "asking for what it mentions.</div>")
 
 
 def _san(rows: list) -> str:
-    """MÁY TỰ LO — bản nháp dựng sẵn cho MỌI chỗ hụt, trên một màn.
+    """MACHINE HANDLES IT — a prepared draft for EVERY gap, on one screen.
 
-    Đây là hình duy nhất của "tự động điền" mà không nói dối. Máy làm trước
-    toàn bộ phần nó làm được — tìm dòng yêu cầu tả việc, cắt phần thừa, chia
-    thì quá khứ — rồi dừng đúng ở chỗ nó không biết: CON SỐ. Người dùng điền
-    con số và bấm, từng câu một.
+    This is the only shape of "auto-fill" that does not lie. The machine does
+    the whole part it can do beforehand — find a requirement line describing
+    work, cut the excess, put it into the past — and then stops exactly where
+    it does not know: THE NUMBER. The user fills the number in and presses,
+    one sentence at a time.
 
-    KHÔNG tự ghi vào CV. Câu nháp nằm trong `cv_text` thì bộ chấm đếm luôn nó
-    là kỹ năng đã đáp, và độ phủ nhảy lên mà không có gì thật đằng sau — app
-    nói dối người dùng về chính họ. Đây là lý do duy nhất, và nó đủ.
+    It does NOT write into the CV by itself. A draft sentence sitting inside
+    `cv_text` would be counted by the scorer as a skill already answered, and
+    coverage would jump with nothing real behind it — the app lying to the
+    user about the user. That is the only reason, and it is enough.
     """
     if not rows:
         return ""
@@ -495,12 +535,13 @@ def _san(rows: list) -> str:
         cho = (f"/cv/soan?ky={quote(r['ky'], safe='')}"
                f"&nen={quote(r['nen'], safe='')}")
         o += (f"<a class=sanone href='{cho}'>"
-              f"<span class=sanky>{esc(r['ky'])}<b>+{r['them']}</b>tin</span>"
+              f"<span class=sanky>{esc(r['ky'])}<b>+{r['them']}</b>postings</span>"
               f"<span class=sannhap>{esc(r['nhap'])}</span>"
-              f"<span class=sanco>{esc(r['cong_ty'])} · điền số rồi lưu →</span>"
+              f"<span class=sanco>{esc(r['cong_ty'])} · fill in the number and "
+              f"save →</span>"
               f"</a>")
-    return (f"<div class=sanbox><div class=briefhead>Máy đã dựng sẵn "
-            f"<b>{len(rows)}</b> bản nháp<span>mỗi chỗ hụt một câu, đã cắt "
-            f"phần thừa và chia thì quá khứ. Chỗ <b>___</b> là bằng chứng — "
-            f"thứ duy nhất máy không biết. Bấm một cái để điền rồi lưu."
-            f"</span></div>{o}</div>")
+    return (f"<div class=sanbox><div class=briefhead>The machine has prepared "
+            f"<b>{len(rows)}</b> drafts<span>one sentence per gap, excess "
+            f"already cut and the tense already past. The <b>___</b> is the "
+            f"evidence — the one thing the machine does not know. Press one to "
+            f"fill it in and save.</span></div>{o}</div>")
