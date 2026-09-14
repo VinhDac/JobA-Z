@@ -1,37 +1,42 @@
-/* Cầu nối runtime: máy đẩy xuống, màn hình vẽ lại. Không thư viện.
+/* The runtime bridge: the machine pushes, the screen redraws. No libraries.
  *
- * Hợp đồng với HTML — view chỉ cần đặt đúng thuộc tính, không cần biết gì thêm:
+ * The contract with the HTML — a view only has to set the right attributes,
+ * and needs to know nothing more:
  *
- *   [data-journal="search"]   khung nhật ký, lọc theo luồng ("" = tất cả)
- *   [data-progress="search"]  khung thanh tiến độ, lọc theo luồng
- *   [data-state]              chỗ hiện đang chạy / tạm dừng / chờ
- *   [data-act="run"|"pause"]  nút master
- *   [data-nav]                nút gập thanh bên
- *   [data-tags]               ô thẻ: gõ + Enter để thêm, × để bỏ
- *   [data-post]               nút gọi việc nền; [data-arg] là tham số
- *   [data-settings]           mở tấm bên phải; giá trị = URL mảnh HTML cần nạp
- *   [data-appset]             mở hộp Cài đặt cả app (giữa màn)
- *   [data-widget]             một ô; [data-expand] trong đó là nút mở to
+ *   [data-journal="search"]   the journal frame, filtered by stream ("" = all)
+ *   [data-progress="search"]  the progress frame, filtered by stream
+ *   [data-state]              where running / paused / waiting is shown
+ *   [data-act="run"|"pause"]  the master buttons
+ *   [data-nav]                the sidebar collapse button
+ *   [data-tags]               a tag box: type + Enter to add, × to remove
+ *   [data-post]               a button calling a background job; [data-arg] is
+ *                             its parameter
+ *   [data-settings]           opens the right-hand panel; the value is the URL
+ *                             of the HTML fragment to load
+ *   [data-appset]             opens the whole-app Settings box (mid-screen)
+ *   [data-widget]             one widget; [data-expand] inside is its enlarge
+ *                             button
  *
- * Không dùng polling: mở một kết nối SSE rồi để yên. Chạy 24/7 mà hỏi mỗi
- * giây thì một ngày là 86.400 lượt hỏi cho phần lớn là "chưa có gì mới".
+ * No polling: one SSE connection is opened and left alone. Running 24/7 and
+ * asking once a second is 86,400 requests a day, mostly answering "nothing
+ * new".
  */
 (() => {
   'use strict';
 
-  const MAX_LINES = 200;          // trần DOM — chạy 24/7 không được phình
+  const MAX_LINES = 200;          // a DOM ceiling — running 24/7 must not bloat
   const $ = (sel, root) => (root || document).querySelectorAll(sel);
 
-  // ---------------------------------------------------------------- nhật ký
+  // ---------------------------------------------------------------- journal
   const timeOf = (iso) => {
     const d = new Date(iso);
     return isNaN(d) ? '' : d.toTimeString().slice(0, 8);
   };
 
-  // Khung CUỘN thật nằm ở đâu. Dòng nhật ký nằm trong .journal, nhưng thứ có
-  // thanh cuộn là .jfeed bọc ngoài — đặt scrollTop lên nhầm phần tử thì không
-  // có gì xảy ra, và cũng không có lỗi nào để mà lần ra. Dừng ở [data-widget]
-  // để không leo ra tới cả trang.
+  // Where the real SCROLL frame is. Journal lines live inside .journal, but
+  // the thing with a scrollbar is the .jfeed around it — set scrollTop on the
+  // wrong element and nothing happens, with no error to trace either. Stops at
+  // [data-widget] so it never climbs out to the whole page.
   function scroller(el) {
     for (let n = el; n; n = n.parentElement) {
       const how = getComputedStyle(n).overflowY;
@@ -41,7 +46,7 @@
     return null;
   }
 
-  const STICK = 24;               // cách đỉnh trong ngần này px = đang bám tin mới
+  const STICK = 24;               // within this many px of the top = following the newest
 
   function addLine(box, ev) {
     const want = box.dataset.journal;
@@ -57,69 +62,73 @@
     if (!want) row.querySelector('.jstream').textContent = ev.stream;
     row.querySelector('.jtext').textContent = ev.text;
 
-    // Dòng mới vào ĐỈNH. Chèn ở trên chỗ đang nhìn thì trình duyệt giữ
-    // nguyên scrollTop, nghĩa là mỗi dòng mới đẩy khung nhìn xuống thêm một
-    // nấc — càng chạy càng trôi xa tin mới nhất, và tin mới nhất nằm ngoài
-    // màn hình. Đúng cái vừa thấy: vòng nộp đang chạy mà nhật ký đứng ở
-    // mấy dòng cũ.
+    // A new line goes to THE TOP. Inserting above what is being read leaves
+    // scrollTop unchanged, which means every new line pushes the view one
+    // notch further down — the longer it runs the further it drifts from the
+    // newest line, until the newest line is off screen. Exactly what was just
+    // seen: an apply run in progress while the journal sat on old lines.
     const sc = scroller(box);
     const dang_bam = !sc || sc.scrollTop <= STICK;
     box.insertBefore(row, box.firstChild);
     while (box.childElementCount > MAX_LINES) box.removeChild(box.lastChild);
     if (!sc) return;
-    if (dang_bam) sc.scrollTop = 0;              // bám theo tin mới nhất
-    else sc.scrollTop += row.offsetHeight;       // đang đọc dòng cũ -> giữ nguyên chỗ
+    if (dang_bam) sc.scrollTop = 0;              // follow the newest line
+    else sc.scrollTop += row.offsetHeight;       // reading an old line -> keep the place
   }
 
   const journal = (ev) => $('[data-journal]').forEach((b) => addLine(b, ev));
 
-  // --------------------------------------------------------------- tiến độ
+  // -------------------------------------------------------------- progress
   function drawProgress(box, all) {
     const want = box.dataset.progress;
     const rows = Object.entries(all).filter(([s]) => !want || s === want);
-    if (!rows.length) { box.innerHTML = '<div class=pidle>không có việc đang chạy</div>'; return; }
+    if (!rows.length) { box.innerHTML = '<div class=pidle>nothing is running</div>'; return; }
 
     box.innerHTML = rows.map(([stream, p]) => {
       const width = p.total ? p.percent : 100;
-      // Dòng "còn bao lâu" chỉ dựng khi CÓ số. Dựng sẵn rồi để rỗng thì nó
-      // vẫn chiếm chỗ và thanh nhảy lên nhảy xuống mỗi lần máy đổi việc.
+      // The "time left" line is only built when there IS a figure. Built
+      // up front and left empty it still takes space, and the bar jumps up
+      // and down every time the machine changes job.
       return '<div class="prow' + (p.total ? '' : ' spin') + '">' +
              '<div class=phead><b></b><span></span></div>' +
              '<div class=ptrack><i style="width:' + width + '%"></i></div>' +
              (p.eta_text ? '<div class=peta></div>' : '') + '</div>';
     }).join('');
 
-    // Chữ đặt bằng textContent, KHÔNG nối vào chuỗi HTML: tên nguồn và tên
-    // tin là dữ liệu cào về, nối thẳng vào innerHTML là mở cửa cho thẻ lạ.
+    // Text is set with textContent, NEVER concatenated into an HTML string:
+    // source names and posting titles are scraped data, and joining them
+    // straight into innerHTML opens the door to foreign tags.
     box.querySelectorAll('.prow').forEach((el, i) => {
       const [stream, p] = rows[i];
       el.querySelector('b').textContent = want ? p.what : stream + ' — ' + p.what;
       el.querySelector('span').textContent = p.total ? p.done + '/' + p.total : '';
       const eta = el.querySelector('.peta');
-      // Chữ do MÁY CHỦ tính (journal.remain_text) — dòng nhật ký và thanh này
-      // phải nói cùng một con số, nên chỉ có một chỗ định dạng.
-      if (eta) eta.textContent = 'còn ' + p.eta_text;
+      // The wording is computed BY THE SERVER (journal.remain_text) — the
+      // journal line and this bar have to state the same figure, so there is
+      // only one place that formats it.
+      if (eta) eta.textContent = p.eta_text + ' left';
     });
   }
 
   const progress = (all) => $('[data-progress]').forEach((b) => drawProgress(b, all));
 
-  // --------------------------------------------------------------- trạng thái
-  // 'tạm dừng' lúc vừa mở app đọc ra như đang hỏng. Nói thẳng ra là TRẠM TRỰC
-  // đang tắt, và nút Start session trên tab Tổng quan chính là chỗ bật.
+  // ------------------------------------------------------------------ state
+  // 'paused' on a freshly opened app reads as something being broken. Say
+  // outright that THE WATCH STATION is off, and that the Start session button
+  // on the Overview tab is where it goes on.
   //
-  // "Trạm trực", không phải "tự quét": vòng nền giờ chạy CẢ dây chuyền
-  // (Search → Make CV → Manage mail), không riêng lượt quét. Gọi nó là "tự
-  // quét" thì người dùng tắt nó đi để khỏi quét, và mất luôn hai khúc kia
-  // mà không biết.
+  // "Watch station", not "auto-scan": the background loop now runs THE WHOLE
+  // line (Search → Make CV → Manage mail), not just a scan. Call it
+  // "auto-scan" and the user turns it off to stop scanning, losing the other
+  // two stages without knowing it.
   function label(state, mins) {
-    if (state === 'running') return 'phiên đang chạy';
-    if (state === 'paused') return 'trạm trực: TẮT';
-    return mins > 0 ? 'đang trực · vòng sau sau ' + mins + ' phút' : 'đang trực';
+    if (state === 'running') return 'session running';
+    if (state === 'paused') return 'watch station: OFF';
+    return mins > 0 ? 'on watch · next round in ' + mins + ' min' : 'on watch';
   }
 
-  // Việc gần nhất, hiện ở thanh trạng thái đáy app. Không lưu đâu cả — đây là
-  // TIN, không phải trạng thái; dòng mới đến là đè lên dòng cũ.
+  // The most recent job, shown on the app's bottom status bar. Stored
+  // nowhere — this is NEWS, not state; a new line simply replaces the old.
   function setLastMessage(text) {
     if (!text) return;
     $('[data-lastmsg]').forEach((el) => { el.textContent = text; });
@@ -129,42 +138,47 @@
     document.body.dataset.run = state;
     $('[data-state]').forEach((el) => { el.textContent = label(state, mins); });
     $('[data-act="pause"]').forEach((b) => {
-      b.textContent = state === 'paused' ? 'Bật trạm trực' : 'Tắt trạm trực';
+      b.textContent = state === 'paused'
+        ? 'Start the watch station' : 'Stop the watch station';
       b.title = state === 'paused'
-        ? 'Chạy cả dây chuyền theo lịch. Lựa chọn được nhớ cho lần mở app sau.'
-        : 'Ngưng chạy theo lịch. Nút chạy tay vẫn dùng được.';
+        ? 'Run the whole line on schedule. The choice is remembered next time the app opens.'
+        : 'Stop running on schedule. The manual buttons still work.';
     });
     $('[data-act="run"]').forEach((b) => { b.disabled = state === 'running'; });
 
-    // Nút chạy của KHÚC (Search…). Chữ lúc rảnh do máy chủ tính theo tình
-    // huống — Bắt đầu / Tiếp tục / Cập nhật — và nằm sẵn ở data-run. Lúc
-    // đang chạy thì chỉ có một chữ đúng, và nó là trạng thái tạm nên để
-    // trình duyệt lo, máy chủ không phải đoán xem màn hình đang thấy gì.
+    // A STAGE's run button (Search…). The idle wording is computed by the
+    // server from the situation — Start / Resume / Update — and sits ready in
+    // data-run. While it runs there is only one right word, and that is a
+    // temporary state, so the browser handles it and the server never has to
+    // guess what the screen is showing.
     $('[data-post="/api/stage/start"]').forEach((b) => {
       const ranh = b.dataset.run || b.textContent;
       b.disabled = state === 'running';
-      b.textContent = state === 'running' ? 'Đang quét…' : ranh;
+      b.textContent = state === 'running' ? 'Scanning…' : ranh;
     });
   }
 
-  // --------------------------------------------------------------- kết nối
-  // Nạp lại trang, TRỪ KHI làm thế là cướp mất việc người dùng đang làm dở.
+  // ------------------------------------------------------------ connection
+  // Reload the page, UNLESS doing so would steal work the user is in the
+  // middle of.
   //
-  // Ba thứ được coi là "đang làm dở", và cái thứ ba mới thêm: một dòng chi
-  // tiết đang MỞ. Bảng Quản lí mở dòng ra để đọc một lá thư; vòng chạy xong
-  // là trang nhảy, dòng đóng sập, và người đọc mất chỗ mà không hiểu vì sao.
+  // Three things count as "in the middle of", the third newly added: a detail
+  // row being OPEN. The Track table opens a row to read an email; a run
+  // finishes, the page jumps, the row slams shut, and the reader loses their
+  // place with no idea why.
   //
-  // Hoãn thì phải NHỚ, không được nuốt: `choLamMoi` giữ lại ý định, và lần
-  // sau người dùng đóng dòng (hay rời ô gõ) thì vẽ lại ngay. Bỏ luôn thì
-  // trang đứng im vĩnh viễn, đúng kiểu hỏng câm.
+  // A deferral has to be REMEMBERED, never swallowed: `choLamMoi` keeps the
+  // intent, and the next time the user closes the row (or leaves the field)
+  // it redraws at once. Drop it instead and the page freezes forever —
+  // exactly the silent kind of failure.
   let choLamMoi = false;
 
   function dangBan() {
     const here = document.activeElement;
-    if (here && here.matches('input, textarea, select')) return true;  // đang gõ
+    if (here && here.matches('input, textarea, select')) return true;  // typing
     const sheet = document.querySelector('[data-sheet]');
-    if (sheet && !sheet.hidden) return true;                           // menu đang mở
-    if (document.querySelector('main details[open]')) return true;      // đang mở dòng
+    if (sheet && !sheet.hidden) return true;                           // a menu is open
+    if (document.querySelector('main details[open]')) return true;      // a row is open
     return false;
   }
 
@@ -173,7 +187,7 @@
     location.reload();
   }
 
-  // Vừa xong việc đang dở -> trả nốt lần vẽ lại đã hoãn.
+  // Just finished what was in progress -> pay back the deferred redraw.
   document.addEventListener('toggle', () => {
     if (choLamMoi && !dangBan()) location.reload();
   }, true);
@@ -200,55 +214,62 @@
         journal(m);
         setLastMessage(m.text);
       } else if (m.type === 'progress') {
-        // Luồng CỦA TRANG NÀY vừa xong -> vẽ lại trang. Ruột mỗi tab (danh
-        // sách việc, kho đề bài) do máy chủ dựng thành HTML; SSE chỉ đẩy được
-        // nhật ký và tiến độ. Không nạp lại thì máy làm xong mà màn hình vẫn
-        // y nguyên — người dùng đọc ra là hỏng.
-        // KHÚC NÀO XONG THÌ VẼ LẠI TRANG NÀY — trang tự khai ở
-        // <body data-reload>. KHÔNG hỏi ô nhật ký nữa: `data-journal` trả
-        // lời câu "hiện dòng của luồng nào", một câu khác hẳn. Gộp hai câu
-        // làm một thì Home (`journal=""`) không bao giờ vẽ lại, còn Quản lí
-        // (`journal="search"`) lại nhảy mỗi lần vòng quét xong.
+        // A stage OF THIS PAGE just finished -> redraw the page. Each tab's
+        // contents (the job list, the brief store) are built into HTML by the
+        // server; SSE can only push the journal and progress. Without a
+        // reload the machine finishes its work while the screen stays exactly
+        // as it was — which the user reads as broken.
+        //
+        // WHICH STAGE FINISHING REDRAWS THIS PAGE is declared by the page
+        // itself at <body data-reload>. The journal panel is NO LONGER asked:
+        // `data-journal` answers "show lines from which stream", a quite
+        // different question. Fold the two together and Home (`journal=""`)
+        // never redraws, while Track (`journal="search"`) jumps every time a
+        // scan finishes.
         const muon = document.body.dataset.reload || '';
         const hop = muon === '*' || muon.split(' ').indexOf(m.stream) >= 0;
         if (!m.what && muon && hop) { refreshIfIdle(); return; }
-        // Còn lại: hỏi lại toàn cảnh, vì khung tiến độ vẽ TẤT CẢ luồng đang
-        // chạy chứ không riêng luồng vừa báo.
+        // Otherwise: ask for the whole picture again, because the progress
+        // frame draws EVERY running stream, not only the one that reported.
         fetch('/api/state').then((r) => r.json()).then((s) => {
           progress(s.running); setState(s.state, s.next_in);
         }).catch(() => {});
       }
     };
 
-    // Đứt thì tự nối lại. Máy chạy 24/7, ngủ dậy mở máy là phải có sẵn.
+    // Dropped, it reconnects itself. The machine runs 24/7, and waking up to
+    // it has to mean finding it already there.
     live.onerror = () => { live.close(); setTimeout(connect, 3000); };
   }
 
-  // --------------------------------------------------------------- ô thẻ
-  // Gõ chức danh rồi Enter là thêm. Mỗi thẻ mang một <input hidden>, nên form
-  // gửi lên một danh sách giá trị — server không phải ngồi tách dòng.
-  // Ô thẻ dùng chung cho MỌI câu hỏi kiểu danh sách. Tên trường lấy từ
-  // data-tags của chính ô đó — trước đây đóng cứng 'job_titles', nên mang
-  // widget sang ô khác là mọi thẻ lặng lẽ lưu nhầm vào chức danh.
+  // --------------------------------------------------------------- tag box
+  // Type a job title and press Enter to add it. Each tag carries an <input
+  // hidden>, so the form posts a list of values and the server never has to
+  // split lines.
+  //
+  // The tag box is shared by EVERY list-shaped question. The field name comes
+  // from that box's own data-tags — it used to be hardcoded to 'job_titles',
+  // so moving the widget to another field silently saved every tag into the
+  // job titles.
   function addTag(box, text) {
     const name = text.trim().replace(/\s+/g, ' ');
     if (!name) return false;
     const have = [...box.querySelectorAll('.tag > input')].map(
       (i) => i.value.toLowerCase());
-    if (have.includes(name.toLowerCase())) return false;   // đã có, không thêm hai lần
+    if (have.includes(name.toLowerCase())) return false;   // already there, never twice
 
     const tag = document.createElement('span');
     tag.className = 'tag';
-    tag.textContent = name;                                 // textContent: chữ người
-    const hidden = document.createElement('input');         // gõ vào, không phải HTML
+    tag.textContent = name;                                 // textContent: words a
+    const hidden = document.createElement('input');         // person typed, not HTML
     hidden.type = 'hidden';
     hidden.name = box.dataset.tags || 'job_titles';
     hidden.value = name;
     const kill = document.createElement('button');
-    kill.type = 'button';                                   // không có dòng này thì
-    kill.className = 'untag';                               // bấm × là gửi cả form
+    kill.type = 'button';                                   // without this line,
+    kill.className = 'untag';                               // × submits the whole form
     kill.dataset.untag = '';
-    kill.title = 'bỏ';
+    kill.title = 'remove';
     kill.textContent = '×';
     tag.append(hidden, kill);
     box.insertBefore(tag, box.querySelector('.taginput'));
@@ -262,11 +283,13 @@
       if (!input) return;
       const box = input.closest('[data-tags]');
       if (e.key === 'Enter') {
-        // Chặn Enter gửi form: người dùng đang thêm thẻ, chưa muốn Áp dụng.
+        // Stop Enter from submitting the form: the user is adding a tag,
+        // not asking to Apply yet.
         e.preventDefault();
-        // Đang có gợi ý khớp thì Enter lấy CÁI ĐÓ, không lấy chữ gõ dở. Gõ
-        // "quant" rồi Enter mà ra thẻ "quant" thì tìm không ra tin nào —
-        // chức danh phải đúng nguyên văn như trên tin.
+        // With a matching suggestion showing, Enter takes THAT rather than
+        // the half-typed text. Type "quant", press Enter, get a "quant" tag,
+        // and it finds no posting at all — a job title has to be word for
+        // word what the posting says.
         const khoi = input.closest('[data-tagfield]');
         const dau = khoi && input.value.trim()
           ? khoi.querySelector('[data-sugdrop] [data-addtag]:not([hidden])')
@@ -282,8 +305,9 @@
         if (last) last.remove();
       }
     });
-    // Rời ô mà còn chữ dở thì vẫn thêm — gõ xong bấm thẳng Áp dụng là chuyện
-    // thường, không nên im lặng nuốt mất.
+    // Leaving the field with text still in it adds it anyway — typing and
+    // then pressing Apply straight away is normal, and it must not be
+    // silently swallowed.
     document.addEventListener('blur', (e) => {
       const input = e.target.closest && e.target.closest('.taginput');
       if (input && addTag(input.closest('[data-tags]'), input.value)) {
@@ -292,33 +316,36 @@
     }, true);
   }
 
-  // ------------------------------------------------------------- menu Cài đặt
-  // Nạp nội dung LÚC BẤM, không nhúng sẵn vào mọi trang: cài đặt là thứ mở ra
-  // vài lần một tuần, mà nhúng sẵn thì trang nào cũng phải mang theo dữ liệu
-  // nó không dùng.
-  // kind='stage' -> tấm bên phải (⚟ điều chỉnh khúc)
-  // kind='app'   -> hộp giữa màn (Cài đặt cả app). Cùng bộ máy mở/đóng, khác
-  //                 chỗ đứng, để nhìn là biết thứ này của khúc hay của app.
+  // --------------------------------------------------------- Settings menu
+  // The content is loaded AT PRESS TIME, never embedded in every page:
+  // settings get opened a few times a week, and embedding them makes every
+  // page carry data it does not use.
+  //
+  // kind='stage' -> the right-hand panel (a stage's ⚟ adjust)
+  // kind='app'   -> the mid-screen box (whole-app Settings). The same
+  //                 open/close machinery in a different place, so one glance
+  //                 says whether this belongs to a stage or to the app.
   function openSheet(url, kind, tab) {
     const sheet = document.querySelector('[data-sheet]');
     if (!sheet) return;
     sheet.classList.toggle('mid', kind === 'app');
     const box = sheet.querySelector('.sheetbox');
-    box.innerHTML = '<div class=sheetwait>đang mở…</div>';
+    box.innerHTML = '<div class=sheetwait>opening…</div>';
     sheet.hidden = false;
     fetch(url || '/settings')
       .then((r) => r.text())
       .then((html) => {
         box.innerHTML = html;
-        // Mở đúng TAB được chỉ. Bấm ở đây chứ không hẹn giờ: nội dung nạp về
-        // bằng fetch, đặt setTimeout là đoán xem mạng nhanh hay chậm — và
-        // trên máy chậm thì cái nút chưa tồn tại lúc hẹn giờ nổ.
+        // Open THE TAB that was named. Clicked here rather than on a timer:
+        // the content arrives by fetch, and a setTimeout would be guessing
+        // whether the network is fast or slow — on a slow machine the button
+        // does not exist yet when the timer fires.
         if (tab) {
           const nut = box.querySelector(`[data-stab="${tab}"]`);
           if (nut) nut.click();
         }
       })
-      .catch(() => { box.innerHTML = '<div class=sheetwait>không mở được</div>'; });
+      .catch(() => { box.innerHTML = '<div class=sheetwait>could not open it</div>'; });
   }
 
   function closeSheet() {
@@ -326,15 +353,17 @@
     if (sheet) { sheet.hidden = true; sheet.querySelector('.sheetbox').innerHTML = ''; }
   }
 
-  // Nút phá hoại phải GÕ ĐÚNG CHỮ mới bấm được. Trình nghe đặt trên document
-  // vì khối Cài đặt nạp vào tấm phủ sau khi trang đã dựng — gắn thẳng vào nút
-  // thì lúc gắn nút chưa tồn tại.
+  // A destructive button only unlocks once THE RIGHT WORD IS TYPED. The
+  // listener sits on document because the Settings block is loaded into the
+  // overlay after the page is built — attach it to the button and the button
+  // does not exist at attach time.
   //
-  // Đây chỉ là lớp khoá ở MÀN HÌNH cho đỡ bấm nhầm. Server kiểm lại lần nữa
-  // (arg phải là "xoa"); không bao giờ tin mỗi phía trình duyệt.
-  // Chuyển tab trong tấm Cài đặt. Đặt trên document vì tấm này nạp vào sau
-  // khi trang đã dựng. KHÔNG nạp lại từ server mỗi lần đổi tab: cả ba tab đã
-  // nằm sẵn trong mảnh HTML, đổi tab chỉ là đổi cái nào hiện.
+  // This is only a SCREEN-side lock against a mis-press. The server checks
+  // again (arg has to be "xoa"); never trust the browser side alone.
+  //
+  // Switching tabs inside the Settings panel. On document for the same
+  // reason. It never reloads from the server on a tab change: all the tabs
+  // are already in the fragment, and switching only changes which one shows.
   function wireSheetTabs() {
     document.addEventListener('click', (e) => {
       const tab = e.target.closest('[data-stab]');
@@ -348,13 +377,16 @@
     });
   }
 
-  // GÕ ĐỂ TÌM, ngay trong ô thẻ — không có ô lọc thứ hai. Lọc trong DOM chứ
-  // không hỏi server: gợi ý là danh sách cố định, gọi mạng mỗi phím là thừa
-  // và giật.
+  // TYPE TO SEARCH, inside the tag box itself — there is no second filter
+  // field. Filtered in the DOM rather than asked of the server: the
+  // suggestions are a fixed list, and a network call per keystroke is both
+  // wasteful and jerky.
   //
-  // Không gõ -> CSS chỉ để lộ mấy chip đầu (một hàng, cho đỡ dồn mắt).
-  // Đang gõ  -> thêm .tim, danh sách thành dropdown và chỉ hiện cái khớp.
-  // Ô "chưa chọn gì" chỉ hiện khi khung thẻ rỗng thật.
+  // Not typing -> CSS reveals only the first few chips (one row, easier on
+  //               the eye).
+  // Typing     -> .tim is added, the list becomes a dropdown and only
+  //               matches show.
+  // The "nothing chosen" box only shows while the tag box is really empty.
   function dongBo(khoi) {
     if (!khoi) return;
     const box = khoi.querySelector('[data-tags]');
@@ -377,7 +409,8 @@
     return dau;
   }
 
-  // Hết gợi ý thì thu gọn: ô tìm và vùng chip rỗng chỉ còn là khoảng trống.
+  // With no suggestions left, it collapses: an empty search field and an
+  // empty chip area are nothing but blank space.
   function dongBoGoiY(khoi) {
     if (!khoi) return;
     const drop = khoi.querySelector('[data-sugdrop]');
@@ -388,8 +421,9 @@
     if (o) o.hidden = con === 0;
   }
 
-  // "Chọn tất cả": thêm mọi gợi ý ĐANG HIỆN. Đang gõ lọc thì nó chỉ thêm cái
-  // khớp — đó là điều người ta mong đợi khi vừa lọc xong.
+  // "Select all": adds every suggestion CURRENTLY SHOWING. While a filter is
+  // typed it adds only the matches — which is what anyone expects right after
+  // filtering.
   function wireAddAll() {
     document.addEventListener('click', (e) => {
       const nut = e.target.closest('[data-addall]');
@@ -413,13 +447,14 @@
       const khoi = o.closest('[data-tagfield]');
       if (khoi) loc(khoi, o.value.trim().toLowerCase());
     });
-    // Enter ở ô TÌM: lấy gợi ý khớp đầu tiên. Không khớp gì thì mới lấy
-    // nguyên văn chữ gõ — thêm thứ ngoài kho là quyết định có ý thức, không
-    // phải hậu quả của một phím lỡ tay.
+    // Enter in the SEARCH field: take the first matching suggestion. Only
+    // with no match at all does it take the typed text verbatim — adding
+    // something outside the store is a deliberate decision, not the
+    // consequence of a stray keystroke.
     document.addEventListener('keydown', (e) => {
       const o = e.target;
       if (e.key !== 'Enter' || !o.classList || !o.classList.contains('tagfind')) return;
-      e.preventDefault();          // chặn Enter gửi cả form
+      e.preventDefault();          // stop Enter submitting the whole form
       const khoi = o.closest('[data-tagfield]');
       const chu = o.value.trim();
       if (!khoi || !chu) return;
@@ -432,9 +467,10 @@
     });
   }
 
-  // Thêm / bỏ HÀNG — dùng chung cho học vấn, kinh nghiệm và project. Một cơ
-  // chế, ba chỗ dùng: nhân bản hàng CUỐI rồi xoá trắng, không dựng HTML trong
-  // JS. Dựng ở hai nơi thì hôm nào thêm một ô là quên một chỗ.
+  // Add / remove a ROW — shared by education, experience and projects. One
+  // mechanism, three users: clone the LAST row and blank it, never build HTML
+  // in JS. Built in two places, the day a field is added one of them is
+  // forgotten.
   function wireRows() {
     document.addEventListener('click', (e) => {
       const them = e.target.closest('[data-rowadd]');
@@ -456,16 +492,18 @@
         e.preventDefault();
         const kho = bo.closest('[data-rows]');
         const hang = bo.parentElement;
-        // Hàng cuối cùng thì XOÁ TRẮNG chứ không gỡ: gỡ hết thì không còn gì
-        // để nhân bản, nút "thêm" chết câm.
+        // The last row is BLANKED rather than removed: remove them all and
+        // there is nothing left to clone, and the "add" button dies
+        // silently.
         if (kho && kho.children.length > 1) hang.remove();
         else if (hang) $('input, textarea', hang).forEach((o) => { o.value = ''; });
       }
     });
   }
 
-  // GÁN THƯ VÀO MỘT DÒNG. Ô chọn, không phải nút: danh sách 37 công ty
-  // không nhét vừa một hàng nút, và người dùng phải TÌM đúng dòng của mình.
+  // ATTACH A MESSAGE TO A ROW. A select, not buttons: a list of 37 companies
+  // does not fit in a row of buttons, and the user has to FIND their own
+  // row.
   function wireGan() {
     document.addEventListener('change', (e) => {
       const sel = e.target.closest('select[data-ganfor]');
@@ -498,26 +536,27 @@
       const app = e.target.closest('[data-appset]');
       if (app) {
         e.preventDefault();
-        // data-appset có thể mang TÊN TAB: một nút "Nối hộp thư…" bên Quản lí
-        // mà mở ra tab Chạy thì người dùng phải tự đi tìm — chỉ đường nửa vời
-        // còn khó chịu hơn không chỉ.
+        // data-appset can carry A TAB NAME: a "Connect a mailbox…" button on
+        // Track that opens the Run tab leaves the user to go hunting — half
+        // a direction is more annoying than none.
         openSheet('/settings', 'app', app.dataset.appset);
         return;
       }
       const knob = e.target.closest('[data-settings]');
       if (knob) { e.preventDefault(); openSheet(knob.dataset.settings, 'stage'); return; }
-      // Bấm ra ngoài hộp thì đóng — nhưng bấm TRONG hộp thì không.
+      // Clicking outside the box closes it — clicking INSIDE does not.
       const sheet = e.target.closest('[data-sheet]');
       if (sheet && !e.target.closest('.sheetbox')) closeSheet();
     });
-    // Form có [data-post]: gửi CẢ FORM, không phải mỗi data-arg như nút bấm.
-    // Nút [data-post] chỉ gửi một tham số; ô nhập hộp thư cần hai.
+    // A form with [data-post]: it posts THE WHOLE FORM, not just data-arg
+    // the way a button does. A [data-post] button sends one parameter; the
+    // mailbox fields need two.
     document.addEventListener('submit', (e) => {
       const form = e.target.closest('form[data-post]');
       if (!form) return;
       e.preventDefault();
       const note = form.querySelector('.formnote');
-      if (note) note.textContent = ' · đang kiểm…';
+      if (note) note.textContent = ' · checking…';
       fetch(form.dataset.post, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -526,28 +565,31 @@
         .then((r) => r.json())
         .then((s) => {
           if (s.reload) { location.reload(); return; }
-          if (note) note.textContent = ' · ' + (s.note || 'chưa được');
+          if (note) note.textContent = ' · ' + (s.note || 'not yet');
         })
-        .catch(() => { if (note) note.textContent = ' · gửi hỏng'; });
+        .catch(() => { if (note) note.textContent = ' · sending failed'; });
     });
     document.addEventListener('submit', (e) => {
       const form = e.target.closest('.setform');
-      // CHỈ chặn form Cài đặt. Trước đây chặn MỌI .setform rồi gửi cứng tới
-      // '/settings', nên hai form khác trong cùng tấm phủ — soạn khối CV và
-      // đưa project vào CV — bấm tay là chạy vào Cài đặt. Bấm bằng
-      // form.submit() trong lúc thử thì không lộ, vì cách đó bỏ qua trình nghe.
+      // ONLY the Settings form is intercepted. This used to intercept EVERY
+      // .setform and post it hardcoded to '/settings', so two other forms in
+      // the same overlay — the CV block editor and adding a project to the CV
+      // — ran into Settings when pressed by hand. Pressing with form.submit()
+      // during testing never showed it, because that path skips listeners.
       if (!form || new URL(form.action, location.href).pathname !== '/settings') return;
-      e.preventDefault();          // lưu tại chỗ, không rời trang đang xem
-      // URLSearchParams chứ KHÔNG phải FormData trần: FormData gửi kiểu
-      // multipart, mà server đọc urlencoded — gửi đi thì im lặng không lưu gì.
+      e.preventDefault();          // save in place, never leave the open page
+      // URLSearchParams and NOT a bare FormData: FormData posts multipart
+      // while the server reads urlencoded — it goes out and silently saves
+      // nothing.
       //
-      // FormData(form, SUBMITTER) — tham số thứ hai là bắt buộc, không phải
-      // tuỳ chọn. FormData(form) BỎ MẤT name/value của chính cái nút vừa
-      // bấm, nên `Tìm chat` (name=tim) và `Test` (name=test) gửi lên y hệt
-      // nút Lưu: server không thấy cờ nào và chỉ lưu, im lặng. Hai cái nút
-      // trông vẫn chạy, chỉ là không làm gì cả — kiểu hỏng câm tệ nhất.
+      // FormData(form, SUBMITTER) — the second argument is required, not
+      // optional. FormData(form) DROPS the name/value of the very button that
+      // was pressed, so `Find chat` (name=tim) and `Test` (name=test) arrive
+      // identical to Save: the server sees no flag and only saves, silently.
+      // Both buttons still look like they work while doing nothing at all —
+      // the worst kind of silent failure.
       const fd = new FormData(form, e.submitter);
-      // Trình duyệt cũ không nhận tham số thứ hai: tự nhét vào cho đủ.
+      // Older browsers ignore the second argument: put it in by hand.
       if (e.submitter && e.submitter.name && !fd.has(e.submitter.name)) {
         fd.append(e.submitter.name, e.submitter.value || '');
       }
@@ -560,22 +602,24 @@
         .then((html) => {
           const box = document.querySelector('.sheetbox');
           box.innerHTML = html;
-          // KHÔNG đè ghi chú khi máy chủ đã trả về một KẾT QUẢ THẬT (băng
-          // .testkq). Đè lên là thay một câu đo được bằng một câu đoán, và
-          // "đã lưu" thì sai hẳn khi việc vừa làm là gửi tin thử.
+          // DO NOT overwrite the note when the server has returned a REAL
+          // RESULT (the .testkq banner). Overwriting replaces a measured
+          // sentence with a guessed one, and "saved" is plainly wrong when
+          // what just happened was sending a test message.
           if (box.querySelector('.testkq')) return;
           const note = box.querySelector('.applynote');
-          if (note) note.textContent = 'đã lưu · có tác dụng từ lần quét sau';
+          if (note) note.textContent = 'saved · takes effect from the next scan';
         })
         .catch(() => {});
     });
   }
 
-  // --------------------------------------------------------------- nút bấm
+  // ---------------------------------------------------------------- buttons
   function syncNav() {
-    // Server luôn vẽ nhãn "Gập" vì nó không biết máy này đang gập hay mở —
-    // lựa chọn nằm ở localStorage. Sửa nhãn ngay khi trang lên, nếu không thì
-    // thanh đang gập mà nút vẫn mời "Gập thanh bên".
+    // The server always draws the "Collapse" label because it cannot know
+    // whether this machine has the sidebar collapsed or open — that choice
+    // lives in localStorage. The label is corrected as the page comes up,
+    // otherwise a collapsed sidebar still offers "Collapse sidebar".
     const min = document.documentElement.classList.contains('navmin');
     $('[data-nav]').forEach((b) => {
       b.title = min ? 'Expand sidebar' : 'Collapse sidebar';
@@ -592,26 +636,29 @@
           .catch(() => {});
         return;
       }
-      // Nút gọi một việc NỀN: gửi đi, rồi tự nói ra nó đang làm gì. Không
-      // dùng chung [data-act] với Chạy/Tạm dừng vì hai cái trả về khác nhau —
-      // bên kia trả về trạng thái máy, bên này trả về việc vừa xếp hàng.
+      // A button calling a BACKGROUND job: it posts, then says what it is
+      // doing. It does not share [data-act] with Run/Pause because the two
+      // return different things — that one returns machine state, this one
+      // returns the job just queued.
       const post = e.target.closest('[data-post]');
-      // FORM cũng mang [data-post], và nút Gửi nằm TRONG nó — closest() đi
-      // ngược lên là gặp form chứ không phải nút. Trước đây nhánh này nhận
-      // luôn cái form rồi gán textContent lên nó, tức là XOÁ SẠCH RUỘT FORM:
-      // bấm Nối một cái là ô nhập biến mất. Form để trình nghe 'submit' lo.
+      // A FORM also carries [data-post], and its submit button sits INSIDE
+      // it — closest() walking up finds the form, not the button. This branch
+      // used to accept the form and set textContent on it, which WIPES THE
+      // FORM'S CONTENTS: one press of Connect and the fields vanished. Forms
+      // are left to the 'submit' listener.
       if (post && post.tagName === 'FORM') return;
-      // CHỐT HAI NHỊP cho nút phá. Nhịp một chỉ ĐỔI CHỮ trên nút và nạp đạn;
-      // nhịp hai mới gửi đi. Không hộp thoại — hộp thoại bị bấm OK theo phản
-      // xạ, còn một cái nút đổi thành "Xoá thật?" thì mắt phải đọc lại.
+      // A TWO-BEAT LATCH for a destructive button. The first beat only
+      // CHANGES THE TEXT and arms it; the second sends. No dialog box — a
+      // dialog gets OK'd by reflex, while a button that turns into "Really
+      // delete?" makes the eye read it again.
       //
-      // Tự tháo đạn sau 4 giây: nút nạp sẵn nằm đó cả buổi là đúng cái bẫy
-      // mình vừa dựng ra để tránh.
+      // It disarms itself after 4 seconds: an armed button sitting there all
+      // afternoon is exactly the trap this was built to avoid.
       if (post && post.dataset.arm !== undefined && !post.dataset.armed) {
         e.preventDefault();
         const cu = post.textContent;
         post.dataset.armed = '1';
-        post.textContent = post.dataset.arm || 'Chắc chưa?';
+        post.textContent = post.dataset.arm || 'Are you sure?';
         post.classList.add('armed');
         setTimeout(() => {
           if (!post.dataset.armed) return;
@@ -626,7 +673,7 @@
         delete post.dataset.armed;
         post.classList.remove('armed');
         const was = post.textContent;
-        post.disabled = true;                 // chặn bấm hai lần ra hai luồng
+        post.disabled = true;                 // stop a double press making two threads
         fetch(post.dataset.post, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -635,26 +682,29 @@
           .then((r) => r.json())
           .then((s) => {
             if (s.reload) {
-              // "Về trạng thái ban đầu" gồm cả thứ trình duyệt đang nhớ —
-              // thanh bên đang gập hay mở là state của app, không phải của máy.
+              // "Back to the original state" includes what the browser is
+              // remembering — a collapsed or open sidebar is app state, not
+              // machine state.
               if (s.wipe_local) { try { localStorage.clear(); } catch (err) {} }
               location.reload();
               return;
             }
-            // BỊ TỪ CHỐI thì lý do ra THANH TRẠNG THÁI, không nhét vào nhãn
-            // nút: câu lý do dài cả trăm ký tự, gán vào nút là vỡ viên thuốc.
-            // Nút trả về chữ cũ và bấm lại được — người dùng vừa đọc được vì
-            // sao, vừa còn nút để bấm sau khi sửa.
+            // ON REFUSAL the reason goes to THE STATUS BAR, never into the
+            // button's label: a reason runs to a hundred characters, and
+            // setting it on the button bursts the pill. The button returns to
+            // its old text and can be pressed again — the user gets to read
+            // why and still has a button to press once they have fixed it.
             if (s.ok === false) {
-              setLastMessage(s.note || 'chưa được');
+              setLastMessage(s.note || 'not yet');
               post.disabled = false;
               post.textContent = was;
               return;
             }
             post.textContent = s.note || was;
-            // NÚT BẬT/TẮT khác nút một-lần. Mặc định nút bị khoá sau khi bấm
-            // (chặn bấm hai lần ra hai luồng việc nền) — đúng cho "Nộp",
-            // "Dựng", nhưng sai cho một công tắc: bật rồi không tắt lại được.
+            // AN ON/OFF BUTTON differs from a one-shot. By default a button
+            // locks after being pressed (stopping a double press from making
+            // two background threads) — right for "Apply" and "Build", wrong
+            // for a switch: turn it on and it cannot be turned off again.
             if (s.again) post.disabled = false;
             if (typeof s.on === 'boolean') post.classList.toggle('off', !s.on);
           })
@@ -664,19 +714,22 @@
       const nav = e.target.closest('[data-nav]');
       if (nav) {
         e.preventDefault();
-        // Đổi class NGAY rồi mới ghi nhớ: bấm là thấy, không chờ gì cả.
+        // Change the class FIRST and remember afterwards: pressing shows at
+        // once, with nothing to wait for.
         const min = document.documentElement.classList.toggle('navmin');
         try { localStorage.jobbotNav = min ? '1' : '0'; } catch (err) {}
         syncNav();
         return;
       }
-      // Chip "lưới đang bỏ sót": bấm là thẻ rơi vào ô chức danh. KHÔNG tự
-      // lưu — vẫn phải bấm Áp dụng, vì đổi lưới là phán lại cả bảng.
+      // The "the sieve is missing these" chips: pressing drops the tag into
+      // the job titles box. It does NOT save by itself — Apply still has to
+      // be pressed, because changing the sieve re-judges the whole table.
       const add = e.target.closest('[data-addtag]');
       if (add) {
         e.preventDefault();
-        // Tìm ô thẻ CÙNG KHỐI với chip. Một trang hồ sơ có nhiều ô thẻ; lấy
-        // querySelector toàn trang thì mọi chip đều rơi vào ô đầu tiên.
+        // Find the tag box IN THE SAME BLOCK as the chip. A profile page has
+        // several tag boxes; a page-wide querySelector drops every chip into
+        // the first one.
         const khoi = add.closest('[data-tagfield]') || document;
         const box = khoi.querySelector('[data-tags]');
         if (box && addTag(box, add.dataset.addtag)) add.remove();
@@ -685,7 +738,8 @@
       }
       const bot = e.target.closest('[data-untag]');
       if (bot) {
-        // để nhánh [data-untag] sẵn có xử lí; chỉ cần dọn ô trống sau đó
+        // let the existing [data-untag] branch handle it; only the empty box
+        // needs tidying afterwards
         setTimeout(() => dongBo(bot.closest('[data-tagfield]')), 0);
       }
       const untag = e.target.closest('[data-untag]');
@@ -697,11 +751,12 @@
         grow.closest('[data-widget]').classList.toggle('big');
       }
     });
-    // Esc để thu ô đang mở to — mở to rồi không tìm thấy nút đóng là bí.
+    // Esc shrinks an enlarged widget — enlarged with no visible close button
+    // is a dead end.
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       const sheet = document.querySelector('[data-sheet]');
-      if (sheet && !sheet.hidden) { closeSheet(); return; }   // menu trước
+      if (sheet && !sheet.hidden) { closeSheet(); return; }   // the menu first
       $('[data-widget].big').forEach((w) => w.classList.remove('big'));
     });
   }
@@ -714,8 +769,9 @@
   wireSheetTabs();
   wireSuggestFilter();
   wireAddAll();
-  // BẮT ĐIỀN: hồ sơ chưa đủ thì bật tấm phủ ngay khi vào app. Đóng được
-  // (Esc / bấm ra ngoài) — giữ chứ không nhốt; quay lại Home là nó bật lại.
+  // MAKE THEM FILL IT IN: with the profile incomplete, the overlay opens as
+  // soon as the app does. It can be closed (Esc / click outside) — held, not
+  // locked in; come back to Home and it opens again.
   if (document.body.dataset.setup) openSheet(document.body.dataset.setup, 'app');
   wireRows();
   syncNav();
