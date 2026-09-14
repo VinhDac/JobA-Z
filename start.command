@@ -1,24 +1,26 @@
 #!/bin/bash
-# Bấm đúp để mở jobbot.  (macOS)
-# Đang chạy   -> chỉ mở dashboard, KHÔNG khởi động lượt thứ hai
-# Chưa chạy   -> khởi động ngầm (icon ◆ trên thanh menu) rồi mở dashboard
+# Double-click to open jobbot.  (macOS)
+# Already running -> just open the dashboard, do NOT start a second run
+# Not running     -> start it in the background (the ◆ icon in the menu bar),
+#                    then open the dashboard
 #
-# Không hỏi cổng 8765 nữa. Cổng do hệ điều hành cấp (xem server.serve), nên
-# nó đổi theo từng lượt chạy; app đang sống ở 8766 mà kịch bản này gõ 8765
-# thì nó kết luận "chưa chạy" và bật lượt thứ hai đè lên cùng một tệp SQLite.
-# Địa chỉ thật nằm ở data/dang-chay.txt — xem src/jobbot/core/dia_chi.py.
+# It no longer asks for port 8765. The operating system hands out the port (see
+# server.serve), so it changes from run to run; with the app alive on 8766, a
+# script asking for 8765 concludes "not running" and boots a second run on top
+# of the same SQLite file.
+# The real address lives in data/dang-chay.txt — see src/jobbot/core/dia_chi.py.
 
 cd "$(dirname "$0")" || exit 1
 
-keu() {          # hỏng thì PHẢI kêu. Bấm đúp mà im lặng là kiểu hỏng tệ nhất.
+alert() {        # a failure MUST speak. A double-click that goes silent is the worst kind.
   osascript -e "display alert \"jobbot\" message \"$1\"" >/dev/null 2>&1
   echo "$1" >&2
   exit 1
 }
 
-# Có đúng jobbot đang trả lời ở địa chỉ này không. "Có ai đó trả lời 200"
-# không đủ: cổng cũ có thể đã thuộc về app khác.
-con_song() {
+# Is it really jobbot answering at this address? "Something answered 200" is not
+# enough: the old port may belong to another app by now.
+is_alive() {
   [ -n "$1" ] || return 1
   curl -sf --max-time 2 "${1}api/alive" 2>/dev/null | grep -q '^jobbot '
 }
@@ -26,27 +28,28 @@ con_song() {
 URL=""
 [ -f data/dang-chay.txt ] && URL="$(head -n 1 data/dang-chay.txt)"
 
-if con_song "$URL"; then
+if is_alive "$URL"; then
   open "$URL"; exit 0
 fi
 
-# Lượt cũ để lại tệp mà không còn sống (kill -9, mất điện). Bỏ qua, chạy mới.
-. scripts/tim-python.sh
-[ -n "$PY" ] || keu "$THIEU_PYTHON"
+# An earlier run left the file behind without still being alive (kill -9, a power
+# cut). Ignore it and start fresh.
+. scripts/find-python.sh
+[ -n "$PY" ] || alert "$PYTHON_MISSING"
 
 mkdir -p data
 nohup "$PY" run.py > data/app.log 2>&1 &
 
 for _ in $(seq 1 40); do
   [ -f data/dang-chay.txt ] && URL="$(head -n 1 data/dang-chay.txt)"
-  con_song "$URL" && break
+  is_alive "$URL" && break
   sleep 0.4
 done
 
-if con_song "$URL"; then
+if is_alive "$URL"; then
   open "$URL"
 else
-  keu "Khởi động không thành công.
+  alert "Startup did not succeed.
 
-Xem: $(pwd)/data/app.log"
+See: $(pwd)/data/app.log"
 fi

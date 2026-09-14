@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Đóng gói thành jobbot.app — app macOS đúng nghĩa.
+"""Package it into jobbot.app — a real macOS app.
 
     python3 scripts/make_app.py
 
-Sau đó: kéo jobbot.app vào thư mục Applications. Bấm đúp như mọi app khác,
-hiện ở Dock, ở Launchpad, cmd-tab được, có icon riêng.
+Then: drag jobbot.app into the Applications folder. Double-click it like any
+other app; it appears in the Dock and in Launchpad, it is cmd-tabbable, and it
+has its own icon.
 
-Bundle chỉ là vỏ mỏng gọi run.py — code vẫn nằm trong dự án, sửa là chạy ngay,
-không phải đóng gói lại.
+The bundle is only a thin shell calling run.py — the code stays in the project,
+so an edit runs straight away with no repackaging.
 """
 
 from __future__ import annotations
@@ -25,62 +26,65 @@ BUNDLE_ID = "com.jobbot.app"
 
 # --- ICON -----------------------------------------------------------------
 #
-# Khuôn giống icon app quen thuộc (GitHub Desktop, Slack…): ô bo tròn đặc →
-# vòng tròn → dấu hiệu bên trong. Khuôn đó thắng vì cái vòng tròn cắt hẳn dấu
-# hiệu ra khỏi nền, nên ở 32px mắt vẫn bắt được hình chứ không thấy một cục.
+# The shape follows the familiar app icons (GitHub Desktop, Slack…): a solid
+# rounded square -> a circle -> a mark inside it. That shape wins because the
+# circle cuts the mark clean off the ground, so at 32px the eye still reads a
+# shape rather than a blob.
 #
-# ĐEN TRẮNG, và dấu hiệu là CHÌA KHOÁ — cùng dấu với logo trong app (ba vòng
-# làm tay cầm). Icon ở Dock và logo trên thanh bên phải là MỘT cái tên; hai
-# hình khác nhau thì người dùng phải học hai lần.
+# BLACK AND WHITE, and the mark is A KEY — the same mark as the logo inside the
+# app (three rings for the bow). The icon in the Dock and the logo on the
+# sidebar are ONE name; two different drawings make the user learn it twice.
 #
-# VẼ BẰNG HÌNH, KHÔNG DÙNG KÝ TỰ. Bản trước vẽ ký tự "◆" bằng font hệ thống:
-# cỡ quang học và baseline do font quyết định, nên đổi macOS là icon xê dịch,
-# mà không có gì báo. Hình thì 512px hay 16px cũng ra đúng một tỉ lệ.
-NEN, VONG, NET = "#0A0A0A", "#FFFFFF", "#0A0A0A"
+# DRAWN, NEVER TYPED. An earlier version drew the character "◆" in the system
+# font: its optical size and baseline are the font's to decide, so a macOS
+# upgrade shifts the icon with nothing to say so. A drawing comes out in the
+# same proportions at 512px and at 16px.
+GROUND, RING, INK = "#0A0A0A", "#FFFFFF", "#0A0A0A"
 
-# Đảo lại (nền trắng, vòng đen, chìa trắng) thì đổi đúng ba hằng số trên.
+# To invert it (white ground, black ring, white key), change exactly those three.
 
-GOC = -38          # độ nghiêng của chìa — dùng đường chéo của vòng tròn
-TI_VONG = 0.615    # đường kính vòng / cạnh ô
-TI_KHOA = 0.90     # chiều dài chìa / đường kính vòng
+ANGLE = -38        # the key's tilt — it runs along the circle's diagonal
+RING_RATIO = 0.615 # ring diameter / square side
+KEY_RATIO = 0.90   # key length / ring diameter
 
 
-def _mau(hexa: str):
+def _colour(hexa: str):
     from AppKit import NSColor
     h = hexa.lstrip("#")
     return NSColor.colorWithSRGBRed_green_blue_alpha_(
         *[int(h[k:k + 2], 16) / 255 for k in (0, 2, 4)], 1.0)
 
 
-def _khoa(L: float, mau) -> None:
-    """Chìa khoá nằm ngang: từ x=0 tới x=L, trục dọc ở y=0.
+def _key(L: float, colour) -> None:
+    """A key lying flat: from x=0 to x=L, its long axis on y=0.
 
-    Vẽ ở tư thế NẰM NGANG rồi để người gọi xoay. Gõ cứng toạ độ đã xoay thì
-    đổi góc một cái là phải tính lại cả hai chục con số bằng tay.
+    Drawn LYING FLAT and left for the caller to rotate. Hard-code already-rotated
+    coordinates and changing the angle means recomputing two dozen numbers by hand.
 
-    Ba vòng tay cầm DÀY HƠN logo ngang trong app: ở 32px ba vòng mảnh dính
-    vào nhau thành một cục đen, và cái làm nên dấu hiệu này là ba cái lỗ.
+    The three rings of the bow are THICKER than the wide logo inside the app: at
+    32px three thin rings merge into one black blob, and the three holes are what
+    make this mark a mark.
     """
     from AppKit import NSBezierPath, NSMakeRect
-    mau.set()
-    r, net = L * .105, L * .072
+    colour.set()
+    r, stroke = L * .105, L * .072
     for cx, cy in ((.115, 0), (.275, .125), (.27, -.125)):
-        vong = NSBezierPath.bezierPathWithOvalInRect_(
+        ring = NSBezierPath.bezierPathWithOvalInRect_(
             NSMakeRect(cx * L - r, cy * L - r, r * 2, r * 2))
-        vong.setLineWidth_(net)
-        vong.stroke()                      # NÉT, không tô — lỗ là lỗ thật
+        ring.setLineWidth_(stroke)
+        ring.stroke()                      # STROKED, not filled — a hole is a real hole
     h = L * .082
-    NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(       # thân
+    NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(       # the shaft
         NSMakeRect(.29 * L, -h / 2, .71 * L, h), h / 2, h / 2).fill()
-    NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(       # khấc
+    NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(       # the notch
         NSMakeRect(.60 * L, -h / 2, h, L * .20), h / 2, h / 2).fill()
-    for x in (.775, .885):                                         # hai răng
+    for x in (.775, .885):                                         # the two teeth
         NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
             NSMakeRect(x * L, -L * .225, h, L * .19), h / 2, h / 2).fill()
 
 
 def draw_icon(out_dir: Path) -> Path | None:
-    """Vẽ icon bằng AppKit (có sẵn), xuất .icns bằng iconutil (có sẵn)."""
+    """Draw the icon with AppKit (already there), export .icns with iconutil (already there)."""
     try:
         from AppKit import (NSAffineTransform, NSBezierPath, NSBitmapImageRep,
                             NSImage, NSMakeRect, NSPNGFileType)
@@ -95,23 +99,23 @@ def draw_icon(out_dir: Path) -> Path | None:
         image = NSImage.alloc().initWithSize_(NSMakeSize(size, size))
         image.lockFocus()
         pad = size * .085
-        _mau(NEN).set()
+        _colour(GROUND).set()
         NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
             NSMakeRect(pad, pad, size - 2 * pad, size - 2 * pad),
             size * .225, size * .225).fill()
 
-        d = size * TI_VONG
-        _mau(VONG).set()
+        d = size * RING_RATIO
+        _colour(RING).set()
         NSBezierPath.bezierPathWithOvalInRect_(
             NSMakeRect((size - d) / 2, (size - d) / 2, d, d)).fill()
 
-        L = d * TI_KHOA
+        L = d * KEY_RATIO
         t = NSAffineTransform.transform()
         t.translateXBy_yBy_(size / 2, size / 2)
-        t.rotateByDegrees_(GOC)
-        t.translateXBy_yBy_(-L / 2, 0)     # CĂN TÂM: chìa dài L, tâm ở L/2
+        t.rotateByDegrees_(ANGLE)
+        t.translateXBy_yBy_(-L / 2, 0)     # CENTRED: the key is L long, its middle at L/2
         t.concat()
-        _khoa(L, _mau(NET))
+        _key(L, _colour(INK))
         image.unlockFocus()
 
         rep = NSBitmapImageRep.imageRepWithData_(image.TIFFRepresentation())
@@ -128,42 +132,44 @@ def draw_icon(out_dir: Path) -> Path | None:
     return icns if done.returncode == 0 else None
 
 
-# Vỏ của .app: một kịch bản bash mỏng, code thật nằm trong dự án nên sửa code
-# là chạy ngay, không phải dựng lại bundle.
+# The .app's shell: a thin bash script. The real code stays in the project, so
+# an edit runs straight away with no rebuilding of the bundle.
 #
-# HAI THỨ BIẾN MẤT ĐƯỢC sau khi dựng, và cũ thì cả hai đều chết CÂM:
+# TWO THINGS CAN VANISH after the build, and the old version died SILENTLY on
+# both:
 #
-#   1. Thư mục dự án — đổi tên hay chuyển chỗ là xong. Bản cũ `cd ... || exit 1`
-#      rồi thoát lặng lẽ: bấm icon, icon nảy một cái, hết. Không thông báo,
-#      không log, không cách nào đoán.
-#   2. Python đã dựng bằng — bản cũ nướng cứng `sys.executable`, ở máy này là
-#      /opt/anaconda3/bin/python3. Gỡ Anaconda hay nâng cấp nó là app chết,
-#      trong khi máy vẫn còn Python 3.13 chỗ khác dùng được.
+#   1. The project folder — renamed or moved, and that is that. The old version
+#      did `cd ... || exit 1` and left quietly: press the icon, it bounces once,
+#      nothing. No message, no log, no way to guess.
+#   2. The Python it was built with — the old version baked in `sys.executable`,
+#      which on this machine is /opt/anaconda3/bin/python3. Remove Anaconda or
+#      upgrade it and the app is dead, while a perfectly usable Python 3.13 sits
+#      elsewhere on the same machine.
 #
-# Nên: đường dự án vẫn nướng vào (kéo .app sang /Applications thì không tự suy
-# ra được), nhưng KIỂM TRA rồi mới dùng; còn Python thì đi TÌM lúc chạy, dùng
-# chung đúng một bản chọn với start.command.
-VO = """#!/bin/bash
-# Vỏ mỏng — code thật nằm trong dự án, sửa là chạy ngay.
+# So: the project path is still baked in (dragging the .app to /Applications
+# leaves no way to work it out), but it is CHECKED before use; and Python is
+# FOUND at run time, sharing exactly one chooser with start.command.
+SHELL_SCRIPT = """#!/bin/bash
+# A thin shell — the real code is in the project, so an edit runs straight away.
 
-keu() {
+alert() {
   osascript -e "display alert \\"jobbot\\" message \\"$1\\"" >/dev/null 2>&1
   echo "$1" >&2
   exit 1
 }
 
-DU_AN="<DU_AN>"
-[ -f "$DU_AN/run.py" ] || keu "Không thấy dự án ở:
+PROJECT="<PROJECT>"
+[ -f "$PROJECT/run.py" ] || alert "The project is not at:
 
-$DU_AN
+$PROJECT
 
-Thư mục đã bị đổi tên hoặc chuyển chỗ. Mở thư mục dự án rồi chạy lại:
+The folder has been renamed or moved. Open the project folder and run again:
   python3 scripts/make_app.py"
 
-cd "$DU_AN" || keu "Không vào được $DU_AN"
+cd "$PROJECT" || alert "Could not enter $PROJECT"
 
-. scripts/tim-python.sh
-[ -n "$PY" ] || keu "$THIEU_PYTHON"
+. scripts/find-python.sh
+[ -n "$PY" ] || alert "$PYTHON_MISSING"
 
 exec "$PY" run.py "$@"
 """
@@ -183,8 +189,8 @@ def build() -> int:
         "CFBundleName": "jobbot",
         "CFBundleDisplayName": "jobbot",
         "CFBundleIdentifier": BUNDLE_ID,
-        "CFBundleVersion": "0.1",
-        "CFBundleShortVersionString": "0.1",
+        "CFBundleVersion": "1.0",
+        "CFBundleShortVersionString": "1.0",
         "CFBundlePackageType": "APPL",
         "CFBundleExecutable": "jobbot",
         "NSHighResolutionCapable": True,
@@ -195,13 +201,13 @@ def build() -> int:
     (contents / "Info.plist").write_bytes(plistlib.dumps(info))
 
     launcher = macos / "jobbot"
-    launcher.write_text(VO.replace("<DU_AN>", str(ROOT)))
+    launcher.write_text(SHELL_SCRIPT.replace("<PROJECT>", str(ROOT)))
     launcher.chmod(0o755)
 
-    subprocess.run(["touch", str(APP)], check=False)     # để Finder nhận icon mới
-    print(f"\n  Đã dựng: {APP}")
-    print(f"  Icon:    {'có' if icns else 'dùng icon mặc định'}")
-    print("\n  Kéo jobbot.app vào /Applications rồi bấm đúp.\n")
+    subprocess.run(["touch", str(APP)], check=False)     # so Finder picks up the new icon
+    print(f"\n  Built: {APP}")
+    print(f"  Icon:  {'yes' if icns else 'using the default icon'}")
+    print("\n  Drag jobbot.app into /Applications, then double-click it.\n")
     return 0
 
 

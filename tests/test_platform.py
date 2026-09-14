@@ -251,14 +251,14 @@ _ma = _il.module_from_spec(_spec); _spec.loader.exec_module(_ma)
 _src = (_goc / "scripts/make_app.py").read_text(encoding="utf-8")
 
 # BLACK AND WHITE: all three colours have to be pure grey — three equal RGB channels.
-for _ten, _h in (("ground", _ma.NEN), ("rings", _ma.VONG), ("key", _ma.NET)):
+for _ten, _h in (("ground", _ma.GROUND), ("rings", _ma.RING), ("key", _ma.INK)):
     _rgb = [int(_h.lstrip("#")[i:i+2], 16) for i in (0, 2, 4)]
     check(f"the {_ten} colour is pure grey, with no cast",
           _rgb[0] == _rgb[1] == _rgb[2])
 check("the rings contrast sharply with the ground",
-      abs(int(_ma.NEN.lstrip('#')[:2], 16) - int(_ma.VONG.lstrip('#')[:2], 16)) > 200)
+      abs(int(_ma.GROUND.lstrip('#')[:2], 16) - int(_ma.RING.lstrip('#')[:2], 16)) > 200)
 check("the key is the ground colour, so it is a shape CUT OUT of the rings",
-      _ma.NET == _ma.NEN)
+      _ma.INK == _ma.GROUND)
 # DRAWN AS SHAPES, NOT AS A CHARACTER. The previous version drew "◆" in the
 # system font: optical size and baseline were the font's to decide, so a macOS
 # update shifted the icon with nothing to say so.
@@ -267,7 +267,7 @@ check("the key is the ground colour, so it is a shape CUT OUT of the rings",
 _code = "\n".join(l for l in _src.splitlines() if not l.lstrip().startswith("#"))
 for _cam in ("NSAttributedString", "NSFont", "drawAtPoint_"):
     check(f"it no longer relies on «{_cam}»", _cam not in _code)
-check("the key is drawn with paths, in a function of its own", hasattr(_ma, "_khoa"))
+check("the key is drawn with paths, in a function of its own", hasattr(_ma, "_key"))
 check("the three grip rings are STROKED, not filled — the holes are real holes",
       "setLineWidth_" in _src and ".stroke()" in _src)
 # The Dock icon and the sidebar logo are ONE name.
@@ -344,25 +344,25 @@ for _f, _co in _duong_vao:
 
 # --- the .app wrapper: no baked-in Python, and it speaks when it fails ---
 _ma_app = _il.module_from_spec(_spec); _spec.loader.exec_module(_ma_app)
-_vo = _ma_app.VO
-check("the .app wrapper does NOT bake in a Python path", "/opt/anaconda3" not in _vo
-      and "sys.executable" not in _vo)
+_shell = _ma_app.SHELL_SCRIPT
+check("the .app wrapper does NOT bake in a Python path", "/opt/anaconda3" not in _shell
+      and "sys.executable" not in _shell)
 check("the .app wrapper finds Python at run time, sharing start.command's finder",
-      "scripts/tim-python.sh" in _vo)
-check("the .app wrapper checks the project is still there before cd", "run.py" in _vo.split("cd ")[0])
+      "scripts/find-python.sh" in _shell)
+check("the .app wrapper checks the project is still there before cd", "run.py" in _shell.split("cd ")[0])
 check("the .app wrapper SPEAKS UP when it fails, it does not exit silently",
-      "display alert" in _vo and _vo.count("keu ") >= 2)
-_vo_thu = _goc2 / "jobbot.app/Contents/MacOS/jobbot"
-if _vo_thu.exists():
+      "display alert" in _shell and _shell.count("alert ") >= 2)
+_shell_installed = _goc2 / "jobbot.app/Contents/MacOS/jobbot"
+if _shell_installed.exists():
     # The version INSTALLED on this machine, not the one in the source: only a
     # rebuild takes effect.
-    check("the installed .app is already the new wrapper", "tim-python.sh" in
-          _vo_thu.read_text(encoding="utf-8"))
+    check("the installed .app is already the new wrapper", "find-python.sh" in
+          _shell_installed.read_text(encoding="utf-8"))
 
 # --- the Python finder: it picks by VERSION NUMBER, never by name --------
-_tim = (_goc2 / "scripts/tim-python.sh").read_text(encoding="utf-8")
-check("the Python finder asks the version rather than trusting the name", "version_info >= (3, 11)" in _tim)
-check("JOBBOT_PYTHON can point at it by hand on an unusual machine", "JOBBOT_PYTHON" in _tim)
+_finder = (_goc2 / "scripts/find-python.sh").read_text(encoding="utf-8")
+check("the Python finder asks the version rather than trusting the name", "version_info >= (3, 11)" in _finder)
+check("JOBBOT_PYTHON can point at it by hand on an unusual machine", "JOBBOT_PYTHON" in _finder)
 _cu_py2 = Path("/usr/bin/python3")
 if _cu_py2.exists():
     # On this machine /usr/bin/python3 is 3.9 — the filter MUST reject it, or
