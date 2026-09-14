@@ -970,10 +970,10 @@ from jobbot.dashboard.views import trackcho as _qT
 _hang = [_r(origin="tay", posting_id=9, url="https://li/job/1")]
 _tay = _qT.render(rows=_hang, asks=[], mu=[])
 check("có ô riêng cho tin máy không nộp được",
-      "máy không nộp hộ được" in _tay)
+      "the machine cannot apply for you" in _tay)
 check("đưa ĐƯỜNG NỘP để tự làm", "https://li/job/1" in _tay)
 check("và đường TẢI BẢN CV", "/api/cv/pdf" in _tay)
-check("nói rõ làm xong thì bấm gì", "Quét thư" in _tay)
+check("nói rõ làm xong thì bấm gì", "Scan mail" in _tay)
 _bang = _tkD.render(rows=_hang, asks=[], counts={}, mail_ready=False,
                     mail_address="", thu={1: []}, loc={})
 check("và bảng KHÔNG ôm việc đó nữa", "máy không nộp hộ được" not in _bang)
@@ -1034,7 +1034,7 @@ check("hết việc thì nút không bịa ra số",
 check("màn hàng chờ có đường về bảng", "href='/track'" in _q)
 # Rỗng ĐƯỢC, và đó là điểm của cả màn: bảng thì không bao giờ trống.
 check("hàng chờ rỗng thì nói thẳng là xong",
-      "Không còn gì đợi bạn quyết" in _qD.render(rows=[], asks=[], mu=[]))
+      "Nothing is waiting on you" in _qD.render(rows=[], asks=[], mu=[]))
 # Tên module KHÔNG được là `queue`: server.py đã `import queue` của thư viện
 # chuẩn và luồng SSE bắt `queue.Empty`. Đè lên nhau = màn hình đứng im.
 import queue as _stdq
@@ -1196,7 +1196,7 @@ check("chọn dòng nào thì hiện chặng đi tiếp của DÒNG ĐÓ",
 check("chưa chọn thì không bày nút đổi nào",
       "data-arg='2:interview'" not in _qT.render(rows=_rs, asks=[], mu=[]))
 check("chặng đã là kết cục thì nói thẳng, không bày nút chết",
-      "không đi tiếp" in _qT.render(rows=_rs, asks=[], mu=[], doi="5"))
+      "nowhere further to go" in _qT.render(rows=_rs, asks=[], mu=[], doi="5"))
 
 print("\n[HUY HIỆU PHẢI NÓI CÙNG CÂU VỚI NHÓM]")
 def _rim(im, stage=_bdK.SENT, song="im"):

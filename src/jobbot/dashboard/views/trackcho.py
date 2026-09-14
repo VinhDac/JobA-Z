@@ -1,20 +1,22 @@
-"""Hàng chờ — mọi thứ MÁY KHÔNG TỰ CHỐT ĐƯỢC, gom về một chỗ.
+"""The queue — everything THE MACHINE CANNOT SETTLE, gathered in one place.
 
-Màn con của Quản lí. Tách ra là có lý do, không phải để cho đẹp:
+A sub-screen of Manage. It is separate for a reason, not for looks:
 
-    /track        BẢNG. Việc đã xong, máy đã chốt, chỉ đọc.
-    /track/queue  HÀNG CHỜ. Việc máy bí, cần người quyết.
+    /track        THE TABLE. Settled work, decided, read-only.
+    /track/queue  THE QUEUE. What the machine is stuck on, needing a person.
 
-Trộn hai thứ vào một trang thì cái sạch bị cái chưa rõ đè xuống — 16 thẻ thư
-đẩy ô tìm của bảng xuống dưới hơn một màn hình, và người vào xem bảng phải
-cuộn qua một đống việc chưa làm mới tới thứ họ định xem.
+Mixed into one page, the clean half is pushed down by the unresolved half —
+16 mail cards pushed the table's search box more than a screen down, and
+someone coming to read the table had to scroll past a pile of undone work to
+reach what they came for.
 
-Và chúng khác nhau ở NHỊP: bảng là thứ liếc mỗi ngày, hàng chờ là thứ ngồi
-dọn một lần rồi trống. Một chỗ trống được mới là chỗ làm việc; bảng thì
-không bao giờ trống.
+And they differ in RHYTHM: the table is glanced at daily, the queue is sat
+down with once and emptied. A place that can be emptied is a workplace; the
+table never empties.
 
-MÁY KHÔNG TỰ ĐỔI GÌ Ở ĐÂY. Nó đề xuất, người bấm. Đây là chỗ ranh giới đó
-hiện ra thành hình — xem apply/run.py cho ranh giới cùng loại ở tầng nộp.
+THE MACHINE CHANGES NOTHING HERE BY ITSELF. It proposes, a person clicks.
+This is where that boundary takes visible form — see apply/run.py for the
+same boundary in the applying layer.
 
 CHỈ VẼ.
 """
@@ -28,13 +30,13 @@ from . import runtime
 
 
 def _ask(items: list[dict], rows: list[dict] | None = None) -> str:
-    """Dải CẦN VIN: thư về đề xuất đổi trạng thái.
+    """The NEEDS-VIN strip: mail proposing a status change.
 
-    `rows` = cả bảng, để lá thư KHÔNG khớp dòng nào vẫn gán tay được. Trước
-    đây lá như thế chỉ có đúng một nút — Bỏ qua. Máy đọc được kết cục mà
-    không đoán ra công ty, rồi bắt người dùng vứt lá thư đi: thấy mà không
-    làm gì được thì cũng là mất, chỉ là mất ồn ào hơn. Đo trên hộp thư thật
-    có 3 lá như vậy.
+    `rows` = the whole table, so a mail matching NO row can still be attached
+    by hand. Such a mail used to have exactly one button — Skip. The machine
+    read the outcome but could not work out the company, and then asked the
+    user to throw the mail away: seeing something you can do nothing about is
+    still losing it, just more loudly. Measured, the real mailbox has 3.
     """
     if not items:
         return ""
@@ -45,11 +47,11 @@ def _ask(items: list[dict], rows: list[dict] | None = None) -> str:
     rows = ""
     for p in items:
         who = p["company"] or p["company_guess"] or "?"
-        # Vin nộp ba vai trò ở Point72; thư từ chối đến, máy đề xuất hạ MỘT
-        # dòng. Không hiện vai trò thì Vin bấm Nhận mà không biết vừa hạ cái
-        # nào.
+        # Vin applied for three roles at Point72; a rejection arrives and
+        # the machine proposes demoting ONE row. Without showing the role,
+        # Vin presses Accept without knowing which one he just closed.
         job = f" · {p['role'][:38]}" if p.get("role") else ""
-        now = STAGE_LABEL.get(p["stage"], "—") if p["stage"] else "chưa có dòng"
+        now = STAGE_LABEL.get(p["stage"], "—") if p["stage"] else "no row yet"
         to = STAGE_LABEL.get(p["kind"], p["kind"])
         rows += (
             f"<div class=askrow><div class=askmain>"
@@ -63,31 +65,34 @@ def _ask(items: list[dict], rows: list[dict] | None = None) -> str:
                if p["app_id"] else
                (f"<form class=ganform method=post data-post='/api/track/mail/gan'>"
                 f"<select name=app data-ganfor='{p['id']}'>"
-                f"<option value=''>máy không biết thư này của ai — chọn…</option>"
+                f"<option value=''>the machine cannot tell whose this is — pick…</option>"
                 f"{chon}</select></form>" if chon else
-                "<span class=muted>chưa khớp dòng nào</span>"))
+                "<span class=muted>matches no row</span>"))
             + f"<button class='mbtn tiny' data-post='/api/track/mail'"
               f" data-arg='{p['id']}:no'>Bỏ qua</button></div></div>")
-    return (f"<div class=asklist><div class=askhead>{len(items)} thư đang đợi "
-            f"bạn quyết — máy đề xuất, không tự đổi</div>{rows}</div>")
+    return (f"<div class=asklist><div class=askhead>{len(items)} mail waiting "
+            f"on you — the machine proposes, it does not change anything"
+            f"</div>{rows}</div>")
 
 
-# Bốn kết cục người dùng có thể xếp cho một lá thư máy không đọc nổi.
-XEP = (("applied", "xác nhận đã nộp"), ("interview", "mời phỏng vấn"),
+# The four outcomes a user can assign to a mail the machine cannot read.
+XEP = (("applied", "acknowledgement"), ("interview", "interview invitation"),
        ("rejected", "từ chối"), ("offer", "nhận việc"))
 
 
 def _mu(items: list[dict]) -> str:
-    """THƯ MÁY KHÔNG HIỂU — và đây là lời hứa thật của tầng thư.
+    """MAIL THE MACHINE CANNOT READ — and this is the mail layer's real
+    promise.
 
-    Bảng mẫu cách diễn đạt không bao giờ đủ: đo trên hộp thư thật, thư từ
-    chối của Maven ("Sorry, it's not quite a match") và thư xác nhận của
-    Trading 212 ("Your application is in") đều rơi vào `other` và biến mất.
-    Đua thêm từ khoá là trò không có điểm dừng.
+    A table of phrasings is never complete: measured on the real mailbox,
+    Maven's rejection ("Sorry, it's not quite a match") and Trading 212's
+    acknowledgement ("Your application is in") both fell into `other` and
+    vanished. Racing to add more keywords is a game with no end.
 
-    Nên máy KHÔNG hứa hiểu mọi lá thư. Nó hứa KHÔNG LÁ NÀO BIẾN MẤT: thư nào
-    nó bó tay mà lại thuộc một lần nộp trên bảng thì hiện ra đây, người dùng
-    xếp một cái là xong.
+    So the machine does NOT promise to understand every mail. It promises NO
+    MAIL DISAPPEARS: anything it is stuck on that belongs to an application
+    on the table appears here, and one classification from the user settles
+    it.
     """
     if not items:
         return ""
@@ -100,21 +105,21 @@ def _mu(items: list[dict]) -> str:
         rows += (
             f"<div class=askrow><div class=askmain>"
             f"<b>{esc(m['company'] or m['company_guess'] or '?')}</b>"
-            f"<span class=askto>máy không đọc được — bạn xếp giúp</span>"
+            f"<span class=askto>the machine could not read this — you classify it</span>"
             f"<div class=asksub>{esc(' '.join((m['subject'] or '').split())[:96])}</div>"
             f"<div class=asksnip>{esc(' '.join((m['snippet'] or '').split())[:130])}</div>"
             f"</div><div class=askact>{nut}"
             f"<button class='mbtn tiny' data-post='/api/track/mail/ignore'"
             f" data-arg='{m['id']}'>bỏ qua</button></div></div>")
     return (f"<div class='asklist mu'><div class=askhead>"
-            f"<b>{len(items)}</b> thư máy KHÔNG đọc được — nhưng chúng thuộc "
-            f"về một lần nộp trên bảng, nên không lá nào bị bỏ rơi"
+            f"<b>{len(items)}</b> mail the machine could NOT read — but they "
+            f"belong to an application on the table, so none is left behind"
             f"</div>{rows}</div>")
 
 
-# CHẶNG ĐI TIẾP ĐƯỢC từ mỗi chặng. Dọn từ bảng sang đây: đổi chặng là SỬA,
-# và bảng không sửa gì cả.
-NEXT = {"draft": [("applied", "đã gửi tay")],
+# The stages REACHABLE from each stage. Moved here from the table: changing a
+# stage is EDITING, and the table edits nothing.
+NEXT = {"draft": [("applied", "sent by hand")],
         "applied": [("interview", "phỏng vấn"), ("rejected", "từ chối")],
         "interview": [("offer", "nhận"), ("rejected", "từ chối")],
         "rejected": [], "offer": []}
@@ -123,10 +128,10 @@ NEXT = {"draft": [("applied", "đã gửi tay")],
 def _nhap(rows: list[dict]) -> str:
     """MÁY ĐIỀN XONG, CHỜ BẠN BẤM GỬI — việc dở dang thật sự của app.
 
-    Máy mở form và điền phần nó chứng minh được rồi DỪNG: vài câu như
-    sponsorship hay ngày tốt nghiệp chỉ bạn trả lời được, và cú bấm Gửi là
-    của bạn. Ranh giới đó nằm trong apply/run.py, và đây là chỗ nó hiện ra
-    thành việc phải làm.
+    The machine opens the form, fills what it can prove, and STOPS: questions
+    like sponsorship or the graduation date can only be answered by you, and
+    the Send click is yours. That boundary lives in apply/run.py, and this is
+    where it becomes a piece of work to do.
     """
     nhap = [r for r in rows if r.get("stage") == "draft"]
     if not nhap:
@@ -136,24 +141,27 @@ def _nhap(rows: list[dict]) -> str:
         o += (f"<div class=askrow><div class=askmain>"
               f"<div class=askwho><b>{esc(r['company'][:34])}</b>"
               f"<i>{esc((r.get('role') or '')[:38])}</i></div>"
-              f"<div class=asksub>máy đã điền xong phần nó chứng minh được — "
-              f"còn lại là mấy câu chỉ bạn trả lời được</div></div>"
+              f"<div class=asksub>the machine has filled everything it can "
+              f"prove — what is left is the questions only you can answer"
+              f"</div></div>"
               f"<div class=askact>"
               f"<button class='mbtn tiny apply' data-post='/api/apply/send'"
-              f" data-arg='{r['id']}'>Gửi đơn</button>"
+              f" data-arg='{r['id']}'>Send it</button>"
               f"<button class='mbtn tiny' data-post='/api/track/drop'"
               f" data-arg='{r['id']}'>bỏ</button></div></div>")
-    return (f"<div class=asklist><div class=askhead><b>{len(nhap)}</b> đơn máy "
-            f"điền xong, chờ bạn bấm Gửi</div>{o}</div>")
+    return (f"<div class=asklist><div class=askhead><b>{len(nhap)}</b> "
+            f"application(s) filled in, waiting on your Send</div>{o}</div>")
 
 
 def _tay(rows: list[dict]) -> str:
-    """MÁY BÓ TAY — và nó đưa đủ đồ nghề chứ không chỉ báo một câu.
+    """THE MACHINE IS STUCK — and it hands over the tools rather than just
+    saying so.
 
-    Tin LinkedIn không lộ đường nộp (môi giới, hoặc buộc nộp trong LinkedIn).
-    Hai thứ cần để tự làm là ĐƯỜNG NỘP và BẢN CV, app đang giữ cả hai. Làm
-    xong bấm Quét thư: thư xác nhận về thì trạng thái tự đổi — không phải tự
-    tay đánh dấu.
+    A LinkedIn posting that does not expose an application link (an agency,
+    or LinkedIn's own form). The two things needed to do it yourself are THE
+    APPLICATION LINK and THE CV, and the app holds both. When done, press
+    Scan mail: the acknowledgement arriving changes the status by itself —
+    no manual marking.
     """
     tay = [r for r in rows if (r.get("origin") or "") == "tay"]
     if not tay:
@@ -168,28 +176,30 @@ def _tay(rows: list[dict]) -> str:
         o += (f"<div class=askrow><div class=askmain>"
               f"<div class=askwho><b>{esc(r['company'][:34])}</b>"
               f"<i>{esc((r.get('role') or '')[:38])}</i></div>"
-              f"<div class=asksub>máy không nộp hộ được — mở trang, tải bản "
-              f"CV, nộp tay. Xong thì bấm <b>Quét thư</b>: thư xác nhận về là "
-              f"dòng đó tự sang «đã nộp»</div></div>"
+              f"<div class=asksub>the machine cannot apply for you — open the "
+              f"page, download the CV, apply by hand. Then press <b>Scan "
+              f"mail</b>: when the acknowledgement arrives the row moves to "
+              f"«applied» on its own</div></div>"
               f"<div class=askact>{mo}{tai}</div></div>")
     return (f"<div class='asklist mu'><div class=askhead><b>{len(tay)}</b> tin "
-            f"máy không nộp hộ được — bạn tự nộp</div>{o}</div>")
+            f"the machine cannot apply for you — you apply</div>{o}</div>")
 
 
 def _doi(rows: list[dict], doi: str = "") -> str:
-    """ĐỔI CHẶNG BẰNG TAY — cửa thoát hiểm, MỘT cái, không phải 74 cái nút.
+    """CHANGE A STAGE BY HAND — an escape hatch, ONE of them, not 74 buttons.
 
-    Vì sao phải có: thư là cảm biến duy nhất của bảng. Một cuộc gọi mời phỏng
-    vấn không để lại lá thư nào, nên máy không bao giờ biết — và sau 20 ngày
-    nó lặng lẽ xếp dòng đó vào "coi như trượt". Không có cửa này thì đó là
-    mất trắng một cơ hội có thật.
+    Why it must exist: mail is the table's only sensor. An interview
+    invitation by phone leaves no mail, so the machine never learns of it —
+    and after 20 days it quietly files that row under "counts as rejected".
+    Without this hatch, that is a real opportunity lost outright.
 
-    Vì sao KHÔNG để trên bảng: ở đó nó thành 74 cái nút nằm cạnh 37 dòng
-    đang đọc, và một cú bấm nhầm đổi trạng thái thật. Ở đây nó là hai bước
-    có chủ ý — chọn dòng, rồi chọn chặng.
+    Why NOT on the table: there it becomes 74 buttons sitting beside the 37
+    rows being read, and one mis-click changes a real status. Here it is two
+    deliberate steps — pick the row, then pick the stage.
 
-    HAI BƯỚC ĐI QUA URL (`?doi=`), không qua JavaScript: mở thẳng địa chỉ
-    hay bấm Back đều đúng, cùng lối với ô tìm bên Search.
+    THE TWO STEPS GO THROUGH THE URL (`?doi=`), not JavaScript: opening the
+    address directly or pressing Back both behave correctly, the same way the
+    Search box does.
     """
     that = [r for r in rows if r.get("stage") != "draft"]
     if not that:
@@ -209,41 +219,43 @@ def _doi(rows: list[dict], doi: str = "") -> str:
             f" data-post='/api/track/state'"
             f" data-arg='{kia['id']}:{to}'>{esc(nhan)}</button>"
             for to, nhan in di)
-            or "<span class=muted>chặng này đã là kết cục — không đi tiếp "
-               "đâu được</span>")
+            or "<span class=muted>this stage is already an outcome — there "
+               "is nowhere further to go</span>")
         nut = (f"<div class=doinow><b>{esc(kia['company'][:40])}</b>"
-               f"<span>đang ở «{esc(STAGE_LABEL.get(kia['stage'], ''))}»"
-               f" — đổi sang:</span><div class=askact>{nut}</div></div>")
+               f"<span>currently «{esc(STAGE_LABEL.get(kia['stage'], ''))}»"
+               f" — change to:</span><div class=askact>{nut}</div></div>")
     return (f"<div class=asklist><div class=askhead>Đổi chặng bằng tay"
-            f"<span>dùng khi kết quả đến ngoài hộp thư — một cuộc gọi, một "
-            f"tin nhắn. Máy không thấy được những thứ đó.</span></div>"
+            f"<span>for when the outcome arrives outside the mailbox — a "
+            f"phone call, a text. The machine cannot see those.</span></div>"
             f"<form class=doiform method=get action='/track/queue'>"
             f"<select name=doi>{chon}</select>"
             f"<button class='mbtn tiny'>Chọn</button></form>{nut}</div>")
 
 
 def _trong() -> str:
-    """Hàng chờ rỗng — và nó RỖNG ĐƯỢC, đó là điểm của cả màn này."""
-    return ("<div class=empty-box><b>Không còn gì đợi bạn quyết.</b><br>"
-            "Thư nào máy đọc ra kết cục thì nó đã cập nhật thẳng vào bảng. "
-            "Chỗ này chỉ sáng lên khi máy bí — bấm <b>Quét thư</b> để đọc "
-            "hộp thư lần nữa.</div>")
+    """An empty queue — and it CAN be empty; that is the point of this screen."""
+    return ("<div class=empty-box><b>Nothing is waiting on you.</b><br>"
+            "Any mail the machine could read an outcome from has already gone "
+            "into the table. This lights up only when the machine is stuck — "
+            "press <b>Scan mail</b> to read the mailbox again.</div>")
 
 
 def render(*, rows: list[dict], asks: list[dict], mu: list[dict] | None = None,
            stage: dict | None = None, doi: str = "") -> str:
-    """Hai ô: THƯ (máy đọc được / máy bó tay) · VIỆC & SỬA.
+    """Two panels: MAIL (read / not read) · WORK & EDITS.
 
-    Bảng bên /track chỉ còn fact — không một nút nào đổi được dòng nào. Mọi
-    thứ hỏi ý kiến hay sửa dồn hết về đây, chia theo AI ĐANG BÍ:
+    The table at /track is facts only — not one button changes a row.
+    Everything that asks for an opinion or edits anything lives here, grouped
+    by WHO IS STUCK:
 
-        máy đọc ra kết cục, xin gật đầu      -> một cú bấm
-        máy không đọc nổi lá thư             -> bạn xếp giúp
-        máy điền xong đơn, không được bấm Gửi -> bạn gửi
-        máy không nộp hộ được                 -> bạn nộp tay
-        máy không thấy gì cả (gọi điện, nhắn) -> bạn đổi chặng tay
+        the machine read an outcome and wants a nod    -> one click
+        the machine could not read the mail            -> you classify it
+        the application is filled in, Send is yours    -> you send
+        the machine cannot apply for you               -> you apply by hand
+        the machine saw nothing (a call, a text)       -> you change the stage
 
-    Ba cái đầu là thư, hai cái sau là việc — nên hai ô, không phải năm.
+    The first three are mail, the last two are work — so two panels, not
+    five.
     """
     from ..layout import deck
     info = stage or {}
@@ -255,26 +267,28 @@ def render(*, rows: list[dict], asks: list[dict], mu: list[dict] | None = None,
     con = len(de) + len(bi) + sum(1 for r in rows if r.get("stage") == "draft") \
         + sum(1 for r in rows if (r.get("origin") or "") == "tay")
     return runtime.render(
-        title="Hàng chờ", active="/track", stream="search", journal="bottom",
-        # VẼ LẠI khi khúc QUẢN LÍ chạy xong, không phải khi vòng quét xong.
-        # Bảng này dựng từ đơn + thư, mà vòng quét chỉ đẻ ra tin — quét xong
-        # mà nhảy trang thì nó đóng sập mọi dòng đang mở dở, đúng lúc người
-        # dùng đang đọc một lá thư. Ô nhật ký vẫn xem luồng `search` vì đó
-        # là khúc chạy lâu, đáng nhìn nhất; hai việc khác nhau.
+        title="Queue", active="/track", stream="search", journal="bottom",
+        # REDRAW when the MANAGE stage finishes, not when the scan does. This
+        # page is built from applications + mail, while the scan only
+        # produces postings — jumping the page when a scan ends slams shut
+        # every open row, exactly while the user is reading a mail. The
+        # journal panel still watches the `search` stream because that is the
+        # long-running stage and the one worth watching; two different jobs.
         reload="track",
         cols=2,
-        bar=deck("track", "Quản lí · hàng chờ",
-                 (f"{con} việc đang đợi bạn" if con else "không còn gì đợi bạn"),
-                 [(f"{len(de)}", "máy đề xuất", "act"),
-                  (f"{len(bi)}", "máy không đọc nổi", "new"),
-                  (f"{con - len(de) - len(bi)}", "đơn chờ bạn", "new"),
-                  (f"{len(rows)}", "dòng trên bảng", "view")],
-                 run="Quét thư", run_note="đọc hộp thư rồi cập nhật bảng",
-                 sua=("/track", "← Bảng", "Quay lại bảng Đã nộp")),
-        panels=[runtime.panel("Thư · máy hỏi bạn",
+        bar=deck("track", "Manage · queue",
+                 (f"{con} waiting on you" if con else "nothing waiting on you"),
+                 [(f"{len(de)}", "proposed", "act"),
+                  (f"{len(bi)}", "unreadable", "new"),
+                  (f"{con - len(de) - len(bi)}", "waiting on you", "new"),
+                  (f"{len(rows)}", "rows on the table", "view")],
+                 run="Scan mail", run_note="read the mailbox and update the table",
+                 sua=("/track", "← Table", "Back to the applications table")),
+        panels=[runtime.panel("Mail · the machine is asking you",
                               (_ask(de, rows) + _mu(bi)) or _trong(), rows=2),
-                runtime.panel("Việc & sửa · bảng không làm được",
-                              viec or "<div class=empty-box>không đơn nào dở "
-                              "dang, và bảng đang đúng như thư kể.</div>",
+                runtime.panel("Work & edits · what the table cannot do",
+                              viec or "<div class=empty-box>no application is "
+                              "half-done, and the table matches what the mail "
+                              "says.</div>",
                               rows=2)],
     )
