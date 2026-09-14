@@ -1,13 +1,15 @@
-"""Test tab Home — tổng quan.  python3 tests/test_home.py
+"""Test the Home tab — the overview.  python3 tests/test_home.py
 
-Trọng tâm KHÔNG phải "có vẽ ra hình không". Nó là: hình có NÓI THẬT không.
+The focus is NOT "does it draw a picture". It is: does the picture TELL THE
+TRUTH.
 
-Một trang thống kê hỏng thì không im lặng, nó chỉ sai hướng — và người dùng
-đi sửa nhầm chỗ mà không biết. Nên phần lớn bài ở đây canh đúng ba thứ:
+A broken statistics page is not silent, it merely points the wrong way — and
+the user goes off fixing the wrong thing without knowing. So most of the
+checks here guard three things:
 
-    · ngày app CHƯA CHẠY phải khác ngày LÀM ĐƯỢC 0
-    · mọi tỉ lệ phải kèm mẫu số và cỡ mẫu
-    · chưa đủ dữ liệu thì NÓI RA, không vẽ một cái lưới trống
+    · a day the app WAS NOT RUNNING has to differ from a day that PRODUCED 0
+    · every ratio has to carry its denominator and its sample size
+    · not enough data has to be SAID, never drawn as an empty grid
 """
 
 import re
@@ -18,14 +20,15 @@ from pathlib import Path
 GOC = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(GOC / "src"))
 
-# CHẠY LẺ CŨNG PHẢI ĐÚNG.
+# RUNNING THIS FILE ALONE HAS TO WORK TOO.
 #
-# run_all.py dựng một gốc dự án giả + khoá mạng cho mọi bài. Nhưng chạy lẻ
-# một file (python3 tests/test_web.py) thì không có chốt đó, và mấy bài
-# khẳng định "chưa nối bot" sẽ đỏ — đỏ vì máy này có cấu hình, không vì code
-# sai. Tệ hơn: chạy lẻ có thể gửi tin thật về điện thoại người dùng.
+# run_all.py builds a fake project root + a network lock for every test. But
+# running one file on its own (python3 tests/test_web.py) has no such latch,
+# and the checks asserting "the bot is not connected" go red — red because
+# this machine has a config, not because the code is wrong. Worse: running
+# alone could send real messages to the user's phone.
 #
-# Đặt NGAY ĐÂY, trước mọi import jobbot, để không có lối vòng.
+# Set RIGHT HERE, before any jobbot import, so there is no way around it.
 import os as _os, tempfile as _tf, pathlib as _pl
 _os.environ.setdefault("JOBBOT_OFFLINE", "1")
 if "JOBBOT_ROOT" not in _os.environ:
@@ -51,235 +54,246 @@ def truoc(n):
 
 
 def kho():
-    """Kho thử: 1 đi tiếp · 1 họ từ chối · 1 im quá mốc · 1 còn trong cửa sổ."""
+    """A fixture: 1 taken further · 1 they said no · 1 silent past the mark · 1 still open."""
     c = db.connect(":memory:")
     board.add(c, "Kappa Lab", "Quant", applied_at=truoc(9),
               stage=board.INTERVIEW)
     board.add(c, "Maven", "Quant", applied_at=truoc(30), stage=board.REJECTED)
-    board.add(c, "Im Lâu", "Quant", applied_at=truoc(40))
-    board.add(c, "Vừa Nộp", "Quant", applied_at=truoc(3))
+    board.add(c, "Long Silence", "Quant", applied_at=truoc(40))
+    board.add(c, "Just Applied", "Quant", applied_at=truoc(3))
     return c
 
 
-print("\n[PHỄU — hai đoạn, và chỗ nối phải nói thật]")
+print("\n[THE FUNNEL — two stages, and the join has to tell the truth]")
 c = kho()
 p = T.pheu(c)
-check("bốn bước của đoạn TÌM", len(p["tim"]) == 4)
-check("mỗi bước dẫn về tab của nó", all(b[2].startswith("/") for b in p["tim"]))
-check("kho rỗng thì mọi bước bằng 0", all(b[1] == 0 for b in p["tim"]))
-# Ngưỡng "đáng nộp" phải TRÙNG với nút Nộp bên Quản lí. Hai chỗ hai ngưỡng là
-# có ngày Home bảo còn 130 tin đáng nộp mà bấm Nộp thì nó nói hết.
+check("the FIND stage has four steps", len(p["tim"]) == 4)
+check("each step leads back to its own tab", all(b[2].startswith("/") for b in p["tim"]))
+check("an empty store makes every step 0", all(b[1] == 0 for b in p["tim"]))
+# The "worth applying" threshold has to MATCH the Apply button on Track. Two
+# thresholds in two places and one day Home says 130 postings are worth
+# applying to while pressing Apply reports none left.
 _nop = (GOC / "src/jobbot/dashboard/live.py").read_text(encoding="utf-8")
-check("cùng một ngưỡng điểm với nút Nộp bên Quản lí",
+check("the same score threshold as Track's Apply button",
       f"score >= {T.DIEM_DANG_NOP}" in _nop)
 
-print("\n[KẾT QUẢ — mọi tỉ lệ phải kèm MẪU SỐ]")
+print("\n[RESULTS — every ratio has to carry its DENOMINATOR]")
 k = T.ket_qua(c)
-check("đếm đúng 4 lần nộp", k["tong"] == 4)
-check("đi tiếp = phỏng vấn + nhận việc", k["di_tiep"] == 1)
-# TRƯỢT gộp hai thứ, nhưng vẫn giữ riêng từng cái: "họ đã nói" và "ta suy ra"
-# là hai sự thật khác nhau, gộp mà không tách được là mất phân biệt đó.
-check("trượt = họ từ chối + coi như trượt", k["truot"] == 2)
-check("và vẫn tách được từng loại", k["ho_noi"] == 1 and k["suy"] == 1)
-check("còn lại là CHƯA BIẾT, không nhét vào trượt", k["cho"] == 1)
-check("tỉ lệ trên TỔNG", k["pc_di"] == 25.0)
-check("và tỉ lệ trên ĐÃ NGÃ NGŨ khác nó", k["pc_di_xong"] == round(100 / 3, 1))
-check("kèm mốc im lặng đang đặt để giải thích con số",
+check("it counts 4 applications", k["tong"] == 4)
+check("taken further = interview + offer", k["di_tiep"] == 1)
+# REJECTED folds two things together while still keeping each: "they said so"
+# and "we inferred it" are two different truths, and folding them without
+# being able to split again loses that distinction.
+check("rejected = they said no + treated as rejected", k["truot"] == 2)
+check("and each kind is still separable", k["ho_noi"] == 1 and k["suy"] == 1)
+check("the rest is UNKNOWN, never pushed into rejected", k["cho"] == 1)
+check("the ratio over THE TOTAL", k["pc_di"] == 25.0)
+check("and the ratio over WHAT HAS SETTLED differs from it", k["pc_di_xong"] == round(100 / 3, 1))
+check("with the silence mark in use, to explain the figure",
       k["nguong_im"] == board.nguong(c))
 _rong = T.ket_qua(db.connect(":memory:"))
-check("chưa nộp gì thì tỉ lệ là None, KHÔNG phải 0%", _rong["pc_di"] is None)
-check("và 0% không bao giờ bị in ra thay cho «chưa có số»",
+check("nothing applied to -> the ratio is None, NOT 0%", _rong["pc_di"] is None)
+check("and 0% is never printed in place of «no figure yet»",
       "0%" not in home._ket_qua(_rong))
 
 _css = (GOC / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
-print("\n[NĂNG SUẤT — mỗi chuỗi TỰ GÁC lấy mình]")
-# Đây là lỗi đã xảy ra thật: lấy chuỗi DÀI NHẤT làm cổng chung, nên biểu đồ
-# "tin tìm được theo thứ" được vẽ trên 2 ngày dữ liệu và nói "thứ sáu gấp chín
-# lần thứ bảy" — đúng phép tính, sai hoàn toàn về nghĩa.
+print("\n[OUTPUT — each series GUARDS ITSELF]")
+# This is a bug that really happened: the LONGEST series was used as a shared
+# gate, so the "postings found by weekday" chart was drawn over 2 days of data
+# and announced "Friday is nine times Saturday" — arithmetically right,
+# entirely wrong in meaning.
 c2 = db.connect(":memory:")
-for i in range(60):                       # thư từ chối: 60 ngày, thừa sức gộp
+for i in range(60):                       # rejection mail: 60 days, easily enough to group
     c2.execute("INSERT INTO message (msg_id, from_addr, subject, received_at,"
                " snippet, kind) VALUES (?,?,?,?,?,?)",
                (f"m{i}", "a@b.c", "s", truoc(i), "", "rejected"))
-board.add(c2, "X", "R", applied_at=truoc(1))   # nộp: đúng 1 ngày
+board.add(c2, "X", "R", applied_at=truoc(1))   # applications: exactly 1 day
 c2.commit()
 n = T.nang_suat(c2)
-check("chuỗi báo trượt đủ dài -> cho gộp theo thứ", n["viec"]["truot"]["du_thu"])
-check("chuỗi nộp mới 1 ngày -> KHÔNG cho gộp theo thứ",
+check("the rejection series is long enough -> weekday grouping allowed", n["viec"]["truot"]["du_thu"])
+check("the applications series at 1 day -> weekday grouping NOT allowed",
       not n["viec"]["nop"]["du_thu"])
-check("cổng là của TỪNG chuỗi, không phải một số chung",
+check("the gate belongs to EACH series, not to one shared figure",
       n["viec"]["truot"]["du_thu"] != n["viec"]["nop"]["du_thu"])
 
-print("\n[BỐN DẢI = ĐÚNG BỐN SỐ TRÊN THANH MASTER]")
-# Thanh trên nói "hôm nay được bao nhiêu", dải dưới nói "mấy hôm trước thì
-# sao". Cùng một câu hỏi, hai độ dài — nên phải cùng một bộ số, không phải
-# hai bộ khác nhau đặt cạnh nhau.
+print("\n[FOUR STRIPS = EXACTLY THE FOUR NUMBERS ON THE MASTER BAR]")
+# The bar says "how much today produced", the strips below say "and how about
+# the days before". One question at two lengths — so it has to be one set of
+# numbers, not two different sets placed side by side.
 _hn = T.hom_nay(c2)
-check("bốn dải", len(n["viec"]) == 4)
-check("và trùng đúng bốn khoá của thanh «hôm nay»",
+check("four strips", len(n["viec"]) == 4)
+check("and exactly the four keys of the «today» bar",
       set(n["viec"]) == set(_hn) - {"ngay"})
-check("«thư về» đã bỏ — 95% là nhiễu", "thu" not in n["viec"])
-# MÀU MANG NGHĨA. Cột cao của thư TỪ CHỐI mà tô xanh thì đọc thành "hôm nay
-# được việc", tức là ngược hẳn sự thật.
-check("báo trượt tô màu XẤU", n["viec"]["truot"]["mau"] == "xau")
-check("được gọi tiếp tô màu TỐT", n["viec"]["tiep"]["mau"] == "tot")
-check("và CSS thật sự tô chúng khác nhau",
+check("«mail in» was dropped — 95% of it is noise", "thu" not in n["viec"])
+# COLOUR CARRIES MEANING. A tall column of REJECTION mail painted green reads
+# as "a productive day", i.e. the exact opposite of the truth.
+check("rejections take the BAD colour", n["viec"]["truot"]["mau"] == "xau")
+check("taken further takes the GOOD colour", n["viec"]["tiep"]["mau"] == "tot")
+check("and the CSS really paints them differently",
       ".spark.xau rect{fill:var(--bad)" in _css and ".spark.tot rect{" in _css)
-# Hai dải kết cục dựng từ THƯ, nên "app chạy từ bao giờ" là của HỘP THƯ, không
-# phải của lá thư từ chối đầu tiên. Không có luật này thì mọi ngày trước lời
-# mời đầu tiên bị ghi là "app chưa chạy" — trong khi hộp thư chạy suốt, và
-# một ngày KHÔNG AI GỌI là số 0 có thật.
-check("ngày chưa ai gọi là số 0 THẬT, không phải «app chưa chạy»",
+# The two outcome strips are built from MAIL, so "when the app started"
+# belongs to THE MAILBOX, not to the first rejection letter. Without this rule
+# every day before the first invitation is recorded as "the app was not
+# running" — while the mailbox ran throughout, and a day WHEN NOBODY CALLED is
+# a real 0.
+check("a day nobody called is a REAL 0, not «the app was not running»",
       n["viec"]["tiep"]["truoc"] == 0)
-check("mốc bắt đầu của nó là mốc HỘP THƯ",
+check("its start mark is THE MAILBOX's",
       n["viec"]["tiep"]["tu"] == n["viec"]["truot"]["tu"])
-check("ngưỡng đủ-để-gộp có nói ra thành số", n["can_thu"] == T.DU_NGAY)
-# Chuỗi trả về THƯA: ngày không có gì thì KHÔNG có khoá. Điền 0 cho đủ là
-# trộn "làm được 0" với "app chưa chạy" ngay từ tầng số liệu.
+check("the enough-to-group threshold is stated as a number", n["can_thu"] == T.DU_NGAY)
+# The series comes back SPARSE: a day with nothing has NO key. Filling in 0s
+# mixes "produced 0" with "the app was not running" at the data layer itself.
 _ch = T._chuoi(c2, "application", "applied_at", 30)
-check("chuỗi ngày trả về THƯA, không điền 0 cho đủ", len(_ch) == 1)
-check("và nói rõ mấy ngày trong cửa sổ app chưa chạy",
+check("the day series comes back sparse, with no 0s filled in", len(_ch) == 1)
+check("and it states how many days in the window the app was not running",
       n["viec"]["nop"]["truoc"] > 0)
 
-print("\n[BIỂU ĐỒ — «làm được 0» KHÁC «app chưa chạy»]")
+print("\n[CHARTS — «produced 0» DIFFERS from «the app was not running»]")
 h = bd.cot_ngay([("2026-09-01", 5), ("2026-09-02", 0)], 5, truoc=3)
-check("ngày app chưa chạy có lớp riêng", h.count("class=ngoai") == 3)
-check("ngày làm được 0 có lớp KHÁC", "class=khong" in h)
-check("hai lớp đó không trùng tên", "class=ngoai" in h and "khong" in h)
-check("và CSS thật sự tô chúng khác nhau",
+check("a day the app was not running has its own class", h.count("class=ngoai") == 3)
+check("a day that produced 0 has a DIFFERENT class", "class=khong" in h)
+check("the two class names do not collide", "class=ngoai" in h and "khong" in h)
+check("and the CSS really paints them differently",
       ".spark rect.ngoai{" in _css and ".spark rect.khong{" in _css)
-check("cột nào cũng có nhãn chữ để rê chuột", h.count("<title>") == 5)
-check("chuỗi rỗng thì không vẽ khung trống", bd.cot_ngay([], 0) == "")
-# Chưa đủ dữ liệu thì NÓI RA. Một biểu đồ trống trông y hệt một biểu đồ
-# "năng suất bằng 0", và người dùng sẽ tin cái thứ hai.
+check("every column carries a text label for hovering", h.count("<title>") == 5)
+check("an empty series draws no empty frame", bd.cot_ngay([], 0) == "")
+# Not enough data has to be SAID. An empty chart looks exactly like a
+# "productivity is zero" chart, and the user will believe the second one.
 _cd = bd.chua_du(2, 21)
-check("chưa đủ thì nói thẳng", "Not enough to say" in _cd)
-check("và nói rõ đang có mấy, cần mấy", ">2<" in _cd and ">21<" in _cd)
-check("tỉ lệ luôn đi kèm mẫu số",
-      "1/37" in bd.ti_le(2.7, "1/37 lần nộp", "đi tiếp"))
-check("chưa có số thì in «—», không in 0%", "—" in bd.ti_le(None, "x", "y"))
-check("khúc bằng 0 thì KHÔNG vẽ, cũng không chú thích",
+check("not enough is said outright", "Not enough to say" in _cd)
+check("and it states how many there are and how many are needed", ">2<" in _cd and ">21<" in _cd)
+check("a ratio always carries its denominator",
+      "1/37" in bd.ti_le(2.7, "1/37 applications", "taken further"))
+check("with no figure it prints «—», never 0%", "—" in bd.ti_le(None, "x", "y"))
+check("a 0 segment is NOT drawn, and gets no caption either",
       "qtu" not in bd.thanh_chia([("a", 3, "qdi"), ("b", 0, "qtu")], 3))
 
-print("\n[CHẨN ĐOÁN — nói rõ CHẮC tới đâu]")
+print("\n[DIAGNOSIS — it states HOW SOLID it is]")
 ds = T.chan_doan(c)
-check("mỗi dấu hiệu khai độ chắc", all(x["muc"] in T.MUC_HET for x in ds))
-check("mỗi dấu hiệu khai đo trên bao nhiêu mẫu",
+check("every sign declares how solid it is", all(x["muc"] in T.MUC_HET for x in ds))
+check("every sign declares how many samples it is measured over",
       all(x.get("tren") for x in ds))
-check("và dẫn đi đâu để sửa",
+check("and where to go to fix it",
       all(x.get("di", "").startswith("/") and x.get("nut") for x in ds))
 
-print("\n[TRANG HOME — vừa MỘT khung, không ô nào cuộn]")
+print("\n[THE HOME PAGE — ONE screenful, with no panel scrolling]")
 d = T.tat_ca(c)
 _h = home.render({"gate_open": True}, so=d,
-                 stage={"state": "x", "cho_ban": 3, "label": "Quét việc"})
-check("có thanh khúc như mọi tab", "class=deckpill" in _h)
-check("có nhật ký", "data-journal" in _h)
+                 stage={"state": "x", "cho_ban": 3, "label": "Scan jobs"})
+check("it has a stage bar like every tab", "class=deckpill" in _h)
+check("it has a journal", "data-journal" in _h)
 for _o in ("Results", "Output per day", "Diagnosis", "Funnel"):
-    check(f"có ô «{_o}»", _o in _h)
-# HAI CÂU HỎI KHÁC NHAU, và bài test cũ gộp chúng làm một y như code:
-#   data-journal  = ô nhật ký HIỆN dòng của luồng nào ("" = mọi luồng)
-#   data-reload   = khúc nào chạy xong thì VẼ LẠI trang ("*" = mọi khúc)
-# Bài cũ khẳng định `"mine && m.stream === mine" in _js` rồi gọi đó là "hiểu
-# luồng rỗng là mọi luồng" — trong khi JavaScript đọc chuỗi rỗng là SAI, nên
-# nhánh đó không bao giờ chạy và Home KHÔNG BAO GIỜ tự vẽ lại. Bài test canh
-# đúng dòng chữ gây ra lỗi, và gật đầu với nó.
-check("nhật ký nghe MỌI luồng", "data-journal=''" in _h)
-check("và trang tự vẽ lại khi BẤT KỲ khúc nào xong", "data-reload='*'" in _h)
+    check(f"it has the «{_o}» panel", _o in _h)
+# TWO DIFFERENT QUESTIONS, and the old test folded them into one exactly as
+# the code did:
+#   data-journal  = which stream's lines the journal panel SHOWS ("" = all)
+#   data-reload   = which stage finishing REDRAWS the page ("*" = any)
+# The old test asserted `"mine && m.stream === mine" in _js` and called that
+# "it understands an empty stream as every stream" — while JavaScript reads
+# the empty string as FALSE, so that branch never ran and Home NEVER redrew
+# itself. The test guarded the very line causing the bug, and nodded at it.
+check("the journal listens to EVERY stream", "data-journal=''" in _h)
+check("and the page redraws when ANY stage finishes", "data-reload='*'" in _h)
 _js = (GOC / "src/jobbot/dashboard/web/live.js").read_text(encoding="utf-8")
-check("live.js đọc cờ của trang, không suy từ ô nhật ký",
+check("live.js reads the page's flag rather than inferring from the journal panel",
       "dataset.reload" in _js and "mine && m.stream === mine" not in _js)
-check("và «*» thật sự nghĩa là mọi khúc", "=== '*'" in _js)
-# Ô Home KHÔNG được là khung cuộn: `.wbody{overflow:auto}` làm min-content của
-# ô bằng 0, nên lưới nén ô xuống bao nhiêu cũng được và ruột đành cuộn.
-check("bốn ô khai là ô VỪA RUỘT, không phải khung cuộn", _h.count("wid vua") == 4)
-check("và CSS bỏ khung cuộn cho chúng", ".wid.vua > .wbody{overflow:visible" in _css)
-check("hàng nội dung có sàn min-content, không bị nén",
+check("and «*» really does mean every stage", "=== '*'" in _js)
+# A Home panel must NOT be a scroll frame: `.wbody{overflow:auto}` makes the
+# panel's min-content 0, so the grid can squeeze it as far as it likes and the
+# contents are left to scroll.
+check("the four panels declare themselves CONTENT-SIZED, not scroll frames", _h.count("wid vua") == 4)
+check("and the CSS removes the scroll frame for them", ".wid.vua > .wbody{overflow:visible" in _css)
+check("the content rows have a min-content floor and cannot be squeezed",
       "minmax(min-content,auto)" in _h)
-check("nhật ký là ô DUY NHẤT ăn phần dôi ra", "minmax(130px,1fr)" in _h)
+check("the journal is the ONLY panel taking the slack", "minmax(130px,1fr)" in _h)
 
-print("\n[GỌN LÚC LIẾC, ĐỦ LÚC SOI]")
-check("chi tiết giấu sau nút ⤢", "class=chitiet" in _h)
-check("và ô nào cũng có nút ⤢ để mở", _h.count("data-expand") >= 4)
-# ĐỘ ĐẶC HIỆU PHẢI THẮNG: `.chitiet{display:none}` và `.cdrow{display:flex}`
-# cùng 0,1,0 — cái nào khai sau thì thắng, và `.cdrow` nằm dưới ~200 dòng.
-# Hậu quả: thẻ gắn .chitiet vẫn hiện, hỏng CÂM.
-check("lớp ẩn không thua cascade của .cdrow", ".cdrow.chitiet{display:none}" in _css)
-check("mở to thì nó hiện lại", ".wid.big .cdrow.chitiet{display:flex}" in _css)
-_nhieu = [dict(muc="chac", ma=f"m{i}", so=f"{i}", ten=f"dấu {i}", y="y",
+print("\n[BRIEF AT A GLANCE, COMPLETE UNDER INSPECTION]")
+check("the detail is hidden behind the ⤢ button", "class=chitiet" in _h)
+check("and every panel has a ⤢ to open it", _h.count("data-expand") >= 4)
+# SPECIFICITY HAS TO WIN: `.chitiet{display:none}` and `.cdrow{display:flex}`
+# are both 0,1,0 — whichever is declared later wins, and `.cdrow` sits about
+# 200 lines below. The result: a card carrying .chitiet still shows, failing
+# SILENTLY.
+check("the hiding class does not lose the cascade to .cdrow", ".cdrow.chitiet{display:none}" in _css)
+check("enlarged it shows again", ".wid.big .cdrow.chitiet{display:flex}" in _css)
+_nhieu = [dict(muc="chac", ma=f"m{i}", so=f"{i}", ten=f"sign {i}", y="y",
                tren="t", di="/cv", nut="Xem") for i in range(5)]
 _cd5 = home._chan_doan(_nhieu)
-check("lúc gọn chỉ bày 3 dấu hiệu", _cd5.count("cdrow chac'") == 3)
-check("2 cái còn lại gắn lớp ẩn", _cd5.count("chac chitiet") == 2)
-# Cắt mà không báo thì người dùng tin là hết.
-check("và NÓI RÕ còn mấy cái nữa", "<b>2</b> more signs" in _cd5)
-check("đúng 3 cái thì không bịa ra dòng «còn 0»",
-      "dấu hiệu nữa" not in home._chan_doan(_nhieu[:3]))
+check("collapsed it shows 3 signs", _cd5.count("cdrow chac'") == 3)
+check("the other 2 carry the hiding class", _cd5.count("chac chitiet") == 2)
+# Truncate without saying so and the user believes that is all there is.
+check("and it SAYS how many more", "<b>2</b> more signs" in _cd5)
+check("with exactly 3 it does not invent a «0 more» line",
+      "more signs" not in home._chan_doan(_nhieu[:3]))
 
-print("\n[THANH MASTER = BẢN TIN CỦA HÔM NAY]")
+print("\n[THE MASTER BAR = TODAY'S BULLETIN]")
 from jobbot.core import prefs
 c3 = db.connect(":memory:")
-board.add(c3, "Hôm Nay", "R", applied_at=truoc(0))
-board.add(c3, "Hôm Qua", "R", applied_at=truoc(1))
+board.add(c3, "Today", "R", applied_at=truoc(0))
+board.add(c3, "Yesterday", "R", applied_at=truoc(1))
 for i, (k, d) in enumerate((("interview", 0), ("rejected", 0), ("rejected", 5))):
     c3.execute("INSERT INTO message (msg_id, from_addr, subject, received_at,"
                " snippet, kind) VALUES (?,?,?,?,?,?)",
                (f"h{i}", "a@b.c", "s", truoc(d), "", k))
 c3.commit()
 hn = T.hom_nay(c3)
-check("đếm đơn nộp HÔM NAY, không phải tổng", hn["nop"] == 1)
-check("đếm lời mời HÔM NAY", hn["tiep"] == 1)
-check("đếm báo trượt HÔM NAY, bỏ lá 5 ngày trước", hn["truot"] == 1)
+check("it counts applications sent TODAY, not the total", hn["nop"] == 1)
+check("it counts invitations TODAY", hn["tiep"] == 1)
+check("it counts rejections TODAY, dropping the one from 5 days ago", hn["truot"] == 1)
 _trang = home.render({"gate_open": True}, so=T.tat_ca(c3),
-                     stage={"phien": "phiên đang TẮT",
+                     stage={"phien": "the session is OFF",
                             "nhan_phien": "Start session"})
-# CHỈ CẮT RA CÁI THANH. Dò cả trang thì "đã nộp" ở ô Phễu cũng dính, và bài
-# test đỏ vì một lý do chẳng liên quan gì tới thứ nó mang tên.
+# CUT OUT JUST THE BAR. Searching the whole page also hits "applied" in the
+# Funnel panel, and the test goes red for a reason with nothing to do with its
+# own name.
 _bar = _trang[_trang.index("<div class=deckpill>"):]
 _bar = _bar[:_bar.index("</div></div>")]
 for _n in ("postings found", "applications sent", "taken further",
            "rejections"):
-    check(f"thanh có số «{_n}»", f">{_n}<" in _bar)
-# Tổng kết đã nằm ở bốn ô bên dưới. Để chúng trên thanh nữa thì thanh nói một
-# thứ hôm nào nhìn cũng thế, và nó thôi trả lời được câu «hôm nay có gì mới».
-# Nhãn CŨ là "<b>37</b>đã nộp"; nhãn MỚI là "đơn đã nộp" (hôm nay). Dò
-# "đã nộp<" thì bắt cả hai — phải neo vào `</b>` mới tách được.
-for _cu in ("đáng nộp chưa nộp", "</b>đã nộp<", "chờ bạn quyết", "Kho việc"):
-    check(f"thanh KHÔNG còn «{_cu}»", _cu not in _bar)
-check("nút đổi tên thành Start session", ">Start session<" in _bar)
-check("và bấm vào là chạy PHIÊN, không phải một khúc",
+    check(f"the bar has the «{_n}» figure", f">{_n}<" in _bar)
+# The summary is already in the four panels below. Keep them on the bar too
+# and the bar says something that looks the same whichever day you look, and
+# it stops answering «what is new today».
+# The OLD label was "<b>37</b>applied"; the NEW label is "applications sent"
+# (today). Searching for "applied<" catches both — it has to be anchored to
+# `</b>` to tell them apart.
+for _cu in ("worth applying unapplied", "</b>applied<", "waiting on your decision", "Job store"):
+    check(f"the bar NO LONGER has «{_cu}»", _cu not in _bar)
+check("the button is renamed Start session", ">Start session<" in _bar)
+check("and pressing it runs THE SESSION, not one stage",
       "data-post='/api/session/start'" in _bar)
-check("nút Dừng cũng tắt cả phiên", "data-post='/api/session/stop'" in _bar)
-check("có nút ⚟ của phiên", "data-settings='/adjust/home'" in _bar)
+check("the Stop button stops the whole session too", "data-post='/api/session/stop'" in _bar)
+check("there is a ⚟ button for the session", "data-settings='/adjust/home'" in _bar)
 
-print("\n[PHIÊN — một vòng, ba khúc, chạy tuần tự]")
+print("\n[THE SESSION — one round, three stages, run in order]")
 from jobbot import phien
-check("ba khúc, đúng thứ tự dây chuyền",
+check("three stages, in pipeline order",
       phien.dang_bat(c3) == ["search", "cv", "track"])
 prefs.set_flag(c3, prefs.PHIEN_CV, False)
-check("tắt một khúc thì phiên bỏ đúng khúc đó",
+check("turning a stage off drops exactly that stage",
       phien.dang_bat(c3) == ["search", "track"])
-# Thứ tự lấy từ prefs.PHIEN, không gõ lại trong phien.py — gõ lại là hai
-# nguồn cho một sự thật, và có ngày tấm ⚟ xếp một đằng, phiên chạy một nẻo.
-check("thứ tự chạy lấy từ CÙNG bảng với tấm ⚟",
+# The order comes from prefs.PHIEN and is never retyped in phien.py —
+# retyping is two sources for one truth, and one day the ⚟ panel lists one
+# order while the session runs another.
+check("the run order comes from THE SAME table as the ⚟ panel",
       [v[0] for v in prefs.PHIEN.values()] == ["search", "cv", "track"])
 for k in prefs.PHIEN:
     prefs.set_flag(c3, k, False)
 _ra = phien.chay(c3)
-check("tắt cả ba thì phiên NÓI RA, không im lặng chạy không", _ra["tat"])
-check("và không khúc nào chạy", _ra["xong"] == [])
+check("all three off and the session SAYS SO rather than running empty", _ra["tat"])
+check("and no stage runs", _ra["xong"] == [])
 _adj = home.adjust({k: False for k in prefs.PHIEN})
-check("tấm ⚟ cảnh báo khi cả ba đang tắt", "All three are OFF" in _adj)
-check("và bày đủ ba công tắc", _adj.count("/api/home/num") == 3)
+check("the ⚟ panel warns when all three are off", "All three are OFF" in _adj)
+check("and it shows all three switches", _adj.count("/api/home/num") == 3)
 for _t in ("Search", "Make CV", "Manage mail"):
-    check(f"có công tắc «{_t}»", f">{_t}<" in _adj)
+    check(f"there is a «{_t}» switch", f">{_t}<" in _adj)
 _adj_on = home.adjust({k: True for k in prefs.PHIEN})
-check("đang bật thì nút sáng, không chỉ khác chữ", "swbtn'" in _adj_on)
-check("nói rõ thứ tự cố định và VÌ SAO",
+check("turned on the button lights, not merely changes its text", "swbtn'" in _adj_on)
+check("it states the fixed order and WHY",
       "Building CVs reads the posting store" in _adj_on)
 c3.close()
 
-print("\n[BÁO VỀ ĐIỆN THOẠI — báo ÍT thôi, và không báo lại cái cũ]")
+print("\n[MESSAGES TO THE PHONE — message RARELY, and never repeat an old one]")
 from jobbot import bao as _bao
 from jobbot.core import tele as _tele, prefs as _pf2
 c4 = db.connect(":memory:")
@@ -287,55 +301,58 @@ _ap = board.add(c4, "Kappa Lab", "Quant", applied_at=truoc(9))
 for i, k in enumerate(("interview", "rejected", "other")):
     c4.execute("INSERT INTO message (msg_id, from_addr, subject, received_at,"
                " snippet, kind, application_id) VALUES (?,?,?,?,?,?,?)",
-               (f"b{i}", "a@b.c", f"thư {k}", truoc(0), "", k, _ap))
+               (f"b{i}", "a@b.c", f"mail {k}", truoc(0), "", k, _ap))
 c4.commit()
-# CHỈ THƯ ĐI TIẾP mới được nhắn. Nhắn cả thư từ chối và thư quảng cáo thì
-# người dùng tắt thông báo sau đúng hai ngày, và mất luôn cái đáng giá.
+# ONLY A TAKEN-FURTHER message may be sent. Send rejections and marketing too
+# and the user turns notifications off within two days, losing the one that
+# mattered with them.
 _moi = _bao._thu_moi(c4)
-check("chỉ lấy thư ĐI TIẾP để nhắn", [m["kind"] for m in _moi] == ["interview"])
-check("và kèm tên công ty, không phải mỗi tiêu đề",
+check("only TAKEN FURTHER mail is picked to message about", [m["kind"] for m in _moi] == ["interview"])
+check("and it carries the company name, not just the subject",
       _moi[0]["cong_ty"] == "Kappa Lab")
-# MỐC ĐÃ BÁO: không có nó thì mỗi lượt quét lại nhắn đúng lá cũ.
+# THE ALREADY-SENT MARK: without it every scan messages the same old letter again.
 _pf2.put(c4, _pf2.BAO_MOC, str(_moi[0]["id"]))
-check("đã nhắn rồi thì KHÔNG nhắn lại", _bao._thu_moi(c4) == [])
-# Chưa nối bot thì không hàm nào được gửi đi đâu cả.
-check("chưa nối bot -> không báo gì", _bao.di_tiep(c4) == 0)
-check("và cũng không báo phiên hỏng", not _bao.phien_hong(c4, ["search"]))
-check("dù có bật công tắc",
+check("already messaged -> NOT messaged again", _bao._thu_moi(c4) == [])
+# With no bot connected, no function may send anything anywhere.
+check("no bot connected -> nothing is sent", _bao.di_tiep(c4) == 0)
+check("and no session-failure message either", not _bao.phien_hong(c4, ["search"]))
+check("even with the switch turned on",
       _pf2.flag(c4, _pf2.BAO_TIEP) and not _bao.bat(c4, _pf2.BAO_TIEP))
-# Bản tin cuối ngày gửi ĐÚNG MỘT LẦN: vòng nền chạy mỗi 30 giây, không có
-# mốc ngày thì qua giờ hẹn nó nhắn liên tục tới nửa đêm.
-check("bản tin ngày có mốc chống nhắn lặp",
+# The end-of-day report is sent EXACTLY ONCE: the background loop runs every
+# 30 seconds, and with no date mark it would message continuously from the
+# chosen hour until midnight.
+check("the daily report has a mark against repeating",
       _pf2.BAO_NGAY_CUOI in _pf2.DEFAULTS)
-# Bốn loại, không hơn — mỗi loại phải trả lời được "biết rồi thì làm gì khác".
-check("đúng bốn loại báo", len(_pf2.BAO) == 4)
-check("mỗi loại có tên và lý do cho người dùng đọc",
+# Four kinds, no more — each has to answer "what would I do differently for
+# knowing this".
+check("exactly four kinds of notification", len(_pf2.BAO) == 4)
+check("each kind has a name and a reason for the user to read",
       all(len(v) == 2 and v[0] and v[1] for v in _pf2.BAO.values()))
-check("mặc định chỉ bật hai loại ĐÁNG NHẤT",
+check("only the two MOST WORTHWHILE are on by default",
       [k for k in _pf2.BAO if _pf2.DEFAULTS[k] == "1"]
       == [_pf2.BAO_TIEP, _pf2.BAO_HONG])
 
-print("\n[LỆNH TỪ XA — chốt quyền TRƯỚC, rồi mới đọc nội dung]")
-check("lệnh không rõ thì chỉ đường, không im",
+print("\n[REMOTE COMMANDS — authorise FIRST, read the content after]")
+check("an unknown command points the way rather than staying silent",
       "giupdo" in _bao.tra_loi(c4, "xyz", ""))
-check("/giupdo nói rõ KHÔNG có lệnh nộp đơn",
+check("/giupdo states outright that there is NO apply command",
       "no apply command" in _bao.GIUP.lower())
-check("/nhan thiếu số thì nói thiếu gì",
+check("/nhan with no number says what is missing",
       "Missing the mail number" in _bao.tra_loi(c4, "nhan", ""))
-check("/nhan số lạ thì không nổ, chỉ báo không thấy",
+check("/nhan with an unknown number does not blow up, it reports not found",
       "not in the queue" in _bao.tra_loi(c4, "nhan", "99999"))
 _tt = _bao.tra_loi(c4, "trangthai", "")
 for _so in ("found", "applied", "forward", "rejected", "station"):
-    check(f"/trangthai có «{_so}»", _so in _tt)
+    check(f"/trangthai contains «{_so}»", _so in _tt)
 c4.close()
 
-print("\n[KHÔNG BỊA — kho rỗng vẫn phải vẽ được]")
+print("\n[NO INVENTION — an empty store still has to draw]")
 _r = db.connect(":memory:")
 _hr = home.render({"gate_open": True}, so=T.tat_ca(_r), stage={})
-check("kho rỗng không làm trang nổ", "Overview" in _hr)
-check("và nói thẳng là chưa có gì để đánh giá",
+check("an empty store does not blow the page up", "Overview" in _hr)
+check("and it says outright that there is nothing to judge yet",
       "nothing applied to yet" in _hr)
-check("không bịa ra tỉ lệ nào", "%" not in re.sub(r"width:[\d.]+%", "", _hr))
+check("it invents no ratio", "%" not in re.sub(r"width:[\d.]+%", "", _hr))
 c.close(); c2.close(); _r.close()
 
 print(f"\n{ok} ok, {fail} fail")
