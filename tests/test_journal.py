@@ -1,4 +1,4 @@
-"""Test nhật ký chạy — thứ app 24/7 sống chết bằng nó.
+"""Test the runtime journal — what a 24/7 app lives and dies by.
 
     python3 tests/test_journal.py
 """
@@ -21,185 +21,193 @@ with tempfile.TemporaryDirectory() as tmp:
     from jobbot.core.journal import (ERROR, SEARCH, SCORE, SYSTEM,
                                      Journal, RING)
 
-    db.connect().close()                      # dựng bảng audit
+    db.connect().close()                      # create the audit table
 
-    print("[sự kiện: ghi thêm, không sửa]")
+    print("[events: appended, never edited]")
     j = Journal()
-    j.emit(SEARCH, "bắt đầu quét")
-    j.warn(SEARCH, "linkedin bị chặn")
-    j.ok(SCORE, "chấm 208 tin")
-    check("giữ lại đủ số dòng", len(j.tail(limit=99)) == 3)
-    check("mới nhất lên đầu", j.tail(limit=99)[0].text == "chấm 208 tin")
-    check("mức được ghi đúng",
+    j.emit(SEARCH, "scan started")
+    j.warn(SEARCH, "linkedin blocked")
+    j.ok(SCORE, "scored 208 postings")
+    check("it keeps every line", len(j.tail(limit=99)) == 3)
+    check("newest first", j.tail(limit=99)[0].text == "scored 208 postings")
+    check("the level is recorded correctly",
           [e.level for e in j.tail(SEARCH, 9)] == ["warn", "info"])
 
-    print("\n[luồng: mỗi tab chỉ thấy việc của mình]")
-    check("lọc theo luồng search", len(j.tail(SEARCH, 99)) == 2)
-    check("lọc theo luồng score", len(j.tail(SCORE, 99)) == 1)
-    check("luồng chưa dùng thì rỗng", j.tail(SYSTEM, 99) == [])
-    check("không lọc thì thấy tất cả", len(j.tail(None, 99)) == 3)
+    print("\n[streams: each tab sees only its own work]")
+    check("filtered to the search stream", len(j.tail(SEARCH, 99)) == 2)
+    check("filtered to the score stream", len(j.tail(SCORE, 99)) == 1)
+    check("an unused stream is empty", j.tail(SYSTEM, 99) == [])
+    check("unfiltered shows everything", len(j.tail(None, 99)) == 3)
 
-    print("\n[tiến độ: ghi đè, KHÔNG ghi đĩa]")
-    j.progress(SEARCH, "đọc kỹ LinkedIn", 47, 192)
-    j.progress(SEARCH, "đọc kỹ LinkedIn", 48, 192)
-    check("chỉ giữ giá trị mới nhất", j.running()[SEARCH]["done"] == 48)
-    check("tính được phần trăm", j.running()[SEARCH]["percent"] == 25)
-    check("tiến độ KHÔNG lẫn vào nhật ký sự kiện", len(j.tail(limit=99)) == 3)
-    check("đang chạy thì busy", j.busy())
+    print("\n[progress: overwritten, NEVER written to disk]")
+    j.progress(SEARCH, "deep-reading LinkedIn", 47, 192)
+    j.progress(SEARCH, "deep-reading LinkedIn", 48, 192)
+    check("only the latest value is kept", j.running()[SEARCH]["done"] == 48)
+    check("the percentage is computed", j.running()[SEARCH]["percent"] == 25)
+    check("progress does NOT leak into the event journal", len(j.tail(limit=99)) == 3)
+    check("running means busy", j.busy())
     j.done(SEARCH)
-    check("xong thì xoá thanh tiến độ", SEARCH not in j.running())
-    check("và hết busy", not j.busy())
-    j.progress(SCORE, "chấm điểm", 5, 0)
-    check("không biết tổng thì phần trăm là 0", j.running()[SCORE]["percent"] == 0)
+    check("finished clears the progress bar", SEARCH not in j.running())
+    check("and it is no longer busy", not j.busy())
+    j.progress(SCORE, "scoring", 5, 0)
+    check("with no total the percentage is 0", j.running()[SCORE]["percent"] == 0)
     j.done(SCORE)
 
-    print("\n[đẩy cho giao diện]")
+    print("\n[pushed to the interface]")
     chan = j.subscribe()
-    j.emit(SEARCH, "tin mới")
-    j.progress(SEARCH, "đang chạy", 1, 10)
+    j.emit(SEARCH, "a new posting")
+    j.progress(SEARCH, "running", 1, 10)
     got = [chan.get_nowait(), chan.get_nowait()]
-    check("sự kiện được đẩy đi", got[0]["type"] == "event" and got[0]["text"] == "tin mới")
-    check("tiến độ cũng được đẩy đi", got[1]["type"] == "progress")
-    check("có kèm luồng để giao diện lọc", got[1]["stream"] == SEARCH)
+    check("the event is pushed", got[0]["type"] == "event" and got[0]["text"] == "a new posting")
+    check("progress is pushed too", got[1]["type"] == "progress")
+    check("with the stream, so the interface can filter", got[1]["stream"] == SEARCH)
     j.unsubscribe(chan)
-    j.emit(SEARCH, "sau khi rời")
-    check("rời rồi thì không nhận nữa", chan.empty())
+    j.emit(SEARCH, "after leaving")
+    check("once gone it receives nothing more", chan.empty())
 
-    print("\n[người xem chậm KHÔNG được làm nghẽn việc đang chạy]")
-    # Vòng quét đứng lại vì chờ một cái hàng đợi đầy là hỏng thật; giao diện
-    # mất vài dòng là chuyện nhỏ.
+    print("\n[a slow reader must NOT stall the work in progress]")
+    # A scan loop stopping because it is waiting on a full queue is a real
+    # failure; the interface losing a few lines is trivial.
     slow = j.subscribe()
-    for n in range(400):                       # nhiều hơn maxsize=200
-        j.progress(SEARCH, "đổ tràn", n, 400)
-    check("hàng đợi đầy thì bỏ tin, không treo", slow.qsize() <= 200)
-    check("và việc vẫn chạy tới cuối", j.running()[SEARCH]["done"] == 399)
+    for n in range(400):                       # more than maxsize=200
+        j.progress(SEARCH, "overflowing", n, 400)
+    check("a full queue drops messages, it does not hang", slow.qsize() <= 200)
+    check("and the work still runs to the end", j.running()[SEARCH]["done"] == 399)
     j.unsubscribe(slow)
     j.done(SEARCH)
 
-    print("\n[bộ nhớ có trần — chạy 24/7 không được phình]")
+    print("\n[memory has a ceiling — running 24/7 must not bloat]")
     k = Journal()
     for n in range(RING + 250):
-        k.emit(SYSTEM, f"dòng {n}", persist=False)
-    check(f"giữ tối đa {RING} dòng", len(k.tail(limit=99999)) == RING)
-    check("giữ dòng MỚI, bỏ dòng cũ",
-          k.tail(limit=1)[0].text == f"dòng {RING + 249}")
+        k.emit(SYSTEM, f"line {n}", persist=False)
+    check(f"at most {RING} lines kept", len(k.tail(limit=99999)) == RING)
+    check("it keeps the NEW lines and drops the old",
+          k.tail(limit=1)[0].text == f"line {RING + 249}")
 
-    print("\n[còn lại sau khi tắt app]")
+    print("\n[what survives the app closing]")
     m = Journal()
-    m.open()                                # gắn vào DB tạm
-    m.emit(SCORE, "trước khi tắt")
-    m.error(SCORE, "một lỗi cần nhớ")
-    after = Journal()                          # "mở app lại"
+    m.open()                                # attach to the temp DB
+    m.emit(SCORE, "before shutdown")
+    m.error(SCORE, "an error worth remembering")
+    after = Journal()                          # "the app reopened"
     after.open()
     texts = [e.text for e in after.tail(SCORE, 99)]
-    check("sự kiện được nạp lại từ đĩa", "trước khi tắt" in texts)
-    check("và giữ đúng mức", after.tail(SCORE, 1)[0].level == ERROR)
-    check("gắn lần hai không nhân đôi", after.open() == 0)
+    check("events are reloaded from disk", "before shutdown" in texts)
+    check("and the level is preserved", after.tail(SCORE, 1)[0].level == ERROR)
+    check("attaching a second time does not duplicate", after.open() == 0)
 
-    # Dòng đời trước ghi bằng postings.log() chỉ có `kind`, detail rỗng —
-    # nạp thẳng thì nhật ký đầy dòng trống trơn chỉ có mỗi giờ.
+    # Lines from a previous life were written with postings.log(), which has
+    # only `kind` and an empty detail — loaded straight, the journal fills
+    # with blank lines carrying nothing but a time.
     conn = db.connect()
     conn.execute("INSERT INTO audit (at, kind, detail) VALUES (?,?,?)",
                  ("2026-01-01T00:00:00+00:00", "scan_started", ""))
     conn.commit(); conn.close()
     legacy = Journal(); legacy.open()
     old_line = [e for e in legacy.tail(limit=999) if e.at.startswith("2026-01-01")]
-    check("dòng cũ không có detail thì lấy kind", bool(old_line))
-    check("và đọc ra được chữ", old_line and old_line[0].text == "scan started")
+    check("an old line with no detail falls back to kind", bool(old_line))
+    check("and it reads as text", old_line and old_line[0].text == "scan started")
 
-    print("\n[chưa gắn vào DB thì KHÔNG được đụng đĩa]")
-    # Đây là lý do 24 dòng của bài test lọt vào nhật ký thật: nhật ký mặc
-    # định ghi thẳng db_path(), bất kể bài test đang dùng DB tạm nào.
+    print("\n[not attached to a DB means NOT touching the disk]")
+    # This is why 24 lines from the test suite reached the real journal: the
+    # journal wrote straight to db_path() by default, whatever temp DB the
+    # test was using.
     quiet = Journal()
-    quiet.emit(SEARCH, "chỉ trong bộ nhớ")
-    check("chưa open() thì không mở kết nối nào", quiet._db() is None)
-    check("nhưng vẫn ghi được vào bộ nhớ", len(quiet.tail(SEARCH, 9)) == 1)
+    quiet.emit(SEARCH, "in memory only")
+    check("without open() it opens no connection", quiet._db() is None)
+    check("but it still records in memory", len(quiet.tail(SEARCH, 9)) == 1)
 
-    print("\n[còn bao lâu nữa xong]")
+    print("\n[how much longer]")
     from jobbot.core.journal import remain_text
-    check("dưới 90 giây thì nói giây", remain_text(45) == "~45s")
-    check("trên 90 giây thì đổi sang phút", remain_text(600) == "~10 min")
-    check("trên một giờ thì nói giờ + phút", remain_text(11520) == "~3h 12min")
-    check("tròn giờ thì không viết '0 phút'", remain_text(7200) == "~2h")
-    check("không biết thì im, không đoán bừa", remain_text(0) == "")
+    check("under 90 seconds it says seconds", remain_text(45) == "~45s")
+    check("over 90 seconds it switches to minutes", remain_text(600) == "~10 min")
+    check("over an hour it says hours + minutes", remain_text(11520) == "~3h 12min")
+    check("on the hour it does not write '0 min'", remain_text(7200) == "~2h")
+    check("not knowing, it stays silent rather than guessing", remain_text(0) == "")
 
     eta = Journal()
-    eta.progress(SEARCH, "đọc kỹ · tin A", 1, 100)
-    check("một nhịp thì CHƯA dám đoán", eta.running()[SEARCH]["eta"] == 0)
-    eta.progress(SEARCH, "đọc kỹ · tin B", 2, 100)
-    check("hai nhịp vẫn chưa", eta.running()[SEARCH]["eta"] == 0)
+    eta.progress(SEARCH, "deep-read · posting A", 1, 100)
+    check("one tick is NOT enough to estimate", eta.running()[SEARCH]["eta"] == 0)
+    eta.progress(SEARCH, "deep-read · posting B", 2, 100)
+    check("two ticks still not", eta.running()[SEARCH]["eta"] == 0)
     time.sleep(0.05)
-    eta.progress(SEARCH, "đọc kỹ · tin C", 3, 100)
-    check("đủ ba nhịp mới nói", eta.running()[SEARCH]["eta"] > 0)
-    check("và nói thành chữ luôn", eta.running()[SEARCH]["eta_text"] != "")
-    check("cùng một con số với thanh tiến độ",
+    eta.progress(SEARCH, "deep-read · posting C", 3, 100)
+    check("three ticks and it speaks", eta.running()[SEARCH]["eta"] > 0)
+    check("and it says it in words too", eta.running()[SEARCH]["eta_text"] != "")
+    check("the same figure as the progress bar",
           eta.remaining(SEARCH) == eta.running()[SEARCH]["eta_text"])
 
-    # Đây là cái bẫy thật: vòng tìm LinkedIn viết tên chức danh đang tìm vào
-    # `what`, nên MỖI NHỊP LÀ MỘT CHỮ KHÁC. Nếu mốc thời gian đặt lại theo
-    # chữ thì đồng hồ reset liên tục và không bao giờ đoán ra được gì.
+    # This is the real trap: the LinkedIn search writes the job title being
+    # searched into `what`, so EVERY TICK CARRIES DIFFERENT TEXT. If the clock
+    # reset on the text, it would reset constantly and never estimate
+    # anything.
     moc = eta.running()[SEARCH]["started"]
-    eta.progress(SEARCH, "đọc kỹ · tin D — chữ hoàn toàn khác", 4, 100)
-    check("đổi CHỮ thì đồng hồ vẫn chạy tiếp",
+    eta.progress(SEARCH, "deep-read · posting D — completely different text", 4, 100)
+    check("changing THE TEXT keeps the clock running",
           eta.running()[SEARCH]["started"] == moc)
-    eta.progress(SEARCH, "sang việc khác", 1, 7)
-    check("đổi VIỆC (tổng khác) thì đồng hồ đặt lại",
+    eta.progress(SEARCH, "on to another job", 1, 7)
+    check("changing THE JOB (a different total) resets the clock",
           eta.running()[SEARCH]["started"] != moc)
-    check("và lại im cho tới khi đủ nhịp", eta.running()[SEARCH]["eta"] == 0)
+    check("and it goes quiet again until it has enough ticks", eta.running()[SEARCH]["eta"] == 0)
 
-    print("\n[nhật ký phải CHẠY THEO tin mới nhất]")
-    # Hợp đồng hai đầu: máy chủ gửi CŨ TRƯỚC, trình duyệt chèn từng dòng vào
-    # ĐỈNH — nên nạp xong thì tin mới nhất nằm trên cùng, cùng chiều với dòng
-    # về sau. Đảo một trong hai đầu là danh sách lộn tùng phèo mà không ai
-    # nhận ra ngay, vì lúc mới mở app nhật ký nào cũng trông hợp lý.
+    print("\n[the journal has to FOLLOW the newest line]")
+    # A two-ended contract: the server sends OLDEST FIRST, the browser inserts
+    # each line AT THE TOP — so once loaded the newest is on top, the same way
+    # round as the lines that follow. Reverse either end and the list is
+    # upside down with nobody noticing at once, because on a freshly opened
+    # app any journal looks plausible.
     xep = Journal()
     for n in range(4):
-        xep.emit(SEARCH, f"dòng {n}")
+        xep.emit(SEARCH, f"line {n}")
     trong_bo_nho = [e.text for e in xep.tail(SEARCH, 10)]
-    check("tail() trả MỚI NHẤT trước", trong_bo_nho[0] == "dòng 3", str(trong_bo_nho))
-    gui_di = trong_bo_nho[::-1]            # đúng phép server.py dùng cho 'hello'
-    check("gói gửi cho trình duyệt thì CŨ trước", gui_di[0] == "dòng 0")
+    check("tail() returns NEWEST first", trong_bo_nho[0] == "line 3", str(trong_bo_nho))
+    gui_di = trong_bo_nho[::-1]            # exactly what server.py does for 'hello'
+    check("the packet sent to the browser is OLDEST first", gui_di[0] == "line 0")
     tren_man = []
-    for e in gui_di:                       # live.js: chèn từng dòng vào đỉnh
+    for e in gui_di:                       # live.js: each line inserted at the top
         tren_man.insert(0, e)
-    check("chèn vào đỉnh xong thì mới nhất lên trên cùng",
-          tren_man[0] == "dòng 3", str(tren_man))
+    check("inserting at the top leaves the newest on top",
+          tren_man[0] == "line 3", str(tren_man))
 
-    # LỖI THẬT: chèn ở TRÊN chỗ đang nhìn thì trình duyệt giữ nguyên scrollTop,
-    # nên mỗi dòng mới đẩy khung nhìn xuống thêm một nấc — càng chạy càng trôi
-    # xa tin mới nhất. Đo trên máy thật: nhật ký cao 877px trong khung 60px,
-    # vòng nộp đang chạy mà màn hình đứng ở mấy dòng cũ.
+    # THE REAL BUG: inserting ABOVE what is being read leaves scrollTop
+    # unchanged, so every new line pushes the view one notch further down —
+    # the longer it runs the further it drifts from the newest. Measured on
+    # the real machine: an 877px journal inside a 60px frame, an apply run in
+    # progress while the screen sat on old lines.
     js = (Path(__file__).resolve().parent.parent
           / "src/jobbot/dashboard/web/live.js").read_text(encoding="utf-8")
     than = js.split("function addLine")[1].split("\n  const journal")[0]
-    check("chèn dòng xong có xử lý cuộn", "scrollTop" in than, "")
-    check("đang bám đỉnh -> kéo về tin mới nhất", "sc.scrollTop = 0" in than)
-    check("đang đọc dòng cũ -> giữ nguyên chỗ, không giật",
+    check("inserting a line handles scrolling", "scrollTop" in than, "")
+    check("following the top -> pulled back to the newest", "sc.scrollTop = 0" in than)
+    check("reading an old line -> the place is kept, with no jump",
           "sc.scrollTop += row.offsetHeight" in than)
-    # Thanh cuộn KHÔNG nằm trên .journal mà trên .jfeed bọc ngoài. Đặt
-    # scrollTop lên nhầm phần tử thì không có gì xảy ra và cũng không có lỗi.
-    check("tìm đúng khung cuộn chứ không đoán", "function scroller" in js)
+    # The scrollbar is NOT on .journal but on the .jfeed around it. Set
+    # scrollTop on the wrong element and nothing happens, with no error
+    # either.
+    check("it finds the real scroll frame rather than guessing", "function scroller" in js)
 
-    print("\n[quét: MỌI nguồn phải để lại dấu vết]")
-    # Lượt quét 19:22 chạy 21 board và để lại đúng 3 dòng nhật ký, vì luật cũ
-    # là "chỉ ghi khi có tin mới". Người dùng không có cách nào biết 18 board
-    # kia đã chạy xong hay đã chết. Im lặng không phải là gọn — im lặng là mù.
+    print("\n[a scan: EVERY source has to leave a trace]")
+    # The 19:22 scan ran 21 boards and left exactly 3 journal lines, because
+    # the old rule was "only log when something new came in". The user had no
+    # way to know whether the other 18 boards had finished or had died.
+    # Silence is not tidiness — silence is blindness.
     from jobbot.core.journal import log as chung
     from jobbot import scan_runner as _sr
     _c = db.connect()
     _truoc = len(chung.tail(SEARCH, 999))
     _sr._run_source(_c, "greenhouse:rong", lambda: [], log=lambda _m: None)
     _sau = chung.tail(SEARCH, 999)
-    check("nguồn KHÔNG có tin mới vẫn ghi một dòng", len(_sau) == _truoc + 1)
-    check("và dòng đó nói rõ là 0 mới", "0 new" in _sau[0].text, _sau[0].text)
-    check("mức 'info' chứ không phải 'ok' — không có gì để mừng",
+    check("a source with NO new postings still writes a line", len(_sau) == _truoc + 1)
+    check("and that line says 0 new outright", "0 new" in _sau[0].text, _sau[0].text)
+    check("level 'info', not 'ok' — there is nothing to celebrate",
           _sau[0].level == "info")
     _c.close()
 
-    print("\n[một nguồn rác KHÔNG được giết cả lượt quét]")
-    # Bản cũ chỉ bọc khúc lấy tin. Nguồn trả về đàng hoàng mà save_batch()
-    # nổ (DB khoá, tin thiếu trường) thì ngoại lệ bay ra vòng gọi và mọi
-    # nguồn sau KHÔNG chạy — lại còn không ghi lại rằng nó đã hỏng.
+    print("\n[one bad source must NOT kill the whole scan]")
+    # The old version wrapped only the fetch. A source returning properly
+    # while save_batch() blew up (the DB locked, a posting missing a field)
+    # sent the exception out to the calling loop and every later source did
+    # NOT run — and it did not even record that it had broken.
     _c2 = db.connect()
     _that_save = postings.save_batch
     _lan = []
@@ -210,53 +218,54 @@ with tempfile.TemporaryDirectory() as tmp:
     try:
         _kq = _sr._run_source(_c2, "greenhouse:khoa", lambda: [1, 2, 3],
                               log=lambda _m: None)
-        check("save_batch nổ -> KHÔNG ném ra ngoài", True)
-        check("và trả về (0, 0) để vòng quét đi tiếp", _kq == (0, 0), str(_kq))
+        check("save_batch blows up -> NOTHING is raised out", True)
+        check("and it returns (0, 0) so the scan carries on", _kq == (0, 0), str(_kq))
     except Exception as exc:                   # noqa: BLE001
-        check("save_batch nổ -> KHÔNG ném ra ngoài", False,
+        check("save_batch blows up -> NOTHING is raised out", False,
               f"{type(exc).__name__}: {exc}")
     finally:
         postings.save_batch = _that_save
-    check("thật sự đã đi tới khúc ghi DB", _lan == [1])
+    check("it really did reach the DB-writing stage", _lan == [1])
     _dong = _c2.execute("SELECT ok, error FROM source_run"
                         " WHERE source='greenhouse:khoa'").fetchone()
-    check("vẫn ghi lại một lượt HỎNG, không im", _dong is not None)
+    check("a FAILED run is still recorded, never silent", _dong is not None)
     if _dong:
-        check("đánh dấu ok=0", _dong[0] == 0)
-        # Câu lỗi phải nói ĐÚNG khúc: "hỏng" chung chung thì người đọc đi
-        # kiểm mạng, trong khi lỗi nằm ở đĩa.
-        check("và nói rõ hỏng ở khúc ghi DB, không phải khúc lấy tin",
+        check("marked ok=0", _dong[0] == 0)
+        # The error sentence has to name THE RIGHT stage: a generic "failed"
+        # sends the reader off checking the network while the fault is on
+        # disk.
+        check("and it says the DB-writing stage failed, not the fetch",
               "writing to the DB" in (_dong[1] or ""), str(_dong[1]))
     _hong = chung.tail(SEARCH, 999)
-    check("nhật ký cũng có dòng đỏ", any("greenhouse:khoa" in r.text and
+    check("the journal carries a red line too", any("greenhouse:khoa" in r.text and
                                          r.level == "error" for r in _hong))
 
-    # Đường GHI LỖI cũng phải chịu được DB chết — record_run() viết vào
-    # đúng cái DB vừa làm save_batch() nổ.
+    # THE ERROR-RECORDING PATH also has to survive a dead DB — record_run()
+    # writes into the very DB that just made save_batch() blow up.
     postings.save_batch = _no
     _that_rec = postings.record_run
     postings.record_run = _no
     try:
         _kq2 = _sr._run_source(_c2, "greenhouse:chet", lambda: [1],
                                log=lambda _m: None)
-        check("cả đường ghi lỗi hỏng nốt cũng không ném ra ngoài", _kq2 == (0, 0))
+        check("the error path failing too is still not raised out", _kq2 == (0, 0))
     except Exception as exc:                   # noqa: BLE001
-        check("cả đường ghi lỗi hỏng nốt cũng không ném ra ngoài", False,
+        check("the error path failing too is still not raised out", False,
               f"{type(exc).__name__}: {exc}")
     finally:
         postings.save_batch, postings.record_run = _that_save, _that_rec
     _c2.close()
 
-    print("\n[nhật ký hỏng KHÔNG được giết việc đang chạy]")
+    print("\n[a broken journal must NOT kill the work in progress]")
     broken = Journal()
     broken.open()
-    broken._conn = "không phải kết nối"        # ép mọi thao tác đĩa nổ
+    broken._conn = "not a connection"          # force every disk operation to blow up
     try:
-        broken.emit(SEARCH, "vẫn phải chạy")
-        check("ghi đĩa hỏng vẫn emit được", True)
+        broken.emit(SEARCH, "it still has to run")
+        check("a broken disk write still emits", True)
     except Exception as exc:                   # noqa: BLE001
-        check("ghi đĩa hỏng vẫn emit được", False, f"{type(exc).__name__}: {exc}")
-    check("và dòng đó vẫn có trong bộ nhớ", len(broken.tail(SEARCH, 9)) == 1)
+        check("a broken disk write still emits", False, f"{type(exc).__name__}: {exc}")
+    check("and that line is still in memory", len(broken.tail(SEARCH, 9)) == 1)
 
     os.environ.pop("JOBBOT_DATA_DIR", None)
 
