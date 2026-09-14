@@ -1,24 +1,29 @@
-"""BẢN CHẤM ĐIỂM — trước/sau, và vì sao từng câu được chọn hay bị bỏ.
+"""THE MARKING — before/after, and why each sentence was picked or dropped.
 
-Đây là thứ duy nhất trong tầng CV nói chuyện với NGƯỜI. Mọi module khác quyết
-định; module này giải trình.
+This is the only thing in the CV layer that talks to a PERSON. Every other
+module decides; this one explains.
 
-VÌ SAO CẦN. Máy đã quyết đủ thứ ở mỗi lần dựng — câu nào lên, xếp trước sau
-thế nào, câu nào bị cấm, câu nào sửa chữ — và trước đây không chỗ nào cho Vin
-xem. Một cái máy quyết mà không giải trình thì người dùng chỉ có hai lựa chọn:
-tin mù, hoặc bỏ không dùng. Cả hai đều tệ hơn là đọc được lý do rồi tự sửa.
+WHY IT IS NEEDED. The machine decides a great deal on each build — which
+sentences go on, in what order, which are banned, which were reworded — and
+there used to be nowhere for Vin to see it. A machine that decides without
+explaining leaves the user two options: blind trust, or abandoning it. Both
+are worse than reading the reason and fixing it themselves.
 
-Và nó bắt được lỗi. Luật `rules.sentence_ok` cấm câu kể thất bại lên CV từ đầu,
-nhưng bộ dựng chưa bao giờ tra luật đó — 3 câu bị cấm đi ra ngoài trên MỌI bản,
-trong đó có "drawdown ran roughly 30% deeper than the model predicted". Không
-ai thấy vì không có bản giải trình nào để mà đọc.
+And it catches bugs. The rule `rules.sentence_ok` banned failure-telling
+sentences from the CV from the start, but the builder never consulted it — 3
+banned sentences went out on EVERY version, including "drawdown ran roughly
+30% deeper than the model predicted". Nobody saw it, because there was no
+explanation to read.
 
-BỐ CỤC, theo thứ tự người đọc cần:
+THE LAYOUT, in the order a reader needs it:
 
-    tóm       trả lời được mấy phần yêu cầu · mấy câu vào · mấy câu sửa
-    từng câu  SAU (in ra) · TRƯỚC (Vin viết) · trả lời gì · còn hổng gì
-    bỏ        chia HAI nhóm, vì hai nhóm cần hai hành động khác nhau
-    câm       tin đòi mà hồ sơ không nói được gì -> đây là việc phải làm
+    summary     how much of the requirements is answered · sentences in ·
+                sentences reworded
+    per line    AFTER (printed) · BEFORE (as Vin wrote it) · what it answers
+                · what is still missing
+    dropped     split into TWO groups, because the two need different actions
+    silent      what the posting asks that the profile cannot answer -> this
+                is the work to do
 """
 
 from __future__ import annotations
@@ -27,29 +32,30 @@ from html import escape as esc
 
 from .build import TailoredCV, dang_ke
 
-# Lý do bỏ nào là LUẬT CẤM. Phân biệt này quyết định người dùng phải làm gì:
-# câu bị cấm thì sửa chữ cũng vô ích (nó không thuộc CV), còn câu yếu hơn thì
-# không phải sửa gì cả — tin khác sẽ dùng nó.
+# Which drop reasons are BANS. This distinction decides what the user has to
+# do: a banned sentence cannot be saved by rewording (it does not belong on a
+# CV), while a weaker sentence needs no work at all — another posting will
+# use it.
 CAM = ("outcome failure", "opinion", "invites the reader", "too short")
 
 VIET = {
     "outcome failure — belongs on the project page, not the CV":
-        "kể thất bại — thuộc trang project, không thuộc CV",
+        "tells a failure — belongs on a project page, not a CV",
     "opinion, not evidence of capability":
-        "ý kiến, không phải bằng chứng năng lực",
+        "an opinion, not evidence of ability",
     "too short to carry evidence":
-        "quá ngắn để mang bằng chứng",
+        "too short to carry evidence",
     "invites the reader to doubt you":
-        "mời người đọc nghi ngờ bạn",
+        "invites the reader to doubt you",
     "has hard evidence but wording may read badly — your call":
-        "có bằng chứng cứng nhưng chữ dễ đọc xấu — bạn tự quyết",
+        "hard evidence but wording that reads badly — your call",
     "weaker than what this posting asks for":
-        "yếu hơn thứ tin này hỏi — tin khác sẽ dùng tới",
+        "weaker than what this posting asks — another posting will use it",
 }
 
 
 def vi(why: str) -> str:
-    """Lý do bỏ, sang tiếng Việt. Dùng chung với màn Soạn khối."""
+    """The drop reason in plain words. Shared with the block editor."""
     return VIET.get(why, why)
 
 
@@ -58,7 +64,7 @@ def _la_cam(why: str) -> bool:
 
 
 def _bo(cv: TailoredCV) -> str:
-    """Câu bị bỏ, CHIA HAI NHÓM — vì hai nhóm cần hai hành động khác nhau."""
+    """Dropped sentences in TWO GROUPS — the two need different actions."""
     cam = [(t, w) for t, w in cv.dropped if _la_cam(w)]
     yeu = [(t, w) for t, w in cv.dropped if not _la_cam(w)]
 
@@ -72,18 +78,21 @@ def _bo(cv: TailoredCV) -> str:
                 f"<ul class=droplist>{muc}</ul><div class=note>{dan}</div>")
 
     return (
-        _khoi(cam, "Luật không cho lên CV",
-              "Sửa chữ cũng không cứu được — mấy câu này không thuộc CV. "
-              "Chúng KHÔNG bị xoá khỏi hồ sơ: chỗ của chúng là buổi phỏng vấn, "
-              "nơi người đọc có kinh nghiệm coi sự trung thực là điểm mạnh. "
-              "Trước mặt người sàng 200 CV một buổi chiều thì không.")
-        + _khoi(yeu, "Để dành cho tin khác",
-                "Mấy câu này hợp lệ — chỉ là tin NÀY hỏi thứ khác. Không phải "
-                "sửa gì cả; bản CV cho tin khác sẽ dùng tới chúng."))
+        _khoi(cam, "The rules do not allow these on a CV",
+              "Rewording cannot save them — these do not belong on a CV. They "
+              "are NOT deleted from your profile: their place is the "
+              "interview, where an experienced reader counts honesty as a "
+              "strength. In front of someone sifting 200 CVs in an afternoon, "
+              "it is not.")
+        + _khoi(yeu, "Saved for another posting",
+                "These are perfectly valid — THIS posting simply asks for "
+                "something else. Nothing to fix; the CV for another posting "
+                "will use them."))
 
 
 def diem(cv: TailoredCV) -> dict:
-    """Mấy con số của bản này. Tính ở một chỗ để chữ và số không lệch nhau."""
+    """This version's numbers. Computed in one place so the words and the
+    figures cannot disagree."""
     lines = [l for s in cv.sections for l in s.lines
              if s.kind in ("experience", "project")]
     return {
@@ -93,8 +102,9 @@ def diem(cv: TailoredCV) -> dict:
         "xem": sum(1 for l in lines if l.review),
         "bo_cam": sum(1 for _, w in cv.dropped if _la_cam(w)),
         "bo_yeu": sum(1 for _, w in cv.dropped if not _la_cam(w)),
-        # Xem live.cv_versions: wanted/covered là cặp NÓI DỐI (mẫu số nhặt
-        # cả đoạn giới thiệu công ty, tử số bỏ qua mục Technical skills).
+        # See live.cv_versions: wanted/covered is a LYING pair (the
+        # denominator picks up the company blurb, the numerator skips the
+        # Technical skills section).
         "doi": len(cv.asked),
         "tra_loi": len(cv.on_paper),
         "cam": len(cv.missing),
@@ -102,10 +112,11 @@ def diem(cv: TailoredCV) -> dict:
 
 
 def cho_xem(cv: TailoredCV) -> list:
-    """Mọi CHỖ đáng xem trên tờ này, theo loại. [(loại, nhãn, số), …]
+    """Every SPOT worth looking at on this sheet, by kind. [(kind, label,
+    count), …]
 
-    Đếm theo CHỖ chứ không theo câu: một câu có thể vừa thiếu số vừa quá dài,
-    và đó là hai việc phải làm, không phải một.
+    Counted by SPOT rather than by sentence: one sentence can be both missing
+    a measurement and too long, and that is two things to do, not one.
     """
     from collections import Counter
     dem: Counter = Counter()
@@ -115,17 +126,19 @@ def cho_xem(cv: TailoredCV) -> list:
         for line in sec.lines:
             for v in getattr(line, "vet", ()) or ():
                 dem[v.loai] += 1
-    ten = {"thieu_so": "thiếu số đo", "qua_dai": "quá dài",
-           "lac_de": "không chạm tin này", "da_sua": "máy đã sửa chữ"}
+    ten = {"thieu_so": "no measurement", "qua_dai": "too long",
+           "lac_de": "does not touch this posting", "da_sua": "reworded"}
     thu_tu = ("thieu_so", "qua_dai", "lac_de", "da_sua")
     return [(k, ten[k], dem[k]) for k in thu_tu if dem[k]]
 
 
 def head(cv: TailoredCV, xem_tin: str = "") -> str:
-    """ĐIỂM + CHỖ CẦN XEM + nút Trước/Sau. Đứng trên cùng, trước cả tờ CV.
+    """THE SCORE + WHAT TO LOOK AT + the Before/After toggle. At the very
+    top, above the CV sheet.
 
-    Con số đầu tiên phải trả lời "tờ này còn việc gì" — mở ra là biết ngay có
-    5 chỗ phải xem, không phải bấm từng dòng mới phát hiện ra.
+    The first number has to answer "what is left to do on this sheet" —
+    opening it should say at once that there are 5 spots to look at, not
+    require clicking each line to find out.
     """
     d = diem(cv)
     ty = f"{d['tra_loi']}/{d['doi']}" if d["doi"] else "—"
@@ -135,56 +148,62 @@ def head(cv: TailoredCV, xem_tin: str = "") -> str:
     o = ("<div class=gsum>"
          f"<span class='gstat {'act' if can else ''}'><b>{can}</b>"
          f"chỗ cần bạn xem</span>"
-         f"<span class=gstat><b>{ty}</b>thứ tin này đòi, CV nói được</span>"
-         f"<span class=gstat><b>{d['vao']}</b>câu lên bản này</span>"
-         f"<span class=gstat><b>{len(cv.missing)}</b>thứ hồ sơ câm</span>"
+         f"<span class=gstat><b>{ty}</b>of what this posting asks, the CV answers</span>"
+         f"<span class=gstat><b>{d['vao']}</b>sentences on this version</span>"
+         f"<span class=gstat><b>{len(cv.missing)}</b>things the profile cannot answer</span>"
          "</div>")
-    # CHÚ GIẢI vệt — không có nó thì mấy đường gạch chân là câu đố.
+    # A LEGEND for the marks — without it the underlines are a puzzle.
     chu_giai = ("<div class=glegend>"
                 + "".join(f"<span class='gleg v{k}'>{esc(nhan)} <b>{n}</b></span>"
                           for k, nhan, n in cho)
-                + "<span class='gleg kw'>từ khoá tin này đòi</span></div>"
+                + "<span class='gleg kw'>keywords this posting asks for</span></div>"
                 if cho else "")
-    # XEM TIN đứng CẠNH nút Trước/Sau, không thay chỗ nút Back. Back là "về
-    # trang vừa rời"; xem tin là một chuyến đi khác. Trộn hai thứ vào một chỗ
-    # thì một trong hai luôn sai.
+    # VIEW POSTING sits BESIDE the Before/After toggle; it does not take
+    # Back's place. Back means "return to the page you left"; viewing the
+    # posting is a different journey. Merge them and one of the two is
+    # always wrong.
     di = (f"<a class='mbtn tiny' href='{esc(xem_tin)}'>Xem tin →</a>"
           if xem_tin else "")
     nut = ("<input type=checkbox id=cvtruoc class=gswitch hidden>"
            "<div class=gtoggle>"
            "<label for=cvtruoc><span class=gt1>Sau khi sửa</span>"
-           "<span class=gt2>Trước khi sửa</span></label>"
-           "<span class=muted>bấm để xem chữ gốc bạn viết</span>"
+           "<span class=gt2>Before rewording</span></label>"
+           "<span class=muted>click to see your original wording</span>"
            f"{di}</div>")
-    chu = ("<div class=note>Gạch chân là chỗ máy có ý kiến — bấm vào chính "
-           "đoạn đó để xem cách sửa và đổi sang câu khác bạn đã viết. Máy chỉ "
-           "<b>cắt và xếp lại</b> chữ của bạn; mọi từ trên bản in ra đều có "
-           "trong câu bạn đã viết.</div>")
+    chu = ("<div class=note>An underline is where the machine has an "
+           "opinion — click that span to see how to fix it and to swap in "
+           "another sentence you wrote. The machine only <b>cuts and "
+           "reorders</b> your words; every word on the printed sheet comes "
+           "from a sentence you wrote.</div>")
     return (f"{nut}<div class=cvaudit>"
-            f"<h4 class=cvsec>Chấm điểm bản này</h4>{o}{chu_giai}{chu}</div>")
+            f"<h4 class=cvsec>Marking this version</h4>{o}{chu_giai}{chu}</div>")
 
 
 def chi_tiet(cv: TailoredCV) -> str:
-    """Phần dưới tờ CV — CHỈ thứ KHÔNG thuộc về một câu nào.
+    """The section under the CV sheet — ONLY what belongs to no single line.
 
-    Từng câu đã được chữa NGAY TRÊN BÀI (xem render._muc): bấm vào dòng là
-    thẻ mở ra tại chỗ, nói tin này đòi gì, máy sửa gì, còn hổng gì, đổi sang
-    câu nào. Nên ở đây KHÔNG lặp lại từng câu nữa — lặp là bắt người đọc đọc
-    hai lần cùng một thứ rồi tự ghép "câu 3 ở dưới" với câu nào ở trên.
+    Each sentence is already marked ON THE SHEET (see render._muc): clicking
+    a line opens a card in place, saying what the posting asks, what the
+    machine reworded, what is still missing, and what to swap in. So this
+    does NOT repeat each sentence — repeating makes the reader read the same
+    thing twice and then match "sentence 3 below" with one above.
 
-    Còn lại đúng hai thứ, và cả hai đều nói về TỜ GIẤY chứ không về một dòng:
-        câu KHÔNG lên bài   — vì sao chúng vắng mặt
-        tin đòi mà hồ sơ câm — việc phải làm, và không câu nào lấp được
+    Exactly two things are left, and both are about THE SHEET rather than one
+    line:
+        sentences that did NOT make it — why they are absent
+        what the posting asks that the profile cannot answer — the work to
+        do, which no existing sentence can fill
     """
     cam = ""
     if cv.missing:
-        cam = ("<h4 class=cvsec>Tin đòi mà hồ sơ câm</h4>"
+        cam = ("<h4 class=cvsec>Asked for, and the profile cannot answer</h4>"
                "<div class=chiprow>"
                + "".join(f"<span class='badge warn'>{esc(m)}</span>"
                          for m in cv.missing)
-               + "</div><div class=note>Không câu nào trong hồ sơ lấp được "
-                 "mấy chỗ này — máy chỉ chọn được chữ bạn đã viết. Hoặc bạn "
-                 "thật sự chưa có, hoặc có làm mà chưa viết ra; cái thứ hai "
-                 "sửa được tối nay bằng một câu.</div>")
-    # BỌC .cvaudit — luật @media print đã ẩn lớp này sẵn.
+               + "</div><div class=note>No sentence in your profile fills "
+                 "these — the machine can only pick words you have written. "
+                 "Either you genuinely have not done it, or you have and "
+                 "never wrote it down; the second is fixable tonight with one "
+                 "sentence.</div>")
+    # Wrapped in .cvaudit — the @media print rules already hide this class.
     return "<div class=cvaudit>" + _bo(cv) + cam + "</div>"

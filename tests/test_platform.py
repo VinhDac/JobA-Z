@@ -111,7 +111,7 @@ with platform_is(ic, "win32"):
         check("PDF font nhúng -> báo lỗi, KHÔNG nhét rác vào hồ sơ", False)
     except ic.ReadError as exc:
         check("PDF font nhúng -> báo lỗi, KHÔNG nhét rác vào hồ sơ", True)
-        check("và chỉ đường khác (dán chữ)", "DÁN" in str(exc))
+        check("và chỉ đường khác (dán chữ)", "PASTE" in str(exc))
 
 check("nhận ra chữ thật", ic._looks_like_text("Analyst at Acme. " * 20))
 check("nhận ra rác", not ic._looks_like_text("\x01\x02\x03\x04" * 80))

@@ -969,7 +969,7 @@ with tempfile.TemporaryDirectory() as tmp:
         check("bản chấm điểm có mục trước/sau", "ĐÃ SỬA" in _bcv_html.upper()
               or "gsua" in _bcv_html)
         check("nói ra máy chỉ cắt chữ, không viết thêm",
-              "cắt và xếp lại" in _bcv_html)
+              "cuts and reorders" in _bcv_html)
     # HAI NHÓM BỎ phải tách, vì hai nhóm cần hai hành động khác nhau: câu bị
     # luật cấm thì sửa chữ cũng vô ích, câu yếu hơn thì không phải sửa gì.
     from jobbot.cv.build import TailoredCV as _TCV
@@ -982,12 +982,13 @@ with tempfile.TemporaryDirectory() as tmp:
                 wanted=["python"], covered=[], missing=["c++"])
     _rh = _rp.chi_tiet(_gia)
     check("nhóm 'luật không cho lên CV' hiện riêng",
-          "Luật không cho lên CV (1)" in _rh)
+          "The rules do not allow these on a CV (1)" in _rh)
     check("nhóm 'để dành cho tin khác' hiện riêng",
-          "Để dành cho tin khác (1)" in _rh)
-    check("lý do dịch sang tiếng Việt, không để nguyên tiếng Anh",
-          "kể thất bại" in _rh and "outcome failure" not in _rh)
-    check("nói ra chỗ hồ sơ CÂM", "hồ sơ câm" in _rh and "c++" in _rh)
+          "Saved for another posting (1)" in _rh)
+    check("lý do dịch thành câu người đọc được, không để mã nội bộ",
+          "tells a failure" in _rh and "outcome failure" not in _rh)
+    check("nói ra chỗ hồ sơ CÂM",
+          "the profile cannot answer" in _rh and "c++" in _rh)
 
     print("\n[BACKEND ↔ FRONTEND: một luật, một kho nhớ, một chỗ quên]")
     import ast as _ast5, pathlib as _pl5

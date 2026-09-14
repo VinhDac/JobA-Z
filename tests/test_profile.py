@@ -200,7 +200,7 @@ check("nhập CV mới THAY được bản cũ", "cv_text" in _p3)
 # lưu, mà màn hình duyệt vẫn tick xanh như thường.
 _lac = [f for f in _p if f not in all_questions()]
 check(f"mọi ô máy nhập đề xuất đều LƯU được {_lac or ''}", not _lac)
-check("và nói rõ là sẽ thay", "THAY bản CV đang lưu" in _p3["cv_text"].note)
+check("và nói rõ là sẽ thay", "REPLACES the stored CV" in _p3["cv_text"].note)
 check("còn ô khác vẫn giữ luật không-đè", "full_name" not in _p3)
 # cv_text KHÔNG vẽ ra form, nhưng PHẢI ở lại schema. store.save() lọc theo
 # schema — gỡ khỏi đó là nó lặng lẽ không lưu được nữa. Đã mất nguyên toàn văn

@@ -1,12 +1,12 @@
-"""Đọc CV từ file — PDF, DOCX, TXT — và ĐỀ XUẤT điền hồ sơ.
+"""Read a CV from a file — PDF, DOCX, TXT — and PROPOSE profile answers.
 
-Không cài gì thêm:
-    PDF   PDFKit của macOS qua PyObjC (có sẵn)
-    DOCX  zipfile + xml trong thư viện chuẩn
-    TXT   đọc thẳng
+Nothing to install:
+    PDF   macOS PDFKit through PyObjC (already there)
+    DOCX  zipfile + xml from the standard library
+    TXT   read directly
 
-Luật: **đề xuất, không tự ghi.** Người dùng bấm duyệt từng mục.
-Tự ghi đè là cách nhanh nhất để xoá mất thứ họ đã điền tay.
+The rule: **propose, never write.** The user approves item by item.
+Writing automatically is the fastest way to erase what they typed by hand.
 """
 
 from __future__ import annotations
@@ -27,17 +27,19 @@ CITY = re.compile(r"\b(London|Manchester|Edinburgh|Birmingham|Leeds|Bristol|Glas
                   r"Cambridge|Oxford|Hanoi|Ho Chi Minh|New York|Singapore|Dublin)\b", re.I)
 
 
-# Từ khoá nhận ra một dòng LÀ chức danh. Cố tình hẹp: thà bỏ sót vài dòng còn
-# hơn đề xuất cả "References available on request" làm chức danh.
+# Keywords that recognise a line AS a job title. Deliberately narrow: better
+# to miss a few lines than to propose "References available on request" as a
+# job title.
 ROLE_WORD = re.compile(
     r"\b(Analyst|Engineer|Scientist|Developer|Researcher|Manager|Consultant|"
     r"Trader|Strategist|Quant|Associate|Specialist|Architect|Administrator)\b", re.I)
-# Dòng có mấy thứ này thì KHÔNG phải chức danh — là câu mô tả hoặc tên công ty.
+# A line containing these is NOT a title — it is prose or a company name.
 NOT_ROLE = re.compile(r"[.;•·]|\b(and|with|using|for|the|a|an|of|to)\b\s", re.I)
 UK = re.compile(r"\b(London|Manchester|Edinburgh|Birmingham|Leeds|Bristol|Glasgow|"
                 r"Cambridge|Oxford|United Kingdom|UK|England|Scotland|Wales)\b")
-# Bậc: chữ trong CV -> lựa chọn trong schema. Không suy từ số năm kinh nghiệm —
-# đếm năm là đoán, còn chữ "Intern" in trên CV là bằng chứng.
+# Seniority: the word on the CV -> the schema option. Not inferred from years
+# of experience — counting years is guessing, while the word "Intern" printed
+# on the CV is evidence.
 LEVEL_WORD = [("intern", re.compile(r"\b(intern|internship|placement)\b", re.I)),
               ("grad", re.compile(r"\b(graduate|MSc|MEng|BSc|BEng|MA|BA)\b")),
               ("junior", re.compile(r"\bjunior\b", re.I))]
@@ -47,19 +49,20 @@ class ReadError(RuntimeError):
     pass
 
 
-# ---------------------------------------------------------------- đọc file
+# ------------------------------------------------------------ reading files
 
 def from_pdf(data: bytes) -> str:
     """Đọc chữ trong PDF.
 
-    macOS có PDFKit — nó xử lý được font nhúng và bảng mã riêng, nên ưu tiên.
-    Máy khác thì bóc bằng thư viện chuẩn: giải nén luồng nội dung rồi nhặt
-    chữ trong các toán tử Tj/TJ.
+    macOS has PDFKit — it handles embedded fonts and custom encodings, so it
+    goes first. Elsewhere the standard library does it: inflate the content
+    streams and pick the text out of the Tj/TJ operators.
 
-    Bộ bóc tay KHÔNG đọc được PDF dùng font nhúng có bảng mã riêng (LaTeX,
-    Canva, InDesign hay ra kiểu này) — nó trả về ký tự rác. Nên phải TỰ KIỂM
-    và nói thẳng, thay vì nhét một đống rác vào hồ sơ. Người dùng còn đường
-    khác: dán thẳng chữ vào ô bên cạnh.
+    The hand-written extractor CANNOT read a PDF using an embedded font with
+    a custom encoding (LaTeX, Canva and InDesign often produce these) — it
+    returns garbage characters. So it CHECKS ITSELF and says so, rather than
+    pushing a pile of junk into the profile. The user has another route:
+    paste the text into the box beside it.
     """
     if sys.platform == "darwin":
         try:
@@ -67,12 +70,13 @@ def from_pdf(data: bytes) -> str:
         except ReadError:
             raise
         except Exception:                       # noqa: BLE001
-            pass                                # không có PyObjC -> bóc tay
+            pass                                # no PyObjC -> extract by hand
     text = _pdf_plain(data)
     if not _looks_like_text(text):
         raise ReadError(
-            "PDF này dùng font nhúng nên bóc chữ ra bị rác. "
-            "Mở PDF, bôi đen toàn bộ, copy rồi DÁN vào ô bên cạnh.")
+            "This PDF uses an embedded font, so the extracted text is "
+            "garbage. Open the PDF, select all, copy, and PASTE it into the "
+            "box beside this one.")
     return text
 
 
@@ -85,17 +89,17 @@ def _pdf_macos(data: bytes) -> str:
     doc = PDFDocument.alloc().initWithData_(              # noqa: F821
         NSData.dataWithBytes_length_(data, len(data)))
     if doc is None:
-        raise ReadError("Không mở được PDF — file hỏng hoặc có mật khẩu.")
+        raise ReadError("Could not open the PDF — corrupt, or password protected.")
     return str(doc.string() or "")
 
 
-# (chữ) Tj   |   [(a) -3 (b)] TJ   — hai cách PDF đặt chữ lên trang
+# (text) Tj   |   [(a) -3 (b)] TJ   — the two ways a PDF puts text on a page
 _PDF_STR = re.compile(rb"\((?:\\.|[^\\()])*\)", re.S)
 _PDF_SHOW = re.compile(rb"(?:Tj|TJ|'|\")")
 
 
 def _pdf_plain(data: bytes) -> str:
-    """Bóc chữ bằng thư viện chuẩn. Chỉ ăn được PDF mã hoá chữ kiểu thường."""
+    """Extract with the standard library. Only works on normally encoded PDFs."""
     import zlib
 
     chunks: list[str] = []
@@ -105,9 +109,9 @@ def _pdf_plain(data: bytes) -> str:
             body = zlib.decompress(raw)
         except zlib.error:
             try:
-                body = zlib.decompressobj().decompress(raw)   # luồng cụt đuôi
+                body = zlib.decompressobj().decompress(raw)   # a truncated stream
             except zlib.error:
-                continue                                       # không phải Flate
+                continue                                       # not Flate
         chunks.append(_pdf_text_ops(body))
     return re.sub(r"\n{3,}", "\n\n", "\n".join(c for c in chunks if c.strip())).strip()
 
@@ -133,7 +137,7 @@ def _pdf_unescape(raw: bytes) -> str:
         ch = raw[i:i + 1]
         if ch == b"\\" and i + 1 < len(raw):
             nxt = raw[i + 1:i + 2]
-            if nxt.isdigit():                     # \ddd = mã bát phân
+            if nxt.isdigit():                     # \ddd = an octal code
                 digits = raw[i + 1:i + 4]
                 out.append(chr(int(digits, 8))); i += 1 + len(digits); continue
             out.append(_ESCAPES.get(nxt, nxt.decode("latin-1"))); i += 2; continue
@@ -142,13 +146,14 @@ def _pdf_unescape(raw: bytes) -> str:
 
 
 def _looks_like_text(text: str) -> bool:
-    """Có phải chữ người đọc được không, hay là rác từ font nhúng.
+    """Is this readable text, or garbage from an embedded font.
 
-    Dấu hiệu: CV thật thì phần lớn ký tự là chữ cái, khoảng trắng, dấu câu.
-    Font nhúng bảng mã riêng cho ra một biển ký tự lạ.
+    The signal: in a real CV most characters are letters, spaces and
+    punctuation. An embedded font with a custom encoding produces a sea of
+    strange characters.
     """
     body = text.strip()
-    if len(body) < 200:                           # quá ngắn -> không phải CV
+    if len(body) < 200:                           # too short -> not a CV
         return False
     good = sum(c.isalnum() or c.isspace() or c in ".,;:/@()&+%-–—·" for c in body)
     return good / len(body) > 0.85
@@ -159,7 +164,7 @@ def from_docx(data: bytes) -> str:
         with zipfile.ZipFile(BytesIO(data)) as zf:
             xml = zf.read("word/document.xml").decode("utf-8", "replace")
     except (KeyError, zipfile.BadZipFile) as exc:
-        raise ReadError("Không đọc được .docx — file hỏng?") from exc
+        raise ReadError("Could not read the .docx — corrupt file?") from exc
     xml = re.sub(r"</w:p>", "\n", xml)
     xml = re.sub(r"<w:tab[^>]*/>", " ", xml)
     return re.sub(r"\n{3,}", "\n\n", re.sub(r"<[^>]+>", "", xml)).strip()
@@ -173,17 +178,17 @@ def read(filename: str, data: bytes) -> str:
         return from_docx(data)
     text = data.decode("utf-8", "replace")
     if "\x00" in text:
-        raise ReadError("Định dạng không đọc được. Dùng PDF, DOCX hoặc TXT.")
+        raise ReadError("Unreadable format. Use PDF, DOCX or TXT.")
     return text
 
 
-# ------------------------------------------------------------- đề xuất
+# ------------------------------------------------------------- proposals
 
 @dataclass
 class Proposal:
     field: str
     label: str
-    value: str | list[str]        # danh sách cho câu chọn-nhiều
+    value: str | list[str]        # a list for multi-select questions
     note: str = ""
 
 
@@ -194,19 +199,21 @@ def _section(text: str, name: str) -> str:
 
 
 def propose(text: str, existing: dict) -> list[Proposal]:
-    """Rút thông tin ra khỏi CV. CHỈ đề xuất cho ô đang TRỐNG —
-    không bao giờ đè lên thứ người dùng đã tự điền."""
+    """Extract information from a CV. It only proposes for fields that are
+    EMPTY — it never overwrites what the user typed themselves."""
     lines = [l.strip() for l in text.splitlines() if l.strip()]
     out: list[Proposal] = []
 
     def add(field, label, value, note="", thay=False):
-        """Câu chọn-nhiều nhận DANH SÁCH mã lựa chọn, câu tự do nhận chuỗi —
-        store giữ nguyên kiểu nào đưa vào. Trước đây hàm này chỉ biết chuỗi,
-        đưa danh sách vào là vỡ ngay ở .strip().
+        """A multi-select question takes a LIST of option codes, a free-text
+        question takes a string — the store keeps whatever type it is given.
+        This function used to know only strings, so passing a list broke
+        immediately at .strip().
 
-        `thay=True` cho phép đề xuất ĐÈ lên ô đã có. Chỉ dùng cho cv_text:
-        "nhập một CV mới" thì rõ ràng là muốn thay bản cũ. Mọi ô khác giữ luật
-        không-bao-giờ-đè — đó là thứ bảo vệ câu người dùng tự gõ.
+        `thay=True` lets a proposal OVERWRITE a field that already has a
+        value. Only used for cv_text: "import a new CV" clearly means
+        replacing the old one. Every other field keeps the never-overwrite
+        rule — that is what protects the sentences the user typed.
         """
         cu = existing.get(field)
         if isinstance(cu, (list, tuple)):
@@ -221,8 +228,8 @@ def propose(text: str, existing: dict) -> list[Proposal]:
 
     cu_cv = str(existing.get("cv_text") or "")
     add("cv_text", "Full CV text", text,
-        (f"{len(text)} characters — THAY bản CV đang lưu "
-         f"({len(cu_cv)} ký tự). Bỏ tick nếu chỉ muốn lấy mấy ô bên dưới."
+        (f"{len(text)} characters — REPLACES the stored CV "
+         f"({len(cu_cv)} characters). Untick to take only the fields below."
          if cu_cv.strip() else f"{len(text)} characters"),
         thay=True)
 
@@ -249,22 +256,23 @@ def propose(text: str, existing: dict) -> list[Proposal]:
 
     edu = _section(text, "EDUCATION")
     if edu:
-        # Bỏ dòng KHÔNG mang tin: PDF hay đẻ ra một dấu "·" đứng lẻ giữa hai
-        # bằng. Để nguyên thì nó thành một dòng học vấn rỗng, mà score.py và
-        # cv/build.py đều đọc theo DÒNG.
+        # Drop lines carrying NO information: a PDF often produces a lone
+        # "·" between two degrees. Left in, it becomes an empty education
+        # line, and both score.py and cv/build.py read LINE BY LINE.
         sach = [l for l in edu.split("Certification")[0].strip().splitlines()
                 if l.strip(" ·—–-\t")]
         add("education", "Education", "\n".join(sach))
     cert = re.search(r"^Certifications?\s*[—–-]\s*(.+)$", text, re.M)
     if cert:
-        # MỘT CHỨNG CHỈ MỘT DÒNG. CV viết "A · B · C" trên một dòng, nhưng
-        # cv/build.py làm `certs.splitlines()[0]` để lấy chứng chỉ mạnh nhất —
-        # giữ nguyên một dòng thì nó nhét cả cụm 90 ký tự vào CV làm một
-        # "fact", và máy đếm ra 1 chứng chỉ trong khi thật sự có 3.
+        # ONE CERTIFICATE PER LINE. The CV writes "A · B · C" on one line,
+        # but cv/build.py does `certs.splitlines()[0]` to take the strongest
+        # one — leave it as one line and it puts the whole 90-character run
+        # into the CV as a single "fact", and the machine counts 1
+        # certificate where there are really 3.
         tung = [c.strip() for c in re.split(r"\s·\s|\s\|\s", cert.group(1))
                 if c.strip()]
         add("certifications", "Certifications", "\n".join(tung),
-            f"{len(tung)} chứng chỉ — mỗi dòng một cái, hệ thống đọc theo dòng"
+            f"{len(tung)} certificates — one per line; the system reads by line"
             if len(tung) > 1 else "")
 
     skills = _section(text, "TECHNICAL SKILLS") or _section(text, "SKILLS")
@@ -275,13 +283,14 @@ def propose(text: str, existing: dict) -> list[Proposal]:
         add("skills_strong", "Skills recognised in your CV", ", ".join(found),
             f"{len(found)} terms — edit before saving, the system cannot tell "
             f"strong from merely mentioned")
-        # Cùng một mẻ kỹ năng, dùng luôn làm từ khoá tìm tin. Không rút lại
-        # lần nữa bằng luật khác — hai luật cho một thứ thì sớm muộn lệch nhau.
+        # The same batch of skills doubles as the search keywords. Not
+        # re-extracted under a different rule — two rules for one thing drift
+        # apart sooner or later.
         add("search_keywords", "Keywords to look for in postings",
             ", ".join(found[:12]),
             "taken from the skills above — trim to the few that really matter")
 
-    # --- phần MỤC TIÊU: đây mới là chỗ mở cổng cho app chạy được ------------
+    # --- the GOALS section: this is what opens the gate for the app --------
     titles = _job_titles(text)
     if titles:
         add("job_titles", "Job titles to search for", "\n".join(titles),
@@ -299,25 +308,28 @@ def propose(text: str, existing: dict) -> list[Proposal]:
             "inferred from the location on your CV — change it if you are "
             "looking elsewhere")
 
-    # work_auth CỐ TÌNH KHÔNG ĐỀ XUẤT. Nó là sự thật pháp lý về con người, CV
-    # không nói, và đoán sai thì hỏng cả lá đơn — nhà tuyển dụng lọc câu này
-    # trước khi đọc bất cứ thứ gì khác. Người phải tự trả lời.
+    # work_auth IS DELIBERATELY NOT PROPOSED. It is a legal fact about a
+    # person, the CV does not state it, and guessing wrong ruins the whole
+    # application — employers filter on that question before reading anything
+    # else. The person answers it themselves.
     return out
 
 
 def _job_titles(text: str) -> list[str]:
-    """Chức danh đọc được trong CV, giữ nguyên thứ tự xuất hiện.
+    """The job titles readable in a CV, in the order they appear.
 
-    Hai luật, cả hai đều rút ra từ một CV THẬT đọc hụt:
+    Two rules, both drawn from a REAL CV that was read badly:
 
-    1. CẮT TRƯỚC, ĐO SAU. CV thật viết cả dòng là "Founder / Quantitative
+    1. CUT FIRST, MEASURE SECOND. A real CV writes a whole line as "Founder /
+       Quantitative
        Developer — Algorithmic Trading Startup Jan 2024 – …" (81 ký tự). Đo
-       độ dài trước khi cắt vế công ty thì dòng nào cũng quá dài và bị loại
-       sạch — đúng lỗi làm hồ sơ của Vin không rút được chức danh nào.
+       the length before cutting the company half and every line is too long
+       and all of them are rejected — exactly the bug that left Vin's profile
+       with no extracted titles at all.
 
-    2. CHỈ ĐỌC PHẦN EXPERIENCE nếu CV có phần đó. Quét cả tệp thì "Quant
-       Trading Studio" ở mục SELECTED PROJECTS cũng lọt vào — nó là tên
-       project, không phải chức danh, mà nhìn thì y hệt.
+    2. ONLY READ THE EXPERIENCE SECTION when the CV has one. Scanning the
+       whole file lets "Quant Trading Studio" from SELECTED PROJECTS through
+       — that is a project name, not a job title, and it looks identical.
     """
     vung = (_section(text, "EXPERIENCE")
             or _section(text, "WORK EXPERIENCE")
@@ -328,9 +340,9 @@ def _job_titles(text: str) -> list[str]:
         line = raw.strip(" \t-–—•|")
         if not ROLE_WORD.search(line):
             continue
-        # cắt vế công ty / ngày tháng TRƯỚC rồi mới đo
+        # cut the company / date half FIRST, then measure
         line = re.split(r"\s[—–|]\s|\s{2,}|,\s", line)[0].strip()
-        # bỏ đuôi ngày tháng còn sót: "Research Consultant Jan 2025 – Sep 2025"
+        # drop a leftover date tail: "Research Consultant Jan 2025 – Sep 2025"
         line = re.sub(r"\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*"
                       r"\s+\d{4}.*$", "", line).strip()
         if not (4 <= len(line) <= 60) or NOT_ROLE.search(line):
