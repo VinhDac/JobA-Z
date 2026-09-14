@@ -1,12 +1,13 @@
-"""Thư này nói gì — và nó thuộc lần nộp nào.
+"""What this mail says — and which application it belongs to.
 
-Hộp thư RIÊNG cho việc làm nên bài toán nhẹ hẳn: gần như mọi thư đều là thư
-tuyển dụng, nên đây là XẾP LOẠI, không phải LỌC. Hộp chính thì phải đoán giữa
-hoá đơn, bạn bè, quảng cáo.
+A SEPARATE mailbox for job hunting makes the problem far lighter: nearly
+every message is recruiting mail, so this is CLASSIFYING, not FILTERING. A
+main mailbox would have to guess among invoices, friends and adverts.
 
-Thư ĐỀ XUẤT đổi trạng thái, KHÔNG tự đổi. Một thư "unfortunately" có thể là
-từ chối, mà cũng có thể là câu mở đầu của một thư mời phỏng vấn đổi lịch.
-Đoán sai mà tự ghi thì bảng thành sai, và Vin không có cách nào biết.
+Mail PROPOSES a status change, it does NOT make one. An "unfortunately" mail
+could be a rejection, or it could be the opening line of an interview
+reschedule. Guess wrong and write it, and the table is wrong with no way for
+Vin to know.
 """
 
 from __future__ import annotations
@@ -16,9 +17,9 @@ import re
 from ..ingest.base import norm
 from .board import INTERVIEW, OFFER, REJECTED, SENT
 
-# Thứ tự QUAN TRỌNG: xét từ kết cục mạnh nhất xuống. Một thư mời phỏng vấn
-# thường vẫn mở đầu bằng "thank you for applying" — bắt "confirm" trước là
-# xếp nhầm thư quan trọng nhất thành thư xác nhận.
+# The ORDER MATTERS: strongest outcome first. An interview invitation still
+# usually opens with "thank you for applying" — catching "confirm" first
+# files the most important mail as an acknowledgement.
 RULES = [
     (OFFER, re.compile(
         r"\b(offer of employment|pleased to offer|we would like to offer|"
@@ -31,11 +32,11 @@ RULES = [
         r"schedule (?:a |an )?(?:call|interview|chat)|book a time|"
         r"next (?:round|stage)|first[- ]round|online assessment|"
         r"coding (?:test|challenge)|hackerrank|codility|karat)\b", re.I)),
-    # Đo trên tiêu đề thư thật: bản cũ bắt hụt "decided not to move forward"
-    # (chỉ có "moving") và "won't be taking your application further" (chỉ có
-    # "take"). Hụt ở đây là hụt nặng nhất: thư từ chối rơi xuống "other" thì
-    # `needs_you = 0`, thư không bao giờ hiện ra, và bảng báo "đang chờ" mãi
-    # cho một lần nộp đã chết.
+    # Measured on real subject lines: the old version missed "decided not to
+    # move forward" (it only had "moving") and "won't be taking your
+    # application further" (only "take"). Missing here is the worst kind of
+    # miss: a rejection falling into "other" gets `needs_you = 0`, never
+    # appears, and the table says "waiting" forever for a dead application.
     (REJECTED, re.compile(
         r"\b(not (?:be )?(?:mov\w+|progress\w+|proceed\w+) forward|"
         r"will not be (?:progressing|proceeding|moving)|"
@@ -50,49 +51,54 @@ RULES = [
         r"your application (?:to|for|has been received))\b", re.I)),
 ]
 
-# NGƯỜI ĐƯA THƯ, KHÔNG PHẢI NGƯỜI TUYỂN. Ba nhóm, cùng một hệ quả: tên của
-# họ KHÔNG BAO GIỜ là tên công ty, và tên công ty thật nằm trong chữ.
+# THE POSTMAN, NOT THE EMPLOYER. Three groups, one consequence: their name
+# is NEVER the company's, and the real company name is in the text.
 #
-# Đo trên hộp thư thật, 60 ngày, 56 thư có kết cục: lỗi nặng nhất cả bảng là
-# lá thư MỜI PHỎNG VẤN — dòng quan trọng nhất — bị ghi tên "GoHire", một hãng
-# phần mềm tuyển dụng. Công ty thật là Kappa Lab, nằm ngay trong tiêu đề
-# ("Kappa Lab Interview") lẫn thân thư ("Thank you for applying to Kappa Lab").
-# Tương tự: Workable che mất Flowdesk, Longshot Systems, G-20 Group.
+# Measured on the real mailbox, 60 days, 56 mails with an outcome: the worst
+# error on the whole table was the INTERVIEW INVITATION — the most important
+# row — recorded under "GoHire", a recruiting software vendor. The real
+# company was Kappa Lab, sitting in both the subject ("Kappa Lab Interview")
+# and the body ("Thank you for applying to Kappa Lab"). Likewise: Workable
+# hid Flowdesk, Longshot Systems and G-20 Group.
 ATS_HOST = re.compile(
     r"(greenhouse|lever|ashbyhq|ashby|workday|myworkday|smartrecruiters|icims|"
     r"successfactors|teamtailor|pinpointhq|jobvite|bamboohr|ripplematch|"
     r"workable|gohire|broadbean|recruiterflow|recruitee|breezy|jazzhr|"
     r"applytojob|personio|taleo|brassring|avature|eightfold|phenom|"
-    # bảng việc làm: người đưa thư, không phải người tuyển
+    # the job table: the postman, not the employer
     r"linkedin|indeed|glassdoor|ziprecruiter|totaljobs|reed\.co|cv-library|"
     r"efinancialcareers|otta|welcometothejungle|jobtoday)",
     re.I)
 
-# KẾT CỤC MẠNH — ba loại này không thể khớp nhầm từ một lá thư hành chính.
-# Không sở thuế nào viết "we would like to invite you to interview".
+# STRONG OUTCOMES — these three cannot be matched by accident from an
+# administrative email. No tax office writes "we would like to invite you to
+# interview".
 #
-# `applied` thì YẾU: "Your application for a National Insurance number" khớp
-# nó bằng đúng một chữ "application".
+# `applied` is WEAK: "Your application for a National Insurance number"
+# matches it on the single word "application".
 MANH = (INTERVIEW, OFFER, REJECTED)
 
-# TÊN MIỀN HAY GỬI THƯ HÀNH CHÍNH. Danh sách RỘNG là cố ý, và nó chỉ an toàn
-# nhờ luật MANH ở trên.
+# DOMAINS THAT SEND ADMINISTRATIVE MAIL. A BROAD list, deliberately, and it
+# is only safe because of the STRONG rule above.
 #
-# Nó đè được lên bằng chứng YẾU — đo trên hộp thư thật, "Your application for
-# a National Insurance number" từng đẻ ra một dòng việc làm tên "Apply for a
+# It can override WEAK evidence — measured on the real mailbox, "Your
+# application for a National Insurance number" once produced a job row called
+# "Apply for a
 # National Insurance num".
 #
-# Nhưng nó KHÔNG đè được lên kết cục MẠNH. Ở UK, Civil Service và NHS là hai
-# nhà tuyển dụng lớn nhất nước; bản trước ép thư mời phỏng vấn của họ về
-# "other", needs_you = 0, và lá thư biến mất khỏi mọi màn hình.
+# But it CANNOT override a STRONG outcome. In the UK the Civil Service and
+# the NHS are the two largest employers in the country; the previous version
+# forced their interview invitations to "other", needs_you = 0, and the mail
+# vanished from every screen.
 #
-# Đổi lại: thư "đã nhận đơn" từ Civil Service không tự đẻ dòng. Chấp nhận
-# được — mất một dòng xác nhận nhẹ hơn nhiều so với mất một lời mời.
+# The trade: an "application received" mail from the Civil Service does not
+# create a row on its own. Acceptable — losing an acknowledgement row is far
+# lighter than losing an invitation.
 KHONG_PHAI_VIEC = re.compile(
     r"(service\.gov\.uk|gov\.uk|hmrc|dvla|nhs\.uk|\.edu$|companieshouse)", re.I)
 
-# Tên công ty nằm trong CHỮ. Xếp từ chắc chắn nhất xuống — thư đầu tiên khớp
-# thì dừng. Mẫu rút từ 56 thư thật, không phải đoán.
+# The company name is in the TEXT. Ordered most-certain first — the first
+# match wins. The patterns come from 56 real mails, not from guesswork.
 TRONG_CHU = (
     re.compile(r"thanks?(?: you)? for (?:applying|submitting your application)"
                r" (?:to|for) (.{2,160})", re.I),
@@ -104,44 +110,44 @@ TRONG_CHU = (
     re.compile(r"^(.{2,40}?) (?:interview|hiring team|careers team)\b", re.I),
 )
 
-# TÊN CÔNG TY NẰM SAU CHỮ `at` CUỐI CÙNG. Đây là luật cứu được nhiều dòng
-# nhất, và nó rút thẳng từ hộp thư thật:
+# THE COMPANY NAME COMES AFTER THE LAST `at`. This is the rule that rescues
+# the most rows, and it comes straight from the real mailbox:
 #     "Your application to Quantitative Researcher at Durlston Partners"
 #     "interest in the Machine Learning Engineer position at IMC"
 #     "interest in career opportunities at Schonfeld"
-# Không có `at` thì phần bắt được chính là tên công ty.
+# With no `at`, the captured span is the company name itself.
 _SAU_AT = re.compile(r"\bat\s+(.+)$", re.I | re.S)
 
-# Đuôi thừa sau tên công ty: dấu câu, lời chào, động từ nối.
+# Tails after a company name: punctuation, greetings, linking verbs.
 _DUOI_TEN = re.compile(
     r"\s*(?:[,|!.:;]|\band (?:for|your|taking)\b|\brole\b|\bposition\b|"
     r"\bis\b|\bhas\b|\bwas\b|\bwill\b|\bteam will\b).*$",
     re.I | re.S)
 
-# CHỮ NÀY LÀ VAI TRÒ, KHÔNG PHẢI TÊN CÔNG TY. Chốt quan trọng nhất còn lại:
+# THIS TEXT IS A ROLE, NOT A COMPANY. The most important remaining guard:
 # "we've received your application for Quantitative Trading Analyst" — bắt
-# được thì ra tên một chức danh, và bảng mọc thêm một "công ty" tên là
-# "Quantitative Trading Analyst". Chỉ tin khi câu có chữ `at` tách đôi
-# vai-trò / công-ty; không có thì thà không đoán.
+# captures a job title, and the table grows a "company" called "Quantitative
+# Trading Analyst". Only trusted when the sentence has an `at` separating
+# role from company; without one it is better not to guess.
 LA_VAI_TRO = re.compile(
     r"\b(engineer|developer|analyst|researcher|scientist|trader|manager|"
     r"associate|consultant|intern(ship)?|specialist|architect|quant\w*|"
     r"programme|program|graduate|officer|lead|director|assistant|advisor|"
     r"strategist|technologist|administrator)\b", re.I)
 
-# Mạo từ / rác HTML dính vào đầu đoạn bắt được.
+# Articles / HTML junk stuck to the front of the captured span.
 _DAU_THUA = re.compile(r"^(?:the|a|an|our|your|from)\s+", re.I)
 _RAC_HTML = re.compile(r"&[a-z]+;|&#\d+;|[\u200b\u200c\u00a0]")
 
-# Chữ còn lại sau khi bóc đuôi/đầu mà rơi vào đây thì KHÔNG phải tên công ty.
-# "Talent Acquisition" bóc "Talent" còn "Acquisition"; "GD Notification" còn
-# "GD". Cả hai đã lên bảng như tên công ty.
+# What is left after stripping head and tail, if it lands in here, is NOT a
+# company name. "Talent Acquisition" strips "Talent" and leaves "Acquisition";
+# "GD Notification" leaves "GD". Both reached the table as company names.
 KHONG_PHAI_TEN = re.compile(
     r"^(acquisition|notifications?|team|hiring|careers?|recruit\w*|talent|"
     r"people|hr|jobs?|apply|application|admin|info|support|mail|no ?reply|"
     r"do ?not ?reply|gd|ta|confirmation)$", re.I)
 
-# Chữ thừa trong tiêu đề, bỏ đi thì còn lại tên công ty / vai trò.
+# Filler in a subject line; strip it and the company / role remains.
 NOISE = re.compile(
     r"\b(re|fwd|your application|application (?:for|to|update|status)|"
     r"thank you for applying|update on your application)\b[:\s-]*", re.I)
@@ -156,7 +162,7 @@ def kind(msg: dict) -> str:
     return "other"
 
 
-# Đuôi thừa trong tên người gửi: "Jump Trading Recruiting" -> "Jump Trading".
+# Tails in a sender name: "Jump Trading Recruiting" -> "Jump Trading".
 ROLE_TAIL = re.compile(
     r"\s*\b(recruit(ing|ment)?|talent( acquisition)?|careers?|hr|people|"
     r"hiring|no[- ]?reply|team|notifications?)\b\s*$", re.I)
@@ -173,14 +179,14 @@ def _clean_name(text: str) -> str:
         if cut == out:
             break
         out = cut
-    # BÓC XONG CÒN LẠI MỘT TỪ CHỨC NĂNG thì đó không phải tên công ty. Đo trên
-    # hộp thư thật: "Talent Acquisition" ra "Acquisition", "GD Notification"
-    # ra "GD" — cả hai đã lên bảng như tên hai công ty.
+    # A FUNCTION WORD LEFT AFTER STRIPPING is not a company name. Measured on
+    # the real mailbox: "Talent Acquisition" left "Acquisition", "GD
+    # Notification" left "GD" — both reached the table as company names.
     return "" if KHONG_PHAI_TEN.match(out.strip()) else out
 
 
-# Nhãn đứng trước tên miền thật: "st.griddynamics.net" -> "griddynamics",
-# không phải "st". Lấy nhãn đầu là lấy tên máy chủ, không phải tên công ty.
+# The label before the real domain: "st.griddynamics.net" -> "griddynamics",
+# not "st". Taking the first label takes a hostname, not a company.
 _PHU = {"mail", "email", "mailer", "smtp", "no-reply", "noreply", "notify",
         "notification", "notifications", "st", "us", "eu", "uk", "hire",
         "candidates", "jobs", "careers", "apply", "info", "my", "www"}
@@ -190,7 +196,7 @@ def _ten_mien(host: str) -> str:
     phan = [x for x in (host or "").lower().split(".") if x]
     if len(phan) < 2:
         return phan[0] if phan else ""
-    # Bỏ TLD (và TLD hai tầng kiểu .co.uk), rồi bỏ mấy nhãn phụ ở đầu.
+    # Drop the TLD (and two-part TLDs like .co.uk), then the leading labels.
     loi = phan[:-2] if phan[-2] in ("co", "com", "org", "net", "ac", "gov") \
         and len(phan) > 2 else phan[:-1]
     loi = [x for x in loi if x not in _PHU] or loi
@@ -198,134 +204,143 @@ def _ten_mien(host: str) -> str:
 
 
 def _got(doan: str) -> str:
-    """Từ một đoạn bắt được -> TÊN CÔNG TY, hoặc "" nếu không chắc.
+    """From a captured span -> A COMPANY NAME, or "" when unsure.
 
-    Ba phép, theo đúng thứ tự:
-        1  lấy phần sau chữ `at` CUỐI CÙNG — phần trước là vai trò
-        2  cắt đuôi thừa và mạo từ, dọn rác HTML
-        3  còn dính chức danh mà KHÔNG có `at` tách đôi -> không đoán
+    Three steps, in order:
+        1  take what follows the LAST `at` — what precedes it is the role
+        2  cut tails and articles, clean HTML junk
+        3  still carrying a job title with NO `at` separator -> do not guess
 
-    Phép 3 là chốt: "received your application for Quantitative Trading
-    Analyst" bắt được thì ra tên một chức danh, và bảng mọc thêm một "công
-    ty" mang tên đó. Thà rơi xuống tên miền — mavensecurities.com vẫn đúng.
+    Step 3 is the guard: "received your application for Quantitative Trading
+    Analyst" captures a job title, and the table grows a "company" by that
+    name. Better to fall through to the domain — mavensecurities.com is still
+    right.
     """
     doan = _RAC_HTML.sub(" ", doan or "")
-    doan = " ".join(doan.split())             # tiêu đề thư có xuống dòng
+    doan = " ".join(doan.split())             # subject lines contain newlines
     m = _SAU_AT.search(doan)
     co_at = bool(m)
     if m:
         doan = m.group(1)
     doan = _DUOI_TEN.sub("", doan)
     doan = _DAU_THUA.sub("", doan).strip(" -–—|:")
-    # TÊN RIÊNG VIẾT HOA. Luật tổng quát, không phải bảng liệt kê: chữ sau
-    # `at` trong "unable to give further feedback at this stage" là "this",
-    # viết thường — và nó đã lên bảng như tên một công ty tên "this stage".
-    # Mọi cụm kiểu "at the moment", "at least", "at scale" chết theo cùng một
-    # luật, không cần thêm dòng nào.
+    # A CAPITALISED PROPER NOUN. A general rule, not a list: the word after
+    # `at` in "unable to give further feedback at this stage" is "this",
+    # lowercase — and it reached the table as a company called "this stage".
+    # Every phrase like "at the moment", "at least" and "at scale" dies by
+    # the same rule, with no extra line.
     if doan and not (doan[0].isupper() or doan[0].isdigit()):
         return ""
     if not co_at and LA_VAI_TRO.search(doan):
         return ""
-    # CẢ MỘT CÂU thì không phải tên. "from mcgregorboyall Thank you for your
-    # application" từng lên bảng nguyên văn như tên một công ty.
+    # A WHOLE SENTENCE is not a name. "from mcgregorboyall Thank you for your
+    # application" once reached the table verbatim as a company name.
     if len(doan.split()) > 8 or re.search(r"\bthank|\bapplication\b", doan, re.I):
         return ""
     return _clean_name(doan)
 
 
 def _tu_chu(nguon: str) -> str:
-    """Tên công ty trong MỘT đoạn chữ — tiêu đề, hoặc mấy dòng đầu thân thư."""
+    """The company name inside ONE piece of text — a subject, or the first
+    lines of a body."""
     nguon = " ".join((nguon or "").split())
     for mau in TRONG_CHU:
         m = mau.search(nguon)
         if not m:
             continue
         ten = _got(m.group(1))
-        # Đừng nhận lại chính tên hãng phần mềm ("applying to Workable").
+        # Do not accept the software vendor's own name ("applying to Workable").
         if ten and len(ten) <= 46 and not ATS_HOST.search(ten):
             return ten[:60]
     return ""
 
 
 def company_of(msg: dict) -> str:
-    """Đoán công ty — CHỮ TRƯỚC, người gửi sau.
+    """Guess the company — THE TEXT FIRST, the sender second.
 
-    THỨ TỰ NÀY LÀ CẢ VẤN ĐỀ. Bản cũ tin tên người gửi trước, mà thư tuyển
-    dụng ngày nay phần lớn do hãng phần mềm gửi hộ: Greenhouse, Workable,
-    Ashby, GoHire, Workday. Tên họ hiện ở ô "From", còn tên công ty thật nằm
-    trong câu "Thank you for applying to …".
+    THIS ORDER IS THE WHOLE PROBLEM. The old version trusted the sender name
+    first, while most recruiting mail today is sent on the employer's behalf
+    by software: Greenhouse, Workable, Ashby, GoHire, Workday. Their name is
+    what appears in "From", while the real company sits in the sentence
+    "Thank you for applying to …".
 
-    Đo trên 56 thư có kết cục của hộp thư thật: tin người gửi trước thì thư
-    MỜI PHỎNG VẤN mang tên "GoHire" thay vì Kappa Lab, và ba lần nộp qua
-    Workable gộp thành một dòng "Workable".
+    Measured on the real mailbox's 56 mails with an outcome: trusting the
+    sender first labelled the INTERVIEW INVITATION "GoHire" instead of Kappa
+    Lab, and merged three applications sent through Workable into one
+    "Workable" row.
     """
     host = (msg.get("from_addr") or "").split("@")[-1]
     la_trung_gian = bool(ATS_HOST.search(host))
 
-    # 1. TIÊU ĐỀ — chữ chắc nhất, và là đường DUY NHẤT khi thư do bên thứ ba
-    #    gửi hộ. Thư mời phỏng vấn của Kappa Lab do GoHire gửi: tên thật chỉ
-    #    có ở đây.
+    # 1. THE SUBJECT — the most reliable text, and the ONLY route when a
+    #    third party sends on the employer's behalf. Kappa Lab's interview
+    #    invitation came through GoHire: the real name is only here.
     ten = _tu_chu(msg.get("subject") or "")
     if ten:
         return ten
 
-    # 2. TÊN NGƯỜI GỬI — miễn là chính nó không phải tên bên đưa thư.
+    # 2. THE SENDER NAME — as long as it is not the postman's own name.
     #
-    #    ĐỨNG TRƯỚC THÂN THƯ, không sau. Thân thư là chỗ nhiễu nhất: thư của
-    #    Flowdesk mở đầu "We have received your application for the Technology
-    #    | Quantitative Developer (Low Latency) | London", và bắt ở đó thì ra
-    #    "Technology" trong khi ô From ghi sẵn "Flowdesk".
+    #    BEFORE THE BODY, not after. The body is the noisiest place:
+    #    Flowdesk's mail opens "We have received your application for the
+    #    Technology | Quantitative Developer (Low Latency) | London", and
+    #    capturing there gives "Technology" while From already says
+    #    "Flowdesk".
     #
-    # KHÔNG chặn theo MÁY CHỦ ở đây. Ashby và SmartRecruiters gửi hộ nhưng vẫn
-    # đặt tên CÔNG TY vào ô From ("Midnite Talent Team", "Ayming", "Monad
-    # Foundation Hiring"); chặn cả nhà là vứt luôn mấy tên đúng đó. Chỉ chặn
-    # khi chính CÁI TÊN là tên hãng phần mềm — GoHire, Workable, LinkedIn.
+    # Do NOT block by HOST here. Ashby and SmartRecruiters send on behalf but
+    # still put THE COMPANY's name in From ("Midnite Talent Team", "Ayming",
+    # "Monad Foundation Hiring"); blocking the whole host throws those correct
+    # names away. Block only when THE NAME ITSELF is the vendor's — GoHire,
+    # Workable, LinkedIn.
     name = _clean_name(msg.get("from_name") or "")
     if name and not ATS_HOST.search(name):
         return name[:60]
 
-    # 3. THÂN THƯ — nhiễu hơn tiêu đề, nhưng cứu được thư mà tiêu đề chỉ ghi
+    # 3. THE BODY — noisier than the subject, but it rescues mail whose
+    #    subject only says
     #    chức danh: "we've received your application for Quantitative Trading
-    #    Analyst" / thân: "Thanks for applying to Maven."
+    #    Analyst" / body: "Thanks for applying to Maven."
     ten = _tu_chu(msg.get("snippet") or "")
     if ten:
         return ten
 
-    # 4. TÊN MIỀN — nhãn trước TLD, không phải nhãn đầu.
+    # 4. THE DOMAIN — the label before the TLD, not the first label.
     if host and not la_trung_gian:
         goc = _ten_mien(host)
         if goc:
             return goc.replace("-", " ").title()[:60]
 
-    # 5. CUỐI CÙNG: đuôi tiêu đề sau dấu gạch — "… - Qube Research". Vẫn đi
-    #    qua `_got`, không ghi thẳng: nhánh này từng cho nguyên câu "from
-    #    mcgregorboyall Thank you for your application" lên bảng làm tên
-    #    công ty, vì nó bỏ qua mọi chốt ở trên.
+    # 5. LAST: the subject tail after a dash — "… - Qube Research". It still
+    #    goes through `_got` rather than being written directly: this branch
+    #    once put the whole sentence "from mcgregorboyall Thank you for your
+    #    application" on the table as a company name, because it bypassed
+    #    every guard above.
     head = NOISE.sub("", msg.get("subject") or "").strip(" -–—|:")
     if re.search(r"\s[-–—|]\s", head):
         return _got(re.split(r"\s[-–—|]\s", head)[-1])[:60]
     return "" if la_trung_gian else _got(head)[:60]
 
 
-# VỊ TRÍ nằm TRƯỚC chữ `at`, công ty nằm sau. Cùng một câu, hai nửa:
+# THE ROLE comes BEFORE `at`, the company after. One sentence, two halves:
 #     "your application to Quantitative Researcher at Durlston Partners"
 #     "interest in the Machine Learning Engineer position at IMC"
-# Bỏ nửa trước đi là vứt mất cột `vị trí` của bảng, và vứt luôn thứ duy nhất
-# tách được "Schonfeld · Quant Research Intern" khỏi 70 tin Schonfeld khác.
+# Throwing away the first half loses the table's `role` column, and loses the
+# only thing separating "Schonfeld · Quant Research Intern" from the other 70
+# Schonfeld postings.
 _TRUOC_AT = re.compile(r"^(.+?)\s+\bat\s+\S", re.I | re.S)
 
-# Chữ bọc quanh chức danh, bỏ đi thì còn đúng cái tên.
+# Wrapping around a job title; strip it and the title remains.
 _VO_VAI_TRO = re.compile(
     r"\b(the|a|an|our|your|for|to|position|role|opening|opportunity|vacancy|"
     r"job)\b", re.I)
 
 
 def role_of(msg: dict) -> str:
-    """Vị trí đã nộp, đọc từ chính lá thư. "" nếu thư không nói.
+    """The role applied for, read from the mail itself. "" if it does not say.
 
-    Chỉ nhận khi câu có chữ `at` tách đôi — không có thì không biết đoạn bắt
-    được là chức danh hay tên công ty, và đoán bừa thì cột `vị trí` thành chỗ
-    chứa rác.
+    Only accepted when the sentence has an `at` separator — without one there
+    is no way to tell whether the captured span is a job title or a company,
+    and guessing turns the `role` column into a bin.
     """
     for nguon in (msg.get("subject") or "", msg.get("snippet") or ""):
         nguon = " ".join((nguon or "").split())
@@ -344,14 +359,17 @@ def role_of(msg: dict) -> str:
 
 
 def match_posting(conn, company: str, role: str = "") -> int | None:
-    """Tin nào trong kho ứng với lần nộp này. None nếu nộp ngoài app.
+    """Which posting in the store this application corresponds to. None if it
+    was applied to outside the app.
 
-    KHỚP CÔNG TY TRƯỚC, RỒI MỚI VỊ TRÍ. Một công ty có thể có 70 tin trong
-    kho (greenhouse:schonfeld), nên khớp mỗi tên công ty là chỉ đúng công ty
-    chứ chưa đúng CHỖ đã nộp — và trang chi tiết sẽ mở ra một JD khác hẳn.
+    MATCH THE COMPANY FIRST, THEN THE ROLE. One company can have 70 postings
+    in the store (greenhouse:schonfeld), so matching only the company name
+    identifies the company but not WHICH posting was applied to — and the
+    detail page would open a completely different JD.
 
-    Không tách được thì trả None. Bảng ghi "nộp ngoài app" là sự thật; chỉ
-    đại một tin gần đúng là nói dối ở chỗ người dùng không kiểm được.
+    When it cannot be resolved it returns None. The table saying "applied
+    outside the app" is the truth; pointing at a roughly similar posting is a
+    lie in a place the user cannot check.
     """
     key = norm(company or "").replace(" ", "")
     if len(key) < 3:
@@ -361,19 +379,20 @@ def match_posting(conn, company: str, role: str = "") -> int | None:
         " WHERE REPLACE(LOWER(REPLACE(company, ' ', '')), '.', '') LIKE ?"
         " ORDER BY kept DESC, score DESC", (f"%{key[:16]}%",)).fetchall()
     if not hang or not role:
-        # KHÔNG BIẾT VỊ TRÍ THÌ KHÔNG NỐI. Công ty chỉ có một tin trong kho
-        # cũng không đủ: Acadian có đúng một tin — "VP, Portfolio Manager" —
-        # còn người dùng là sinh viên mới ra trường. Một tin cùng công ty
-        # KHÔNG phải tin đã nộp.
+        # NO ROLE MEANS NO LINK. One posting for the company is not enough
+        # either: Acadian has exactly one — "VP, Portfolio Manager" — while
+        # the user is a recent graduate. A posting from the same company is
+        # NOT the posting applied to.
         return None
     rn = norm(role)
     for r in hang:
         tn = norm(r["title"])
         if not tn:
             continue
-        # Trùng khít, hoặc một bên chứa bên kia mà chỉ hơn vài chữ. "Quant
-        # Researcher" và "Senior Quant Researcher" là HAI tin khác nhau;
-        # "Quant Developer" và "Quant Developer (Systematic)" thì là một.
+        # An exact match, or one containing the other with only a few extra
+        # words. "Quant Researcher" and "Senior Quant Researcher" are TWO
+        # different postings; "Quant Developer" and "Quant Developer
+        # (Systematic)" are one.
         if tn == rn or ((rn in tn or tn in rn)
                         and abs(len(tn) - len(rn)) <= 14):
             return int(r["id"])
@@ -381,14 +400,16 @@ def match_posting(conn, company: str, role: str = "") -> int | None:
 
 
 def match(conn, msg: dict) -> int | None:
-    """Lần nộp nào ứng với thư này. Khớp theo TÊN CÔNG TY đã chuẩn hoá.
+    """Which application this mail belongs to. Matched on the NORMALISED
+    COMPANY NAME.
 
-    So CẢ bản bỏ khoảng trắng: tên miền không có dấu phân cách nên đoán ra
-    "Mangroup" trong khi bảng ghi "Man Group". Đoán vốn có sai số; chỗ khớp
-    phải chịu được, chứ không bắt chỗ đoán phải hoàn hảo.
+    It also compares the space-stripped form: a domain has no separators, so
+    the guess comes out "Mangroup" while the table says "Man Group". Guessing
+    has error in it; the matching has to tolerate that rather than demanding
+    perfect guesses.
 
-    Không khớp được thì trả None, và thư nằm lại ở dải "cần Vin" — chỉ chỗ,
-    không đoán bừa rồi ghi vào nhầm dòng.
+    No match returns None, and the mail stays on the "needs Vin" strip — it
+    points, rather than guessing and writing into the wrong row.
     """
     guess = norm(company_of(msg))
     if not guess:
@@ -400,9 +421,10 @@ def match(conn, msg: dict) -> int | None:
         if not key:
             continue
         flat = key.replace(" ", "")
-        # Tên NGẮN nằm trong tên dài: "imc" nằm trong "imctradinggroup",
-        # "man" nằm trong "freshman". Đòi tên ngắn phải đủ dài mới cho khớp
-        # kiểu nằm-trong; ngắn hơn thì phải trùng khít.
+        # A SHORT name inside a longer one: "imc" is inside
+        # "imctradinggroup", "man" is inside "freshman". A short name must be
+        # long enough before a contains-match is allowed; shorter than that
+        # requires an exact match.
         short = min(len(flat), len(tight))
         loose = short >= 5
         same = flat == tight
@@ -415,10 +437,11 @@ def match(conn, msg: dict) -> int | None:
     if len(hits) == 1:
         return int(hits[0]["id"])
 
-    # MỘT công ty, NHIỀU lần nộp. Đẩy bừa dòng đầu là chuyển trạng thái của
-    # đơn khác: thư từ chối vai trò A hạ luôn vai trò B đang chờ phỏng vấn.
-    # Xét thêm vai trò; không tách được thì trả None để Vin tự chỉ, vì "không
-    # biết" thà hơn "biết sai".
+    # ONE company, MANY applications. Taking the first row changes another
+    # application's status: a rejection for role A closes role B, which was
+    # awaiting an interview. The role is considered too; when it cannot be
+    # resolved it returns None for Vin to point, because "do not know" beats
+    # "know wrongly".
     blob = norm(f"{msg.get('subject', '')} {msg.get('snippet', '')}")
     named = [r for r in hits if (r["role"] or "").strip()
              and norm(r["role"]) in blob]
