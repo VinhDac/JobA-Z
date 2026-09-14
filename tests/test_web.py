@@ -567,7 +567,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # BẤM THÌ MỚI CHẠY. Tab CV không còn dựng lúc vẽ trang, nên muốn kiểm ô
     # "Bản sẽ gửi" thì phải dựng trước — y như người dùng bấm Chạy.
     check("chưa bấm Chạy -> tab CV nói rõ là chưa dựng, không vẽ ô rỗng",
-          "Chưa dựng bản CV nào" in get("/cv")[1])
+          "No CV has been built yet" in get("/cv")[1])
     from jobbot.cv import batch as _bt
     _cvc = db.connect(Path(tmp) / "jobbot.db")
     _bt.run(_cvc)
@@ -575,12 +575,12 @@ with tempfile.TemporaryDirectory() as tmp:
     _s, body = get("/cv")
     check("dựng xong thì ô hiện bản", "class=cvrow" in body)
     # KHỐI HỤT — khối trả lời câu hỏi duy nhất của tab: tối nay viết gì.
-    check("tab CV có khối HỤT", "VIẾT GÌ ĐỂ HẾT HỤT" in body.upper()
-          or "hết hụt" in body)
+    check("tab CV có khối HỤT", "WHAT TO WRITE TO CLOSE THE GAP" in body.upper()
+          or "close the gap" in body)
     # HAI ĐÍCH, không một: "làm hết bảng" gộp cả mấy dòng phải đi HỌC, mà học
     # tính bằng tháng còn viết tính bằng buổi tối.
     check("nói rõ đích VIẾT ĐƯỢC TỐI NAY tách khỏi đích phải đi học",
-          "làm được tối nay" in body and "đi học" in body)
+          "doable tonight" in body and "learnt" in body)
     check("và bỏ hàng chip 'nhắm vào chỗ hồ sơ đang câm' cũ",
           "nhắm vào chỗ hồ sơ đang câm" not in body)
     # IN HÀNG LOẠT ĐÃ BỎ. Câu hỏi thật ở ô này không phải "in cho tôi 28 tệp",
@@ -695,11 +695,11 @@ with tempfile.TemporaryDirectory() as tmp:
     _co = _cvl._list(_gia_data, "man group")
     check("tìm theo tên công ty -> chỉ còn bản khớp",
           "Man Group" in _co and "Citadel" not in _co)
-    check("và nói rõ lọc còn mấy bản trên tổng", "1</b>/2 bản" in _co)
+    check("và nói rõ lọc còn mấy bản trên tổng", "1</b>/2 versions" in _co)
     _ct = _cvl._list(_gia_data, "data scientist")
     check("tìm theo CHỨC DANH cũng được", "Citadel" in _ct and "Man Group" not in _ct)
     check("không khớp gì -> nói thẳng, không trả danh sách rỗng",
-          "không bản nào gửi cho" in _cvl._list(_gia_data, "zzzz"))
+          "no version goes to" in _cvl._list(_gia_data, "zzzz"))
     check("ô tìm vẫn còn khi không khớp — để sửa chữ ngay tại chỗ",
           "class=jfind" in _cvl._list(_gia_data, "zzzz"))
     # SỐ HIỆU BẢN phải giữ nguyên khi lọc: "#2" lúc tìm mà là "#1" lúc không
@@ -724,16 +724,16 @@ with tempfile.TemporaryDirectory() as tmp:
     # Hai con số là HAI câu hỏi khác nhau; gộp chữ thì người đọc trừ 6−4=2 rồi
     # tưởng máy đếm sai khi danh sách chỉ có 1 mục.
     check("nói rõ 'hồ sơ chưa có câu nào về', không phải 'bản này thiếu'",
-          "hồ sơ chưa có câu nào về" in _ca)
+          "the profile has no sentence about" in _ca)
     _nhom2 = [{"jobs": [{"id": 5, "company": "A", "title": "X", "score": 90},
                         {"id": 6, "company": "B", "title": "Y", "score": 70}],
                "only": [], "missing": [], "lines": 0,
                "hoi": 4, "tra_loi": 2, "cam": []}]
     check("nhóm >1 tin -> nói rõ bản dùng chung cho mấy tin",
-          "dùng chung cho" in _cvl._list({"versions": _nhom2, "jobs": 2,
+          "shared by" in _cvl._list({"versions": _nhom2, "jobs": 2,
                                           "gaps": [], "core": 0}))
     check("nhóm 1 tin -> KHÔNG ghi 'dùng chung', đó là nói thừa",
-          "dùng chung cho" not in _ca)
+          "shared by" not in _ca)
     # Dòng phải mở đúng tin người ta vừa gõ tên, không mở một tin khác cùng bản.
     _hai = [{"jobs": [{"id": 9, "company": "Low Co", "title": "X", "score": 99},
                       {"id": 7, "company": "Man Group", "title": "Y", "score": 10}],
@@ -774,10 +774,10 @@ with tempfile.TemporaryDirectory() as tmp:
     check("gộp bản trùng, không liệt kê từng tin",
           body.count("class=cvrow") <= 60)
     check("nói THẲNG mức may đo thật, không khoe số bản",
-          "giống hệt nhau ở mọi bản" in body)
+          "identical in every version" in body)
     check("mỗi dòng trỏ tới bản CV đọc được", "/cv'" in body and "cvrow" in body)
     check("nói ra kỹ năng hồ sơ KHÔNG nói được câu nào",
-          "KHÔNG nói được câu nào" in body)
+          "can say NOTHING about" in body)
 
     from jobbot.dashboard import live as live2
     data = live2.cv_versions(db.connect(Path(tmp) / "jobbot.db"))
@@ -829,8 +829,8 @@ with tempfile.TemporaryDirectory() as tmp:
         check(f"có mức may đo {_r}", f"rieng:{_r}" in _adj)
     # KHÔNG gõ cứng số bản vào nhãn: nó khác theo từng hồ sơ và từng kho tin.
     check("nhãn nói VIỆC nó làm, không gõ cứng số bản của một kho khác",
-          "đưa mục kỹ năng tin này hỏi lên trước" in _adj
-          and "bản/120 tin" not in _adj)
+          "moves the skills sections this posting asks for to the front" in _adj
+          and "versions/120 postings" not in _adj)
     check("có công tắc MÁY TỰ LO", "data-arg='tu_lo:" in _adj)
     # BẬT thì phải SÁNG LÊN — và trạng thái phải đọc được từ HTML, không chỉ
     # từ màu. Cùng lỗi với `.mbtn.off`: lớp có ở HTML mà không có CSS.
@@ -840,9 +840,9 @@ with tempfile.TemporaryDirectory() as tmp:
     _cE.close()
     _adjE = get("/adjust/cv")[1]
     check("bật lên -> nút đổi chữ và BỎ lớp off",
-          ">BẬT<" in _adjE and "swbtn off" not in _adjE)
+          ">ON<" in _adjE and "swbtn off" not in _adjE)
     check("và dòng trạng thái nói ra máy đang lo gì",
-          "nháp dựng sẵn" in _adjE)
+          "drafts prepared" in _adjE)
     _cE = db.connect(Path(tmp) / "jobbot.db")
     _pfc.set_flag(_cE, _pfc.CV_TU_LO, False)
     _cE.close()
@@ -861,8 +861,8 @@ with tempfile.TemporaryDirectory() as tmp:
     _cD.close()
     _adj2 = get("/adjust/cv")[1]
     check("đổi mức -> dấu tích chạy theo",
-          "data-arg='rieng:vua' title='+ đưa mục kỹ năng tin này hỏi lên trước'>✓"
-          in _adj2)
+          "data-arg='rieng:vua' title='+ moves the skills sections this "
+          "posting asks for to the front'>✓" in _adj2)
     _cD = db.connect(Path(tmp) / "jobbot.db")
     _pfc.put(_cD, _pfc.CV_RIENG, "rieng")
     _cD.close()
@@ -2727,15 +2727,15 @@ with tempfile.TemporaryDirectory() as tmp:
     _cX.close()
     _, _sau_xoa = get("/cv")
     check("mở lại tab CV vẫn trống, máy KHÔNG tự dựng",
-          "Chưa dựng bản CV nào" in _sau_xoa)
+          "No CV has been built yet" in _sau_xoa)
     # XOÁ LÀ XOÁ HẾT. Thang HỤT và bản nháp đi CÙNG bản dựng (cv/batch.run),
     # nên xoá bản là cả tab sạch — không còn ô nào đầy số trong khi ô bên
     # cạnh nói "chưa dựng". Trước đây thang HỤT tính lại mỗi lần vẽ trang, và
     # tab CV thành hai cái đồng hồ chỉ hai giờ khác nhau.
-    check("xoá bản -> thang HỤT cũng sạch", "Chưa đo chỗ hụt" in _sau_xoa)
+    check("xoá bản -> thang HỤT cũng sạch", "The gap has not been measured" in _sau_xoa)
     # Và nói ĐÚNG việc phải làm: bấm Chạy, chứ không đổ cho Search khi kho tin
     # vẫn còn nguyên đó.
-    check("ô trống chỉ đúng nút phải bấm", "Bấm <b>Chạy</b>" in _sau_xoa)
+    check("ô trống chỉ đúng nút phải bấm", "Press <b>Run</b>" in _sau_xoa)
     check("và không còn bản nháp nào", "class=hnhap" not in _sau_xoa)
     # KHO KHỐI KHÔNG CÒN Ở TAB CV. Nó có nhà riêng ở màn Sửa khối, nơi bấm
     # vào một khối là soạn được luôn; ở tab CV nó chỉ để nhìn, mà tab này trả
@@ -2765,8 +2765,21 @@ with tempfile.TemporaryDirectory() as tmp:
     # DỰNG MỘT LƯỢT RA ĐỦ CẢ TAB: bản CV, thang HỤT, bản nháp — cùng một mốc.
     check("và lượt dựng đó ra CẢ thang HỤT", bool((_lai or {}).get("hut")))
     _, _cv_lai = get("/cv")
+    # HAI Ô, KHÔNG SO LE: bản CV và thang HỤT dựng trong CÙNG một lượt, nên ô
+    # nào cũng phải nói về CÙNG lượt đó — không có chuyện một ô đầy số còn ô
+    # bên cạnh ghi "chưa dựng".
+    #
+    # Bản cũ canh chuỗi "Bấm Chạy", mà cả hai ô trống đều viết "Bấm
+    # <b>Chạy</b>" — nên bài canh luôn xanh dù ô nào còn trống. Giờ canh đúng
+    # chữ của từng ô, và canh ô HỤT theo CHÍNH số đo vừa lưu: kho tin bé thì
+    # thang HỤT rỗng là đúng, không phải lệch nhịp.
+    _co_hut = bool(((_lai or {}).get("hut") or {}).get("buoc"))
     check("tab CV đầy lại cùng lúc, không so le",
-          "Bấm Chạy" not in _cv_lai and "hết hụt" in _cv_lai)
+          "No CV has been built yet" not in _cv_lai
+          and "close the gap" in _cv_lai
+          and (("The gap has not been measured" in _cv_lai) is not _co_hut),
+          ("CV còn trống " if "No CV has been built yet" in _cv_lai else "")
+          + f"hut={_co_hut}")
 
     print("\n[CV: màn con SOẠN KHỐI — chỗ ngồi viết, không phải tấm phủ]")
     # Tấm phủ /cv/block cũ rộng 380px và CÂM: gõ xong bấm Lưu, rồi chỉ biết

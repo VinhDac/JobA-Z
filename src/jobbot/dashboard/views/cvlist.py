@@ -1,17 +1,19 @@
-"""CV — mọi bản hệ thống SẼ GỬI, xem trước khi gửi.
+"""CV — every version the system WILL SEND, read before it goes.
 
-Tab này KHÔNG phải chỗ soạn CV. Bản gốc vẫn là `cv_text` trong Hồ sơ — chữ của
-Vin, và luật gốc không đổi: máy CHỌN và SẮP XẾP, không viết mới (xem cv/build).
+This tab is NOT where a CV is written. The original is still `cv_text` in the
+Profile — Vin's words, and the founding rule stands: the machine SELECTS and
+ORDERS, it does not write (see cv/build).
 
-Đây là chỗ NHÌN TRƯỚC. Trước khi bước 5 gửi bất cứ thứ gì đi, Vin phải đọc
-được mọi bản sẽ đi ra ngoài, trên một trang.
+This is where you LOOK FIRST. Before step 5 sends anything anywhere, Vin has
+to be able to read every version that will go out, on one page.
 
-Vì sao gộp bản trùng: 101 tin đáng nộp, nhưng chỉ 29 bản khác nhau. Cấu trúc
-CV cố định — 2 việc · 3 project · 2 học vấn · 1 chứng chỉ · 4 kỹ năng = 16 câu
-— nên phần đổi chỉ là CÂU NÀO trong mỗi khối được chọn. Liệt kê đủ 101 dòng là
-bắt đọc lại cùng một bản ba bốn lần.
+Why duplicate versions are grouped: 101 postings worth applying to, but only
+29 distinct versions. The CV structure is fixed — 2 roles · 3 projects · 2
+education · 1 certificate · 4 skills = 16 sentences — so what changes is only
+WHICH SENTENCE in each block gets picked. Listing all 101 rows means reading
+the same version three or four times.
 
-CHỈ VẼ.
+DRAWING ONLY.
 """
 
 from __future__ import annotations
@@ -21,78 +23,81 @@ from urllib.parse import quote
 
 from . import runtime
 
-KIND_LABEL = {"experience": "việc", "project": "project", "education": "học vấn",
-              "cert": "chứng chỉ", "skill": "kỹ năng", "summary": "tóm tắt"}
-
 
 def _khop(job: dict, q: str) -> bool:
-    """Tin này có khớp chữ đang tìm không — theo CÔNG TY hoặc CHỨC DANH."""
+    """Does this posting match the search text — by COMPANY or by TITLE."""
     return q in (job.get("company") or "").lower() \
         or q in (job.get("title") or "").lower()
 
 
 def _row(index: int, ver: dict, q: str = "") -> str:
-    """MỘT dòng = một NHÓM TIN dùng chung một bản CV.
+    """ONE row = one GROUP OF POSTINGS sharing a CV.
 
-    NGƯỜI DÙNG KHÔNG NỘP CHO "BẢN", HỌ NỘP CHO MỘT TIN. Nên dòng phải dẫn
-    bằng tin, không dẫn bằng tài liệu.
+    NOBODY APPLIES TO A "VERSION", THEY APPLY TO A POSTING. So the row has to
+    lead with the posting, not with the document.
 
-    Bản cũ in ra 4 câu tiếng Anh RIÊNG của bản này. Đó là chữ chính Vin viết —
-    đọc lại không nắm thêm được gì, mà nhân 28 dòng thì không ai đọc nổi. Nó
-    cũng không trả lời được câu hỏi thật của người đứng trước 364 tin: *giờ
-    tôi nên nộp cái nào, và bản này có đủ tốt để gửi không.*
+    The old version printed the 4 English sentences unique to this CV. Those
+    are Vin's own words — rereading them adds nothing, and times 28 rows
+    nobody can read it at all. It also failed to answer the real question
+    someone standing in front of 364 postings has: *which do I apply to now,
+    and is this version good enough to send.*
 
-    Bốn thứ, theo đúng thứ tự cần đọc:
+    Four things, in the order they need reading:
 
-        tin nào      công ty — chức danh — điểm, chính là thứ bấm vào để nộp
-        đủ chưa      trả lời được mấy phần thứ TIN ĐÓ hỏi  <- chốt chặn
-        rộng bao xa  còn mấy tin nữa dùng chung bản này
-        thiếu gì     kỹ năng tin đó đòi mà CV câm  <- việc phải làm
+        which posting  company — title — score, and it is what you click to apply
+        good enough    how much of what THAT POSTING asks it answers  <- the gate
+        how far it goes  how many other postings share this version
+        what is missing  skills the posting asks that the CV is silent on  <- the work
 
-    Chi tiết (từng câu, sửa gì, vì sao bỏ) nằm ở trang bấm vào — chỗ có cả
-    bản chấm điểm. Danh sách để QUÉT, trang chi tiết để ĐỌC.
+    The detail (each sentence, what was changed, why something was dropped)
+    lives on the page you click into — where the scoring sits too. The list is
+    for SCANNING, the detail page for READING.
     """
     jobs = ver["jobs"]
     if q:
         jobs = sorted(jobs, key=lambda j: not _khop(j, q))
-    # Đang tìm thì dòng phải mở đúng tin vừa gõ tên, không mở tin điểm cao
-    # nhất của nhóm — người ta gõ "Man Group" là muốn xem bản gửi Man Group.
+    # While searching, the row must open the posting whose name was typed, not
+    # the group's highest-scoring one — somebody typing "Man Group" wants to
+    # see the version going to Man Group.
     hop = [j for j in jobs if _khop(j, q)] if q else jobs
     best = max(hop or jobs, key=lambda j: j["score"] or 0)
 
-    # PHỦ — con số chốt của cả dòng. Tính trên MỘT tin (xem live.cv_versions):
-    # tính trên hợp cả nhóm thì nó đo kích thước nhóm, không đo chất lượng CV.
+    # COVERAGE — the row's decisive number. Computed over ONE posting (see
+    # live.cv_versions): computed over the whole group it measures the group's
+    # size, not the CV's quality.
     hoi = int(ver.get("hoi") or 0)
     tra = int(ver.get("tra_loi") or 0)
     pct = round(100 * tra / hoi) if hoi else 0
-    # Ba mức, vì ba mức dẫn tới ba HÀNH ĐỘNG khác nhau: gửi được / gửi được
-    # nhưng yếu / viết thêm đã rồi hẵng gửi.
+    # Three levels, because three levels lead to three different ACTIONS:
+    # ready to send / sendable but weak / write more before sending.
     muc = "ok" if pct >= 60 else ("mid" if pct >= 35 else "low")
     thanh = (f"<span class='vbarc {muc}'><i style='width:{pct}%'></i></span>"
              if hoi else "")
-    do = (f"<b>{tra}/{hoi}</b> thứ tin này hỏi" if hoi
-          else "<b>—</b> tin này không gọi tên kỹ năng nào")
+    do = (f"<b>{tra}/{hoi}</b> of what this posting asks" if hoi
+          else "<b>—</b> this posting names no skill at all")
 
-    khac = (f" · dùng chung cho {len(jobs):,} tin" if len(jobs) > 1 else "")
+    khac = (f" · shared by {len(jobs):,} postings" if len(jobs) > 1 else "")
 
-    # HAI CON SỐ, HAI CÂU HỎI KHÁC NHAU — phải nói rõ, không thì người đọc
-    # trừ 7−1=6 rồi thấy bên dưới chỉ liệt kê 2 và tưởng máy đếm sai:
-    #   tra/hoi   BẢN NÀY trả lời được mấy thứ TIN ĐÓ hỏi
-    #   cam       CẢ HỒ SƠ không có câu nào về mấy thứ này
-    # Ở giữa là thứ hồ sơ CÓ mà bản này không kịp dùng — đó là chuyện bố cục,
-    # xem ở trang chi tiết.
+    # TWO NUMBERS, TWO DIFFERENT QUESTIONS — and it has to be said outright,
+    # or the reader works out 7−1=6, sees only 2 listed below, and thinks the
+    # machine counted wrong:
+    #   tra/hoi   how much of what THAT POSTING asks THIS VERSION answers
+    #   cam       what THE WHOLE PROFILE has no sentence about
+    # In between is what the profile HAS but this version had no room for —
+    # that is a layout matter, and it is on the detail page.
     cam = ver.get("cam") or ver.get("missing") or []
     gap = ""
     if cam:
         chip = "".join(f"<span class=cvmiss>{esc(m)}</span>" for m in cam[:5])
         if len(cam) > 5:
             chip += f"<span class=cvmiss>+{len(cam) - 5}</span>"
-        gap = f"<div class=cvgap>hồ sơ chưa có câu nào về: {chip}</div>"
+        gap = f"<div class=cvgap>the profile has no sentence about: {chip}</div>"
 
     return (
-        # MANG THEO ĐƯỜNG VỀ. Trang xem bản CV vào được từ đây và từ trang
-        # chi tiết tin; không mang theo thì nút Back phải gõ cứng một đích, và
-        # một trong hai lối đi vào ngõ cụt.
+        # CARRY THE WAY BACK. The CV view is reachable from here and from a
+        # posting's detail page; without carrying it the Back button has to
+        # hardcode one destination, and one of the two ways in becomes a dead
+        # end.
         f"<a class=cvrow href='/jobs/{best['id']}/cv?tu=/cv'>"
         f"<div class=cvn>#{index}</div>"
         f"<div class=cvmain>"
@@ -104,61 +109,66 @@ def _row(index: int, ver: dict, q: str = "") -> str:
         f"<div class=cvact><span class=cvscore>{best['score']}</span>"
         f"<button class='mbtn tiny' data-post='/cv/pdf'"
         f" data-arg='{best['id']}' onclick='event.preventDefault()'>PDF</button>"
-        f"<span class=muted>xem →</span></div></a>")
+        f"<span class=muted>open →</span></div></a>")
 
 
 def _tim(q: str) -> str:
-    """Ô TÌM trong mấy bản đã dựng.
+    """THE SEARCH BOX over the versions already built.
 
-    Câu hỏi thật của người dùng ở ô này không phải "cho tôi xem 28 bản", mà là
-    "gửi Man Group thì dùng bản nào". 28 dòng không trả lời được câu đó; gõ
-    tên công ty thì trả lời được ngay.
+    The user's real question at this box is not "show me 28 versions" but
+    "which version goes to Man Group". 28 rows cannot answer that; typing the
+    company name answers it at once.
 
-    FORM GET, không JavaScript — giống ô tìm ở tab Search: trạng thái nằm hết
-    trên URL, nên gõ xong bấm Enter là ra một địa chỉ lưu lại được và Back được.
+    A GET form, no JavaScript — like the search box on the Search tab: the
+    state lives entirely on the URL, so typing and pressing Enter gives an
+    address that can be saved and gone Back from.
     """
-    xoa = ("<a class=jfindx href='/cv' title='Bỏ tìm, xem lại tất cả'>×</a>"
+    xoa = ("<a class=jfindx href='/cv' title='Clear the search, show all'>×</a>"
            if q else "")
     return (f"<form class=jfind method=get action='/cv'>"
             f"<input class=search type=search name=q value='{esc(q)}'"
             f" autocomplete=off spellcheck=false"
-            f" placeholder='gửi cho ai — gõ tên công ty hoặc chức danh'>"
+            f" placeholder='who it goes to — type a company or a title'>"
             f"{xoa}</form>")
 
 
 def _list(data: dict, q: str = "") -> str:
     versions = data["versions"]
     if not versions:
-        return ("<div class=empty-box>chưa có tin nào đáng nộp — chạy Search "
-                "trước, hoặc nới lưới lọc</div>")
+        return ("<div class=empty-box>no posting is worth applying to yet — run "
+                "Search first, or loosen the filters</div>")
 
     lines = versions[0]["lines"]
     core = data["core"]
     gaps = "".join(f"<span class=cvmiss>{esc(g)}</span>" for g in data["gaps"][:14])
 
-    # Nói thẳng mức may đo thật. "29 bản khác nhau" nghe như nhiều, nhưng
-    # 14/16 câu giống hệt nhau ở mọi bản — chỉ 2 câu đổi theo JD.
-    head = (f"<div class=gapnote><b>{len(versions)}</b> bản cho "
-            f"<b>{data['jobs']}</b> tin đáng nộp. Nhưng <b>{core}/{lines}</b> câu "
-            f"giống hệt nhau ở mọi bản — chỉ <b>{lines - core}</b> câu đổi theo JD. "
-            f"Dưới đây mỗi dòng chỉ in phần RIÊNG của bản đó.</div>")
+    # Say outright how much tailoring there really is. "29 distinct versions"
+    # sounds like a lot, but 14 of 16 sentences are identical across every one
+    # — only 2 sentences change with the JD.
+    head = (f"<div class=gapnote><b>{len(versions)}</b> versions for "
+            f"<b>{data['jobs']}</b> postings worth applying to. But "
+            f"<b>{core}/{lines}</b> sentences are identical in every version — "
+            f"only <b>{lines - core}</b> change with the JD. Each row below "
+            f"prints only what is UNIQUE to that version.</div>")
     if gaps:
-        head += (f"<div class=cvgaps>Hồ sơ KHÔNG nói được câu nào về: {gaps}"
-                 f"<span class=muted>— đây là chỗ project mới nên nhắm</span></div>")
+        head += (f"<div class=cvgaps>The profile can say NOTHING about: {gaps}"
+                 f"<span class=muted>— this is what a new project should aim "
+                 f"at</span></div>")
 
     head += _tim(q)
 
-    # LỌC SAU KHI ĐÁNH SỐ. Số hiệu bản phải giữ nguyên khi tìm — "#7" lúc tìm
-    # mà là "#3" lúc không tìm thì không nói chuyện được về nó.
+    # FILTER AFTER NUMBERING. A version's number has to stay the same while
+    # searching — "#7" while searching that is "#3" otherwise cannot be talked
+    # about.
     danh = list(enumerate(versions, 1))
     if q:
         low = q.lower()
         danh = [(i, v) for i, v in danh if any(_khop(j, low) for j in v["jobs"])]
         if not danh:
-            return (head + "<div class=empty-box>không bản nào gửi cho "
-                    f"«{esc(q)}» — thử tên công ty hoặc chức danh khác</div>")
-        head += (f"<div class=gapnote><b>{len(danh)}</b>/{len(versions)} bản "
-                 f"có tin khớp «{esc(q)}»</div>")
+            return (head + "<div class=empty-box>no version goes to "
+                    f"«{esc(q)}» — try another company or title</div>")
+        head += (f"<div class=gapnote><b>{len(danh)}</b>/{len(versions)} versions "
+                 f"have a posting matching «{esc(q)}»</div>")
 
     return head + "<div class=vlist>" + "".join(
         _row(i, v, q.lower()) for i, v in danh) + "</div>"
@@ -168,117 +178,133 @@ def render(*, versions: list[dict], jobs: int, gaps: list[str],
            core: int = 0, blocks: list[dict] | None = None,
            stage: dict | None = None, q: str = "",
            gap: dict | None = None, nhap: dict | None = None) -> str:
-    """Tab CV. KHỐI là nguyên liệu của Vin; BẢN SẼ GỬI là thứ máy dựng ra.
+    """The CV tab. BLOCKS are Vin's raw material; VERSIONS are what the machine
+    builds from them.
 
-    Hai ô đó khác hẳn nhau về quyền sở hữu, nên chỉ ô bên phải chờ nút Chạy:
-    khối thì Vin gõ vào và thấy ngay, bản thì phải bấm mới dựng.
+    Those two panels differ in who owns them, which is why only the right one
+    waits for a Run button: a block is typed by Vin and shows at once, a
+    version has to be built on request.
     """
     from ..layout import deck
     info = stage or {}
     data = {"versions": versions, "jobs": jobs, "gaps": gaps, "core": core}
     blocks = blocks or []
     words = sum(len(b["lines"]) for b in blocks)
-    # LỜI DẪN phải nói đúng tình trạng. Chưa dựng mà vẫn ghi "26 câu -> 0 bản
-    # cho 364 tin" thì người dùng tưởng máy dựng hỏng, chứ không hiểu là mình
-    # chưa bấm.
-    note = (f"{words} câu nguyên liệu → {len(versions)} bản cho {jobs} tin. "
-            f"Kho câu là TRẦN của cả hệ thống: muốn CV trúng hơn thì viết "
-            f"thêm khối, không phải chọn khéo hơn." if versions else
-            f"{words} câu nguyên liệu trong kho. Chưa dựng bản nào — bấm "
-            f"Chạy trên thanh trên để máy đọc từng tin rồi dựng bản riêng "
-            f"cho nó.")
+    # THE LEAD LINE has to describe the real state. Saying "26 sentences -> 0
+    # versions for 364 postings" before anything is built makes the user think
+    # the builder is broken rather than that they have not pressed anything.
+    note = (f"{words} sentences of raw material → {len(versions)} versions for "
+            f"{jobs} postings. The sentence store is the CEILING of the whole "
+            f"system: for a CV that lands better, write another block — not a "
+            f"cleverer selection." if versions else
+            f"{words} sentences of raw material in the store. Nothing built "
+            f"yet — press Run on the bar above and the machine reads each "
+            f"posting, then builds a version for it.")
     return runtime.render(
         title="CV", active="/cv", stream="cv", journal="corner",
-        # Dựng CV xong thì danh sách bản đổi -> vẽ lại. Màn SOẠN (cvsoan)
-        # KHÔNG khai `reload`: ở đó người ta đang gõ chữ, vẽ lại là cướp.
+        # Building CVs changes the version list -> redraw. The EDITOR screen
+        # (cvsoan) declares NO `reload`: people are typing there, and a redraw
+        # is a theft.
         reload="cv",
-        bar=deck("cv", "CV", info.get("state", "chưa dựng bản nào"),
-                 [(f"{words}", "câu kho", "stock"),
-                  (f"{len(versions)}", "bản", "act"),
-                  (f"{info.get('worth', 0):,}", "tin đáng nộp", "view")],
+        bar=deck("cv", "CV", info.get("state", "nothing built yet"),
+                 [(f"{words}", "sentences", "stock"),
+                  (f"{len(versions)}", "versions", "act"),
+                  (f"{info.get('worth', 0):,}", "worth applying to", "view")],
                  adjust="/adjust/cv",
-                 run=info.get("label", "Chạy"),
+                 run=info.get("label", "Run"),
                  run_note=info.get("note", ""),
-                 sua=("/cv/soan", "Sửa khối",
-                      "Mở màn soạn khối — rộng cả cửa sổ, chấm từng câu"),
-                 xoa=("/api/cv/xoa", "Xoá bản", "Xoá thật?",
-                      "Vứt mọi bản CV đã dựng. Chữ trên CV gốc KHÔNG bị đụng "
-                      "— bấm Chạy là dựng lại")),
+                 sua=("/cv/soan", "Edit blocks",
+                      "Open the block editor — full window, sentence by sentence"),
+                 xoa=("/api/cv/xoa", "Delete versions", "Really delete?",
+                      "Throw away every CV built. The words on the original CV "
+                      "are NOT touched — press Run to rebuild")),
         note=note,
         cols=2, columns="minmax(360px, 1fr) 1.6fr",
         rows_tpl="1fr 140px", journal_at=(1, 2),
         panels=[
-            # KHO KHỐI ĐÃ RỜI KHỎI ĐÂY. Nó có nhà riêng ở màn Sửa khối, nơi
-            # bấm vào một khối là soạn được luôn. Ở đây nó chỉ để nhìn — mà
-            # tab này trả lời hai câu khác: *tối nay viết gì* và *gửi bản nào*.
-            runtime.panel("Viết gì để hết hụt", hut(gap or {}, nhap), at=(1, 1)),
-            runtime.panel("Bản sẽ gửi", _list(data, q) if versions
+            # THE BLOCK STORE HAS MOVED OUT OF HERE. It has a home of its own
+            # on the Edit blocks screen, where clicking a block edits it. Here
+            # it was only to look at — while this tab answers two other
+            # questions: *what do I write tonight* and *which version do I
+            # send*.
+            runtime.panel("What to write to close the gap", hut(gap or {}, nhap),
+                          at=(1, 1)),
+            runtime.panel("What will be sent", _list(data, q) if versions
                           else _chua_dung(info), rows=2, at=(2, 1)),
         ],
     )
 
 
 def _chua_dung(info: dict) -> str:
-    """Ô trống khi chưa bấm Chạy. Nói ra SẼ CÓ GÌ, không chỉ nói là trống.
+    """The empty panel before Run has been pressed. It says WHAT THERE WILL BE,
+    not merely that there is nothing.
 
-    "Chưa có dữ liệu" là câu vô dụng: nó không cho người dùng biết bấm vào thì
-    được gì, nên họ không bấm.
+    "No data yet" is a useless sentence: it does not tell the user what
+    pressing the button gets them, so they do not press it.
     """
     ly_do = esc(info.get("note", ""))
     return (
         "<div class=empty-box>"
-        "<b>Chưa dựng bản CV nào.</b><br>"
-        "Bấm <b>Chạy</b> trên thanh trên. Máy sẽ đọc từng tin đáng nộp, hỏi "
-        "kho câu của bạn xem câu nào trả lời được yêu cầu của tin đó, rồi "
-        "dựng một bản riêng — kèm bản so sánh trước/sau và lý do từng câu "
-        "được chọn hay bị bỏ."
+        "<b>No CV has been built yet.</b><br>"
+        "Press <b>Run</b> on the bar above. The machine reads every posting "
+        "worth applying to, asks your sentence store which sentences answer "
+        "that posting's requirements, and builds a version for it — with a "
+        "before/after comparison and the reason each sentence was picked or "
+        "dropped."
         f"<br><span class=muted>{ly_do}</span></div>")
 
 
-# ------------------------------------------------------ tấm Điều chỉnh ⚟
+# ------------------------------------------------------ the ⚟ Adjust panel
 
-# HAI NÚM, hết. Bảy núm đã bỏ — xem lời chú ở core/prefs.py.
+# TWO KNOBS, that is all. Seven knobs were dropped — see the note in
+# core/prefs.py.
 #
-# Người dùng cần đúng hai câu trả lời: bản CV riêng cho từng tin tới mức nào,
-# và máy có tự lo phần nó lo được hay không. Mọi thứ khác từng bày ra ở đây
-# đều là bắt họ học luật của máy trước khi dùng được máy.
+# The user needs exactly two answers: how far each CV is tailored to its
+# posting, and whether the machine handles what it can handle by itself.
+# Everything else that used to be laid out here made them learn the machine's
+# rules before they could use the machine.
 
 NUM = (
-    # ĐỘ MAY ĐO — núm đổi thật nhiều nhất. Đo trên kho thật (358 tin):
-    # chung 25 bản · vừa 89 · riêng 157, lõi bất biến rơi 12/16 -> 9/16 câu.
-    # Cả ba mức CHỈ XẾP LẠI chữ người dùng đã viết.
+    # TAILORING DEPTH — the knob that changes most. Measured on the real store
+    # (358 postings): shared 25 versions · medium 89 · per-posting 157, with
+    # the unchanging core falling from 12/16 to 9/16 sentences. All three
+    # levels ONLY REORDER words the user already wrote.
     #
-    # KHÔNG gõ cứng con số vào nhãn: nó khác theo từng hồ sơ và từng kho tin,
-    # mà đếm lại thì tốn ba lượt dựng. Số thật hiện trên thanh sau khi dựng.
-    ("rieng", "Độ may đo", "mỗi bản riêng cho tin đó tới mức nào",
-     (("chung", "Dùng chung", "chỉ chọn câu trong khối việc và project"),
-      ("vua", "Vừa", "+ đưa mục kỹ năng tin này hỏi lên trước"),
-      ("rieng", "Riêng từng tin", "+ đưa cả món trong mục lên trước"))),
+    # The numbers are NOT hardcoded into the labels: they differ per profile
+    # and per store, and recounting costs three build runs. The real numbers
+    # appear on the bar after a build.
+    ("rieng", "Tailoring depth", "how far each version is tailored to its posting",
+     (("chung", "Shared", "only picks sentences from experience and project blocks"),
+      ("vua", "Medium", "+ moves the skills sections this posting asks for to the front"),
+      ("rieng", "Per posting", "+ moves the items inside those sections to the front"))),
 )
 
-# CÔNG TẮC TỰ LO — máy làm sẵn mọi phần nó làm được, không đợi bấm.
+# THE SELF-SERVE SWITCH — the machine does everything it can without being
+# asked.
 TU_LO = (
-    "tu_lo", "Máy tự lo",
-    "Bật lên thì máy làm sẵn hai việc: dựng bản nháp cho MỌI chỗ hụt nhãn "
-    "VIẾT, và dựng lại toàn bộ bản CV ngay khi chữ trên CV đổi. Phần duy "
-    "nhất nó không tự lo được là CON SỐ — bao nhiêu cái, trên bao nhiêu dữ "
-    "liệu, đổi được mấy phần. Máy không biết bạn đã làm gì, và câu trên CV "
-    "là câu bạn phải đỡ được trong phòng phỏng vấn.")
+    "tu_lo", "Machine handles it",
+    "Turned on, the machine does two things unasked: builds a draft for EVERY "
+    "gap labelled WRITE, and rebuilds every CV the moment the words on the CV "
+    "change. The one part it cannot handle is THE NUMBERS — how many, over "
+    "how much data, how much it changed. The machine does not know what you "
+    "did, and a sentence on a CV is a sentence you have to hold up in the "
+    "interview room.")
 
 
 def adjust(num: dict | None = None) -> str:
-    """Tấm phủ ⚟ — HAI núm của tầng CV.
+    """The ⚟ overlay — the CV layer's TWO knobs.
 
-    Bấm là có tác dụng ngay, KHÔNG đi qua nút Áp dụng — giống công tắc nguồn
-    ở tab Search.
+    Pressing takes effect immediately, with NO Apply button — like the source
+    switches on the Search tab.
     """
     dang = (num or {}).get("ten") or {}
     khoi = ""
     for ma, ten, y_nghia, chon in NUM:
-        # MỨC ĐANG DÙNG PHẢI CÓ DẤU TÍCH, không chỉ khác màu. Bản trước gắn
-        # lớp `off` cho mấy mức còn lại — mà `.mbtn.off` chưa bao giờ có CSS,
-        # nên cả ba nút trông y hệt nhau và không ai biết mình đang ở đâu.
-        # Dấu ✓ đọc được cả khi màu hỏng, cả khi in ra giấy.
+        # THE ACTIVE LEVEL MUST CARRY A TICK, not just a different colour. The
+        # previous version gave the other levels an `off` class — and
+        # `.mbtn.off` never had any CSS, so all three buttons looked identical
+        # and nobody could tell where they were. A ✓ reads even when the
+        # colour breaks, and on paper.
         nut = ""
         for gia_tri, nhan, ghi in chon:
             on = dang.get(ma) == gia_tri
@@ -294,119 +320,130 @@ def adjust(num: dict | None = None) -> str:
     khoi += (f"<div class='swrow{'' if on else ' off'}'>"
              f"<button class='mbtn tiny swbtn{'' if on else ' off'}'"
              f" data-post='/api/cv/num' data-arg='{ma}:{'0' if on else '1'}'>"
-             f"{'BẬT' if on else 'TẮT'}</button>"
+             f"{'ON' if on else 'OFF'}</button>"
              f"<b class=swten>{esc(ten)}</b>"
              f"<span class=swnow>"
-             + ("nháp dựng sẵn · dựng lại ngay" if on else "bạn tự bấm")
+             + ("drafts prepared · rebuilt at once" if on else "you press it yourself")
              + f"</span>"
-             f"<details class=swwhy><summary>vì sao</summary>"
+             f"<details class=swwhy><summary>why</summary>"
              f"<div class=swbody>{esc(y_nghia)}</div></details></div>")
 
-    return ("<div class=sheethead>Điều chỉnh · CV</div>"
+    return ("<div class=sheethead>Adjust · CV</div>"
             f"<div class=adjbox>{khoi}</div>")
 
 
-# ------------------------------------------------------------ khối HỤT
+# ------------------------------------------------------------ THE GAP BLOCK
 
-# CHÚ THÍCH PHẢI NÓI ĐÚNG THỨ MÁY ĐO. Bản trước ghi "bạn có làm rồi, chỉ chưa
-# viết ra" — máy không biết điều đó và chưa bao giờ đo nó; nó chỉ đo được là
-# mấy dòng yêu cầu này không gọi tên sản phẩm nào. Khẳng định thay người dùng
-# là đúng cái bệnh cả app này tránh.
+# THE CAPTION MUST DESCRIBE WHAT THE MACHINE MEASURES. An earlier version read
+# "you have done this, you just have not written it down" — the machine does
+# not know that and has never measured it; all it can measure is that these
+# requirement lines name no product. Making a claim on the user's behalf is
+# exactly the disease this whole app avoids.
 def _nhap_dong(d: dict | None) -> str:
-    """Bản nháp của một dòng hụt — hoặc lý do không có, nói thẳng."""
+    """The draft for one gap row — or, said outright, why there is none."""
     if d is None:
-        return ""                         # công tắc đang tắt
+        return ""                         # the switch is off
     if d.get("nhap"):
         return (f"<span class=hnhap>{esc(d['nhap'])}"
-                f"<i>chữ {esc(d['cong_ty'][:24])} · bấm để điền số rồi lưu</i>"
+                f"<i>{esc(d['cong_ty'][:24])}'s words · click to fill in the "
+                f"numbers and save</i>"
                 f"</span>")
     if not d.get("nen_co"):
-        return ("<span class='hnhap tho'>không tin nào đòi nó bằng một dòng "
-                "TẢ VIỆC — viết từ đầu bằng chữ của bạn</span>")
-    return ("<span class='hnhap tho'>máy không rút gọn được dòng nào của họ "
-            "thành hình câu CV — viết từ đầu, dùng dòng của họ làm đề bài</span>")
+        return ("<span class='hnhap tho'>no posting asks for it in a line that "
+                "DESCRIBES WORK — write it from scratch in your own words</span>")
+    return ("<span class='hnhap tho'>the machine could not cut any of their "
+            "lines down to the shape of a CV sentence — write it from scratch, "
+            "using their line as the brief</span>")
 
 
-VIEC = {"viet": ("VIẾT", "viet",
-                 "mấy dòng đòi nó không gọi tên sản phẩm nào — diễn đạt lại "
-                 "bằng chữ của bạn được, nếu bạn đã làm. Một buổi tối."),
-        "hoc": ("HỌC", "hoc",
-                "gọi đích danh tên sản phẩm — không câu nào viết thay được")}
+VIEC = {"viet": ("WRITE", "viet",
+                 "the lines asking for it name no product — it can be said in "
+                 "your own words, if you have done it. One evening."),
+        "hoc": ("LEARN", "hoc",
+                "names a product outright — no sentence stands in for it")}
 
 
 def hut(d: dict, nhap: dict | None = None) -> str:
-    """Viết thêm câu về cái gì thì bao nhiêu TIN HẾT HỤT.
+    """Write a sentence about what, and how many POSTINGS CLEAR.
 
-    Khối trả lời câu hỏi duy nhất của tab này: *tối nay tôi viết gì?*
+    The block that answers this tab's one question: *what do I write tonight?*
 
-    ĐƠN VỊ LÀ TIN HẾT HỤT — tin mà MỌI dòng must đều đáp được. Đếm theo lượt
-    thì `cloud` đứng đầu (50 dòng) trong khi nó chỉ mở khoá thêm 19 tin, còn
-    `visualisation` mở 28. Đếm sai đơn vị là xếp sai thứ tự việc.
+    THE UNIT IS POSTINGS CLEARED — postings where EVERY must line is answered.
+    Counted by mentions, `cloud` comes top (50 lines) while unlocking only 19
+    postings, and `visualisation` unlocks 28. Counting in the wrong unit
+    orders the work wrongly.
 
-    Mỗi dòng là GIÁ TRỊ BIÊN khi đã làm xong mấy dòng trên nó — ba kỹ năng
-    cùng mở một tin thì cộng riêng lẻ là đếm tin đó ba lần.
+    Each row is the MARGINAL value once the rows above it are done — three
+    skills unlocking the same posting, added up separately, count it three
+    times.
     """
     buoc = d.get("buoc") or []
     _np = nhap or {}
     tong, nen = d.get("tin") or 0, d.get("nen") or 0
     if not buoc or not tong:
-        # THANG HỤT ĐI CÙNG BẢN DỰNG. Chưa bấm Chạy thì chưa có số đo nào —
-        # nói đúng việc phải làm, đừng đổ cho Search khi kho tin vẫn còn đó.
-        return ("<div class=empty-box><b>Chưa đo chỗ hụt.</b><br>Bấm "
-                "<b>Chạy</b> trên thanh trên — máy đo cùng lúc với lượt dựng "
-                "bản CV, nên hai ô luôn nói về cùng một lúc.<br>"
-                "<span class=muted>chưa có tin nào đã chấm điểm thì chạy "
-                "Search trước.</span></div>")
+        # THE GAP LADDER COMES WITH THE BUILD. Before Run is pressed there is
+        # no measurement — so name the actual thing to do, and do not blame
+        # Search while the posting store is sitting right there.
+        return ("<div class=empty-box><b>The gap has not been measured.</b><br>"
+                "Press <b>Run</b> on the bar above — the machine measures it "
+                "during the same pass that builds the CVs, so the two panels "
+                "always speak about the same moment.<br>"
+                "<span class=muted>if nothing has been scored yet, run Search "
+                "first.</span></div>")
 
     hang = []
     for b in buoc:
         nhan, lop, y = VIEC.get(b["viec"], VIEC["viet"])
         viet_duoc = b["dong"] - b["rieng"]
-        # Vạch dài theo SỐ TIN MỞ KHOÁ, không theo số dòng — đó là thứ quyết định
+        # The bar length follows POSTINGS UNLOCKED, not the number of lines —
+        # that is the number that decides.
         rong = round(100 * b["them"] / max(1, buoc[0]["them"]))
         hang.append(
             f"<div class=hrow title='{esc(y)}'>"
             f"<span class='hlab {lop}'>{nhan}</span>"
             f"<span class=hname>{esc(b['ky_nang'])}</span>"
             f"<span class=hbar><i style='width:{rong}%' class={lop}></i></span>"
-            f"<span class=hplus>+{b['them']}<span>tin</span></span>"
+            f"<span class=hplus>+{b['them']}<span>postings</span></span>"
             f"<span class=hcum>{b['cong_don']}<span>/{tong}</span></span>"
-            # NÚT VIẾT chỉ trên dòng CÓ THỂ VIẾT. Dòng toàn tên sản phẩm
-            # thì mời viết là mời làm một việc không làm được.
+            # THE WRITE BUTTON only on rows THAT CAN BE WRITTEN. Inviting
+            # someone to write a row that is nothing but product names is
+            # inviting them to do something that cannot be done.
             + (f"<a class='mbtn tiny hgo'"
                f" href='/cv/soan?ky={quote(b['ky_nang'], safe='')}"
                + (f"&nen={quote(_np.get(b['ky_nang'], {}).get('nen', ''), safe='')}"
                   if (_np.get(b["ky_nang"]) or {}).get("nhap") else "")
-               + f"'>{'Sửa nháp' if (_np.get(b['ky_nang']) or {}).get('nhap') else 'Viết'}</a>"
+               + f"'>{'Edit draft' if (_np.get(b['ky_nang']) or {}).get('nhap') else 'Write'}</a>"
                if b["dong"] - b["rieng"] > 0 else "")
-            + f"<span class=hsplit>{b['dong']} dòng đòi · "
-            f"<b>{viet_duoc}</b> viết được"
-            + (f" · <b>{b['rieng']}</b> phải học" if b["rieng"] else "")
+            + f"<span class=hsplit>{b['dong']} lines ask · "
+            f"<b>{viet_duoc}</b> writable"
+            + (f" · <b>{b['rieng']}</b> to be learnt" if b["rieng"] else "")
             + "</span>"
-            # BẢN NHÁP MÁY DỰNG SẴN, ngay trên dòng nó thuộc về. Bật công tắc
-            # mà phải đi tìm ở màn khác thì cái nút nói một đằng, màn hình nói
-            # một nẻo. Ba kết cục, cả ba đều nói ra.
+            # THE DRAFT THE MACHINE PREPARED, on the very row it belongs to.
+            # Turning a switch on and then having to hunt for the result on
+            # another screen means the button says one thing and the screen
+            # another. Three outcomes, and all three are said.
             + _nhap_dong(_np.get(b["ky_nang"]))
             + "</div>")
 
     het = buoc[-1]["cong_don"]
     cv_ = d.get("chi_viet") or nen
     nv = d.get("so_viet") or 0
-    # HAI ĐÍCH, KHÔNG MỘT. "Làm hết bảng" gộp cả mấy dòng phải đi HỌC — học
-    # tính bằng tháng, viết tính bằng buổi tối. Gộp lại là chỉ cho người dùng
-    # một cái đích tối nay không với tới được.
+    # TWO TARGETS, NOT ONE. "Do the whole table" folds in the rows that have
+    # to be LEARNT — learning is counted in months, writing in evenings.
+    # Folded together, the user is shown one target they cannot reach tonight.
     return (
-        f"<div class=gapnote>Hồ sơ đang đáp trọn <b>{nen}</b>/{tong} tin "
-        f"(<b>{nen * 100 // tong}%</b>).</div>"
+        f"<div class=gapnote>The profile fully answers <b>{nen}</b>/{tong} "
+        f"postings (<b>{nen * 100 // tong}%</b>).</div>"
         f"<div class=htarget>"
-        f"<span class=ht1><b>{cv_}</b> tin ({cv_ * 100 // tong}%)"
-        f"<span>chỉ cần VIẾT {nv} câu — làm được tối nay</span></span>"
-        f"<span class=ht2><b>{het}</b> tin ({het * 100 // tong}%)"
-        f"<span>nếu đi học nốt mấy thứ còn lại</span></span></div>"
-        f"<div class=gapnote>Mỗi dòng là số tin mở khoá THÊM khi đã làm xong "
-        f"mấy dòng trên nó — không phải cộng lại.</div>"
+        f"<span class=ht1><b>{cv_}</b> postings ({cv_ * 100 // tong}%)"
+        f"<span>needs only WRITING {nv} sentences — doable tonight</span></span>"
+        f"<span class=ht2><b>{het}</b> postings ({het * 100 // tong}%)"
+        f"<span>if the rest is learnt as well</span></span></div>"
+        f"<div class=gapnote>Each row is how many postings it unlocks ON TOP OF "
+        f"the rows above it — they do not add up.</div>"
         + "".join(hang)
-        + "<div class=note><b>VIẾT</b> = dòng yêu cầu nói chung chung mà bạn "
-          "đã làm rồi, chỉ chưa viết ra hồ sơ. <b>HỌC</b> = nó gọi đích danh "
-          "tên sản phẩm, không câu nào viết thay được. Máy chỉ chọn được chữ "
-          "bạn đã viết, nên mấy chỗ này là việc của bạn.</div>")
+        + "<div class=note><b>WRITE</b> = the requirement lines are general, so "
+          "they can be answered in your own words if you have done the work. "
+          "<b>LEARN</b> = they name a product outright, and no sentence stands "
+          "in for it. The machine can only pick words you have already "
+          "written, so these are yours to do.</div>")
