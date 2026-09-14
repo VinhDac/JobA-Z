@@ -1,12 +1,13 @@
-"""Sổ trả lời — hồ sơ của Vin, viết lại thành CÁI FORM HỎI.
+"""The answer book — Vin's profile, rewritten as WHAT THE FORM ASKS.
 
-MỘT NGUỒN. Mọi ô được điền đều lấy giá trị từ đây, không nơi nào khác dựng
-chuỗi riêng. Thiếu thì thiếu công khai — trả về rỗng, và ô đó thành việc của
-Vin. KHÔNG bịa, không suy diễn "chắc là".
+ONE SOURCE. Every filled field takes its value from here; nowhere else
+builds its own string. Missing is missing in the open — it returns empty and
+that field becomes Vin's job. It INVENTS nothing and infers no "probably".
 
-Vì sao có `aliases`: một sự thật, hai kiểu ô. Ô chữ nhận "MSc"; ô chọn có sẵn
-danh sách và phải trúng đúng chữ trong danh sách ("Master's Degree"). Cùng một
-sự thật, nên cùng một mục — không tách hai khoá rồi có ngày lệch nhau.
+Why `aliases` exists: one fact, two kinds of field. A text field takes "MSc";
+a select has a fixed list and has to hit the exact wording in it ("Master's
+Degree"). The same fact, so the same entry — not two keys waiting to drift
+apart.
 """
 
 from __future__ import annotations
@@ -15,16 +16,17 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-# Học vị: chữ viết tắt trên CV -> nhóm mà ô chọn của ATS dùng.
+# Degrees: the abbreviation on the CV -> the bucket an ATS select uses.
 DEGREE_LEVEL = {
     "phd": "doctor", "dphil": "doctor",
     "msc": "master", "ma": "master", "meng": "master", "mphil": "master",
     "mba": "mba", "mres": "master", "mfin": "master", "mst": "master",
     "bsc": "bachelor", "ba": "bachelor", "beng": "bachelor", "ba (hons)": "bachelor",
 }
-# Chữ hay gặp trong ô chọn học vị. Xếp từ CHÍNH XÁC NHẤT xuống, vì đó cũng là
-# thứ tự thử. Đo được: để mỗi chữ "master" thì máy chọn trúng "Master of
-# Business Administration (M.B.A.)" — Vin học MSc, đó là khai sai bằng cấp.
+# Wordings commonly found in degree selects. Ordered MOST PRECISE FIRST,
+# because that is also the order they are tried. Measured: with only the word
+# "master", the machine selected "Master of Business Administration
+# (M.B.A.)" — Vin has an MSc, so that is declaring the wrong degree.
 LEVEL_WORDS = {
     "doctor": ("Doctorate", "Doctor of Philosophy (Ph.D.)", "PhD", "doctor"),
     "master": ("Master's Degree", "Masters Degree", "Master of Science", "master"),
@@ -47,14 +49,16 @@ COUNTRY = {"uk": ("United Kingdom", "GB", "UK", "United Kingdom of Great Britain
 class Ans:
     """Một sự thật.
 
-    `value`   điền vào ô chữ
-    `aliases` các cách gọi khác, để dò trong danh sách thả xuống
-    `prefer`  phần CÒN LẠI của hồ sơ dùng để phân xử khi nhiều dòng cùng trúng
+    `value`   what goes into a text field
+    `aliases` other wordings, for finding it in a dropdown
+    `prefer`  the REST of the profile, used to break ties when several
+              options match
 
-    Vì sao có `prefer`: gõ "London" vào ô thành phố của Greenhouse thì ra cả
-    "London, England, United Kingdom" lẫn "London, Ontario, Canada". Một câu
-    trả lời thiếu vế không tự phân xử được — phải lấy vế còn lại của hồ sơ
-    (Vin ở UK) mà chọn. Đo được: không có nó, máy khai Vin sống ở Canada.
+    Why `prefer` exists: typing "London" into Greenhouse's city field offers
+    both "London, England, United Kingdom" and "London, Ontario, Canada". An
+    answer missing that second half cannot break the tie itself — it has to
+    use the rest of the profile (Vin is in the UK) to choose. Measured:
+    without it, the machine declared Vin lives in Canada.
     """
     value: str
     aliases: tuple[str, ...] = ()
@@ -77,7 +81,7 @@ class Education:
     start_year: int = 0
     end_month: int = 0
     end_year: int = 0
-    note: str = ""            # dòng phụ: điểm môn, hạng
+    note: str = ""            # the sub-line: module marks, classification
     missing: list[str] = field(default_factory=list)
 
 
@@ -92,15 +96,16 @@ def _month(word: str | None) -> int:
 
 
 def educations(text: str) -> list[Education]:
-    """MỌI bằng trong ô Education, không chỉ bằng mới nhất.
+    """EVERY degree in the Education field, not just the latest.
 
-    MỘT ngữ pháp cho cả đọc lẫn ghi: form hồ sơ dựng dòng bằng `line()` ngay
-    dưới, rồi chính hàm này đọc lại. Hai bên lệch nhau là form ghi ra thứ máy
-    không hiểu — mà thứ máy không hiểu ở đây là NGÀY TỐT NGHIỆP, câu mà lá đơn
-    nào cũng hỏi.
+    ONE grammar for both reading and writing: the profile form builds its
+    lines with `line()` just below, and this function reads them back. Let
+    the two drift and the form writes something the machine cannot parse —
+    and what it cannot parse here is the GRADUATION DATE, the question every
+    single application asks.
 
-    Dòng thụt đầu là dòng PHỤ (điểm môn, hạng) — thuộc về bằng ngay trên nó,
-    không phải một bằng mới.
+    An indented line is a SUB-LINE (module marks, classification) — it
+    belongs to the degree above it, not to a new degree.
     """
     out: list[Education] = []
     for line in (text or "").splitlines():
@@ -111,10 +116,10 @@ def educations(text: str) -> list[Education]:
                 out[-1].note = (out[-1].note + " " + line.strip()).strip()
             continue
         sach = line.strip()
-        # Dòng KHÔNG mang tên bằng và KHÔNG có khoảng năm thì không phải một
-        # bằng — nó là dòng phụ viết sát lề. CV thật hay viết điểm môn kiểu đó
-        # ("Investment & Portfolio Management 86 · Data Analysis 83"), và nhận
-        # nhầm thì nó hiện ra thành một cái bằng tên "Investment".
+        # A line with NO degree name and NO year range is not a degree — it
+        # is a sub-line written flush left. Real CVs often write module marks
+        # that way ("Investment & Portfolio Management 86 · Data Analysis
+        # 83"), and misreading it produces a degree called "Investment".
         if out and not _la_bang(sach):
             out[-1].note = (out[-1].note + " " + sach).strip()
             continue
@@ -123,7 +128,7 @@ def educations(text: str) -> list[Education]:
 
 
 def _la_bang(dong: str) -> bool:
-    """Dòng này có phải một cái BẰNG không — có tên bằng, hoặc có khoảng năm."""
+    """Is this line a DEGREE — does it name one, or carry a year range."""
     dau = _DEGREE_HEAD.match(dong)
     if dau:
         key = dau.group(1).lower().replace(".", "").replace(" (hons)", "")
@@ -134,11 +139,12 @@ def _la_bang(dong: str) -> bool:
 
 def line(degree: str, discipline: str, school: str,
          start: str, end: str, note: str = "") -> str:
-    """Các ô rời -> ĐÚNG dòng mà `educations()` đọc lại được.
+    """The separate fields -> EXACTLY the line `educations()` can read back.
 
     Dạng: "MSc Computational Finance — Royal Holloway, Sep 2025 – Sep 2026"
-    Ghi chú (điểm môn) xuống dòng và THỤT VÀO — đó là cách nói "đây là dòng
-    phụ của bằng trên", và cũng là thứ giữ cho nó không bị đọc nhầm thành một
+    The note (module marks) goes on its own INDENTED line — that is how it
+    says "this is a sub-line of the degree above", and it is also what keeps
+    it from being misread as another
     bằng thứ hai.
     """
     trai = " ".join(x for x in (degree.strip(), discipline.strip()) if x)
@@ -153,15 +159,16 @@ def line(degree: str, discipline: str, school: str,
 
 
 def education(text: str) -> Education:
-    """Bằng MỚI NHẤT — dòng đầu. Các ô mà form xin việc hỏi.
+    """The LATEST degree — the first line. The fields an application asks for.
 
-    Ngữ pháp đọc được (đúng cách Vin đã viết):
+    The grammar it reads (exactly how Vin wrote it):
 
         MSc Computational Finance — Royal Holloway, University of London, 2025–2026
         BA (Hons) Advanced Finance — National Economics University, Vietnam
 
-    Có tháng thì lấy tháng ("Sep 2025 – Sep 2026"). Không có thì KHÔNG đoán —
-    ghi vào `missing` để báo Vin sửa hồ sơ một lần, khỏi phải chọn tay 49 lần.
+    If a month is there it takes it ("Sep 2025 – Sep 2026"). If not it does
+    NOT guess — it records it in `missing` so Vin fixes the profile once
+    instead of picking by hand 49 times.
     """
     hang = educations(text)
     if not hang:
@@ -173,9 +180,10 @@ def education(text: str) -> Education:
 
 def _one(head: str) -> Education:
     out = Education()
-    # Nhiều kiểu dấu ngăn. Chỉ nhận "—" và " - " thì Vin gõ "MSc X-Royal
-    # Holloway" hay "MSc X | Royal Holloway" là CẢ DÒNG chui vào ô ngành học
-    # và ô trường bỏ trống — nhà tuyển dụng nhận một chuỗi vô nghĩa.
+    # Several separator styles. Accepting only "—" and " - " means that
+    # "MSc X-Royal Holloway" or "MSc X | Royal Holloway" puts THE WHOLE LINE
+    # into the field-of-study box and leaves the university box empty — and
+    # the employer receives a meaningless string.
     left, right = head, ""
     for dash in ("—", "–", " - ", " | ", " · ", ", "):
         a, sep, b = head.partition(dash)
@@ -200,18 +208,20 @@ def _one(head: str) -> Education:
     out.school = right.rstrip(" ,")
 
     if not out.start_year:
-        out.missing.append("năm học")
+        out.missing.append("the study years")
     elif not out.start_month:
-        # Ghi rõ cách sửa: đây là dữ liệu thiếu, không phải luật thiếu.
-        out.missing.append("tháng học — sửa ô Education thành 'Sep 2025 – Sep 2026'")
+        # Say how to fix it: this is missing data, not a missing rule.
+        out.missing.append("the study months — write Education as "
+                           "'Sep 2025 – Sep 2026'")
     return out
 
 
 def _links(raw: str) -> dict[str, str]:
-    """Tách các đường dẫn. Chỉ nhận thứ THẬT SỰ là URL.
+    """Split out the links. Only accepts what is genuinely a URL.
 
-    Hồ sơ đang ghi trần chữ "LinkedIn"/"GitHub" — đó là nhãn, không phải địa
-    chỉ. Điền chữ "LinkedIn" vào ô LinkedIn URL là rác. Bỏ, và báo thiếu.
+    The profile currently holds the bare words "LinkedIn"/"GitHub" — those
+    are labels, not addresses. Putting the word "LinkedIn" into a LinkedIn
+    URL field is rubbish. Drop it, and report it missing.
     """
     out = {"website": "", "linkedin": "", "github": ""}
     for piece in re.split(r"[\s,]+", raw or ""):
@@ -229,12 +239,14 @@ def _links(raw: str) -> dict[str, str]:
 
 
 def book(profile: dict[str, Any]) -> dict[str, Ans]:
-    """Hồ sơ -> sổ trả lời. Khoá là CÂU HỎI, không phải tên ô của ATS nào."""
+    """Profile -> answer book. The key is THE QUESTION, not any ATS's field
+    name."""
     get = lambda k: str(profile.get(k) or "").strip()      # noqa: E731
 
-    # "Dac Vinh Nguyen" viết theo lối Tây: TIẾNG CUỐI là họ, phần còn lại là
-    # tên gọi. Cắt ngược lại (first = "Dac", last = "Vinh Nguyen") là sai họ —
-    # và họ là thứ nhà tuyển dụng gọi trong thư.
+    # "Dac Vinh Nguyen" is written Western-style: the LAST WORD is the
+    # surname and the rest is the given name. Splitting it the other way
+    # (first = "Dac", last = "Vinh Nguyen") gets the surname wrong — and the
+    # surname is what an employer writes in their email.
     full = get("full_name")
     parts = full.split()
     first = " ".join(parts[:-1]) if len(parts) > 1 else (parts[0] if parts else "")
@@ -251,7 +263,7 @@ def book(profile: dict[str, Any]) -> dict[str, Ans]:
     def month(n: int) -> Ans:
         return Ans(f"{n:02d}", (MONTH_NAME[n], MONTH_NAME[n][:3], str(n))) if n else Ans("")
 
-    # Vế dùng để phân xử tên thành phố trùng nhau khắp thế giới.
+    # The half used to break ties between identically named cities.
     where = tuple(x for x in (country[0] if country else "", "England",
                               *(country[1:] if country else ())) if x)
 

@@ -49,7 +49,7 @@ check("học vị", edu.degree == "MSc" and edu.level == "master", edu.degree)
 check("ngành", edu.discipline == "Computational Finance", edu.discipline)
 check("trường", edu.school == "Royal Holloway, University of London", edu.school)
 check("năm", (edu.start_year, edu.end_year) == (2025, 2026), str(edu.start_year))
-check("thiếu tháng thì NÓI ra", any("tháng" in m for m in edu.missing), str(edu.missing))
+check("thiếu tháng thì NÓI ra", any("month" in m for m in edu.missing), str(edu.missing))
 check("lấy bằng MỚI NHẤT, không phải bằng đầu", "Royal Holloway" in edu.school)
 
 edu2 = education("MSc Data Science — Imperial College, Sep 2025 – Sep 2026")
@@ -373,9 +373,9 @@ _bd = (Path(__file__).resolve().parent.parent
        / "src/jobbot/track/board.py").read_text(encoding="utf-8")
 check("claim() đổi chặng có điều kiện", "WHERE id = ? AND stage = ?" in _bd)
 check("submit() từ chối khi form đã biến mất",
-      "trang không còn form" in body)
+      "the page has no form left" in body)
 check("và chặn TRƯỚC khi tính ô thiếu",
-      body.index("trang không còn form") < body.index("gaps = missing(tab)"))
+      body.index("the page has no form left") < body.index("gaps = missing(tab)"))
 
 print("\n== chưa đăng nhập thì NÓI, không im ==")
 check("nhận ra trang login của LinkedIn",

@@ -1,16 +1,19 @@
-"""Khởi động và quản lý một Chrome RIÊNG.
+"""Launch and manage a SEPARATE Chrome.
 
 BA RÀNG BUỘC, cố ý:
 
-1. **Profile riêng.** Chrome không cho hai tiến trình mở cùng một profile, nên
-   dùng profile chính thì mỗi lần app chạy bạn phải đóng hết Chrome đang lướt.
-   Profile riêng -> đăng nhập một lần, sau đó chạy nền độc lập.
-2. **Cổng riêng** (9333), không phải 9222 mặc định — tránh đụng công cụ khác.
-3. **Không bao giờ đụng vào Chrome người dùng đang mở.**
-4. **Một cổng = một profile.** Chrome khoá thư mục profile: hai tiến trình cùng
-   một `--user-data-dir` thì cái thứ hai lặng lẽ chết, cổng debug không bao giờ
-   mở. Đo được: 9333 lên, 9334 cùng profile -> "Chrome không lên trong 8s".
-   Nên profile suy ra TỪ CỔNG, không phải tham số ai đó phải nhớ truyền.
+1. **Its own profile.** Chrome will not let two processes open one profile,
+   so using the main profile would mean closing every browsing window each
+   time the app runs. A separate profile -> log in once, then run in the
+   background independently.
+2. **Its own port** (9333), not the default 9222 — so it cannot collide with
+   another tool.
+3. **It never touches the Chrome the user has open.**
+4. **One port = one profile.** Chrome locks the profile directory: two
+   processes on one `--user-data-dir` and the second dies silently, with the
+   debug port never opening. Measured: 9333 came up, 9334 on the same profile
+   -> "Chrome did not come up within 8s". So the profile is derived FROM THE
+   PORT, not an argument somebody has to remember to pass.
 """
 
 from __future__ import annotations
@@ -27,21 +30,21 @@ from pathlib import Path
 
 from ..core.paths import data_dir
 
-PORT = 9333          # vòng quét — có cửa sổ, Vin nhìn được
+PORT = 9333          # the scan — visible window, Vin can watch
 PDF_PORT = 9334      # in CV — ẩn
-APPLY_PORT = 9335    # điền form nộp — có cửa sổ, Vin bấm cú cuối
+APPLY_PORT = 9335    # filling the application form — visible, Vin clicks last
 
-# Một cổng một profile. Xem ràng buộc 4 ở đầu tệp.
+# One port, one profile. See constraint 4 at the top of this file.
 PROFILE = {PORT: "chrome-profile", PDF_PORT: "chrome-pdf",
            APPLY_PORT: "chrome-apply"}
 
 
 def _candidates() -> list[str]:
-    """Chỗ Chrome hay nằm, theo từng hệ điều hành.
+    """Where Chrome usually lives, per operating system.
 
-    Windows: đường dẫn có biến môi trường (%LOCALAPPDATA% khi cài cho riêng
-    một tài khoản, Program Files khi cài cho cả máy) nên phải dựng lúc chạy,
-    không hằng số hoá được.
+    Windows: the paths contain environment variables (%LOCALAPPDATA% for a
+    per-user install, Program Files for a machine-wide one), so they have to
+    be built at runtime and cannot be constants.
     """
     if sys.platform == "win32":
         roots = [os.environ.get("PROGRAMFILES", r"C:\Program Files"),
@@ -67,30 +70,35 @@ def _candidates() -> list[str]:
 CANDIDATES = _candidates()
 
 
-# Cờ cho CHẠY KHÔNG NGƯỜI TRÔNG. App này quét 24/7, phần lớn thời gian không
-# ai nhìn màn hình — nên thứ duy nhất được xuất hiện trên cửa sổ đó là trang
-# tuyển dụng. Mỗi cờ dưới đây chặn đúng MỘT thứ đã hoặc sẽ chen vào giữa:
+# Flags for RUNNING UNATTENDED. This app scans 24/7 and most of that time
+# nobody is looking at the screen — so the only thing allowed to appear in
+# that window is a job posting. Each flag below blocks exactly ONE thing that
+# has pushed, or would push, its way in:
 KHONG_NGUOI_TRONG = (
-    # Tắt máy đột ngột / mất điện -> lần mở sau Chrome hiện "Khôi phục trang?"
-    # phủ lên nội dung. Không ai bấm Đóng lúc 3 giờ sáng.
+    # A hard shutdown / power cut -> the next launch shows "Restore pages?"
+    # over the content. Nobody presses Close at 3am.
     "--disable-session-crashed-bubble",
     "--hide-crash-restore-bubble",
-    # Thanh "Dịch trang này?" — tin tiếng Pháp, Bồ Đào Nha về đều đặn, và
-    # thanh đó đẩy nội dung xuống, có lúc che mất dòng đầu.
+    # The "Translate this page?" bar — French and Portuguese postings arrive
+    # regularly, and that bar pushes the content down, sometimes hiding the
+    # first line.
     "--disable-features=Translate,TranslateUI",
-    # Trang xin quyền gửi thông báo -> hộp thoại chặn ngang, chờ người bấm.
+    # A site asking for notification permission -> a modal that blocks and
+    # waits for a person to click.
     "--disable-notifications",
-    # Cửa sổ không được focus (đúng định nghĩa "không người trông") thì Chrome
-    # bóp hẹn giờ và đóng băng renderer để tiết kiệm pin. Hậu quả: script trên
-    # trang không chạy xong, grab() trả về rỗng, và lần quét ấy báo "0 tin" —
-    # một kiểu hỏng trông y hệt "hôm nay không có việc nào".
+    # An unfocused window (the definition of "unattended") makes Chrome
+    # throttle timers and freeze the renderer to save battery. The
+    # consequence: the page's scripts never finish, grab() returns empty, and
+    # that scan reports "0 postings" — a failure that looks exactly like
+    # "there were no jobs today".
     "--disable-background-timer-throttling",
     "--disable-backgrounding-occluded-windows",
     "--disable-renderer-backgrounding",
-    # Chrome tự cập nhật thành phần giữa lúc quét thì trang đang mở khựng lại.
+    # Chrome updating a component mid-scan stalls the page being read.
     "--disable-component-update",
-    # Trần cache. Không có trần thì profile phình vô hạn — đo được 134 MB sau
-    # một ngày. 50 MB đủ cho việc mở đi mở lại vài nghìn trang tuyển dụng.
+    # A cache ceiling. Without one the profile grows without bound —
+    # measured at 134 MB after a day. 50 MB is plenty for reopening a few
+    # thousand job pages.
     "--disk-cache-size=52428800",
 )
 
@@ -99,7 +107,7 @@ class ChromeError(RuntimeError):
     pass
 
 
-# Tên lệnh để dò trong PATH, khi Chrome cài ở chỗ lạ.
+# Command names to look for in PATH, when Chrome is installed somewhere odd.
 ON_PATH = ["google-chrome", "google-chrome-stable", "chromium",
            "chromium-browser", "chrome", "msedge"]
 
@@ -113,8 +121,8 @@ def binary() -> str:
         if found:
             return found
     raise ChromeError(
-        "Không tìm thấy Chrome. Cài Google Chrome rồi thử lại "
-        f"(đã dò {len(_candidates())} chỗ quen thuộc trên {sys.platform}).")
+        "Chrome not found. Install Google Chrome and try again "
+        f"(checked {len(_candidates())} usual locations on {sys.platform}).")
 
 
 def profile_dir(port: int = PORT) -> Path:
@@ -134,7 +142,7 @@ def alive(port: int = PORT) -> dict | None:
 
 def launch(headless: bool = True, port: int = PORT,
            wait: float = 15.0) -> subprocess.Popen | None:
-    """Mở Chrome riêng. Đã chạy sẵn thì dùng lại, không mở thêm cái nữa."""
+    """Open the separate Chrome. Reuse it if it is already running."""
     if alive(port):
         return None
 
@@ -158,22 +166,23 @@ def launch(headless: bool = True, port: int = PORT,
             return process
         time.sleep(0.4)
     process.terminate()
-    raise ChromeError(f"Chrome không lên trong {wait:g}s")
+    raise ChromeError(f"Chrome did not come up within {wait:g}s")
 
 
 def shutdown(port: int = PORT, wait: float = 6.0) -> bool:
-    """Đóng Chrome RIÊNG. Không đụng tới Chrome người dùng đang mở.
+    """Close the SEPARATE Chrome. It never touches the user's own Chrome.
 
-    Trả True nếu nó thật sự tắt.
+    Returns True if it genuinely shut down.
 
-    LỖI ĐÃ SỬA: bản cũ gọi GET /json/close — endpoint đó cần kèm target id
-    (/json/close/<id>) nên trả 404, và lỗi bị nuốt trong except. Hàm chạy êm
-    ru, trả None, mà Chrome vẫn nguyên đó. Cách đúng là lệnh CDP Browser.close
-    trên WebSocket của TRÌNH DUYỆT, không phải của tab.
+    A BUG THAT WAS FIXED: the old version called GET /json/close — that
+    endpoint needs a target id (/json/close/<id>), so it returned 404 and the
+    error was swallowed in an except. The function ran smoothly, returned
+    None, and Chrome was still there. The correct way is the CDP
+    Browser.close command on the BROWSER's WebSocket, not a tab's.
 
-    Vì sao không kill thẳng tiến trình: Chrome cá nhân của người dùng cũng là
-    tiến trình "Google Chrome". Đi qua cổng debug 9333 thì chỉ chạm đúng bản
-    chạy bằng profile riêng của app.
+    Why not kill the process directly: the user's personal Chrome is also a
+    "Google Chrome" process. Going through debug port 9333 touches only the
+    instance running under the app's own profile.
     """
     from .ws import WebSocket, WSError
 
@@ -186,8 +195,9 @@ def shutdown(port: int = PORT, wait: float = 6.0) -> bool:
         control = WebSocket(browser_ws)
         try:
             control.send(json.dumps({"id": 1, "method": "Browser.close"}))
-            # Không chờ trả lời: Chrome đóng kết nối NGAY khi nhận lệnh, nên
-            # recv() ở đây sẽ ném lỗi — đó là dấu hiệu thành công, không phải hỏng.
+            # Do not wait for a reply: Chrome closes the connection AS SOON
+            # as it receives the command, so recv() here would raise — which
+            # is the sign of success, not of failure.
             try:
                 control.recv()
             except (WSError, OSError):
@@ -209,11 +219,12 @@ def shutdown(port: int = PORT, wait: float = 6.0) -> bool:
 
 
 def shutdown_all(wait: float = 6.0) -> int:
-    """Đóng MỌI Chrome của app. Trả về số cửa sổ thật sự đóng được.
+    """Close EVERY Chrome the app owns. Returns how many really shut down.
 
-    Thoát app mà chỉ đóng cổng mặc định thì cửa sổ NỘP (9335) nằm lại: nó CỐ Ý
-    được để mở trong lúc chạy, để Vin bấm cú cuối, nên không có ai khác đóng
-    nó. Một cửa sổ mồ côi giữ khoá thư mục profile, và lần sau mở app lên
-    Chrome không mở lại được profile đó — hỏng mà không hiểu vì sao.
+    Quitting the app while closing only the default port leaves the APPLY
+    window (9335) behind: it is DELIBERATELY left open while running so Vin
+    can make the final click, so nobody else closes it. An orphaned window
+    holds the profile directory lock, and the next launch cannot reopen that
+    profile — a failure with no visible cause.
     """
     return sum(1 for port in PROFILE if alive(port) and shutdown(port, wait))
