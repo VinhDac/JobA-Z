@@ -1,87 +1,96 @@
-/* jobbot — dark theme dứt khoát: nền đen tuyền, nhấn xanh lá mạnh.
-   Cố ý CHỈ có một tông. Không theo theme hệ thống — đây là app, không phải trang web. */
+/* jobbot — an unapologetic dark theme: pure black ground, a strong green accent.
+   Deliberately ONE tone only. It does not follow the system theme — this is an
+   app, not a web page. */
 
 
-/* THANG XÁM — học từ dark theme VS Code.
+/* THE GREY SCALE — learnt from VS Code's dark theme.
 
-   1. Xám TRUNG TÍNH, không ám màu. Xám cũ ngả xanh (lệch kênh 3-8) nên nó
-      cãi nhau với màu nhấn xanh lá: nền đã hơi xanh thì chữ xanh hết nổi.
-      Bây giờ chỉ ĐIỂM NHẤN mới có màu, mặt nền đều xám sạch.
+   1. NEUTRAL grey, with no cast. The old grey leaned blue (channels 3-8
+      apart) so it argued with the green accent: on a slightly blue ground,
+      green text stops standing out. Now only THE ACCENTS carry colour, and
+      every surface is clean grey.
 
-   2. VÙNG LÀM VIỆC NỀN ĐEN · ĐỒ PHỤ NỀN XÁM.
+   2. THE WORK AREA IS BLACK · THE CHROME IS GREY.
 
-      Nền của vùng main là ĐEN (#0D0D0D, L*3.6) — đen thì mọi thứ đặt lên nó
-      đều bật hẳn ra: thẻ +9.1 điểm L*, chữ chính 10.9:1, màu nhấn 9.4:1. Đây
-      là chỗ tương phản MẠNH, vì đây là chỗ làm việc.
+      The main area's ground is BLACK (#0D0D0D, L*3.6) — on black everything
+      laid over it lifts right out: cards +9.1 L* points, body text 10.9:1,
+      the accent 9.4:1. This is where contrast is STRONG, because this is
+      where the work happens.
 
-      Thanh bên và thanh trạng thái là XÁM (#1A1A1A) — SÁNG HƠN nền main. Xám
-      trên xám thì chênh lệch bé, cả mảng dịu lại và lùi ra sau. Chữ trong đó
-      cũng nhạt theo (xem khối .side,.statusbar bên dưới): 4.5-5.9:1, trong
-      khi nội dung là 7.1-10.9:1.
+      The sidebar and the status bar are GREY (#1A1A1A) — LIGHTER than the
+      main ground. Grey on grey is a small step, so the whole band softens
+      and recedes. The text inside them fades to match (see the
+      .side,.statusbar block below): 4.5-5.9:1, while content is 7.1-10.9:1.
 
-      Đây là chỗ bản trước làm ngược: khung tối hơn nền main nên nó thành cái
-      sọc đen cắt gắt nhất màn — đồ phụ hét to hơn việc đang làm.
+      This is where the previous version had it backwards: the chrome was
+      darker than the main ground, so it became the harshest black stripe on
+      screen — the furniture shouting louder than the work.
 
-   3. Khung app (thanh bên, thanh trạng thái) TỐI HƠN vùng nội dung. Mắt tự
-      đi về chỗ sáng nhất, mà chỗ sáng nhất phải là việc cần làm.
+   3. The app's chrome (sidebar, status bar) is DARKER than the content area.
+      The eye goes to the brightest place, and the brightest place has to be
+      the work to be done.
 
-   4. Bậc chữ thấp nhất VẪN PHẢI ĐỌC ĐƯỢC. Đây là lỗi cũ: --mute là màu chữ
-      dùng NHIỀU NHẤT app (84 chỗ: nhãn số liệu, giờ nhật ký, đầu bảng) mà
-      chỉ đạt 3.1:1 trên panel-2 — dưới ngưỡng 4.5 của chữ thường, lại toàn
-      cỡ 10-12px. VS Code không bao giờ lấy bậc "chữ tắt" (#7F7F7F) làm chữ
-      nội dung; bậc phụ của họ là #9D9D9D. Sàn mới: 4.5:1 trên mặt SÁNG NHẤT
-      mà nó nằm lên (--panel-2). */
+   4. THE LOWEST TEXT STEP MUST STILL BE READABLE. This was the old mistake:
+      --mute is the app's MOST USED text colour (84 places: metric labels,
+      journal timestamps, table headers) and it only reached 3.1:1 on panel-2
+      — under the 4.5 threshold for body text, and all of it at 10-12px. VS
+      Code never uses its "disabled text" step (#7F7F7F) for content; their
+      secondary step is #9D9D9D. The new floor: 4.5:1 on the LIGHTEST surface
+      it sits on (--panel-2). */
 :root{--status-h:26px;
   color-scheme: dark;
-  --bg:#0D0D0D;           /* L* 3.6 — nền vùng MAIN: đen, không phải xám */
-  --side:#1A1A1A;         /* L* 9.3 — khung phụ: XÁM, sáng hơn main +5.6 */
-  --panel:#212121;        /* L*12.7 — thẻ; bật khỏi nền main +9.1 */
-  --panel-2:#2B2B2B;      /* L*17.5 — hover, mặt nổi */
-  --line:#2F2F2F;         /* L*19.4 — viền thường */
-  --line-2:#3C3C3C;       /* L*25.3 — viền nổi hơn */
-  --ink:#D4D4D4;          /* 10.3:1 trên panel — dịu hơn trắng, đỡ loá */
+  --bg:#0D0D0D;           /* L* 3.6 — the MAIN area's ground: black, not grey */
+  --side:#1A1A1A;         /* L* 9.3 — the chrome: GREY, +5.6 lighter than main */
+  --panel:#212121;        /* L*12.7 — cards; +9.1 clear of the main ground */
+  --panel-2:#2B2B2B;      /* L*17.5 — hover, raised surfaces */
+  --line:#2F2F2F;         /* L*19.4 — ordinary borders */
+  --line-2:#3C3C3C;       /* L*25.3 — a more prominent border */
+  --ink:#D4D4D4;          /* 10.3:1 on panel — softer than white, less glare */
   --dim:#C0C0C0;          /*  8.4:1 */
-  --mute:#ACACAC;         /*  6.5:1 — trước là 3.5:1 */
-  /* BA THÀNH PHẦN RGB của màu nhấn, khai riêng.
-     Mọi chỗ cần màu nhấn với ĐỘ TRONG khác nhau đều viết
-     rgba(var(--acc-rgb), .35) thay vì gõ cứng rgba(var(--acc-rgb),.35).
-     Không có nó thì đổi màu hệ thống chỉ đổi được CHỮ: đo thật, 12 chỗ
-     viền và nền vẫn xanh lá, nên chọn Tím ra chữ tím viền xanh. */
+  --mute:#ACACAC;         /*  6.5:1 — it used to be 3.5:1 */
+  /* THE ACCENT'S THREE RGB COMPONENTS, declared separately.
+     Everywhere the accent is needed at a different OPACITY is written
+     rgba(var(--acc-rgb), .35) rather than a hardcoded rgba(85,201,141,.35).
+     Without this, changing the system colour changes only THE TEXT:
+     measured, 12 borders and grounds stayed green, so choosing Purple gave
+     purple text inside green borders. */
   --acc-rgb:85,201,141;
-  --acc:#55C98D;          /* xanh lá dịu — không neon, cũng không nhờ */
+  --acc:#55C98D;          /* a soft green — neither neon nor washed out */
   --acc-2:#48B37C;
-  --acc-ink:#10261B;      /* chữ trên nền xanh */
+  --acc-ink:#10261B;      /* text on a green ground */
   --acc-bg:rgba(var(--acc-rgb),.11);
   --acc-bg-2:rgba(var(--acc-rgb),.20);
-  --info:#6CB6FF;         /* 7.5:1 trên pill — tin nền, đọc để biết */
+  --info:#6CB6FF;         /* 7.5:1 on a pill — background news, read to know */
   --warn:#D8A15E;
   --warn-bg:rgba(216,161,94,.11);
-  --bad:#DD7D76;          /* 4.7:1 — bản cũ 4.3, hụt ngưỡng trên panel-2 */
-  --rim:#333333;          /* L*21.2 — xám VIỀN, sáng hơn xám khung +11.9 */
-  --gap:5px;              /* khoảng xám giữa hai khung và mép cửa sổ */
-  --round:8px;            /* góc bo của hai khung */
+  --bad:#DD7D76;          /* 4.7:1 — the old one was 4.3, under the threshold on panel-2 */
+  --rim:#333333;          /* L*21.2 — BORDER grey, +11.9 lighter than the chrome grey */
+  --gap:5px;              /* the grey gap between the two frames and the window edge */
+  --round:8px;            /* the two frames' corner radius */
   --nav-w:216px;
-  --main-l:calc(var(--nav-w) + var(--gap) * 2);  /* mép trái khung làm việc */
-  --top:28px;             /* chiều cao thanh tiêu đề — vừa đúng ba nút
-                             traffic light của macOS (12pt, tâm cách mép
-                             trên 14pt), không thừa một dòng trống nào */
+  --main-l:calc(var(--nav-w) + var(--gap) * 2);  /* the work frame's left edge */
+  --top:28px;             /* the title bar's height — exactly the three macOS
+                             traffic lights (12pt, centres 14pt from the top
+                             edge), with not one blank line to spare */
 }
-/* KHUNG APP NÓI NHỎ — VÙNG LÀM VIỆC NÓI TO.
+/* THE CHROME SPEAKS QUIETLY — THE WORK AREA SPEAKS UP.
 
-   Trước đây ngược: đo trên /search, thanh bên có tương phản giữa 8.1:1 và
-   thanh trạng thái 12.2:1, trong khi 548 phần tử NỘI DUNG chỉ được 6.8:1.
-   Thanh bên và thanh trạng thái là đồ phụ — chúng chỉ cần ĐỌC ĐƯỢC, không
-   được tranh chỗ với thứ mình đang làm. Mắt phải rơi vào giữa màn trước.
+   It used to be the other way round: measured on /search, the sidebar had a
+   contrast of 8.1:1 and the status bar 12.2:1, while 548 CONTENT elements got
+   only 6.8:1. The sidebar and the status bar are furniture — they only have
+   to be READABLE, and must not compete with the thing being worked on. The
+   eye has to land in the middle of the screen first.
 
-   Khai lại ba bậc chữ NGAY TRONG phạm vi khung: mọi rule bên trong đều dùng
-   var() nên tự nhạt theo, không phải vá từng dòng và không đẻ thêm biến mới.
+   The three text steps are redeclared INSIDE the chrome's scope: every rule
+   within uses var() and so fades along, with no line-by-line patching and no
+   new variables.
 
-   Màu nhấn KHÔNG nhạt theo: mục đang mở và chấm trạng thái là TÍN HIỆU, thứ
-   duy nhất trong khung được phép sáng. */
+   The accent does NOT fade: the open tab and the status dot are SIGNALS, the
+   only things in the chrome allowed to be bright. */
 .side,.statusbar{
-  --ink:#969696;          /* 6.1:1 trên --side — dùng cho hover và tên app */
-  --dim:#868686;          /* 5.0:1 — nhãn tab lúc nghỉ */
-  --mute:#828282;         /* 4.7:1 — icon, chữ mờ nhất; vẫn trên sàn 4.5 */
+  --ink:#969696;          /* 6.1:1 on --side — used for hover and the app name */
+  --dim:#868686;          /* 5.0:1 — a tab label at rest */
+  --mute:#828282;         /* 4.7:1 — icons, the faintest text; still above the 4.5 floor */
 }
 
 *{box-sizing:border-box}
@@ -91,16 +100,16 @@ body{margin:0;background:var(--side);color:var(--ink);overflow:hidden;
   -webkit-font-smoothing:antialiased}
 
 /* ---------------- sidebar ---------------- */
-/* HAI KHUNG LỒNG NHAU, KHÔNG KẺ VẠCH.
+/* TWO NESTED FRAMES, NO RULES DRAWN.
 
-   Khung ngoài là cả cửa sổ, màu xám (body). Thanh tiêu đề, thanh bên và thanh
-   trạng thái KHÔNG có nền riêng — chúng chính là mảng xám đó, nên giữa chúng
-   không có gì để ngăn.
+   The outer frame is the whole window, grey (body). The title bar, the
+   sidebar and the status bar have NO ground of their own — they ARE that
+   grey, so there is nothing between them to divide.
 
-   Trên mảng xám đó nổi lên HAI khung bo tròn, cùng một viền --rim: cột nút
-   chuyển tab (nền xám như khung) và vùng làm việc (nền đen). Khoảng cách
-   giữa chúng là --gap, không phải một vạch kẻ — góc bo và viền đã tách rõ
-   hơn vạch 1px, mà lại không cắt ngang cái gì. */
+   Raised off that grey are TWO rounded frames sharing one --rim border: the
+   tab column (grey like the chrome) and the work area (black). What separates
+   them is --gap, not a drawn rule — a corner radius and a border separate
+   more clearly than a 1px line, and cut across nothing. */
 .titlebar{position:fixed;left:0;right:0;top:0;z-index:40;height:var(--top);
   display:flex;align-items:center;justify-content:center;
   font-size:12px;font-weight:600;color:var(--mute);user-select:none}
@@ -110,21 +119,24 @@ body{margin:0;background:var(--side);color:var(--ink);overflow:hidden;
 .brand{display:flex;align-items:center;gap:8px;
   font-size:15px;font-weight:700;letter-spacing:-.02em;padding:6px 10px 14px;
   color:var(--ink)}
-/* Chìa khoá nằm ngang nên RỘNG hơn CAO — cao 13px thì rộng ~38px. Lúc gập
-   thanh bên chỉ còn 38px lọt lòng, nên thu lại vừa đủ. */
+/* The key lies on its side, so it is WIDER than TALL — 13px high makes it
+   ~38px wide. With the sidebar collapsed only 38px of inner width remains, so
+   it is trimmed to exactly that. */
 .logo{width:38px;height:13px;flex:none;color:var(--acc)}
-/* Logo trên cùng · các nút tab GIỮA · Cài đặt dưới cùng. nav ăn hết chỗ
-   trống rồi tự căn giữa; `safe` để màn thấp thì tụt về đầu chứ không
-   cắt mất mục trên. */
+/* The logo on top · the tab buttons IN THE MIDDLE · Settings at the bottom.
+   nav takes the empty space and centres itself; `safe` so that on a short
+   screen it falls back to the top rather than cutting off the items above. */
 .side nav{display:flex;flex-direction:column;gap:1px;flex:1;
   justify-content:safe center;overflow-y:auto}
 .navlink{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:8px;
   color:var(--dim);text-decoration:none;font-size:13.5px;transition:background .1s,color .1s}
 .navlink i{display:flex;align-items:center;justify-content:center;
   width:16px;flex:none;color:var(--mute)}
-/* MỘT chỗ khai kiểu cho CẢ bộ icon. Nét, cỡ, đầu nét — đổi ở đây là đổi
-   toàn app; khai ở từng chỗ dùng là có ngày thanh bên một kiểu, nút ⚟ một
-   kiểu. `currentColor` nên màu theo chữ xung quanh, không phải sửa hình. */
+/* ONE place declares the style for THE WHOLE icon set. Stroke, size, caps —
+   change it here and the whole app changes; declared at each use site and one
+   day the sidebar looks one way and the ⚟ button another. `currentColor`, so
+   the colour follows the surrounding text rather than needing the art
+   edited. */
 .ico{width:16px;height:16px;flex:none;display:block;
   fill:none;stroke:currentColor;stroke-width:1.75;
   stroke-linecap:round;stroke-linejoin:round}
@@ -132,9 +144,10 @@ body{margin:0;background:var(--side);color:var(--ink);overflow:hidden;
 .navlink:hover{background:var(--panel-2);color:var(--ink)}
 .navlink.on{background:var(--acc-bg);color:var(--acc);font-weight:600}
 .navlink.on i{color:var(--acc)}
-/* Cài đặt nằm ở ĐÁY thanh bên, tách khỏi <nav> đang flex:1 nên nó bị đẩy
-   xuống dưới cùng. Là <button> chứ không phải <a>: /settings trả về MẢNH
-   HTML cho tấm phủ, không phải một trang — link tới đó là ra trang trắng. */
+/* Settings sits at the BOTTOM of the sidebar, outside the <nav> that is
+   flex:1, so it is pushed all the way down. A <button>, not an <a>: /settings
+   returns an HTML FRAGMENT for the overlay, not a page — a link to it lands
+   on a blank page. */
 .navend{margin-top:auto;padding-top:6px;border-top:1px solid var(--line)}
 .navend .navlink{width:100%;background:none;border:0;font:inherit;
   cursor:pointer;text-align:left}
@@ -144,24 +157,26 @@ body{margin:0;background:var(--side);color:var(--ink);overflow:hidden;
 .navfoot .dot{width:6px;height:6px;border-radius:50%;background:var(--acc);flex:none;
   box-shadow:0 0 0 3px var(--acc-bg)}
 
-/* ---------------- vùng nội dung ---------------- */
-/* Viền tấm đen là xám RIÊNG, sáng hơn xám khung một bậc (+6.9 L*) — đủ để
-   thấy rõ đường bo mà không thành cái vạch. Viền nằm TRONG hộp (box-sizing
-   border-box) nên thêm nó không xê dịch gì. */
+/* ---------------- the content area ---------------- */
+/* The black panel's border is its OWN grey, one step lighter than the chrome
+   grey (+6.9 L*) — enough to see the rounded edge clearly without becoming a
+   drawn line. The border sits INSIDE the box (box-sizing border-box), so
+   adding it shifts nothing. */
 main{position:fixed;top:var(--top);left:var(--main-l);right:var(--gap);
   bottom:var(--status-h);overflow-y:auto;background:var(--bg);
   border:1px solid var(--rim);border-radius:var(--round)}
-/* KHUNG KHÔNG BAO GIỜ BỎ PHÍ. Trước đây `.inner` chặn cứng 840px nên trên màn
-   1900px, khung chính rộng 1684 mà nội dung chỉ dùng 840 — bỏ trống 844px,
-   đúng nửa cửa sổ, ở MỌI trang kiểu này.
+/* A FRAME NEVER WASTES SPACE. `.inner` used to be hard-capped at 840px, so on
+   a 1900px screen the main frame was 1684 wide while the content used 840 —
+   844px empty, exactly half the window, on EVERY page of this kind.
 
-   Bề rộng là tính chất của NỘI DUNG, không phải của trang: chỉ ĐOẠN VĂN mới
-   cần bề rộng đọc được (dòng dài quá 90 ký tự thì mắt lạc hàng). Bảng, danh
-   sách, lưới thì càng rộng càng đọc nhanh — đo trên trang chi tiết tin: mỗi
-   "card" là một danh sách yêu cầu 3.645 ký tự gồm nhiều mục ngắn, không phải
-   văn xuôi.
+   Width is a property of THE CONTENT, not of the page: only PROSE needs a
+   readable measure (past about 90 characters the eye loses the line). Tables,
+   lists and grids read faster the wider they are — measured on a posting's
+   detail page: each "card" is a 3,645-character requirement list of short
+   items, not prose.
 
-   Một luật ở một chỗ, không cần cờ `wide=` mà trang nào cũng phải nhớ truyền. */
+   One rule in one place, with no `wide=` flag every page has to remember to
+   pass. */
 .inner{max-width:none;padding:20px 26px 90px}
 .inner p,.inner .lead,.inner blockquote{max-width:78ch}
 
@@ -184,8 +199,9 @@ a:hover{text-decoration:underline}
 .empty-box{background:var(--panel);border:1px dashed var(--line-2);border-radius:11px;
   padding:30px;text-align:center;color:var(--mute);font-size:13px}
 
-/* ---------------- Home: chu trình dựng hồ sơ ---------------- */
-/* Thanh tiến độ: một con số người ta hiểu ngay, không cần đọc chú thích. */
+/* ---------------- Home: the profile-building run ---------------- */
+/* The progress bar: one number understood at a glance, with no caption to
+   read. */
 .obar{height:5px;border-radius:999px;background:var(--panel-2);overflow:hidden;
   margin:0 0 6px}
 .obar span{display:block;height:100%;background:var(--acc);border-radius:999px;
@@ -193,16 +209,18 @@ a:hover{text-decoration:underline}
 .obarnum{font-size:12px;color:var(--mute);margin:0 0 14px}
 .obarnum b{color:var(--ink);font-weight:600}
 .mbtn.big{display:inline-block;padding:9px 20px;font-size:13.5px;margin:0 0 4px}
-/* .mbtn.apply mặc định width:100% (nó sinh ra cho nút Lưu trong form),
-   nên trong hàng này phải trả về bề rộng theo chữ — không thì nút nuốt
-   cả hàng và đẩy link 'hoặc tự gõ' xuống dòng. */
+/* .mbtn.apply defaults to width:100% (it was made for the Save button inside
+   a form), so in this row it has to go back to shrink-to-fit — otherwise the
+   button swallows the row and pushes the 'or type it yourself' link onto the
+   next line. */
 .octa{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .octa .mbtn.apply{width:auto;flex:none}
 .oalt{font-size:12.5px;color:var(--mute)}
 .oalt:hover{color:var(--ink)}
 .omeo{font-size:12.5px;color:var(--mute);line-height:1.5;margin:10px 0 0;max-width:78ch}
 .omeo b{color:var(--dim);font-weight:600}
-/* Xong phần bắt buộc thì chu trình tự đóng — mở lại bằng một cú bấm. */
+/* Once the required part is done the run closes itself — one press reopens
+   it. */
 .odone{margin:18px 0 0}
 .odone > summary{cursor:pointer;list-style:none;font-size:12px;color:var(--mute);
   padding:9px 12px;border:1px solid var(--line);border-radius:var(--round);
@@ -216,7 +234,7 @@ a:hover{text-decoration:underline}
   color:var(--mute);margin:22px 0 4px}
 .ostep{padding:13px 3px}
 .ostep .blkhead b{font-size:13.5px}
-/* Phần đã xong lùi lại — việc còn lại mới là thứ cần nhìn. */
+/* Finished sections recede — what is left is the thing to look at. */
 .ostep.done .blkhead b{color:var(--acc)}
 .ostep.dim{opacity:.5}
 .ostep.dim:hover{opacity:1}
@@ -225,7 +243,7 @@ a:hover{text-decoration:underline}
 .osub{display:block;font-size:12.5px;color:var(--mute);margin-top:3px}
 .blkkind.req{color:var(--warn);border-color:rgba(216,161,94,.4)}
 
-/* ---------------- huy hiệu, điểm ---------------- */
+/* ---------------- badges, scores ---------------- */
 .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;
   border:1px solid var(--line-2);color:var(--mute);white-space:nowrap}
 .badge.ok,.badge.safe{color:var(--acc);border-color:rgba(var(--acc-rgb),.35);background:var(--acc-bg)}
@@ -373,17 +391,19 @@ button.primary:hover{background:var(--acc-2)}
 .gate.ok{background:var(--acc-bg);color:var(--acc);border:1px solid rgba(var(--acc-rgb),.25)}
 .gate.block{background:var(--warn-bg);color:var(--warn);border:1px solid rgba(255,180,84,.25)}
 .gate a{color:inherit;text-decoration:underline}
-/* table-layout:fixed — `width` trên ô bảng chỉ là GỢI Ý khi bảng tự dàn cột:
-   nhãn dài ("Which job titles would you take? Write them EXACTLY…") kéo cột
-   nhãn ra 650px trên màn rộng, đẩy giá trị sang tận bên phải. Dàn cố định thì
-   cột nhãn theo đúng bề rộng đặt ra, nhãn tự xuống dòng. */
+/* table-layout:fixed — `width` on a table cell is only A HINT while the table
+   lays itself out: a long label ("Which job titles would you take? Write them
+   EXACTLY…") drags the label column to 650px on a wide screen, pushing the
+   value right over to the edge. Fixed layout gives the label column exactly
+   the width set, and the label wraps. */
 .sum{width:100%;table-layout:fixed;border-collapse:collapse;background:var(--panel);
   border:1px solid var(--line);
   border-radius:11px;overflow:hidden}
 .sum th{text-align:left;font-weight:500;color:var(--mute);padding:10px 15px;
-  /* Số TRẦN, không phải min()/clamp(): đo trong Chrome — dàn cột cố định BỎ
-     QUA hàm min()/clamp() trên bề rộng ô bảng (rơi về tự dàn, ra 803px), chỉ
-     nhận giá trị trần hoặc phần trăm. Màn hẹp có luật riêng bên dưới. */
+  /* A PLAIN number, not min()/clamp(): measured in Chrome — fixed table
+     layout IGNORES min()/clamp() on a cell's width (it falls back to auto
+     layout, giving 803px) and only accepts a plain value or a percentage.
+     Narrow screens have their own rule below. */
   width:340px;overflow-wrap:anywhere;
   vertical-align:top;border-top:1px solid var(--line);font-size:12.5px}
 .sum td{padding:10px 15px;vertical-align:top;border-top:1px solid var(--line);
@@ -420,7 +440,7 @@ button.primary:hover{background:var(--acc-2)}
 .search:focus{outline:1px solid var(--acc);border-color:var(--acc)}
 .filters button{padding:8px 16px;font-size:13px}
 
-/* chip = radio thật, input ẩn đi */
+/* a chip = a real radio, with the input hidden */
 label.chip{display:inline-flex;align-items:center;cursor:pointer;padding:0;border:0;
   background:none}
 label.chip input{position:absolute;opacity:0;width:0;height:0}
@@ -430,7 +450,7 @@ label.chip:hover span{border-color:var(--mute);color:var(--ink)}
 label.chip input:checked + span{background:var(--acc);color:var(--acc-ink);
   border-color:var(--acc);font-weight:600}
 
-/* ô tích chọn nhiều */
+/* multi-select tick boxes */
 label.tick{display:flex;align-items:center;gap:8px;padding:4px 7px;border-radius:6px;
   cursor:pointer;font-size:12.5px;color:var(--dim)}
 label.tick:hover{background:var(--panel-2);color:var(--ink)}
@@ -452,7 +472,7 @@ label.tick.on b{color:var(--acc)}
   font-size:12px;color:var(--warn)}
 .chip.off{opacity:.35;cursor:default}
 
-/* ---------------- điểm khớp ---------------- */
+/* ---------------- match score ---------------- */
 .noscore{font-size:12px;color:var(--warn)}
 .conf{font-size:11px;color:var(--mute);margin-left:8px}
 .bd{display:flex;flex-direction:column;gap:7px}
@@ -466,7 +486,7 @@ label.tick.on b{color:var(--acc)}
   font-size:12px;color:var(--warn);line-height:1.5}
 .card.bdcard .note + .note{border-top:0;margin-top:6px;padding-top:0;color:var(--mute)}
 
-/* ---------------- CV tuỳ biến ---------------- */
+/* ---------------- the tailored CV ---------------- */
 .cvpaper{background:var(--panel);border:1px solid var(--line);border-radius:11px;
   padding:26px 30px;margin:0 0 16px}
 .cvhead{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line)}
@@ -493,7 +513,7 @@ ul.droplist{list-style:none;padding:0;margin:0}
 .dtext{flex:1;color:var(--mute);text-decoration:line-through;text-decoration-color:var(--line-2)}
 .dwhy{flex:none;max-width:44%;color:var(--warn);font-size:11.5px}
 
-/* ---------------- nhập CV + sức khoẻ CV ---------------- */
+/* ---------------- CV import + CV health ---------------- */
 .pval{display:block;white-space:pre-wrap;font-size:12.3px;color:var(--dim);
   margin-top:5px;max-height:150px;overflow:auto;line-height:1.5}
 .frow > a.chip{text-decoration:none}
@@ -531,15 +551,15 @@ ul.cjobs{list-style:none;padding:0;margin:8px 0 0}
 .need.warn .tag{color:var(--bad)}
 
 /* ================================================================
-   RUNTIME — thanh master, lưới widget, nhật ký, tiến độ
-   App chạy 24/7: trang KHÔNG cuộn, mỗi ô tự cuộn bên trong.
+   RUNTIME — the master bar, the widget grid, the journal, progress
+   The app runs 24/7: the page does NOT scroll, each widget scrolls inside.
    ================================================================ */
 
 /* ---------------- thanh master ---------------- */
-/* Chỉ còn MỘT loại: thanh của khúc đang mở. Trang không có khúc thì không
-   vẽ thanh này — trạng thái chung nằm ở .statusbar dưới đáy.
-   KHÔNG có vạch đáy: viên thuốc tự nó đã là ranh giới, thêm vạch là ngăn hai
-   lần. Chừa 18px trên cho viên thuốc không dính trần app. */
+/* Only ONE kind is left: the open stage's bar. A page with no stage does not
+   draw it — the shared state lives in .statusbar along the bottom.
+   NO bottom rule: the pill is itself the boundary, and adding a line divides
+   twice. 18px is left above so the pill does not touch the app's ceiling. */
 .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;
   justify-content:center;gap:14px;height:auto;padding:18px 20px 12px;
   background:rgba(13,13,13,.86);
@@ -558,21 +578,22 @@ body[data-run=paused]  .rdot{background:var(--warn)}
 .mbtn[data-act=run]:hover{background:var(--acc-bg-2)}
 .mbtn:disabled{opacity:.4;cursor:default}
 
-/* ---------------- trang không cuộn ---------------- */
-/* main.flow = trang CHƯA chuyển sang widget, vẫn cuộn như cũ. */
-/* Cửa sổ đủ rộng thì KHÔNG cuộn — đó là điểm của bố cục widget. Nhưng cửa
-   sổ nhỏ thì phải cho cuộn: ép mọi thứ vừa màn hình 640px nghĩa là mỗi ô còn
-   133px, chỉ đủ tiêu đề và hai dòng. Ô cao 133px thì có cũng như không.
-   overflow:hidden ở đây CẮT CỤT nội dung mà không có cách nào xem tiếp. */
+/* ---------------- a page that does not scroll ---------------- */
+/* main.flow = a page NOT yet moved to widgets, still scrolling as before. */
+/* With a wide enough window it does NOT scroll — that is the point of the
+   widget layout. But a small window has to be allowed to scroll: forcing
+   everything into a 640px screen leaves each widget 133px, barely a title and
+   two lines. A 133px widget may as well not be there. overflow:hidden here
+   TRUNCATES the content with no way to see the rest. */
 main:not(.flow){overflow-y:auto;display:flex;flex-direction:column}
 main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
   padding:14px 16px 14px 16px;
   display:flex;flex-direction:column}
 
-/* ---------------- lưới widget ---------------- */
-/* minmax(190px, 1fr): chia đều khi có chỗ, nhưng KHÔNG bao giờ mỏng hơn
-   190px. Hết chỗ thì lưới dài ra và trang cuộn — thà cuộn còn hơn có bảy ô
-   mà ô nào cũng cụt. */
+/* ---------------- the widget grid ---------------- */
+/* minmax(190px, 1fr): shares evenly when there is room, but NEVER goes below
+   190px. Out of room, the grid grows and the page scrolls — better to scroll
+   than to have seven widgets all cut off. */
 .wgrid{flex:1;min-height:0;display:grid;gap:12px;
   grid-auto-rows:minmax(190px,1fr)}
 .wid{display:flex;flex-direction:column;min-height:0;min-width:0;
@@ -587,21 +608,23 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
   display:flex;align-items:center;justify-content:center;
   background:none;border:0;padding:3px 5px;border-radius:5px}
 .wexp:hover{color:var(--ink);background:var(--panel-2)}
-/* Đây là chỗ làm nên "không cuộn trang": ô tự cuộn, trang đứng yên. */
+/* This is what makes "the page does not scroll" true: the widget scrolls, the
+   page stays still. */
 .wbody{flex:1;min-height:0;overflow:auto;padding:12px}
 
-/* mở to: phủ toàn màn hình để xem kỹ / chỉnh, Esc thu về */
+/* enlarged: full screen for a close look or an edit, Esc shrinks it back */
 .wid.big{position:fixed;inset:calc(var(--top) + 10px) calc(var(--gap) + 10px)
   calc(var(--status-h) + 10px) calc(var(--main-l) + 10px);
   z-index:40;box-shadow:0 24px 70px rgba(0,0,0,.6);border-color:var(--line-2)}
 .wid.big .wexp{color:var(--acc)}
 
-/* ---------------- nhật ký ---------------- */
+/* ---------------- journal ---------------- */
 .journal{font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
 .jline{display:flex;gap:9px;padding:2.5px 0 2.5px 7px;
   border-bottom:1px solid rgba(255,255,255,.03);
-  /* Vạch trái TRONG SUỐT sẵn ở mọi dòng: dòng mới nhất chỉ tô màu nó lên,
-     nên không dòng nào bị đẩy ngang lúc dấu chuyển sang dòng khác. */
+  /* A TRANSPARENT left rule is already on every line: the newest line only
+     colours it in, so no line shifts sideways when the marker moves to
+     another one. */
   border-left:2px solid transparent}
 .jtime{color:var(--mute);flex:none;font-variant-numeric:tabular-nums}
 .jstream{color:var(--dim);flex:none;min-width:52px}
@@ -611,34 +634,37 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .jline.error .jtext{color:var(--bad)}
 .jline.info  .jtext{color:var(--dim)}
 
-/* DÒNG MỚI NHẤT — dòng mới luôn chèn vào ĐỈNH (live.js: insertBefore
-   firstChild), nên "mới nhất" đúng bằng :first-child. Thuần CSS, không có
-   class nào để JS quên gỡ, và không có cách nào dấu lệch khỏi dòng thật.
+/* THE NEWEST LINE — a new line is always inserted at THE TOP (live.js:
+   insertBefore firstChild), so "newest" is exactly :first-child. Pure CSS,
+   with no class for JS to forget to remove, and no way for the marker to
+   drift off the real line.
 
-   Đánh dấu bằng NỀN + VẠCH TRÁI, KHÔNG bằng màu chữ: màu chữ ở đây đã mang
-   nghĩa khác rồi (ok / warn / error). Tô đỏ dòng mới nhất là nói dối về mức
-   độ, mà mức độ mới là thứ người dùng cần đọc trước tiên. Nên vạch trái lấy
-   luôn màu của MỨC — vừa chỉ ra dòng mới, vừa không giẫm lên nghĩa cũ. */
+   Marked with A GROUND + A LEFT RULE, NOT with text colour: text colour here
+   already means something else (ok / warn / error). Colouring the newest line
+   red lies about severity, and severity is the first thing the user needs to
+   read. So the left rule takes THE LEVEL's own colour — pointing out the new
+   line without treading on the existing meaning. */
 .journal .jline:first-child{background:rgba(255,255,255,.062);
   border-left-color:var(--mute);border-radius:0 3px 3px 0}
 .journal .jline.ok:first-child   {border-left-color:var(--acc)}
 .journal .jline.warn:first-child {border-left-color:var(--warn)}
 .journal .jline.error:first-child{border-left-color:var(--bad)}
-/* Giờ và chữ sáng lên một nấc. Với dòng `info` đây là khác biệt duy nhất
-   thấy được — dim -> ink là SÁNG HƠN, không phải mức khác. */
+/* The time and the text lift one step. On an `info` line this is the only
+   visible difference — dim -> ink is BRIGHTER, not a different level. */
 .journal .jline:first-child .jtime{color:var(--dim)}
 .journal .jline.info:first-child .jtext{color:var(--ink)}
 
-/* Loé một cái lúc vừa tới. Mắt bắt CHUYỂN ĐỘNG nhanh hơn bắt màu, và nhật ký
-   chạy nhanh thì đó là thứ duy nhất nói "vừa có dòng mới" mà không phải đọc
-   giờ. Ngắn thôi: 0.5s, rồi về đúng nền nghỉ ở trên. */
+/* A flash as it arrives. The eye catches MOVEMENT faster than colour, and
+   with the journal running fast this is the only thing that says "a new line
+   just came" without reading the clock. Kept short: 0.5s, then back to the
+   resting ground above. */
 .journal .jline:first-child{animation:jnew .5s ease-out}
 @keyframes jnew{from{background:rgba(255,255,255,.17)}}
 @media (prefers-reduced-motion:reduce){
   .journal .jline:first-child{animation:none}
 }
 
-/* ---------------- tiến độ ---------------- */
+/* ---------------- progress ---------------- */
 .progress{display:flex;flex-direction:column;gap:11px}
 .pidle{color:var(--mute);font-size:12px}
 .prow{display:flex;flex-direction:column;gap:5px}
@@ -647,17 +673,18 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
   white-space:nowrap}
 .phead span{color:var(--dim);flex:none;font-variant-numeric:tabular-nums}
 .ptrack{height:5px;border-radius:3px;background:var(--line);overflow:hidden}
-/* Còn bao lâu nữa xong. Chữ nhỏ, màu mờ: nó là ƯỚC LƯỢNG, không được to
-   ngang con số thật ở trên. */
+/* How much longer. Small text, faint colour: it is AN ESTIMATE, and must not
+   be as loud as the real figure above it. */
 .peta{font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
 .ptrack i{display:block;height:100%;background:var(--acc);border-radius:3px;
   transition:width .25s ease}
-/* Không biết tổng thì chạy sọc thay vì đứng ở 100% giả vờ xong. */
+/* With no total, it runs a stripe rather than sitting at 100% pretending to
+   be finished. */
 .prow.spin .ptrack i{background:linear-gradient(90deg,var(--line) 0%,var(--acc) 50%,var(--line) 100%);
   background-size:200% 100%;animation:slide 1.3s linear infinite}
 @keyframes slide{from{background-position:200% 0}to{background-position:-200% 0}}
 
-/* ---------------- biểu đồ ---------------- */
+/* ---------------- charts ---------------- */
 .plot{display:flex;flex-direction:column;height:100%;min-height:96px;gap:5px}
 
 .sg{display:block;min-width:2px}
@@ -668,19 +695,21 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .lg{display:flex;align-items:center;gap:5px}
 .lg u{text-decoration:none;color:var(--ink);font-weight:600}
 
-/* ---------------- phễu ---------------- */
-/* Tên RIÊNG. Trước đây phễu cũng gọi là .frow, mà hàng lọc ở trên cũng vậy —
-   cùng phạm vi nên định nghĩa sau đè: ô tải CV lên và hàng lọc hồ sơ bị bẻ
-   thành lưới 3 cột. Cùng lớp lỗi với .cvhead/.cvlist đã sửa trước đây. */
+/* ---------------- funnel ---------------- */
+/* ITS OWN NAME. The funnel used to be called .frow too, and so was the filter
+   row above — the same scope, so the later definition won: the CV upload box
+   and the profile filter row were bent into a 3-column grid. The same class
+   of bug as .cvhead/.cvlist, fixed earlier. */
 .frow.todo .fnum{color:var(--mute);font-weight:400;font-style:italic}
 .frow.todo .ftrack{background:repeating-linear-gradient(45deg,
   var(--line) 0 5px,transparent 5px 10px)}
 
-/* ô nhật ký cao: bỏ đệm để dòng bám sát nhau */
+/* a tall journal widget: padding dropped so lines sit close together */
 .wid.tall .wbody{padding:8px 12px}
 
-/* ---------------- số liệu trong ô ---------------- */
-/* .stats gốc dựng cho trang rộng; trong ô widget phải nhỏ lại và tự xếp. */
+/* ---------------- metrics inside a widget ---------------- */
+/* .stats was built for a wide page; inside a widget it has to shrink and wrap
+   itself. */
 .wid .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));
   gap:8px}
 .wid .stat{padding:8px 10px;min-width:0}
@@ -706,9 +735,10 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .drow .mbtn{align-self:flex-start}
 
 .alerts{display:flex;flex-direction:column;gap:6px;margin-bottom:11px}
-/* .alert ĐÃ XOÁ: không view nào dùng class đó, và cái tên thì chặn mất huy
-   hiệu nguồn `<i class='src alert'>` — đúng lỗi .board đã dính hôm qua. Lớp
-   chết mà giữ lại thì nó chỉ còn một tác dụng: chiếm tên. */
+/* .alert HAS BEEN DELETED: no view used that class, and its name was blocking
+   the source badge `<i class='src alert'>` — exactly the bug .board hit
+   yesterday. A dead class kept around has one remaining effect: occupying a
+   name. */
 
 
 .kgroup{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
@@ -726,7 +756,7 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .mnums{gap:5px}
 .mnums span{padding:3px 7px}
 
-/* ---------------- gập thanh bên ---------------- */
+/* ---------------- collapsing the sidebar ---------------- */
 .brandrow{display:flex;align-items:center;gap:6px;padding:6px 4px 14px 0}
 .brandrow .brand{padding:0 0 0 10px;flex:1;min-width:0;white-space:nowrap;
   overflow:hidden}
@@ -736,8 +766,9 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
   flex:none}
 .navtoggle:hover{color:var(--ink);background:var(--panel-2)}
 
-/* Đổi biến --nav-w là cả sidebar LẪN vùng nội dung (main inset trái) cùng co,
-   không phải chỉnh hai chỗ rời nhau rồi lệch. */
+/* Changing the --nav-w variable shrinks BOTH the sidebar AND the content area
+   (main's left inset) together, rather than two separate edits that drift
+   apart. */
 :root.navmin{--nav-w:62px}
 .navmin .brandrow{flex-direction:column;gap:3px;padding:0 0 12px;
   justify-content:center}
@@ -746,9 +777,10 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .navmin .navtoggle{transform:rotate(180deg)}
 .navmin .navlink{justify-content:center;padding:10px 0;gap:0}
 .navmin .navlink span{display:none}
-/* Lúc gập, icon là thứ DUY NHẤT để bấm — không được mờ như lúc có chữ bên cạnh.
-   To lên bằng cách đổi CỠ SVG, không phải font-size: hình vector nên nó nét
-   ở mọi cỡ, và cả năm cái to lên đúng bằng nhau. */
+/* Collapsed, the icon is THE ONLY thing to press — it must not stay as faint
+   as it is beside a label. Enlarged by changing THE SVG SIZE, not font-size:
+   it is vector, so it stays sharp at any size, and all five grow by exactly
+   the same amount. */
 .navmin .navlink i{width:auto;color:var(--dim)}
 .navmin .navlink .ico{width:20px;height:20px}
 .navmin .navlink:hover i{color:var(--ink)}
@@ -762,21 +794,23 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .runsched b{color:var(--ink);font-weight:600}
 
 /* ================================================================
-   SEARCH — ba ô: danh sách việc · lưới lọc · nhật ký dẹt
+   SEARCH — three panels: the job list · the sieve · a flat journal
    ================================================================ */
 
-/* ---------------- nút XEM (bấm là đổi, không qua Áp dụng) ---------------- */
-/* Ô TÌM trong kho. Đứng riêng một hàng trên cùng, không chen vào hàng chip:
-   nó là việc khác — chip lọc theo LOẠI, ô này lọc theo CHỮ. */
+/* -------------- VIEW chips (press to change, no Apply) -------------- */
+/* THE SEARCH BOX over the store. On a row of its own at the top, never mixed
+   into the chip row: it is a different job — chips filter by KIND, this box
+   filters by TEXT. */
 .jfind{display:flex;align-items:center;gap:6px;margin-bottom:10px}
 .jfind .search{min-width:0}
 .jfindx{flex:none;width:30px;height:30px;display:grid;place-items:center;
   border:1px solid var(--line-2);border-radius:8px;color:var(--mute);
   text-decoration:none;font-size:15px;line-height:1}
 .jfindx:hover{color:var(--bad);border-color:var(--bad)}
-/* Hàng nút: hai NHÓM, một đẩy sát trái một đẩy sát phải. Ô "Việc tìm được"
-   rộng gần 2000px mà mọi thứ nép hết vào mép trái thì nửa màn hình bỏ không,
-   và mắt phải quét một cột hẹp dài bốn tầng. */
+/* The chip row: two GROUPS, one flush left and one flush right. The "What it
+   found" panel is nearly 2000px wide, and with everything hugging the left
+   edge half the screen sits empty while the eye scans a narrow four-tier
+   column. */
 .vbar{display:flex;flex-wrap:wrap;justify-content:space-between;
   align-items:center;gap:5px 18px;margin-bottom:7px}
 .vgrp{display:flex;flex-wrap:wrap;align-items:center;gap:5px 12px}
@@ -788,12 +822,14 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .vchip.on{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);
   font-weight:600}
 
-/* THANG MỨC ĐỘ — mấy nấc LIỀN NHAU trong một khung, tô đầy tới nấc đang chọn.
-   Khác pill rời ở đúng một điểm, và đó là điểm quan trọng nhất: liền nhau thì
-   nhìn ra ngay là chúng có THỨ TỰ. Bốn pill rời thì phải đọc hết mới đoán.
+/* A LADDER — ADJOINING steps inside one frame, filled up to the one selected.
+   It differs from separate pills in exactly one way, and that way is the most
+   important: adjoining, it is obvious at a glance that they HAVE AN ORDER.
+   Four separate pills have to be read through before it can be guessed.
 
-   Nấc đã qua tô mờ, nấc đang chọn tô đậm — đọc như cái núm trên thanh trượt,
-   nên "chọn một nấc = từ đây trở lên" không phải giải thích. */
+   Steps already passed are filled faintly, the selected one solidly — it
+   reads like the knob on a slider, so "picking a step = from here up" needs
+   no explaining. */
 .lvl{display:inline-flex;align-items:center;gap:7px}
 .lvlname{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--mute);font-weight:650}
@@ -803,18 +839,19 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
   white-space:nowrap;border-left:1px solid var(--line)}
 .lvlstep:first-child{border-left:0}
 .lvlstep:hover{color:var(--ink)}
-/* Nấc ĐÃ QUA: xanh đậm, đặc — không dùng alpha. rgba(...,.16) trên nền đen
-   ra đúng L* 5, tức là gần như không nhìn thấy: đã thử và thanh trông y hệt
-   mấy pill rời, mất sạch ý nghĩa "thanh mức độ". #1E3A2C là L* ~21, nổi rõ
-   khỏi nền (L* 3.6) mà vẫn thua xa nấc đang chọn (--acc). */
+/* A step ALREADY PASSED: deep green, solid — no alpha. rgba(...,.16) over a
+   black ground comes out at L* 5, i.e. all but invisible: it was tried, and
+   the bar looked exactly like separate pills again, losing the whole "level
+   bar" meaning. #1E3A2C is about L* 21, clearly off the ground (L* 3.6) while
+   still far below the selected step (--acc). */
 .lvlstep.on{background:#1E3A2C;color:#C9E5D5}
 .lvlstep.now{background:var(--acc);color:var(--acc-ink);font-weight:600}
-/* Nhãn của hàng XẾP THEO. Xếp không lọc gì cả — để chung hàng với bộ lọc thì
-   người dùng tưởng nó cũng cắt bớt danh sách. */
+/* The SORT BY row's label. Sorting filters nothing — put it on the same row
+   as the filters and the user assumes it also cuts the list down. */
 .vlabel{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--mute);font-weight:650;align-self:center;margin-right:2px}
 
-/* ---------------- một dòng việc ---------------- */
+/* ---------------- one job row ---------------- */
 .jlist{display:flex;flex-direction:column;gap:1px}
 .jrow{display:grid;grid-template-columns:76px 1fr auto;gap:12px;align-items:start;
   padding:9px 8px;border-radius:8px;text-decoration:none;color:inherit;
@@ -834,25 +871,27 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
   background:var(--line);color:var(--dim);white-space:nowrap}
 .chance.ok{background:var(--acc-bg);color:var(--acc)}
 .chance.warn{background:var(--warn-bg);color:var(--warn)}
-/* "bạn giữ" — tin này nằm đây vì NGƯỜI bảo thế, không phải vì máy chấm đạt.
-   Màu tím: không dùng lại xanh/vàng/đỏ của thang cơ hội, vì nó không nói về
-   cơ hội — nó nói về việc AI quyết định. */
+/* "you kept" — this posting is here because A PERSON said so, not because the
+   machine scored it in. Purple: it does not reuse the green/amber/red of the
+   chance ladder, because it says nothing about chance — it says WHO decided. */
 .chance.keep{background:rgba(167,139,250,.16);color:#A78BFA}
 
-/* badge nguồn — nhìn dòng nào cũng biết cách nào tìm ra nó */
+/* the source badge — every row says at a glance how it was found */
 .src{display:inline-flex;align-items:center;gap:4px;font-style:normal;
   font-size:10.5px;color:var(--dim);border:1px solid var(--line);
   border-radius:5px;padding:1.5px 6px;white-space:nowrap}
 .src b{font-weight:600}
 .src.linkedin{color:#8FA9C9;border-color:rgba(143,169,201,.3)}
-/* Thư báo việc — màu hổ phách, khác hẳn hai nguồn kia. Nó là nguồn NHANH
-   NHẤT (LinkedIn gửi trong vài giờ), nên đáng có màu riêng để liếc là thấy. */
+/* Job alert mail — amber, quite unlike the other two sources. It is the
+   FASTEST source (LinkedIn sends within hours), so it deserves a colour of
+   its own to be seen at a glance. */
 .src.alert{color:#D8A15E;border-color:rgba(216,161,94,.3)}
 .src.board{color:var(--acc);border-color:rgba(var(--acc-rgb),.3)}
 .src.agency{color:var(--warn);border-color:rgba(216,161,94,.3)}
 
-/* Đường sang TIN GỐC ở trang chi tiết. Mỗi nơi đăng một nút; nút nói rõ tên
-   miền, để biết trước mình sắp đi đâu chứ không phải bấm rồi mới biết. */
+/* The link to THE ORIGINAL POSTING on the detail page. One button per place
+   it was posted; the button names the domain, so you know where you are going
+   rather than having to press to find out. */
 .jlinks{display:flex;flex-wrap:wrap;gap:8px}
 .jlink{display:inline-flex;align-items:center;gap:9px;text-decoration:none;
   padding:8px 12px;border:1px solid var(--line-2);border-radius:var(--round);
@@ -864,13 +903,13 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .merged{font-size:10.5px;color:var(--mute)}
 .jwhen{font-size:10.5px;color:var(--mute);white-space:nowrap}
 
-/* ---------------- ô lưới lọc (form thật) ---------------- */
+/* ---------------- the sieve panel (a real form) ---------------- */
 .sieve{display:flex;flex-direction:column;gap:4px}
 .slab{display:flex;flex-direction:column;gap:2px;font-size:11.5px;
   color:var(--dim);margin-top:9px}
 .slab:first-child{margin-top:0}
 .slab span{font-size:10.5px;color:var(--mute);line-height:1.4}
-/* ô thẻ: gõ chức danh rồi Enter là thêm */
+/* the tag box: type a job title and press Enter to add it */
 .tagbox{display:flex;flex-wrap:wrap;gap:4px;align-items:center;
   background:var(--bg);border:1px solid var(--line);border-radius:7px;
   padding:6px 7px;cursor:text}
@@ -893,10 +932,12 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .tick input{accent-color:var(--acc);margin:0}
 .tick:has(input:checked){background:var(--acc-bg);border-color:var(--acc-2);
   color:var(--acc)}
-/* Nút Áp dụng DÍNH đáy ô: nó là hành động chính, mà ô lưới cuộn được nên
-   nếu để nó trôi theo nội dung thì phần lớn thời gian nó nằm khuất.
-   Thanh dính CHE mất phần cuối nội dung, nên form phải chừa chỗ bên dưới —
-   nếu không nhóm "Thị trường" nằm khuất sau nó và không ai bấm được. */
+/* The Apply button is STUCK to the panel's bottom: it is the main action, and
+   the sieve panel scrolls, so left to drift with the content it spends most
+   of its time out of sight.
+   A sticky bar COVERS the end of the content, so the form has to leave room
+   below — otherwise the "Markets" group hides behind it and nobody can press
+   it. */
 .sieve{padding-bottom:2px}
 .sieve .stick{position:sticky;bottom:calc(-1 * var(--wpad, 12px));
   background:var(--panel);padding:11px 0;margin-top:9px;
@@ -908,15 +949,16 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .applynote{font-size:10.5px;color:var(--mute);margin-top:7px;line-height:1.45}
 .applynote b{color:var(--dim)}
 
-/* ---------------- nhật ký dẹt dưới đáy ---------------- */
+/* ---------------- the flat journal along the bottom ---------------- */
 .wid.flat .wbody{padding:9px 12px}
 .jflat{display:grid;grid-template-columns:260px 1fr;gap:16px;height:100%}
 .jprog{border-right:1px solid var(--line);padding-right:16px;overflow:auto}
 .jfeed{overflow:auto;min-width:0}
 
-/* Nhật ký ở GÓC dưới trái thì hẹp — xếp ngang hai khối là mỗi khối còn
-   ~160px, không đọc nổi dòng nào. Xếp DỌC: tiến độ một dòng trên, còn lại
-   nhường hết cho dòng sự kiện. */
+/* A journal in the bottom-left CORNER is narrow — laid out side by side each
+   block gets about 160px, and not a line is readable. Stacked VERTICALLY:
+   progress on one line at the top, and everything else given over to the
+   event lines. */
 .wid.corner .jflat{grid-template-columns:1fr;grid-template-rows:auto 1fr;gap:7px}
 .wid.corner .jprog{border-right:0;border-bottom:1px solid var(--line);
   padding:0 0 6px;overflow:visible}
@@ -928,41 +970,46 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .pager .muted{font-size:11.5px;color:var(--mute)}
 .vchip.off{opacity:.35}
 
-/* Công tắc nguồn trong tấm Điều chỉnh. Màu theo đúng huy hiệu trên dòng việc
-   — cùng một thứ thì phải cùng một màu, không thì phải học hai lần. */
+/* The source switches inside the Adjust panel. Coloured exactly like the
+   badges on a job row — the same thing has to be the same colour, or it has
+   to be learnt twice. */
 .srcrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 .srcbtn{width:auto;padding:6px 13px;font-family:ui-monospace,Menlo,monospace;
   font-size:11.5px}
 .srcbtn.board{color:var(--acc);border-color:rgba(var(--acc-rgb),.35)}
 .srcbtn.linkedin{color:#8FA9C9;border-color:rgba(143,169,201,.35)}
 .srcbtn.alert{color:#D8A15E;border-color:rgba(216,161,94,.35)}
-/* TẮT thì phải nhìn ra ngay là đang tắt: mờ đi VÀ mất màu, vì chỉ mờ thôi
-   dễ đọc nhầm thành "nút chưa bấm được". */
+/* OFF has to be visible as off at once: faded AND drained of colour, because
+   fading alone is easily read as "a button not yet available". */
 .srcbtn.off{opacity:.4;color:var(--mute);border-color:var(--line)}
 
-/* ---------------- menu Cài đặt (tấm phủ, không phải tab) ---------------- */
+/* ------------ the Settings menu (an overlay, not a tab) ------------ */
 .mbtn.gear{font-size:14px;line-height:1;padding:5px 10px}
 .sheet{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.5);
   backdrop-filter:blur(2px);display:flex;align-items:flex-start;
   justify-content:flex-end;padding:calc(var(--top) + 8px) 14px 14px}
-/* Đệm TRONG tấm phủ — một số, mọi khối con dùng chung. Trước đây mỗi khối tự
-   đặt (0, 15px, 18px) nên tiêu đề dính sát góc còn hàng dưới thì thụt vào. */
+/* The padding INSIDE the overlay — one number, shared by every child block.
+   Each block used to set its own (0, 15px, 18px), so the heading hugged the
+   corner while the row below was indented. */
 :root{--sheet-pad:18px}
 
-/* BẮT BUỘC. Thuộc tính hidden chỉ là luật [hidden]{display:none} của trình
-   duyệt; .sheet{display:flex} cùng độ ưu tiên nhưng là CSS của mình nên
-   THẮNG — hidden thành vô nghĩa, tấm phủ nằm trên cùng vĩnh viễn, phủ đen
-   cả trang và nuốt mọi cú bấm. Không bấm được gì hết. */
+/* REQUIRED. The hidden attribute is only the browser's [hidden]{display:none}
+   rule; .sheet{display:flex} has the same specificity but is our own CSS, so
+   it WINS — hidden becomes meaningless, the overlay sits on top forever,
+   blacking out the whole page and swallowing every click. Nothing can be
+   pressed at all. */
 .sheet[hidden]{display:none}
 .setupbody{padding:4px 15px 15px}
 
-/* Cài đặt CẢ APP đứng giữa màn, không phải tấm bên phải như ⚟ của khúc. */
+/* WHOLE-APP settings sit mid-screen, not in the right-hand panel the way a
+   stage's ⚟ does. */
 .sheet.mid{align-items:center;justify-content:center;padding:20px}
-/* 760, KHÔNG phải 480. Tấm Cài đặt giờ có bảy tab — đo bề rộng thật của
-   hàng chip (chữ 12px + đệm 12px mỗi bên + 6 khe) là 530px, nên ở 480 nó gãy
-   xuống hai dòng và "Tình trạng" với "Làm lại" bị cắt làm đôi. Rộng ra cũng
-   trả lại chỗ cho lưới màu ba cột và mấy hàng công tắc Thông báo.
-   `max-width` vẫn giữ để không bao giờ tràn ra ngoài cửa sổ. */
+/* 760, NOT 480. The Settings panel now has seven tabs — measuring the chip
+   row's real width (12px text + 12px padding each side + 6 gaps) gives 530px,
+   so at 480 it broke onto two lines and "Status" and "Start over" were cut in
+   half. The extra width also gives the three-column colour grid and the
+   Notifications switch rows their room back.
+   `max-width` stays so it can never spill outside the window. */
 .sheetbox{width:760px;max-width:calc(100vw - 28px);max-height:100%;overflow:auto;
   background:var(--panel);border:1px solid var(--line-2);border-radius:12px;
   box-shadow:0 24px 70px rgba(0,0,0,.6)}
@@ -981,17 +1028,18 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
   border:1px solid var(--line);border-radius:6px;padding:5px 8px;max-width:210px}
 .setform input:focus,.setform select:focus{outline:none;border-color:var(--acc-2)}
 .setform .unit{color:var(--mute);font-size:11.5px;margin-left:7px}
-/* Một mức nhịp: nút tròn TRƯỚC, tên, rồi cái giá phải trả. Ba cột trên MỘT
-   dòng — xếp dọc thì nút tròn trôi lên trên cái tên và không ai biết nút nào
-   thuộc mức nào. */
+/* One pace level: the radio FIRST, then the name, then the price paid. Three
+   columns on ONE line — stacked, the radio floats above the name and nobody
+   can tell which radio belongs to which level. */
 .setform .prow{display:grid;grid-template-columns:auto auto 1fr;align-items:center;
   gap:4px 10px;padding:7px 0;font-size:12.5px;cursor:pointer;
   border-bottom:1px solid rgba(255,255,255,.04)}
 .setform .prow input[type=radio]{margin:0;accent-color:var(--acc)}
 .setform .prow b{color:var(--ink);font-weight:600}
 .setform .prow .muted{font-size:11.5px}
-/* Một dòng ATS: tick · tên · giới thiệu · SỐ THẬT. Số xuống dòng riêng, canh
-   dưới tên, để mắt so ba nguồn theo cột chứ không phải dò trong câu. */
+/* One ATS row: tick · name · description · THE REAL NUMBERS. The numbers go
+   on their own line, aligned under the name, so the eye compares the three
+   sources down a column rather than hunting inside a sentence. */
 .setform .srcline{grid-template-columns:auto auto 1fr}
 .srcnum{grid-column:2 / -1;font-size:11px;color:var(--mute);
   font-family:ui-monospace,Menlo,monospace}
@@ -1013,7 +1061,7 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
   padding:5px 8px;margin:6px 0}
 .forced code{font-size:10.5px}
 
-/* ---------------- Projects: khoảng trống · kho · hàng đợi ---------------- */
+/* -------------- Projects: the gaps · the store · the queue -------------- */
 
 .gapnote{font-size:11.5px;color:var(--mute);margin-bottom:10px;line-height:1.5}
 .gapnote b{color:var(--dim);font-weight:600}
@@ -1022,20 +1070,21 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .gaprow{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;
   padding:9px 2px;border-bottom:1px solid var(--line)}
 .gaprow:last-child{border-bottom:none}
-/* Ô còn trống là VIỆC PHẢI LÀM — nó phải nổi hơn ô đã có bằng chứng.
-   Ngược lại thì mắt đọc lưới xong không biết nên bắt đầu từ đâu. */
+/* An empty slot is WORK TO BE DONE — it has to stand out more than a slot
+   that already has evidence. The other way round and the eye finishes reading
+   the grid with no idea where to start. */
 .gaprow.open .gaphead b{color:var(--ink)}
 .gaprow.doing{opacity:.8}
 .gaprow.done{opacity:.5}
 .gaphead{display:flex;align-items:baseline;gap:9px}
 .gaphead b{font-size:13px;font-weight:600;color:var(--dim)}
 .gapn{font-size:11px;color:var(--mute);flex:none}
-.gapn i{font-style:normal;opacity:.55}   /* mẫu số mờ hơn tử số */
+.gapn i{font-style:normal;opacity:.55}   /* the denominator is fainter than the numerator */
 .gaptrack{height:3px;border-radius:2px;background:var(--line-2);overflow:hidden;
   margin:5px 0 4px}
 .gaptrack i{display:block;height:100%;background:var(--acc-2);border-radius:2px}
 .gapind{display:flex;gap:5px;flex-wrap:wrap}
-.gapmain{min-width:0}          /* không có dòng này thì tên kỹ năng dài đẩy vỡ cột */
+.gapmain{min-width:0}          /* without this line a long skill name bursts the column */
 .gapact{flex:none}
 .gothave{font-size:11px;color:var(--acc);white-space:nowrap}
 .gotplan{font-size:11px;color:var(--warn);white-space:nowrap}
@@ -1049,7 +1098,8 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 
 /* kho */
 .plist{display:flex;flex-direction:column;gap:1px}
-/* Tên RIÊNG: .prow đã là hàng thanh tiến độ trong nhật ký (live.js vẽ). */
+/* ITS OWN NAME: .prow is already the progress row in the journal (drawn by
+   live.js). */
 .plrow{display:grid;grid-template-columns:70px 1fr auto;gap:12px;align-items:start;
   padding:11px 2px;border-bottom:1px solid var(--line)}
 .plrow:last-child{border-bottom:none}
@@ -1063,7 +1113,7 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .plink{font-size:11px;color:var(--acc);text-decoration:none}
 .plink:hover{text-decoration:underline}
 
-/* hàng đợi LLM — đường RA của llm.ask(), thứ trước giờ chưa có */
+/* the LLM queue — the way OUT of llm.ask(), which never existed before */
 .lq{border:1px solid var(--warn);background:var(--warn-bg);border-radius:11px;
   padding:11px 13px;margin-bottom:13px}
 .lqhead{display:flex;align-items:center;justify-content:space-between;gap:11px;
@@ -1087,7 +1137,7 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .lqbody form{display:flex;flex-direction:column;gap:5px;margin:0}
 .lqbody .mbtn.apply{align-self:flex-start;width:auto;padding:6px 15px}
 
-/* ---------------- CV: mọi bản sẽ gửi ---------------- */
+/* ---------------- CV: every version that will be sent ---------------- */
 
 .cvgaps{font-size:11.5px;color:var(--mute);line-height:2;margin-bottom:12px;
   padding-bottom:11px;border-bottom:1px solid var(--line)}
@@ -1108,8 +1158,8 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .cvwho{font-size:13px;color:var(--ink)}
 .cvwho b{font-weight:600}
 .cvshape{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;align-items:center}
-/* Hình dạng bản CV: nhìn một dòng là biết nó ghép từ khối gì, không phải mở ra
-   mới biết. Đây là phần "lắp ghép khối" hiện ra ở mức danh sách. */
+/* A CV version's shape: one row says what blocks it is assembled from,
+   without opening it. This is the "blocks assembled" view at list level. */
 .cvk{font-size:10px;color:var(--mute);border:1px solid var(--line-2);
   border-radius:20px;padding:1px 8px;white-space:nowrap}
 .cvk b{color:var(--acc);font-weight:600;margin-left:5px}
@@ -1127,40 +1177,46 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .dfthead:focus,.cvdraft:focus{outline:none;border-color:var(--acc-2)}
 .setform .safe{margin-bottom:13px}
 
-/* ---------------- IN / PDF ----------------
-   Trang này in ra là thứ nộp cho nhà tuyển dụng, nên bản in KHÔNG phải bản
-   màn hình thu nhỏ: nền đen thành giấy trắng, thanh bên và mọi nút biến mất,
-   và phần kiểm toán (câu đã bỏ, kỹ năng còn thiếu) cũng biến mất — nó là ghi
-   chú cho Vin, không phải cho người đọc CV. */
+/* ---------------- PRINTING / PDF ----------------
+   What this page prints is what gets sent to employers, so the printed copy
+   is NOT a shrunken screen: the black ground becomes white paper, the sidebar
+   and every button disappear, and the audit section (dropped sentences,
+   missing skills) disappears too — it is a note for Vin, not for whoever
+   reads the CV. */
 @media print {
   @page { size: A4; margin: 14mm 15mm; }
 
   html, body { height:auto; overflow:visible;
     background:#fff !important; color:#111 !important; font-size:10.5pt }
 
-  /* Mọi thứ không phải tờ CV.
-     `.side` chứ không phải `nav`: thanh bên là <aside class=side>, bên trong
-     mới có <nav>. Ẩn mỗi <nav> thì dấu ◐ và chữ "jobbot" vẫn in ra.
-     `.lead` chứ không phải `.h1sub`: dòng "Built for … — the system selects
-     and orders" là ghi chú CHO VIN, không phải cho nhà tuyển dụng, và nó
-     đứng ngay đầu tờ CV. */
-  /* `.statusbar` ĐÃ TỪNG LỌT: nó in đè lên dòng cuối mục Technical Skills, và
-     nó mang đường dẫn tệp trên máy ("PDF: /Users/davi/…") ra một tờ giấy gửi
-     cho nhà tuyển dụng. Thấy được bằng cách in thật rồi mở ảnh ra nhìn.
-     `.cvaudit` bọc cả bản chấm điểm — giải trình là chuyện giữa app và Vin. */
+  /* Everything that is not the CV page itself.
+     `.side` and not `nav`: the sidebar is <aside class=side>, with the <nav>
+     inside it. Hide only the <nav> and the ◐ mark and the word "jobbot" still
+     print.
+     `.lead` and not `.h1sub`: the line "Built for … — the system selects and
+     orders" is a note FOR VIN, not for the employer, and it sits right at the
+     top of the CV. */
+  /* `.statusbar` ONCE SLIPPED THROUGH: it printed over the last line of the
+     Technical Skills section, and it carried a local file path ("PDF:
+     /Users/davi/…") onto a page sent to an employer. Found by really
+     printing it and opening the image to look.
+     `.cvaudit` wraps the whole scoring report — accounting for it is between
+     the app and Vin. */
   .side, nav, .topbar, .titlebar, .sheet, .back, .lead, .cvaudit, .note,
   .chiprow, .statusbar, .mbtn, button, [data-journal], [data-progress],
   .tnote { display:none !important }
 
-  /* KHUNG APP không được in. `main.flow` mang viền 1px + bo góc 8px — trên
-     màn hình đó là cái thẻ, trên giấy nó là một hộp vẽ quanh tờ CV. Reset
-     margin/padding thôi là chưa đủ, phải reset cả viền. */
-  /* POSITION:STATIC — đây mới là gốc. `main` là `position:fixed` với
-     `left:var(--main-l)` = 226px (chừa chỗ cho thanh bên). Khi IN, phần tử
-     fixed được Chrome đặt theo HỘP TRANG và `left` không còn ghi đè được nữa
-     — thử ép `left:0 !important` cả bằng CSS lẫn bằng style inline đều không
-     nhúc nhích. Trả nó về dòng chảy thường thì `left/top/right` hết tác dụng
-     và tờ CV bắt đầu từ mép lề giấy, đúng chỗ của nó. */
+  /* THE APP'S CHROME must not print. `main.flow` carries a 1px border + an 8px
+     radius — on screen that is a card, on paper it is a box drawn around the
+     CV. Resetting margin/padding is not enough; the border has to be reset
+     too. */
+  /* POSITION:STATIC — this is the root of it. `main` is `position:fixed` with
+     `left:var(--main-l)` = 226px (leaving room for the sidebar). WHEN
+     PRINTING, Chrome positions a fixed element against THE PAGE BOX and
+     `left` can no longer override it — forcing `left:0 !important` both in
+     CSS and as an inline style moved it not at all. Put back into normal
+     flow, `left/top/right` stop applying and the CV starts at the paper's
+     margin, where it belongs. */
   main, .flow, .wrap { position:static !important;
     margin:0 !important; padding:0 !important;
     max-width:none !important; overflow:visible !important;
@@ -1170,31 +1226,34 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
   .inner { padding:0 !important; margin:0 !important; max-width:none !important }
   h1 { display:none }
 
-  /* PHÔNG NHÚNG ĐƯỢC. Phông hệ thống macOS (.SF NS) không nhúng được vào
-     PDF, nên Chrome vẽ từng chữ thành GLYPH TAY (Type3 + CharProcs). Đo trên
-     bản in thật: 34 phông Type3, 0 phông TrueType/Type0. Trình bóc chữ tốt
-     vẫn đọc được, trình xoàng cho ra "D a c  V in h  N g u y e n" — đúng
-     nguyên nhân hỏng parse mà Greenhouse liệt kê trong tài liệu của họ.
-     Georgia/Times là phông nhúng được, và có mặt trên mọi máy. */
+  /* AN EMBEDDABLE FONT. The macOS system font (.SF NS) cannot be embedded in
+     a PDF, so Chrome draws every character as A HAND-DRAWN GLYPH (Type3 +
+     CharProcs). Measured on a real print: 34 Type3 fonts, 0 TrueType/Type0.
+     A good text extractor still reads it, a mediocre one produces "D a c  V
+     in h  N g u y e n" — exactly the parsing failure Greenhouse lists in
+     their own documentation. Georgia/Times embed, and exist on every
+     machine. */
   .cvpaper, .cvpaper * { font-family:Georgia,"Times New Roman",serif !important }
   .cvpaper { background:#fff !important; border:none !important;
     border-radius:0 !important; padding:0 !important; margin:0 !important;
     max-width:none !important; width:auto !important;
     box-shadow:none !important }
 
-  /* MÀU IN — ĐẶT MẶC ĐỊNH ĐEN TRƯỚC, rồi mới làm nhạt vài chỗ phụ.
-     Bản cũ làm NGƯỢC: nó liệt kê từng lớp cần tô đen, nên lớp nào không có
-     trong danh sách thì giữ nguyên màu của giao diện TỐI. Đo trên bản in
-     thật: `.cvskill` ở 192/255 và mấy `<b>` ở 212/255 — gần trắng trên giấy
-     trắng, cả mục TECHNICAL SKILLS coi như vô hình.
-     Mặc định đen thì thêm phần tử mới vẫn đọc được, và quên một dòng CSS
-     không còn nghĩa là mất một mục trên CV. */
-  /* GỠ HẾT DẤU CHẤM BÀI. Tờ giấy gửi đi không mang bút đỏ, và nó phải in
-     bản SAU kể cả khi Vin đang để nút ở "Trước khi sửa" — thứ gửi đi là bản
-     đã sửa, không phải bản nháp đang xem. */
+  /* PRINT COLOURS — SET BLACK AS THE DEFAULT FIRST, and only then fade a few
+     secondary things.
+     The old version did it BACKWARDS: it listed each class that needed to be
+     black, so any class not on the list kept its DARK-THEME colour. Measured
+     on a real print: `.cvskill` at 192/255 and several `<b>` at 212/255 —
+     nearly white on white paper, with the whole TECHNICAL SKILLS section
+     effectively invisible.
+     With black as the default a newly added element is still readable, and
+     forgetting one CSS line no longer means losing a section of the CV. */
+  /* STRIP EVERY RED-PEN MARK. The page being sent carries no red pen, and it
+     has to print the AFTER version even while Vin has the toggle on "Before"
+     — what gets sent is the corrected version, not the draft on screen. */
   .ctip, .cno, .ctruoc, .ccard { display:none !important }
-  /* <details> mở hay đóng cũng không in phần thẻ; và bỏ nền tô từ
-     khoá — tờ giấy gửi đi không mang bút đánh dấu. */
+  /* A <details>, open or closed, never prints its summary; and the keyword
+     highlight ground goes — the page being sent carries no marker pen. */
   .vthieu_so, .vqua_dai, .vlac_de, .vda_sua {
     text-decoration:none !important; border-bottom:0 !important;
     background:none !important }
@@ -1217,21 +1276,22 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
   .cvsec { color:#000 !important; border-bottom:1px solid #ccc;
     padding-bottom:2pt; margin:12pt 0 6pt }
 
-  /* Đừng để một mục bị cắt đôi qua hai trang giấy */
+  /* Never let a section be cut in half across two sheets */
   .cvrole, .cvpaper ul, .cvsec { break-inside:avoid; page-break-inside:avoid }
   .cvsec { break-after:avoid; page-break-after:avoid }
 
   a { color:#111 !important; text-decoration:none }
 }
 
-/* ---------------- CV: kho khối ---------------- */
+/* ---------------- CV: the block store ---------------- */
 .blklist{display:flex;flex-direction:column;gap:1px}
 .blk{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;
   padding:10px 3px;border-bottom:1px solid var(--line);
   text-decoration:none;color:inherit;cursor:pointer}
 .blk:last-child{border-bottom:none}
 .blk:hover{background:var(--panel-2)}
-/* Khối với tới 0 tin: nó lên CV vì có ô trống, không vì chứng minh được gì */
+/* A block reaching 0 postings: it is on the CV because there was an empty
+   slot, not because it proves anything */
 .blk.dead{opacity:.45}
 .blkmain{min-width:0}
 .blkhead{display:flex;align-items:baseline;gap:8px}
@@ -1253,7 +1313,7 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
   margin-bottom:13px;padding-bottom:12px;border-bottom:1px solid var(--line)}
 .allpdf .muted{font-size:11px;flex:1;min-width:180px}
 
-/* lưới chức danh đang bỏ sót — máy chỉ chỗ, người bấm nhận */
+/* job titles the sieve is missing — the machine points, the person accepts */
 .missed{margin:9px 0 4px}
 .missedhead{font-size:10px;font-weight:700;letter-spacing:.07em;
   text-transform:uppercase;color:var(--warn);margin-bottom:6px}
@@ -1263,7 +1323,7 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .addtag:hover{color:var(--ink);background:rgba(216,161,94,.2)}
 .addtag b{color:var(--warn);font-weight:600;margin-left:6px}
 
-/* ---------------- Quản lí: bảng đã nộp ---------------- */
+/* ---------------- Track: the applied table ---------------- */
 
 .tracktop{margin-bottom:13px}
 .needcfg{font-size:11.5px;color:var(--warn);background:var(--warn-bg);
@@ -1271,7 +1331,7 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
   display:inline-block}
 .needcfg code{font-size:10.5px}
 
-/* dải CẦN VIN — thư đề xuất, máy không tự đổi */
+/* the NEEDS VIN band — a proposed message the machine will not change itself */
 .asklist{border:1px solid var(--warn);background:var(--warn-bg);
   border-radius:11px;padding:11px 13px;margin-bottom:14px}
 .askhead{font-size:12px;font-weight:600;color:var(--warn);margin-bottom:8px}
@@ -1286,10 +1346,10 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .asksnip{font-size:10.5px;color:var(--mute);margin-top:2px;line-height:1.5}
 .askact{display:flex;gap:6px;align-items:center;flex:none}
 
-/* Bảng Quản lí. TÊN PHẢI RIÊNG: hồi còn tên `.board` nó chiếm mất một từ
-   chung, và huy hiệu nguồn `<i class='src board'>` thừa hưởng luôn
-   width:100% + font-size:12.5px của nó — huy hiệu phình thành một cái hộp
-   to bằng cả dòng. Đúng lớp lỗi .pill và .prow đã dính. */
+/* The Track table. ITS NAME HAS TO BE ITS OWN: while it was called `.board`
+   it occupied a common word, and the source badge `<i class='src board'>`
+   inherited its width:100% + font-size:12.5px — the badge swelled into a box
+   the width of the whole row. The same class of bug .pill and .prow hit. */
 .trackboard{width:100%;border-collapse:collapse;font-size:12.5px}
 .trackboard th{text-align:left;font-size:10px;font-weight:700;letter-spacing:.07em;
   text-transform:uppercase;color:var(--mute);padding:0 10px 7px 0;
@@ -1297,7 +1357,7 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .trackboard td{padding:9px 10px 9px 0;border-bottom:1px solid var(--line);
   vertical-align:top}
 .trackboard tr:hover td{background:var(--panel-2)}
-/* xong việc rồi thì mờ đi — mắt phải rơi vào dòng còn đang chờ */
+/* finished rows fade — the eye has to land on the ones still waiting */
 .trackboard tr.rejected td,.trackboard tr.offer td{opacity:.5}
 .trackboard tr.quiet .tev{color:var(--warn)}
 
@@ -1317,7 +1377,7 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .pill.rejected{border-color:var(--bad);color:var(--bad)}
 .pill.offer{border-color:var(--acc);color:var(--acc-ink);background:var(--acc)}
 
-/* --- ô nối hộp thư (tab Quản lí) ------------------------------------- */
+/* --- the mailbox panel (Track tab) ---------------------------------- */
 .boxform{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
   padding:12px 14px;border:1px solid var(--line);border-radius:10px;
   background:var(--panel2,var(--panel));margin-bottom:14px}
@@ -1331,46 +1391,52 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .boxok{color:var(--muted)}
 .boxok b{color:var(--fg)}
 
-/* --- thanh của KHÚC: một viên thuốc nằm ngang, căn giữa -------------- */
-/* Mọi chức năng dùng chung một khối. Thanh cũ là của cả app — cùng nội dung ở
-   mọi tab — mà thứ nó điều khiển lại chỉ thuộc về Search.
+/* --- A STAGE's bar: one horizontal pill, centred ---------------------- */
+/* Every feature shares one block. The old bar belonged to the whole app — the
+   same content on every tab — while what it controlled belonged only to
+   Search.
 
-   Được phép RỘNG, không được CAO. Tất cả trong MỘT viên: tên khúc, số liệu,
-   nút. Đẩy số liệu ra ngoài thì thanh vỡ thành ba tầng rời rạc. */
+   Allowed to be WIDE, never TALL. Everything in ONE pill: the stage name, the
+   metrics, the buttons. Push the metrics outside and the bar breaks into
+   three disconnected tiers. */
 .deckwrap{display:flex;justify-content:center;width:100%;min-width:0}
 
-/* Nền viên thuốc dùng ĐÚNG luật của mọi mặt khác trong vùng làm việc: nền
-   --panel phẳng + viền --line, y như cái thẻ nằm ngay dưới nó. Bản cũ chồng
-   SÁU lớp (gradient, viền xanh rgba, vệt sáng mép trên, quầng xanh 4px, quầng
-   toả 22px, bóng đổ 26px) — nó là thứ DUY NHẤT trong app có gradient, nên
-   nhìn lạc hẳn khỏi hai khung bo. Màu xanh chỉ giữ ở chỗ CÓ NGHĨA: chấm
-   trạng thái và nút Chạy.
+/* The pill's ground follows EXACTLY the rule every other surface in the work
+   area follows: a flat --panel ground + a --line border, just like the card
+   directly below it. The old version stacked SIX layers (a gradient, an rgba
+   green border, a highlight along the top edge, a 4px green halo, a 22px
+   glow, a 26px drop shadow) — it was the ONLY thing in the app with a
+   gradient, so it looked lost beside the two rounded frames. Green is kept
+   only where it MEANS something: the status dot and the Run button.
 
-   Không dùng vạch ngăn bên trong — khoảng trắng đủ để tách nhóm, mà vạch thì
-   chia viên thuốc thành ba ô nhìn như cái bảng. */
-/* XUỐNG DÒNG khi hết chỗ, KHÔNG cuộn ngang. Bản cũ để `overflow-x:auto` rồi
-   giấu luôn thanh cuộn (`scrollbar-width:none`), nên thứ tràn ra ngoài biến
-   mất SẠCH — không mép mờ, không thanh cuộn, không gì cả. Đo thật trên
-   /track/queue: cửa sổ 1180 vừa khít 7px, xuống 1100 mất nút «← Bảng»,
-   xuống 980 mất ba nút «Quét thư», «Dừng», «← Bảng». Người dùng không bấm
-   được cái nút họ không nhìn thấy, và cũng không có cách nào đoán ra là có.
+   No internal dividing rules — whitespace separates the groups well enough,
+   while rules cut the pill into three cells that look like a table. */
+/* IT WRAPS when it runs out of room, it does NOT scroll sideways. The old
+   version set `overflow-x:auto` and then hid the scrollbar
+   (`scrollbar-width:none`), so anything overflowing vanished COMPLETELY — no
+   fade at the edge, no scrollbar, nothing. Really measured on /track/queue: a
+   1180 window fitted with 7px to spare, at 1100 the «← Table» button was
+   gone, at 980 three buttons were gone — «Scan mail», «Stop», «← Table». A
+   user cannot press a button they cannot see, and has no way to guess it is
+   there.
 
-   "Được phép RỘNG, không được CAO" vẫn đúng — nhưng nó là luật cho lúc VỪA
-   chỗ. Lúc không vừa thì hai hàng vẫn đọc được; một hàng cụt thì không.
+   "Allowed to be WIDE, never TALL" still holds — but that is the rule for
+   when it FITS. When it does not, two rows are still readable; one truncated
+   row is not.
 
-   border-radius 24px: hàng đơn cao 45px nên 24 > 45/2, trình duyệt kẹp lại
-   thành đúng viên thuốc như cũ. Hai hàng thì nó thành thanh bo góc — đúng
-   như vậy, vì nó KHÔNG còn là một viên thuốc nữa. */
+   border-radius 24px: a single row is 45px tall so 24 > 45/2, and the browser
+   clamps it back into the same pill as before. Two rows make it a
+   rounded-corner bar — which is right, because it is no longer a pill. */
 .deckpill{display:inline-flex;align-items:center;flex-wrap:wrap;
   justify-content:center;gap:0 4px;
   max-width:100%;
   padding:0 7px 0 5px;border-radius:24px;
   background:var(--panel);border:1px solid var(--line);
   transition:border-color .2s,box-shadow .2s}
-/* CHỈ lúc đang chạy thì viền thanh mới bắt sáng. Không có luật cho `paused`:
-   trong live.js `paused` nghĩa là "tự quét TẮT" — đó là trạng thái NGHỈ bình
-   thường, không phải cảnh báo. Bắt nó sáng cam thì thanh cam suốt ngày, và
-   cái sáng đó lập tức hết nghĩa. */
+/* ONLY while it is running does the bar's border light up. There is no rule
+   for `paused`: in live.js `paused` means "auto-scan OFF" — an ordinary
+   RESTING state, not a warning. Light it amber and the bar is amber all day,
+   and that brightness immediately stops meaning anything. */
 body[data-run=running] .deckpill{border-color:var(--acc-2);
   box-shadow:0 0 0 3px var(--acc-bg)}
 .deckpillname{display:flex;align-items:center;gap:8px;flex:none;
@@ -1383,15 +1449,16 @@ body[data-run=running] .deckpill{border-color:var(--acc-2);
   white-space:nowrap;flex:none}
 .metric b{font-size:15px;font-weight:650;color:var(--ink);
   font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-/* MÀU MANG NGHĨA — đây là chỗ DUY NHẤT trong app dùng nhiều hơn một màu, và
-   cố ý: thanh điều khiển phải nhìn ra ngay là thanh điều khiển, không lẫn
-   với nội dung. Luật vai->màu ghi ở layout.deck(). */
-.metric.act   b{color:var(--acc)}      /* việc phải làm */
-.metric.stock b{color:var(--info)}     /* kho đang giữ */
-.metric.new   b{color:var(--warn)}     /* vừa về */
-.metric.view  b{color:var(--dim)}      /* chỉ là bộ lọc màn hình */
-/* Số 0 thì TẮT màu, đè lên mọi vai ở trên. Thanh chỉ sáng khi có chuyện —
-   "0 mới" mà vẫn rực cam là nói dối. */
+/* COLOUR CARRIES MEANING — this is the ONE place in the app using more than
+   one colour, and deliberately: a control bar has to be recognisable as a
+   control bar rather than blending into the content. The role->colour rule is
+   written in layout.deck(). */
+.metric.act   b{color:var(--acc)}      /* work to be done */
+.metric.stock b{color:var(--info)}     /* what the store holds */
+.metric.new   b{color:var(--warn)}     /* just in */
+.metric.view  b{color:var(--dim)}      /* only a screen filter */
+/* Zero TURNS THE COLOUR OFF, overriding every role above. The bar only lights
+   up when something has happened — "0 new" glowing orange is a lie. */
 .metric.zero b{color:var(--mute);font-weight:500}
 .deckbtns{display:flex;align-items:center;gap:6px;flex:none;padding:6px 0}
 .deckpill .mbtn{border-radius:999px;padding:5px 13px}
@@ -1401,45 +1468,52 @@ body[data-run=running] .deckpill{border-color:var(--acc-2);
   align-items:center;justify-content:center}
 .mbtn.knob .ico{width:15px;height:15px}
 
-/* Hàng nút phá hoại: ô gõ chữ + nút, nút khoá sẵn cho tới khi gõ đúng. */
-/* Ô thẻ trong FORM HỒ SƠ — BA VÙNG, không nhồi vào một khung:
+/* The destructive row: a text field + a button, the button locked until the
+   right word is typed. */
+/* The tag box in THE PROFILE FORM — THREE AREAS, never crammed into one:
 
-       ô tìm        gõ để lọc; Enter lấy gợi ý khớp
-       gợi ý        chip, tự xuống dòng, KHÔNG cuộn ngang, không bóp
-       đã chọn      khung thẻ riêng ở dưới, rộng bao nhiêu cũng được
+       the search field   type to filter; Enter takes the matching suggestion
+       the suggestions    chips, wrapping, NEVER scrolling sideways, never squeezed
+       what is chosen     its own tag box below, as wide as it needs
 
-   Bản trước gộp ô nhập vào chung khung thẻ: đầy vài thẻ là hết chỗ, hàng gợi
-   ý bị ép cụt, mà gõ dở rồi bấm đi chỗ khác là chữ dở thành thẻ. */
+   The previous version folded the input into the tag box itself: a few tags
+   in and there was no room, the suggestion row was cut short, and typing
+   halfway then clicking elsewhere turned the half-typed text into a tag. */
 .tagfield{display:flex;flex-direction:column;gap:18px;padding:4px 0 2px}
 .findrow{display:flex;gap:10px;align-items:center}
 .findrow[hidden]{display:none}
 .tagfind{flex:1;min-width:0;padding:11px 13px;font-size:13px}
 .findrow .mbtn{flex:none}
 
-/* Cao hẳn ra: bày được ~5 hàng gợi ý mà không phải cuộn. Bóp lại cho vừa chỗ
-   là hàng gợi ý cụt, mà cụt thì người dùng tưởng kho chỉ có mấy cái đó. */
+/* Made properly tall: about 5 rows of suggestions show without scrolling.
+   Squeezed to fit, the suggestion row is cut short, and cut short the user
+   believes the store holds only those few. */
 .sugdrop{display:flex;flex-wrap:wrap;align-content:flex-start;gap:9px;
   min-height:96px;max-height:260px;overflow-y:auto;padding:3px 2px 5px}
 .sugdrop > .addtag{flex:none;font-size:12.5px;padding:7px 13px}
-/* BẮT BUỘC — đã dính hai lần. Đặt display cho chip là CSS của mình THẮNG luật
-   [hidden]{display:none} của trình duyệt: chip bị JS ẩn vẫn hiện, flex bóp mỗi
-   dòng còn 14px và cắt cụt chữ, nhìn như lỗi phông. */
+/* REQUIRED — this has bitten twice. Setting display on a chip means our CSS
+   BEATS the browser's [hidden]{display:none} rule: a chip JS has hidden still
+   shows, flex squeezes each line to 14px and cuts the text off, and it looks
+   like a font bug. */
 .sugdrop > .addtag[hidden]{display:none}
-/* LẦN THỨ BA dính bẫy này: .sugdrop khai display:flex nên nó THẮNG luật
-   [hidden]{display:none} của trình duyệt. Chọn hết gợi ý xong, JS ẩn vùng
-   này mà nó vẫn chiếm 96px khoảng trống giữa trang. */
+/* THE THIRD TIME this trap has bitten: .sugdrop declares display:flex, so it
+   BEATS the browser's [hidden]{display:none} rule. With every suggestion
+   taken, JS hides this area and it still occupies 96px of blank space in the
+   middle of the page. */
 .sugdrop[hidden]{display:none}
 .sugnone{font-size:12px;color:var(--mute);padding:5px 2px;flex-basis:100%}
 
 .chosenhead{font-size:10.5px;font-weight:700;letter-spacing:.09em;
   text-transform:uppercase;color:var(--mute);margin:4px 0 -8px}
-/* Khung "đã chọn" cao sẵn: thêm bớt thẻ không làm cả trang nhảy lên nhảy xuống. */
+/* The "chosen" box has a set height: adding and removing tags no longer makes
+   the whole page jump up and down. */
 .tagfield .tagbox{min-height:92px;align-content:flex-start;gap:9px;padding:12px 13px}
 .tagfield .tag{font-size:12.5px;padding:6px 11px}
 .tagempty{font-size:12.5px;color:var(--mute);padding:4px 4px}
 
-/* Học vấn: MỖI BẰNG MỘT HÀNG. Ô rời thay cho khối chữ thô, vì ngữ pháp ô này
-   CÓ TẢI — apply/answer đọc nó ra ngày tốt nghiệp để điền form xin việc. */
+/* Education: ONE DEGREE PER ROW. Separate fields rather than a raw text
+   block, because this field's grammar CARRIES WEIGHT — apply/answer reads a
+   graduation date out of it to fill in applications. */
 .edurows{display:flex;flex-direction:column;gap:14px;margin:0 0 12px}
 .edurow{display:grid;gap:9px 10px;align-items:end;
   grid-template-columns:96px 1fr 1fr 118px 118px 30px;
@@ -1449,7 +1523,8 @@ body[data-run=running] .deckpill{border-color:var(--acc-2);
 .edufield > span{font-size:10.5px;font-weight:600;letter-spacing:.06em;
   text-transform:uppercase;color:var(--mute)}
 .edufield .txt{width:100%;padding:8px 10px;font-size:12.5px}
-/* Điểm/hạng là dòng phụ -> cho nó cả hàng dưới, đừng bóp vào một cột hẹp. */
+/* The grade/class is a secondary line -> give it the whole row below rather
+   than squeezing it into a narrow column. */
 .edufield.note{grid-column:1 / -2}
 .edudrop{font:inherit;font-size:15px;line-height:1;color:var(--mute);cursor:pointer;
   background:none;border:1px solid var(--line);border-radius:7px;padding:7px 8px}
@@ -1457,9 +1532,10 @@ body[data-run=running] .deckpill{border-color:var(--acc-2);
 @media (max-width:900px){.edurow{grid-template-columns:1fr 1fr 30px}
   .edufield.note{grid-column:1 / -1}}
 
-/* Kinh nghiệm & project: mỗi thứ một KHỐI. Tên + nơi/thời gian trên một hàng,
-   phần "đã làm được gì" cả chiều ngang bên dưới — mỗi dòng ở đó là một câu có
-   thể lên CV, nên nó cần chỗ để viết. */
+/* Experience & projects: each one a BLOCK. The name plus the place/dates on
+   one row, and "what was achieved" across the full width below — every line
+   there is a sentence that could go on a CV, so it needs room to be
+   written. */
 .blockrows{display:flex;flex-direction:column;gap:14px;margin:0 0 12px}
 .blockrow{display:grid;gap:11px 10px;align-items:end;
   grid-template-columns:1fr 190px 30px;
@@ -1470,11 +1546,12 @@ body[data-run=running] .deckpill{border-color:var(--acc-2);
 @media (max-width:900px){.blockrow{grid-template-columns:1fr 30px}
   .edufield.bmeta{grid-column:1 / -2}}
 
-/* Tab trong tấm Cài đặt. Cả ba tab nằm sẵn trong DOM, chỉ một cái mang .on —
-   đổi tab không gọi lại server, nên không có khoảnh khắc trống. */
-/* HÀNG TAB KHÔNG XUỐNG DÒNG. Gãy dòng thì tên tab bị cắt làm đôi ("Tình
-   trạng" thành hai tầng) và hàng chip cao gấp đôi. Thêm tab thứ tám thì nó
-   cuộn ngang, không phải vỡ bố cục. */
+/* Tabs inside the Settings panel. All the tabs are already in the DOM and
+   only one carries .on — switching tabs calls no server, so there is no blank
+   moment. */
+/* THE TAB ROW DOES NOT WRAP. Wrapped, a tab name is cut in half ("Start
+   over" onto two tiers) and the chip row is twice as tall. Add an eighth tab
+   and it scrolls sideways rather than breaking the layout. */
 .stabs{display:flex;gap:5px;padding:0 var(--sheet-pad) 12px;
   border-bottom:1px solid var(--line);flex-wrap:nowrap;overflow-x:auto;
   scrollbar-width:none}
@@ -1485,8 +1562,8 @@ body[data-run=running] .deckpill{border-color:var(--acc-2);
 .stab:hover{color:var(--ink);background:var(--panel-2)}
 .stab.on{color:var(--acc);background:var(--acc-bg);border-color:var(--acc-2)}
 .stpane{display:none;padding:6px var(--sheet-pad) var(--sheet-pad)}
-/* .setform tự mang đệm riêng (nó là <form>), nên trong pane thì bỏ đệm
-   ngang đi, không thì cộng dồn thành 36px một bên. */
+/* .setform brings its own padding (it is a <form>), so inside a pane the
+   horizontal padding is dropped, or the two add up to 36px on one side. */
 .stpane > .setform{padding:0}
 .stpane.on{display:block}
 .dangerrow{display:flex;gap:9px;align-items:center;
@@ -1496,10 +1573,10 @@ body[data-run=running] .deckpill{border-color:var(--acc-2);
 .sheethead{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
   color:var(--mute);padding:var(--sheet-pad) var(--sheet-pad) 12px}
 
-/* --- thanh TRẠNG THÁI đáy app ---------------------------------------- */
-/* Tin CHUNG của cả app, không thuộc tab nào: đang chạy gì, việc gần nhất.
-   live.js đổ vào từ dòng SSE có sẵn — không luồn tham số qua chục hàm render,
-   và không bao giờ cũ. */
+/* --- the app's bottom STATUS bar -------------------------------------- */
+/* The app's SHARED news, belonging to no tab: what is running, and the most
+   recent job. live.js fills it from the SSE stream that is already open — no
+   parameter threaded through a dozen render functions, and never stale. */
 .statusbar{position:fixed;left:0;right:0;bottom:0;z-index:30;
   display:flex;align-items:center;gap:9px;height:var(--status-h);
   padding:0 16px 0 14px;font-size:11.5px;color:var(--dim);
@@ -1511,16 +1588,18 @@ body[data-run=paused] .sdot{background:var(--warn)}
 .smsg{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   text-align:right;color:var(--mute)}
 
-/* ---------------- bản chấm điểm CV ---------------- */
-/* Tên lớp bắt đầu bằng `g` (giải trình) — đã kiểm không đụng lớp nào đang có.
-   Đụng tên là lớp lỗi đã cắn ba lần: .pill, .prow, .board, .alert. */
+/* ---------------- the CV scoring report ---------------- */
+/* Class names start with `g` (for the accounting) — checked against every
+   existing class. Name collisions are the class of bug that has bitten three
+   times: .pill, .prow, .board, .alert. */
 .gsum{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 .gstat{display:flex;flex-direction:column;gap:2px;padding:8px 13px;
   background:var(--panel);border:1px solid var(--line);border-radius:9px;
   font-size:11.5px;color:var(--mute)}
 .gstat b{font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}
 
-/* MỘT CÂU = một khối. Số thứ tự bên trái để nói chuyện được về nó ("câu 3"). */
+/* ONE SENTENCE = one block. The number on the left so it can be talked about
+   ("sentence 3"). */
 .gcau{display:flex;gap:11px;padding:11px 0;
   border-bottom:1px solid rgba(255,255,255,.05)}
 .gcau:last-child{border-bottom:0}
@@ -1528,14 +1607,15 @@ body[data-run=paused] .sdot{background:var(--warn)}
   display:grid;place-items:center;font-size:11px;font-weight:700;
   color:var(--mute);background:var(--panel);border:1px solid var(--line)}
 .gbody{min-width:0;flex:1}
-/* Câu SAU — thứ sẽ tới tay nhà tuyển dụng, nên nó sáng nhất trong khối. */
+/* The AFTER sentence — what reaches the employer, so it is the brightest
+   thing in the block. */
 .gtext{color:var(--ink);line-height:1.55;overflow-wrap:anywhere}
 .gcau.review .gnum{color:var(--warn);border-color:var(--warn)}
 .gnote{margin-top:4px;font-size:11.5px;color:var(--warn)}
 .ghits{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
 
-/* TRƯỚC -> SAU. Gạch ngang bản cũ, xanh bản mới: mắt đọc ra ngay cái nào là
-   cái nào mà không cần nhãn chữ. */
+/* BEFORE -> AFTER. The old one struck through, the new one green: the eye
+   reads which is which at once, with no text label needed. */
 .gsua,.gyeu{margin-top:7px;padding:8px 11px;border-radius:8px;
   background:rgba(255,255,255,.03);font-size:12px}
 .gsua>b,.gyeu>b{display:block;font-size:10.5px;letter-spacing:.06em;
@@ -1550,10 +1630,11 @@ body[data-run=paused] .sdot{background:var(--warn)}
 .gyeu b{display:inline;font-size:12px;text-transform:none;letter-spacing:0;
   color:var(--warn)}
 
-/* ---------------- dòng "Bản sẽ gửi" ---------------- */
-/* Con số CHỐT của cả dòng là tỉ lệ phủ. Vẽ thành thanh vì 28 dòng thì mắt
-   quét hình nhanh hơn đọc số — và ba màu là ba HÀNH ĐỘNG khác nhau, không
-   phải ba sắc thái trang trí. */
+/* ---------------- a "what will be sent" row ---------------- */
+/* The row's DECISIVE number is the coverage ratio. Drawn as a bar because
+   across 28 rows the eye scans a shape faster than it reads a figure — and
+   the three colours are three different ACTIONS, not three decorative
+   shades. */
 .vjob{color:var(--dim);font-weight:400;margin-left:7px}
 .vline{display:flex;align-items:center;gap:9px;margin-top:5px;
   font-size:12px;color:var(--dim)}
@@ -1561,40 +1642,44 @@ body[data-run=paused] .sdot{background:var(--warn)}
 .vbarc{flex:none;width:56px;height:5px;border-radius:3px;
   background:var(--line);overflow:hidden}
 .vbarc i{display:block;height:100%;border-radius:3px}
-.vbarc.ok  i{background:var(--acc)}      /* gửi được */
-.vbarc.mid i{background:var(--warn)}     /* gửi được nhưng yếu */
-.vbarc.low i{background:var(--bad)}      /* viết thêm đã rồi hẵng gửi */
+.vbarc.ok  i{background:var(--acc)}      /* ready to send */
+.vbarc.mid i{background:var(--warn)}     /* sendable but weak */
+.vbarc.low i{background:var(--bad)}      /* write more before sending */
 
-/* ---------------- chấm bài NGAY TRÊN tờ CV ---------------- */
-/* Bút đỏ nằm trên bài, không nằm ở phụ lục. Dấu là CSS thuần nên bản in vẫn
-   là tờ giấy sạch — @media print gỡ hết (xem cuối tệp). */
+/* ------------ marking up the CV page ITSELF ------------ */
+/* The red pen goes on the page, not in an appendix. The marks are pure CSS,
+   so the printed copy is still a clean sheet — @media print strips them all
+   (see the end of this file). */
 .cvpaper.cham li{position:relative;padding-left:11px;margin-left:-11px;
   border-left:2px solid transparent;border-radius:0 3px 3px 0;
   transition:background .12s ease}
 .cvpaper.cham li.dsua {border-left-color:var(--acc)}
 .cvpaper.cham li.dhong{border-left-color:var(--warn)}
-/* Vừa sửa vừa hổng: ưu tiên CAM, vì cam là việc NGƯỜI phải làm, xanh chỉ là
-   việc máy đã làm xong. Dấu phải trỏ vào việc còn lại. */
+/* Both corrected and short: AMBER wins, because amber is work for THE
+   PERSON, while green is only work the machine has already done. The mark has
+   to point at what is left. */
 .cvpaper.cham li.dsua.dhong{border-left-color:var(--warn)}
 .cvpaper.cham li.dxem {border-left-color:var(--bad)}
 .cvpaper.cham li:hover{background:rgba(255,255,255,.05)}
 .cjump{color:inherit;text-decoration:none;display:block}
 .ctruoc{display:none}
-/* Số câu — chỉ hiện lúc rê chuột, để tờ giấy lúc đọc bình thường vẫn sạch */
+/* The sentence number — shown only on hover, so an ordinary read of the page
+   stays clean */
 .cno{position:absolute;left:-26px;top:2px;width:17px;height:17px;
   border-radius:50%;display:grid;place-items:center;font-size:10px;
   font-weight:700;color:var(--mute);background:var(--panel);
   border:1px solid var(--line);opacity:0;transition:opacity .12s ease}
 .cvpaper.cham li:hover .cno{opacity:1}
-/* Mách nước lúc rê chuột: một câu, đủ để quyết có cần bấm vào không */
+/* A hover hint: one sentence, enough to decide whether to click in */
 .ctip{position:absolute;left:11px;top:100%;z-index:5;display:none;
   max-width:520px;padding:5px 10px;border-radius:7px;font-size:11.5px;
   color:var(--ink);background:var(--panel-2);border:1px solid var(--line);
   box-shadow:0 6px 18px rgba(0,0,0,.45)}
 .cvpaper.cham li:hover .ctip{display:block}
 
-/* NÚT TRƯỚC/SAU — checkbox ẩn, không JavaScript. Đổi một cái nhãn thì không
-   đáng gọi thêm một trình nghe, và không JS thì nó không bao giờ hỏng. */
+/* THE BEFORE/AFTER TOGGLE — a hidden checkbox, no JavaScript. Swapping one
+   label does not deserve another listener, and with no JS it can never
+   break. */
 .gtoggle{display:flex;align-items:center;gap:11px;margin:9px 0 4px}
 .gtoggle label{cursor:pointer;padding:5px 13px;border-radius:20px;
   border:1px solid var(--line);background:var(--panel);font-size:12px;
@@ -1603,13 +1688,14 @@ body[data-run=paused] .sdot{background:var(--warn)}
 .gt2{display:none}
 .gswitch:checked ~ label .gt1{display:none}
 .gswitch:checked ~ label .gt2{display:inline}
-/* Bật "trước" -> tờ CV hiện chữ GỐC, và dấu xanh tắt đi: lúc này đang nhìn
-   bản chưa sửa, để nguyên dấu "đã sửa" là nói dối về thứ đang hiện. */
+/* Turn "before" on -> the CV shows the ORIGINAL words, and the green marks go
+   out: what is on screen now is the uncorrected version, and leaving the
+   "corrected" marks would be lying about what is showing. */
 .gswitch:checked ~ .cvpaper.cham .csau{display:none}
 .gswitch:checked ~ .cvpaper.cham .ctruoc{display:inline}
 .gswitch:checked ~ .cvpaper.cham li.dsua:not(.dhong){border-left-color:var(--mute)}
 
-/* Khối chi tiết: số câu là LINK NGƯỢC lên bài */
+/* The detail block: the sentence number is a LINK BACK up to the page */
 .gdoi{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:2px}
 .glab{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
   color:var(--mute);margin-right:2px}
@@ -1617,27 +1703,28 @@ a.gnum{text-decoration:none;cursor:pointer}
 a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .ksua{color:var(--acc)} .khong{color:var(--warn)}
 
-/* Con số trên nút lọc — bấm vào còn bao nhiêu tin. Không có số thì nút lọc
-   là lời mời mù: người dùng bấm để BIẾT nó lọc ra gì, và nếu nó lọc ra y
-   nguyên thì họ vừa mất một cú bấm để học rằng nút đó vô dụng. */
+/* The number on a filter chip — how many postings remain if you press it.
+   Without the number a filter chip is a blind invitation: the user presses it
+   to FIND OUT what it filters to, and if it filters to nothing at all they
+   have spent a click learning that the chip is useless. */
 .vchip b,.lvlstep b{margin-left:6px;font-weight:600;font-size:10.5px;
   color:var(--mute);font-variant-numeric:tabular-nums}
 .vchip.on b,.lvlstep.on b{color:inherit;opacity:.75}
-/* Lọc ra 0 tin: mờ đi, vẫn bấm được. Giấu hẳn thì người dùng không biết là
-   có lựa chọn đó và tưởng app thiếu tính năng. */
+/* Filters to 0 postings: faded, still pressable. Hidden outright and the user
+   does not know the option exists and assumes the app lacks the feature. */
 .vchip.nil{opacity:.4}
 
-/* ---------------- chữa bài kiểu Grammarly ---------------- */
-/* Thẻ mở bằng <details>, đổi câu bằng <form> thật — KHÔNG JavaScript. Một
-   tính năng không có trình nghe thì không có gì để hỏng. */
+/* ---------------- Grammarly-style corrections ---------------- */
+/* The card opens with <details> and a sentence is swapped with a real <form>
+   — NO JavaScript. A feature with no listener has nothing to break. */
 .cdet summary{list-style:none;cursor:pointer;display:block}
 .cdet summary::-webkit-details-marker{display:none}
 .cdet summary::marker{content:""}
 .cdet[open] summary .csau{color:var(--ink)}
 
-/* TỪ KHOÁ tin này ĐÒI. Đây là thứ trả lời câu hỏi đầu tiên của người đọc:
-   tờ giấy có nói ra được thứ họ hỏi không — nhìn phát thấy, không phải đọc
-   phân số. */
+/* THE KEYWORDS this posting ASKS FOR. This answers the reader's first
+   question: can the page say what they are asking about — seen at a glance,
+   without reading a fraction. */
 .kw{background:rgba(var(--acc-rgb),.17);color:var(--acc);
   border-radius:3px;padding:0 2px;font-weight:600}
 
@@ -1649,8 +1736,9 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .cwhy b{color:var(--acc);font-weight:600}
 .cfix{color:var(--dim);margin-top:4px}
 .cfix b{color:var(--warn);font-weight:600}
-/* ĐỔI SANG — mấy câu KHÁC Vin đã viết. Máy không viết chữ mới, nó chỉ đưa
-   lại thứ Vin đã viết mà lần này không được gọi. */
+/* SWAP TO — OTHER sentences Vin has written. The machine writes no new words,
+   it only puts back what Vin already wrote and that was not called this
+   time. */
 .cswap{margin-top:9px;padding-top:8px;border-top:1px solid var(--line)}
 .cswap>b{display:block;font-size:10.5px;letter-spacing:.06em;
   text-transform:uppercase;color:var(--mute);margin-bottom:6px}
@@ -1660,22 +1748,25 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .calt .mbtn{flex:none}
 .calttext{flex:1;color:var(--dim);line-height:1.5}
 
-/* --- VẾT: gạch chân ĐÚNG ĐOẠN CHỮ, không gạch cả dòng --- */
-/* Grammarly có giá trị vì mở tài liệu ra là THẤY NGAY chỗ nào hỏng, bao
-   nhiêu chỗ — không phải bấm từng dòng mới biết có vấn đề. Bản trước đánh
-   dấu ở mức DÒNG bằng viền trái 2px: đo được 0 dấu nào nằm trên chữ. */
+/* --- MARKS: underline THE EXACT PHRASE, never the whole line --- */
+/* Grammarly is worth using because opening a document SHOWS AT ONCE where the
+   problems are and how many — rather than clicking each line to find out
+   there is one. The previous version marked at LINE level with a 2px left
+   border: measured, 0 marks landed on any words. */
 .vthieu_so{text-decoration:underline wavy var(--warn);
   text-underline-offset:3px;text-decoration-thickness:1.5px}
 .vqua_dai{text-decoration:underline wavy var(--bad);
   text-underline-offset:3px;text-decoration-thickness:1.5px}
 .vlac_de{text-decoration:underline dotted var(--mute);text-underline-offset:3px}
 .vda_sua{border-bottom:1.5px solid var(--acc-2)}
-/* Từ khoá vẫn tô nền — nền và gạch chân là hai kênh khác nhau nên một cụm
-   chữ vừa là từ khoá vừa có vấn đề vẫn đọc ra được cả hai. */
+/* Keywords still get a background — a ground and an underline are two
+   different channels, so a phrase that is both a keyword and a problem still
+   reads as both. */
 .cdet summary:hover .vthieu_so,.cdet summary:hover .vqua_dai{
   background:rgba(216,161,94,.12)}
 
-/* Thẻ: mỗi CHỖ một dòng, kèm nguyên văn đoạn bị gạch để mắt nối được */
+/* The card: ONE LINE PER SPOT, carrying the underlined phrase verbatim so the
+   eye can connect them */
 .cspot{margin-top:5px;padding-left:9px;border-left:2px solid var(--line);
   color:var(--dim);line-height:1.55}
 .cspot.vthieu_so{border-left-color:var(--warn);text-decoration:none}
@@ -1685,7 +1776,7 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .cspot b{color:var(--ink);font-weight:600}
 .cquote{display:block;font-style:italic;color:var(--mute);margin-bottom:1px}
 
-/* Chú giải vệt — không có nó thì mấy đường gạch chân là câu đố */
+/* The marks' legend — without it the underlines are a riddle */
 .glegend{display:flex;flex-wrap:wrap;gap:13px;margin:8px 0 2px;font-size:11.5px}
 .gleg{color:var(--dim);padding-bottom:1px}
 .gleg b{color:var(--ink);margin-left:4px;font-variant-numeric:tabular-nums}
@@ -1693,7 +1784,7 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
   border-radius:3px;padding:0 5px;font-weight:600}
 .gstat.act b{color:var(--acc)}
 
-/* ---------------- khối HỤT: viết gì thì hết hụt bao nhiêu tin ---------- */
+/* ----------- THE GAP block: write what, and how many postings clear ---- */
 .hrow{display:grid;grid-template-columns:44px minmax(88px,1fr) 1fr 52px 56px;
   grid-template-areas:"lab name bar plus cum" ". split split split split";
   gap:3px 9px;align-items:center;padding:8px 0;
@@ -1704,8 +1795,9 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .hlab.viet{color:var(--acc);background:rgba(var(--acc-rgb),.14)}
 .hlab.hoc{color:var(--warn);background:rgba(216,161,94,.14)}
 .hname{grid-area:name;color:var(--ink);font-weight:600;font-size:12.5px}
-/* Vạch dài theo SỐ TIN MỞ KHOÁ, không theo số dòng — đó là thứ quyết định
-   thứ tự việc. Đếm theo dòng thì cloud đứng đầu mà chỉ mở thêm 19 tin. */
+/* The bar length follows POSTINGS UNLOCKED, not the number of lines — that is
+   what decides the order of the work. Counted by lines, cloud comes top while
+   unlocking only 19 more postings. */
 .hbar{grid-area:bar;height:5px;border-radius:3px;background:var(--line)}
 .hbar i{display:block;height:100%;border-radius:3px}
 .hbar i.viet{background:var(--acc)} .hbar i.hoc{background:var(--warn)}
@@ -1718,8 +1810,8 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .hsplit{grid-area:split;font-size:11px;color:var(--mute)}
 .hsplit b{color:var(--dim)}
 
-/* HAI ĐÍCH: viết được tối nay vs phải đi học. Gộp làm một con số là chỉ cho
-   người dùng một cái đích tối nay không với tới được. */
+/* TWO TARGETS: writable tonight vs must be learnt. Folded into one number, it
+   shows the user a single target they cannot reach tonight. */
 .htarget{display:flex;gap:9px;margin:9px 0 11px}
 .ht1,.ht2{flex:1;display:flex;flex-direction:column;gap:2px;padding:9px 12px;
   border-radius:9px;font-size:11px;color:var(--mute);
@@ -1728,16 +1820,18 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .ht1 b,.ht2 b{font-size:19px;color:var(--ink);font-variant-numeric:tabular-nums}
 .ht1 b{color:var(--acc)}
 
-/* Công tắc trên tấm Điều chỉnh CV — mỗi cái kèm con số nó đang tốn */
-/* ---------------- Tấm ĐIỀU CHỈNH · CV ----------------
-   BẢNG, không phải bài văn. Bản trước in cả lý do lẫn hai câu ví dụ thẳng ra
-   dưới từng công tắc — năm công tắc thành bốn mươi dòng chữ, và người mở tấm
-   này ra để LẬT MỘT CÔNG TẮC phải cuộn qua cả bài. */
+/* The switches on the CV Adjust panel — each with the number it is costing */
+/* ---------------- The ADJUST panel · CV ----------------
+   A TABLE, not an essay. The previous version printed the reason and two
+   example sentences straight out under each switch — five switches became
+   forty lines of prose, and anyone opening this panel TO FLIP ONE SWITCH had
+   to scroll through the lot. */
 .adjbox{padding:0 var(--sheet-pad) var(--sheet-pad)}
-/* MỨC ĐANG DÙNG. `.mbtn.off` từng được gắn ở HTML mà không có một dòng CSS
-   nào — ba nút trông y hệt nhau, và núm quan trọng nhất của app không nói
-   được nó đang ở đâu. Đánh dấu mức ĐANG DÙNG bằng màu ĐẶC, không bằng cách
-   làm mờ mấy mức kia: nhìn vào là thấy ngay cái đang bật. */
+/* THE LEVEL IN USE. `.mbtn.off` was once set in the HTML with not a single
+   line of CSS behind it — all three buttons looked identical, and the app's
+   most important knob could not say where it was. The level IN USE is marked
+   with a SOLID colour rather than by fading the others: one look and the
+   active one is there. */
 .mbtn.tiny.on{color:var(--acc);background:var(--acc-bg);border-color:var(--acc)}
 .mbtn.tiny.off{color:var(--mute);border-color:var(--line)}
 .mbtn.tiny.off:hover{color:var(--ink);border-color:var(--line-2)}
@@ -1746,28 +1840,30 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .adjname b{display:block;font-size:12.5px;font-weight:600;color:var(--ink)}
 .adjname span{font-size:10.5px;color:var(--mute)}
 .adjrow .srcrow{margin-bottom:0}
-/* CÁI GIÁ CỦA MỘT MỨC, in ngay trên cái nút chọn nó. Mốc im lặng là núm duy
-   nhất trong app có thể ĐÓNG NHẦM một dòng còn sống, và số dòng đó đếm được
-   trên thư có thật — giấu nó vào tooltip là bắt người dùng rê chuột từng nút
-   mới biết mình đang đánh đổi cái gì. Đỏ vì nó là mất mát, không phải số nền. */
+/* A LEVEL'S COST, printed on the very button that picks it. The silence mark
+   is the only knob in the app that can CLOSE A LIVE ROW BY MISTAKE, and the
+   number of such rows is countable on real mail — hiding it in a tooltip
+   makes the user hover over each button to learn what they are trading. Red
+   because it is a loss, not a background figure. */
 .mbtn.tiny .nham{display:block;font-style:normal;font-size:9px;font-weight:600;
   letter-spacing:.03em;color:var(--bad);margin-top:2px;opacity:.85}
 .mbtn.tiny.on .nham{opacity:1}
-/* Tiêu đề nhóm: cái gì máy quyết, cái gì là nhịp chạy — hai câu hỏi khác nhau */
+/* Group headings: what the machine decides vs what the running rhythm is —
+   two different questions */
 .adjsec{font-size:10px;font-weight:700;letter-spacing:.09em;
   text-transform:uppercase;color:var(--mute);margin:20px 0 4px;
   display:flex;align-items:baseline;justify-content:space-between;gap:10px}
 .adjsec span{font-size:10px;font-weight:400;letter-spacing:0;
   text-transform:none;color:var(--line-2)}
 
-/* MỘT CÔNG TẮC = một hàng lưới. Cột cố định nên con số của mọi dòng thẳng
-   hàng nhau — đó là thứ biến năm nút rời thành một bảng đọc được. */
+/* ONE SWITCH = one grid row. Fixed columns, so every row's numbers line up —
+   that is what turns five separate buttons into a readable table. */
 .swrow{display:grid;grid-template-columns:46px 1fr auto;gap:5px 11px;
   align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .swrow:last-of-type{border-bottom:0}
-/* BẬT thì phải SÁNG LÊN. Cùng lỗi với `.mbtn.off`: lớp có ở HTML mà không
-   có CSS, nên BẬT và TẮT vẽ ra y hệt nhau. Dùng đúng một cách đánh dấu với
-   mấy nút chọn mức ở trên — học một lần, đọc được cả tấm. */
+/* ON has to LIGHT UP. The same bug as `.mbtn.off`: a class present in the
+   HTML with no CSS, so ON and OFF drew identically. It uses exactly the same
+   marking as the level buttons above — learn it once, read the whole panel. */
 .swbtn{flex:none;width:52px;font-size:9.5px;font-weight:700;letter-spacing:.05em;
   color:var(--acc);background:var(--acc-bg);border-color:var(--acc)}
 .swbtn.off{color:var(--mute);background:transparent;border-color:var(--line)}
@@ -1775,7 +1871,7 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .swten{font-size:12.5px;font-weight:600;color:var(--ink);min-width:0}
 .swnow{font-size:11px;color:var(--acc);text-align:right;white-space:nowrap}
 .swrow.off .swnow{color:var(--warn)}
-/* Lý do nằm trong thẻ GẤP, chiếm trọn hàng dưới, mặc định đóng */
+/* The reason lives in a FOLD, taking the whole row below, closed by default */
 .swwhy{grid-column:2 / -1}
 .swwhy summary{font-size:10.5px;color:var(--line-2);cursor:pointer;
   list-style:none;padding:1px 0}
@@ -1784,19 +1880,21 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .swwhy[open] summary::before{content:'▾ '}
 .swwhy summary:hover{color:var(--mute)}
 .swbody{font-size:11px;color:var(--mute);line-height:1.55;padding:5px 0 2px}
-/* Ví dụ lấy từ chính hồ sơ đang mở — người dùng nhận ra câu của mình */
+/* The examples come from the open profile itself — the user recognises their
+   own sentence */
 .swvd{display:block;font-size:11.5px;color:var(--dim);font-style:italic;
   margin-top:5px;padding-left:9px;border-left:2px solid var(--line)}
 
-/* ---------------- CV: MÀN SOẠN KHỐI (/cv/soan) ----------------
-   Màn con của tab CV. Khác tấm phủ cũ ở hai chỗ: rộng cả cửa sổ, và mỗi ô
-   soạn có một DẢI CHẤM dưới chân — luật nói gì về câu đó, câu đó nhắc kỹ
-   năng nào, bao nhiêu tin đang đòi thứ đó. */
+/* ---------------- CV: THE BLOCK EDITOR SCREEN (/cv/soan) ----------------
+   The CV tab's own screen. It differs from the old overlay in two ways: it is
+   the full window, and every editing box has a VERDICT STRIP at its foot —
+   what the rules say about that sentence, which skills it mentions, and how
+   many postings are asking for them. */
 .blk.on{background:var(--acc-bg);border-radius:8px;
   box-shadow:inset 2px 0 0 var(--acc)}
 .blk.on .blkhead b{color:var(--acc)}
-/* Khối đang mở thì KHÔNG mờ dù 0 tin — mờ chỗ đang soạn là chống lại người
-   đang sửa đúng cái khối đáng sửa nhất. */
+/* The open block is NOT faded even at 0 postings — fading the thing being
+   edited works against someone editing the very block most worth editing. */
 .blk.dead.on{opacity:1}
 
 .soanform{max-width:760px}
@@ -1806,8 +1904,9 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .soanhead select{width:100%}
 .soanhead .dfthead{margin-bottom:0}
 
-/* MỘT CÂU. Vạch màu bên trái là phán quyết của luật — nhìn dọc một cái là
-   thấy khối nào đang có câu không in ra được. */
+/* ONE SENTENCE. The coloured rule on the left is the rules' verdict — one
+   glance down the column shows which block has a sentence that cannot be
+   printed. */
 .snt{margin:0 0 13px;padding-left:9px;border-left:2px solid var(--line)}
 .snt.warn{border-left-color:var(--warn)}
 .snt.bad{border-left-color:var(--bad)}
@@ -1822,12 +1921,14 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
   border-color:rgba(221,125,118,.35)}
 .svwhy{color:var(--dim);line-height:1.45;flex:1 1 190px;min-width:0}
 .sntsk{display:flex;gap:4px;flex-wrap:wrap;flex:none}
-/* Con số này KHÔNG phải điểm chất lượng: câu kiến thức không nhắc tên công
-   cụ nào thì 0 tin mà vẫn có thể là câu mạnh nhất. Nên nó xám, không xanh. */
+/* This number is NOT a quality score: a knowledge sentence naming no tool
+   scores 0 postings and may still be the strongest one there is. So it is
+   grey, not green. */
 .sntreach{flex:none;color:var(--mute)}
 .sntreach b{color:var(--dim);font-weight:600}
 
-/* BRIEF — thị trường đang thiếu gì, ngay trên chỗ ngồi viết */
+/* THE BRIEF — what the market is short of, right above where the writing
+   happens */
 .sntbrief{margin-bottom:15px;padding-bottom:13px;
   border-bottom:1px solid var(--line)}
 .hminis{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
@@ -1839,22 +1940,25 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .hmplus{font-size:11px;color:var(--acc);font-weight:700}
 .hmplus span{color:var(--mute);font-weight:400;font-size:10px;margin-left:2px}
 
-/* NÚT LÀ THẺ <a> khi nó dẫn tới một trang thật. Dùng <button> cho việc đó
-   thì mất Back, mất mở-tab-mới, mất địa chỉ lưu lại được — mà mấy màn soạn
-   đều đáng lưu lại địa chỉ. Chỗ nào có <a class=mbtn> thì nó phải nhìn và
-   cư xử y như nút, nên gom luật vào một chỗ. */
+/* A BUTTON IS AN <a> when it leads to a real page. Use a <button> for that
+   and you lose Back, lose open-in-new-tab, lose a saveable address — and
+   every editing screen is worth having a saveable address. Wherever there is
+   an <a class=mbtn> it has to look and behave exactly like a button, so the
+   rules are gathered in one place. */
 a.mbtn{text-decoration:none;display:inline-flex;align-items:center;
   justify-content:center;color:var(--ink)}
 a.mbtn:hover{color:var(--acc);border-color:var(--acc-2)}
 a.mbtn.apply{color:var(--acc)}
-/* Nút dẫn sang màn khác của cùng khúc — trên thanh điều khiển.
-   KHÔNG đặt tên lớp là `side`: `.side` đã là THANH BÊN, position:fixed —
-   nút thừa hưởng nó và bay ra góc trái màn hình, ngoài cả thanh chứa nó. */
+/* A button leading to another screen of the same stage — on the control bar.
+   Do NOT name the class `side`: `.side` is already THE SIDEBAR,
+   position:fixed — the button would inherit it and fly to the top-left corner
+   of the screen, outside the bar holding it. */
 
-/* --- MÀN VIẾT MỘT CÂU: BA BƯỚC ĐÁNH SỐ ---------------------------------
-   Phản hồi thật của người dùng trên bản phẳng trước đó: "tôi không biết phải
-   bấm cái gì, viết như nào, confirm cái gì". Trang có đủ mọi thứ cần thiết mà
-   không nói THỨ TỰ — mà viết một câu CV là việc ba nhịp, không phải một. */
+/* --- THE WRITE-ONE-SENTENCE SCREEN: THREE NUMBERED STEPS -----------------
+   The user's real reaction to the earlier flat version: "I don't know what to
+   press, how to write, what I'm confirming". The page had everything needed
+   and never said THE ORDER — and writing a CV sentence is a three-beat job,
+   not a one-beat one. */
 .vietbox{max-width:780px}
 .viethead{display:flex;align-items:center;justify-content:space-between;
   gap:11px;font-size:14px;color:var(--dim);margin-bottom:4px}
@@ -1867,7 +1971,8 @@ a.mbtn.apply{color:var(--acc)}
 .buochead{display:flex;align-items:center;gap:9px;margin-bottom:9px}
 .buochead b{font-size:12.5px;font-weight:600;color:var(--dim)}
 .buoc.dang .buochead b{color:var(--ink)}
-/* Con số BƯỚC — mỏ neo thị giác của cả màn. Bước xong thành dấu tích. */
+/* THE STEP NUMBER — the visual anchor of the whole screen. A finished step
+   becomes a tick. */
 .buocso{flex:none;width:21px;height:21px;border-radius:50%;display:grid;
   place-items:center;font-size:11px;font-weight:700;color:var(--mute);
   border:1px solid var(--line-2);background:var(--bg)}
@@ -1876,7 +1981,7 @@ a.mbtn.apply{color:var(--acc)}
 .buoc.xong .buocso{color:var(--acc);border-color:var(--acc-2);
   background:var(--acc-bg)}
 
-/* BƯỚC 1 — mỗi dòng là một thẻ BẤM ĐƯỢC, và phải NHÌN RA là bấm được */
+/* STEP 1 — each line is a CLICKABLE card, and it has to LOOK clickable */
 .nenlist{display:flex;flex-direction:column;gap:6px}
 .nenone{display:block;text-decoration:none;border:1px solid var(--line);
   border-radius:9px;padding:9px 12px;background:var(--panel);cursor:pointer}
@@ -1886,13 +1991,14 @@ a.mbtn.apply{color:var(--acc)}
   gap:12px;margin-top:5px}
 .nenfoot .wco{max-width:50%}
 .nengo{font-size:10.5px;color:var(--acc);font-weight:600;flex:none}
-/* Bước đã xong: gập lại thành MỘT dòng, kèm đường đổi lại */
+/* A finished step: folded into ONE line, with a way to change it */
 .dachon{display:flex;align-items:center;gap:11px;border-radius:9px;
   border:1px solid var(--acc-2);background:var(--acc-bg);padding:9px 12px}
 .dachon .wq{flex:1;font-size:12px;color:var(--dim);line-height:1.5}
 .dachon .mbtn{flex:none}
 
-/* BƯỚC 2 — chọn khối NGAY TẠI CHỖ, không bắt đi tìm ở cột trái */
+/* STEP 2 — pick the block RIGHT HERE, rather than sending them to the left
+   column to find it */
 .khoichon{display:flex;gap:7px;flex-wrap:wrap}
 .khoione{display:flex;flex-direction:column;gap:2px;text-decoration:none;
   border:1px solid var(--line);border-radius:9px;padding:8px 13px;
@@ -1903,13 +2009,15 @@ a.mbtn.apply{color:var(--acc)}
 .khoione.on{border-color:var(--acc);background:var(--acc-bg)}
 .khoione.on b{color:var(--acc)}
 
-/* BƯỚC 3 — một ô, một nút, nút nói rõ câu này đi vào ĐÂU */
+/* STEP 3 — one box, one button, and the button says WHERE this sentence
+   goes */
 .vietform .cvdraft{font-size:13px;line-height:1.6;margin-bottom:10px}
 .vietfoot{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .vietfoot .mbtn.apply{width:auto;flex:none}
 .vietfoot .applynote{margin-top:0;flex:1;min-width:170px}
-/* Dòng gọi đích danh tên sản phẩm: việc đi HỌC, không viết thay được. Gấp
-   lại — chúng không được chiếm chỗ của phần làm được tối nay. */
+/* Lines naming a product outright: a LEARN job, no sentence stands in for
+   them. Folded away — they must not take room from what can be done
+   tonight. */
 .briefmore{margin:7px 0 3px}
 .briefmore summary{font-size:11px;color:var(--mute);cursor:pointer;
   padding:4px 0;list-style:none}
@@ -1920,10 +2028,11 @@ a.mbtn.apply{color:var(--acc)}
 .hmini.on{border-color:var(--acc-2);background:var(--acc-bg)}
 .hmini.on .hmname{color:var(--acc)}
 
-/* --- NỀN BẢN NHÁP trong ô soạn ------------------------------------------
-   Chữ rơi vào ô là chữ NGUYÊN VĂN của nhà tuyển dụng, không phải câu máy
-   nghĩ ra. Nên nó phải được gắn nhãn ngay tại chỗ: người dùng quay lại sau
-   mười phút vẫn phải nhận ra đây chưa phải câu của mình. */
+/* --- THE DRAFT BASE inside the editing box -------------------------------
+   What lands in the box is the employer's words VERBATIM, not a sentence the
+   machine invented. So it has to be labelled right there: a user coming back
+   ten minutes later must still recognise that it is not their sentence
+   yet. */
 .snt.nen{border-left-color:var(--warn);background:rgba(216,161,94,.05);
   border-radius:0 8px 8px 0;padding:9px 11px 2px}
 .snt.nen.bad{border-left-color:var(--bad);background:rgba(221,125,118,.06)}
@@ -1935,7 +2044,7 @@ a.mbtn.apply{color:var(--acc)}
 .latrow{margin:-2px 0 10px}
 .latrow .muted{font-size:10.5px}
 
-/* --- MÁY TỰ LO: bản nháp dựng sẵn cho mọi chỗ hụt ---------------------- */
+/* --- MACHINE HANDLES IT: a prepared draft for every gap ---------------- */
 .sanbox{max-width:780px}
 .sanone{display:block;text-decoration:none;border:1px solid var(--line);
   border-radius:10px;padding:10px 13px;margin-bottom:7px;background:var(--panel)}
@@ -1946,25 +2055,27 @@ a.mbtn.apply{color:var(--acc)}
 .sanco{display:block;font-size:10.5px;color:var(--mute);margin-top:4px}
 .sanone:hover .sanco{color:var(--acc)}
 
-/* Nút phá đã NẠP ĐẠN: nhịp một đổi chữ, nhịp hai mới gửi (xem live.js).
-   Phải nhìn ra ngay là nó đang khác trạng thái thường, nếu không chốt hai
-   nhịp chỉ là hai lần bấm. */
+/* A destructive button, ARMED: the first beat changes the text, the second
+   sends (see live.js). It has to be visibly different from its resting state,
+   or a two-beat latch is just two presses. */
 .mbtn.kill.armed{background:var(--bad);color:#1A0E0D;border-color:var(--bad);
   font-weight:700}
 
-/* BẢN NHÁP máy dựng sẵn, nằm ngay trên dòng hụt nó thuộc về (tab CV). */
+/* THE DRAFT the machine prepared, sitting on the gap row it belongs to (CV
+   tab). */
 .hnhap{grid-column:2 / -1;display:block;font-size:11.5px;color:var(--ink);
   line-height:1.55;margin-top:5px;padding:6px 10px;border-radius:7px;
   background:var(--acc-bg);border-left:2px solid var(--acc)}
 .hnhap i{display:block;font-style:normal;font-size:10px;color:var(--mute);
   margin-top:3px}
-/* Không dựng nổi thì NÓI RA, đừng im lặng — im lặng để người dùng tưởng
-   công tắc hỏng. */
+/* If it could not be built, SAY SO, never stay silent — silence lets the user
+   believe the switch is broken. */
 .hnhap.tho{color:var(--mute);background:transparent;border-left-color:var(--line)}
 
-/* ---------------- Quản lí: BẢNG TRẠNG THÁI ----------------
-   Bốn số trên đầu, mỗi số một việc. Bản cũ in "37 lần nộp · 35 đang chờ ·
-   35 im lặng" — hai cách đếm cùng một chồng, và không con nào nói phải làm gì. */
+/* ---------------- Track: THE STATE TABLE ----------------
+   Four numbers along the top, one job each. The old version printed "37
+   applications · 35 waiting · 35 silent" — two counts of the same pile, and
+   not one of them said what to do. */
 .tsum{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 14px}
 .tstat{display:flex;flex-direction:column;gap:1px;border:1px solid var(--line);
   border-radius:9px;padding:8px 14px;min-width:112px;font-size:10.5px;
@@ -1977,7 +2088,8 @@ a.mbtn.apply{color:var(--acc)}
 .tstat.stock b{color:var(--info)}
 .tstat.zero b{color:var(--mute)}
 
-/* DÒNG NHÓM — chia bảng theo VIỆC PHẢI LÀM, không theo bảng chữ cái */
+/* THE GROUP ROW — the table is split by WHAT HAS TO BE DONE, not
+   alphabetically */
 .tgroup td{padding:16px 0 7px !important;border-bottom:1px solid var(--line)}
 .tgroup b{font-size:11px;font-weight:700;letter-spacing:.07em;
   text-transform:uppercase;color:var(--dim)}
@@ -1987,20 +2099,22 @@ a.mbtn.apply{color:var(--acc)}
 .tgroup.gnong b{color:var(--acc)}
 .tgroup.gim b{color:var(--warn)}
 
-/* LẦN CHẠM CUỐI — con số quan trọng nhất của mỗi dòng: nó trả lời "còn sống
-   không", thứ mà cột trạng thái không trả lời được. */
-/* MÀU «LẦN CHẠM CUỐI» — nhắm ĐÚNG bảng đang chạy.
-   Bản trước viết cho `<table><tr class=snong><td class=tcham>`; bảng giờ là
-   `<details class='trow snong'>` với `<span class=c6>`. Luật cũ không khớp
-   nổi phần tử nào, nên số ngày im lặng mất màu cảnh báo — chết câm, vì CSS
-   không khớp thì trình duyệt không kêu gì cả. */
+/* LAST CONTACT — the most important number on each row: it answers "is this
+   still alive", which the state column cannot. */
+/* THE «LAST CONTACT» COLOUR — aimed at THE TABLE THAT IS ACTUALLY THERE.
+   The previous version was written for `<table><tr class=snong><td
+   class=tcham>`; the table is now `<details class='trow snong'>` with `<span
+   class=c6>`. The old rule matched no element at all, so the silent-days
+   figure lost its warning colour — a silent failure, because CSS that matches
+   nothing raises nothing. */
 .trow.snong .c6 b{color:var(--acc)}
 .trow.qua .c6 b{color:var(--warn)}
 tr.sxong{opacity:.55}
 .tthu{text-align:right;color:var(--mute);font-size:11.5px}
 
-/* Thư MÁY KHÔNG ĐỌC ĐƯỢC — khác hẳn ô đề xuất: ô kia máy đã hiểu và chỉ xin
-   xác nhận, ô này máy nói thẳng là nó bó tay. Viền xám, không cam. */
+/* Mail THE MACHINE COULD NOT READ — quite different from a proposal card:
+   there the machine understood and only asks for confirmation, here it says
+   outright that it is stuck. A grey border, not amber. */
 .asklist.mu{border-color:var(--line-2);background:transparent}
 .asklist.mu .askhead{color:var(--mute)}
 .asklist.mu .askhead b{color:var(--dim)}
@@ -2010,60 +2124,64 @@ tr.sxong{opacity:.55}
 .asklist.mu .askact{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;
   max-width:330px}
 
-/* ---------------- Quản lí: DATASHEET ----------------
-   Cùng khuôn với "Việc tìm được" bên Search: ô tìm, hàng chip đổi ngay,
-   trạng thái nằm hết trên URL. Học một tab là biết cả ba. */
+/* ---------------- Track: THE DATASHEET ----------------
+   Built to the same pattern as "What it found" on Search: a search box, chips
+   that act at once, and all the state on the URL. Learn one tab and you know
+   all three. */
 .locbox{display:flex;flex-direction:column;gap:4px;margin:8px 0 10px}
 .locbox .vbar{display:flex;gap:22px;flex-wrap:wrap;align-items:center}
 .locbox .vgrp{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .locten{font-size:10px;color:var(--mute);letter-spacing:.04em;
   text-transform:uppercase}
 
-/* MỘT DÒNG = một thẻ bấm mở được. Bảng <table> không mở ra được mà không cần
-   JavaScript; <details> thì mở được, và cả app này không có một dòng JS nào
-   cho mấy màn CV/Quản lí. */
+/* ONE ROW = one card that opens. A <table> cannot open without JavaScript;
+   <details> can, and these CV/Track screens contain not one line of JS. */
 .tboard{display:flex;flex-direction:column}
 .trow{border-bottom:1px solid var(--line)}
 .trow:last-child{border-bottom:0}
-/* MỘT lưới cột cho CẢ hàng tiêu đề và mọi dòng — khai hai chỗ là có ngày
-   chúng lệch nhau và bảng tính hết ra bảng tính.
+/* ONE column grid for BOTH the header row and every data row — declared in
+   two places and one day they drift apart, and a spreadsheet stops being a
+   spreadsheet.
 
-   KHÔNG TRACK NÀO ĐƯỢC CO THEO NỘI DUNG. Dùng chung một biến là CHƯA ĐỦ:
-   bản trước cột cuối khai `auto`, và `auto` đo bằng thứ nằm trong ô. Ô tiêu
-   đề cuối rỗng -> rộng 0; ô dữ liệu cuối có hai cái nút -> rộng 110. Hai cột
-   `fr` đầu bảng chia phần thừa lệch nhau đúng 110px, nên MỌI ô dữ liệu trôi
-   sang trái khỏi nhãn của nó — mà cái khai báo thì vẫn "dùng chung", nhìn
-   vào code không thấy sai ở đâu.
-   Nên: chỉ px và fr. auto / min-content / max-content / fit-content đều
-   cấm ở đây, và có bài test canh. Cùng một khai báo + cùng bề rộng khung
-   + không ô nào co theo ruột = hai hàng KHÔNG THỂ lệch. */
+   NO TRACK MAY SIZE ITSELF TO ITS CONTENT. Sharing one variable is NOT
+   ENOUGH: the previous version declared the last column `auto`, and `auto` is
+   measured by what is inside the cell. The last header cell was empty -> 0
+   wide; the last data cell had two buttons -> 110 wide. The two leading `fr`
+   columns then split the slack differently by exactly 110px, so EVERY data
+   cell drifted left of its own label — while the declaration still read
+   "shared", and nothing in the code looked wrong.
+   So: px and fr only. auto / min-content / max-content / fit-content are all
+   banned here, and a test guards it. One declaration + one frame width + no
+   cell sizing to its contents = the two rows CANNOT drift. */
 .tboard{--cot: minmax(132px,1.35fr) minmax(140px,1.55fr) 84px 106px 50px
         96px 38px 50px 88px}
-/* KHÔNG DÍNH. Bản trước hàng tiêu đề `position:sticky` — nó đè lên dòng
-   đang cuộn qua (chữ dòng hiện xuyên qua nền nó), và một thanh cứ lơ lửng
-   giữa bảng thì đọc mệt hơn là lợi. Bảng này ngắn, cuộn lên một cái là thấy
-   nhãn; đổi lại mọi dòng đọc sạch, không bị che nửa dòng. */
+/* NOT STICKY. The previous version made the header row `position:sticky` — it
+   covered the row scrolling past (the row's text showing through its ground),
+   and a bar hovering in the middle of the table is more tiring than useful.
+   This table is short, and one scroll up shows the labels; in exchange every
+   row reads cleanly, with no half-covered lines. */
 .thead{display:grid;grid-template-columns:var(--cot);gap:10px;
   padding:7px 4px;border-bottom:1px solid var(--line-2);background:var(--panel)}
 .thead span{font-size:9.5px;font-weight:700;letter-spacing:.06em;
   text-transform:uppercase;color:var(--mute);
   border-right:1px solid var(--line);padding-right:9px}
 .thead span:last-child{border-right:0}
-/* BẢNG TÍNH, không phải danh sách: có VẠCH CỘT và nền so le, nên mắt đi
-   theo hàng ngang mà không lạc sang dòng dưới. */
+/* A SPREADSHEET, not a list: it has COLUMN RULES and alternating grounds, so
+   the eye follows a row across without slipping onto the one below. */
 .trow > summary{display:grid;grid-template-columns:var(--cot);
   gap:10px;align-items:center;padding:8px 4px;cursor:pointer;list-style:none}
 .trow > summary > span{border-right:1px solid var(--line);padding-right:9px;
   min-height:17px;display:flex;flex-direction:column;justify-content:center}
 .trow > summary > span:last-child{border-right:0}
 .trow:nth-of-type(even) > summary{background:rgba(255,255,255,.018)}
-/* SUY RA, không phải họ nói. Viền ĐỨT và không tô nền: mọi huy hiệu thật đều
-   liền viền có nền, nên nhìn một cái là biết cái này do máy kết luận chứ
-   không phải do công ty trả lời. */
+/* INFERRED, not what they said. A DASHED border and no fill: every real badge
+   has a solid border and a ground, so one glance says this was the machine's
+   conclusion rather than the company's reply. */
 .pill.suy{color:var(--mute);border:1px dashed var(--line-2);background:none}
 .trow .c1 b{font-size:12.5px;font-weight:600;color:var(--ink)}
 .trow .c2{font-size:11.5px;color:var(--dim);line-height:1.35}
-/* Cột "ai nộp" là một NHÃN phải đọc được, không phải chữ mờ trang trí. */
+/* The "applied by" column is a LABEL that has to be readable, not decorative
+   grey. */
 .trow .c4{font-size:10.5px;color:var(--mute)}
 .trow .c5{font-size:11px;color:var(--mute);white-space:nowrap}
 .trow .c6{font-size:11px;color:var(--mute);white-space:nowrap}
@@ -2087,7 +2205,8 @@ tr.sxong{opacity:.55}
 .trow .tthu{font-size:11px;color:var(--mute);text-align:right}
 .trow.sxong > summary{opacity:.6}
 
-/* RUỘT — ba thứ, cả ba là đường ĐI TIẾP chứ không phải chữ để đọc */
+/* THE INSIDE — three things, and all three are ways ONWARD rather than text
+   to read */
 .dtail{padding:4px 4px 16px 4px;border-left:2px solid var(--line-2);
   margin:0 0 10px 6px;padding-left:14px}
 .dtblock b{font-size:11px;color:var(--dim)}
@@ -2102,9 +2221,11 @@ tr.sxong{opacity:.55}
 .dtact{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px}
 .dtact .muted{font-size:11px}
 
-/* MÁY BÓ TAY, NGƯỜI LÀM ĐƯỢC — đưa đủ đồ nghề, không chỉ báo là hỏng. */
-/* ĐỔI CHẶNG BẰNG TAY — hai bước có chủ ý, không phải 74 nút rải trên bảng.
-   Chọn dòng, rồi mới hiện chặng đi tiếp CỦA DÒNG ĐÓ. */
+/* THE MACHINE CANNOT, A PERSON CAN — hand over the full set of tools, do not
+   merely report a failure. */
+/* CHANGING A STAGE BY HAND — two deliberate steps, not 74 buttons scattered
+   over the table. Pick the row, and only then are THAT ROW's next stages
+   shown. */
 .doiform{display:flex;gap:8px;align-items:center;padding:10px 12px;
   flex-wrap:wrap}
 .doiform select{flex:1;min-width:220px;background:var(--panel-2);
@@ -2122,7 +2243,8 @@ tr.sxong{opacity:.55}
 .taybox span{display:block;font-size:11px;color:var(--mute);line-height:1.55}
 .tayact{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
 
-/* Ô chọn "thư này của lần nộp nào" — 37 công ty không nhét vừa một hàng nút. */
+/* The "which application is this message from" select — 37 companies do not
+   fit in a row of buttons. */
 .ganform{margin:0}
 .ganform select{font:inherit;font-size:11px;color:var(--ink);
   background:var(--bg);border:1px solid var(--line-2);border-radius:7px;
@@ -2131,20 +2253,24 @@ tr.sxong{opacity:.55}
 .ganform select:disabled{opacity:.5}
 
 /* ================================================================
-   HOME — TỔNG QUAN. Đọc lại bốn tab kia, mỗi ô dẫn về tab của nó.
+   HOME — THE OVERVIEW. It rereads the other four tabs, each panel leading
+   back to its own.
    ================================================================ */
 
-/* CHI TIẾT — chỉ hiện khi bấm ⤢ mở to ô. Thuần CSS, không thêm JS: nút ⤢
-   đã có sẵn trên mọi ô, và `.wid.big` là tấm phủ cả cửa sổ nên lúc đó tha hồ
-   chỗ. Gọn lúc liếc, đủ lúc soi — bày hết ra không phải là nói nhiều, nó là
-   KHÔNG CHỌN, và chọn hộ người đọc mới đúng là việc của trang tổng quan. */
+/* THE DETAIL — shown only when the widget is enlarged with ⤢. Pure CSS, no
+   extra JS: the ⤢ button is already on every widget, and `.wid.big` covers
+   the whole window so there is room to spare. Brief at a glance, complete
+   under inspection — laying everything out is not saying more, it is FAILING
+   TO CHOOSE, and choosing for the reader is exactly an overview page's
+   job. */
 .chitiet{display:none}
 .wid.big .chitiet{display:block}
-/* ĐỘ ĐẶC HIỆU PHẢI THẮNG, không phải chỉ "khai sau". `.chitiet{display:none}`
-   và `.cdrow{display:flex}` cùng độ đặc hiệu (0,1,0) — cái nào đứng sau
-   trong file thì thắng, mà `.cdrow` nằm dưới ~200 dòng. Kết quả: thẻ gắn
-   .chitiet vẫn hiện, và nó hỏng CÂM: không lỗi, chỉ là cắt mà không cắt.
-   Ghép hai lớp lên 0,2,0 thì thứ tự khai báo hết vai trò. */
+/* SPECIFICITY HAS TO WIN, not merely "declared later".
+   `.chitiet{display:none}` and `.cdrow{display:flex}` have the same
+   specificity (0,1,0) — whichever comes later in the file wins, and `.cdrow`
+   sits about 200 lines below. The result: a card carrying .chitiet still
+   showed, and it failed SILENTLY: no error, just a cut that did not cut.
+   Combining the two classes to 0,2,0 makes declaration order irrelevant. */
 .cdrow.chitiet{display:none}
 .wid.big .cdrow.chitiet{display:flex}
 .wid.big .cdmain span.chitiet{margin-top:3px}
@@ -2154,21 +2280,23 @@ tr.sxong{opacity:.55}
 .wid.big .chitiet{margin-top:14px;padding-top:13px;
   border-top:1px solid var(--line)}
 
-/* ---------------- PHỄU: rơi rụng ở khúc nào ---------------- */
-/* Bề rộng theo bước ĐẦU nên mắt thấy ngay độ hụt; nhưng con số nói lên khúc
-   nào cắt mạnh nhất lại là "% giữ so với bước LIỀN TRƯỚC" — so với bước đầu
-   thì bước nào cũng bé, và cái bé đó không chỉ ra được chỗ nào đang hỏng. */
-/* TÊN RIÊNG `.fbuoc`, KHÔNG mượn `.prow`: .prow đã là hàng thanh tiến độ
-   trong nhật ký (live.js vẽ) và hàng radio bên Cài đặt. Mượn tên là đúng lớp
-   lỗi .side và .pill đã dính hai lần — lần nào cũng hỏng câm, không báo. */
+/* ---------------- THE FUNNEL: where they drop off ---------------- */
+/* The width is relative to the FIRST step so the eye sees the loss at once;
+   but the number that says which stage cuts hardest is the "% kept against
+   the step IMMEDIATELY BEFORE" — against the first step every stage looks
+   small, and that smallness cannot point at what is going wrong. */
+/* ITS OWN NAME `.fbuoc`, NOT borrowed `.prow`: .prow is already the progress
+   row in the journal (drawn by live.js) and the radio row in Settings.
+   Borrowing a name is exactly the class of bug .side and .pill hit twice —
+   and every time it failed silently, with nothing reported. */
 .pheu{display:flex;flex-direction:column;gap:0}
 .fbuoc{display:grid;grid-template-columns:118px 1fr 78px;gap:8px;
   align-items:center;padding:0 6px;border-radius:5px;text-decoration:none;
   color:var(--dim)}
 .fbuoc:hover{background:var(--panel-2);color:var(--ink)}
-/* KHÔNG XUỐNG DÒNG. Nhãn dài ("đáng nộp (điểm ≥80)") gãy hai dòng thì
-   riêng nó đẩy cả ô cao thêm, và nó chỉ gãy trên màn hẹp — tức là đúng chỗ
-   đang thiếu chỗ nhất. */
+/* IT DOES NOT WRAP. A long label ("worth applying (score ≥80)") broken onto
+   two lines makes the whole panel taller by itself, and it only breaks on a
+   narrow screen — i.e. exactly where room is shortest. */
 .pten{font-size:10.5px;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
 .pbar{height:7px;background:var(--panel-2);border-radius:3px;overflow:hidden}
@@ -2176,21 +2304,24 @@ tr.sxong{opacity:.55}
   background:linear-gradient(90deg,var(--acc),rgba(111,208,140,.45))}
 .pso{text-align:right;font-size:12px;color:var(--ink);font-weight:600}
 .pso b{font-size:12px;font-weight:600}
-/* "% giữ bước trước" là chi tiết, không phải đầu bài — giấu tới lúc mở to. */
+/* "% kept from the previous step" is detail, not the headline — hidden until
+   the widget is enlarged. */
 .protr{display:none}
 .wid.big .protr{display:block;font-style:normal;font-size:9.5px;
   color:var(--mute);font-weight:400}
 .wid.big .fbuoc{padding:6px;grid-template-columns:150px 1fr 130px}
 .wid.big .pbar{height:16px}
-/* Chỗ NỐI hai đoạn phễu. Phải nhìn ra là một VẾT NỐI chứ không phải bước tiếp
-   theo: đoạn dưới gần như không phải kết quả của đoạn trên. */
+/* THE JOIN between the two funnel stages. It has to look like A SEAM rather
+   than the next step: the lower stage is almost not the result of the upper
+   one. */
 .pseam{margin:3px 0 2px;font-size:9px;letter-spacing:.14em;
   text-transform:uppercase;color:var(--mute);text-align:center;
   border-top:1px dashed var(--line-2);padding-top:5px}
 
-/* ---------------- KẾT QUẢ: MỘT số to, không ba số ngang nhau ---------------- */
-/* Ba số ngang nhau là ba số không có số nào quan trọng, và người đọc phải tự
-   chọn hộ mình. Số này trả lời câu duy nhất người ta mở Home để hỏi. */
+/* ------------- RESULTS: ONE big number, not three equal ones ------------- */
+/* Three equal numbers are three numbers with none of them important, leaving
+   the reader to choose for themselves. This number answers the one question
+   people open Home to ask. */
 .qtop{display:flex;align-items:flex-end;justify-content:space-between;
   gap:18px;flex-wrap:wrap;margin-bottom:12px}
 .hero b{display:block;font-size:38px;line-height:1;font-weight:600;
@@ -2204,16 +2335,18 @@ tr.sxong{opacity:.55}
 .hphu b{display:block;font-size:16px;font-weight:600;color:var(--ink);
   line-height:1.2}
 .hphu i{display:block;font-style:normal;font-size:9.5px;color:var(--mute)}
-/* Mỗi tỉ lệ BẮT BUỘC kèm mẫu số: "2,7%" trên 37 lần nộp và "2,7%" trên 3.700
-   lần nộp là hai sự thật khác hẳn nhau, mà nhìn con số % thì không phân biệt
-   được — mẫu số không phải chú thích, nó là một nửa của thông tin. */
+/* Every ratio MUST carry its denominator: "2.7%" over 37 applications and
+   "2.7%" over 3,700 are two quite different truths, and the % alone cannot
+   tell them apart — the denominator is not a footnote, it is half the
+   information. */
 .qbar{display:flex;height:12px;border-radius:4px;overflow:hidden;
   background:var(--panel-2);gap:1px}
 .segq{display:block;height:100%}
 .segq.qdi{background:var(--acc)}
 .segq.qtu{background:var(--bad)}
-/* "Coi như trượt" là PHÉP SUY, không phải họ nói — nhạt hơn khúc từ chối
-   thật, đúng cách huy hiệu .pill.suy nhạt hơn .pill.rejected. */
+/* "Treated as rejected" is AN INFERENCE, not something they said — fainter
+   than the real rejection segment, exactly as the .pill.suy badge is fainter
+   than .pill.rejected. */
 .segq.qim{background:var(--bad);opacity:.42}
 .segq.qcho{background:var(--line-2)}
 .qkeys{display:flex;gap:11px;flex-wrap:wrap;margin-top:8px}
@@ -2225,11 +2358,12 @@ tr.sxong{opacity:.55}
 .qdot.qim{background:var(--bad);opacity:.42}
 .qdot.qcho{background:var(--line-2)}
 
-/* ---------------- NĂNG SUẤT: mỗi việc một dải ---------------- */
-/* Mỗi dải tự chuẩn hoá theo ĐỈNH CỦA CHÍNH NÓ: một ngày quét ra 4.651 tin
-   trong khi nộp 4 đơn, chung trục thì dải "nộp" phẳng thành một vạch — mà đó
-   đúng là dải cần nhìn nhất. Đổi lại HAI DẢI KHÔNG SO ĐƯỢC BẰNG MẮT, nên mỗi
-   dải in đỉnh của nó ra bằng chữ. */
+/* ---------------- OUTPUT: one strip per metric ---------------- */
+/* Each strip normalises to ITS OWN PEAK: one day's scan returns 4,651
+   postings while 4 applications go out, and on a shared axis the "applied"
+   strip flattens to a line — the very strip most worth seeing. The cost is
+   that TWO STRIPS CANNOT BE COMPARED BY EYE, so each strip prints its own
+   peak in text. */
 .dai{padding:2px 0;border-bottom:1px solid var(--line)}
 .dai:last-child{border-bottom:0;padding-bottom:0}
 .dai:first-child{padding-top:0}
@@ -2243,24 +2377,27 @@ tr.sxong{opacity:.55}
 .spark{display:block;width:100%;height:15px}
 .wid.big .spark{height:64px}
 .spark rect{fill:var(--acc);opacity:.72}
-/* MÀU MANG NGHĨA, không phải trang trí — cùng luật với số liệu trên thanh khúc.
-   Một cột cao của thư TỪ CHỐI mà tô xanh thì đọc thành "hôm nay được việc",
-   và người đọc rút ra kết luận ngược hẳn với sự thật. */
-.spark.kho rect{fill:var(--info,#6E9BD8)}      /* kho đang giữ — đọc để biết */
-.spark.lam rect{fill:var(--acc)}               /* việc mình làm */
-.spark.tot rect{fill:var(--acc);opacity:1}     /* kết cục TỐT */
-.spark.xau rect{fill:var(--bad);opacity:.85}   /* kết cục XẤU */
+/* COLOUR CARRIES MEANING, it is not decoration — the same rule as the metrics
+   on a stage bar. A tall column of REJECTION emails painted green reads as
+   "a productive day", and the reader draws exactly the opposite conclusion to
+   the truth. */
+.spark.kho rect{fill:var(--info,#6E9BD8)}      /* what the store holds — read to know */
+.spark.lam rect{fill:var(--acc)}               /* work we did */
+.spark.tot rect{fill:var(--acc);opacity:1}     /* a GOOD outcome */
+.spark.xau rect{fill:var(--bad);opacity:.85}   /* a BAD outcome */
 .spark.tot rect.khong,.spark.xau rect.khong,.spark.kho rect.khong{
   fill:var(--line-2)}
 .spark.tot rect.ngoai,.spark.xau rect.ngoai,.spark.kho rect.ngoai{
   fill:var(--line)}
 .spark rect:hover{opacity:1}
-/* Ngày CÓ trong dải mà số bằng 0 -> chấm đáy. Bỏ trống hẳn thì nó lẫn với
-   ngày nằm NGOÀI dải (app chưa chạy), và hai thứ đó khác hẳn nhau. */
+/* A day INSIDE the strip whose value is 0 -> a dot at the bottom. Left blank
+   it blends into a day OUTSIDE the strip (the app was not running), and those
+   two are quite different things. */
 .spark rect.khong{fill:var(--line-2);opacity:1}
-/* NGOÀI DẢI (app chưa chạy) phải NHẠT HƠN cột 0. Hai thứ này là nguồn gốc
-   của mọi biểu đồ nói dối: "hôm đó làm được 0" và "hôm đó chưa có app" mà vẽ
-   giống nhau thì người đọc tin cái thứ nhất. */
+/* OUTSIDE THE STRIP (the app was not running) has to be FAINTER than a 0
+   column. These two are the root of every lying chart: draw "that day
+   produced 0" and "that day the app did not exist" the same and the reader
+   believes the first. */
 .spark rect.ngoai{fill:var(--line);opacity:.55}
 .daichan{display:none;justify-content:space-between;margin-top:3px;
   font-size:9.5px;color:var(--mute)}
@@ -2270,7 +2407,7 @@ tr.sxong{opacity:.55}
 .nhip b{color:var(--ink);font-weight:600}
 .nhip b.xau{color:var(--bad)}
 
-/* ---------------- THEO THỨ / THEO THÁNG (chỉ khi mở to) ---------------- */
+/* -------------- BY WEEKDAY / BY MONTH (only when enlarged) -------------- */
 .tqhead{font-size:11px;font-weight:600;color:var(--ink);margin-bottom:4px}
 .tqten{font-size:10px;letter-spacing:.08em;text-transform:uppercase;
   color:var(--mute);margin:14px 0 7px}
@@ -2280,25 +2417,27 @@ tr.sxong{opacity:.55}
 .tbar{width:100%;max-width:46px;background:var(--acc);opacity:.72;
   border-radius:4px 4px 0 0;min-height:2px}
 .tcot:hover .tbar{opacity:1}
-/* Gộp theo thứ/tháng ăn CÙNG màu với dải ngày của nó — cùng một việc thì
-   cùng một màu, nếu không thì "báo trượt" gộp theo tháng lại xanh. */
+/* A weekday/month grouping takes THE SAME colour as its own daily strip — the
+   same thing has to be the same colour, or "rejections" grouped by month
+   comes out green. */
 .thubar.kho .tbar{background:var(--info)}
 .thubar.xau .tbar{background:var(--bad)}
 .tcot b{font-size:10.5px;color:var(--ink);font-weight:600}
 .tcot i{font-style:normal;font-size:9.5px;color:var(--mute)}
-/* CHƯA ĐỦ DỮ LIỆU THÌ NÓI RA. Một biểu đồ trống trông y hệt một biểu đồ
-   "năng suất bằng 0", và người dùng sẽ tin cái thứ hai. */
+/* NOT ENOUGH DATA YET -> SAY SO. An empty chart looks exactly like a
+   "productivity is zero" chart, and the user will believe the second one. */
 .chuadu{padding:15px;border:1px dashed var(--line-2);border-radius:9px;
   background:var(--panel-2)}
 .chuadu b{display:block;font-size:12px;color:var(--dim);margin-bottom:4px}
 .chuadu span{font-size:11px;color:var(--mute);line-height:1.55}
 .chuadu span b{display:inline;color:var(--ink)}
 
-/* ---------------- CHẨN ĐOÁN ---------------- */
-/* ĐỘ CHẮC nằm trên mặt thẻ, không giấu trong tooltip. Một con số đếm trực
-   tiếp (130 tin chưa nộp) và một suy đoán trên 4 mẫu mà trông giống nhau thì
-   người dùng đi sửa nhầm chỗ — và đó là cách tệ nhất một trang thống kê hỏng:
-   nó không im lặng, nó chỉ sai hướng. */
+/* ---------------- DIAGNOSIS ---------------- */
+/* HOW SOLID IT IS goes on the face of the card, never hidden in a tooltip. A
+   directly counted number (130 postings not applied to) and an inference from
+   4 samples that look alike send the user off fixing the wrong thing — and
+   that is the worst way a statistics page can fail: it is not silent, it
+   points the wrong way. */
 .cdlist{display:flex;flex-direction:column;gap:4px}
 .cdrow{display:flex;gap:8px;align-items:center;padding:2px 8px;
   border-radius:8px;border:1px solid var(--line);background:var(--panel-2);
@@ -2322,18 +2461,20 @@ tr.sxong{opacity:.55}
 .cdmuc.chac{color:var(--acc);border-color:var(--acc)}
 .cdmuc.vua{color:var(--warn);border-color:rgba(216,161,94,.5)}
 
-/* Lúc gọn chỉ bày BA dấu hiệu chắc nhất — bốn thẻ xếp chồng trên một ô cao
-   190px thì không đọc được thẻ nào. Dòng này nói thẳng còn mấy cái nữa, chứ
-   không cắt im lặng: cắt mà không báo thì người dùng tin là hết. */
+/* Collapsed it shows only the THREE most solid signs — four cards stacked in
+   a 190px panel means none of them can be read. This line says outright how
+   many more there are, rather than truncating silently: truncate without
+   saying so and the user believes that is all there is. */
 .cdmore{margin-top:3px;font-size:9.5px;color:var(--mute);text-align:center}
 .cdmore b{color:var(--ink);font-weight:600}
 .wid.big .cdmore{display:none}
 
-/* ---- SIẾT CHO VỪA MỘT KHUNG ----
-   Ô tổng quan mà phải cuộn thì nó đã thôi là tổng quan. Mấy dòng dưới cắt
-   đúng những chỗ KHÔNG mang thông tin: đệm nút, chiều cao dòng, cỡ chữ phụ.
-   Không cắt con số nào, không cắt mẫu số nào — cắt dữ liệu để vừa khung là
-   đổi một cái xấu lấy một cái sai. Mở to ô thì mọi thứ giãn lại như cũ. */
+/* ---- SQUEEZED INTO ONE SCREENFUL ----
+   An overview panel that has to scroll has stopped being an overview. The
+   lines below cut exactly the things that carry NO information: button
+   padding, line height, secondary font sizes. No figure is cut, no
+   denominator is cut — cutting data to fit is trading something ugly for
+   something wrong. Enlarge the widget and it all expands again. */
 .cdrow .mbtn.tiny{padding:3px 7px;font-size:10px}
 .cdrow .cdmuc{padding:1px 5px}
 .wid.big .cdrow .mbtn.tiny{padding:5px 10px;font-size:11px}
@@ -2346,18 +2487,21 @@ tr.sxong{opacity:.55}
 .wid.big .pheu{gap:3px}
 .wid.big .pbar{height:16px}
 
-/* Ô VỪA RUỘT — không phải khung cuộn.
-   `.wbody{overflow:auto}` làm min-content của ô bằng 0, nên lưới nén ô xuống
-   bao nhiêu cũng được và ruột đành cuộn. Bỏ overflow thì ô đòi đúng chiều cao
-   nó cần; hàng `auto` cấp đủ; cửa sổ quá thấp thì CẢ TRANG cuộn — hỏng đúng
-   cách, thay vì bốn ô cùng cuộn lén. Mở to (.big) thì trả lại cuộn, vì lúc
-   đó ruột giãn ra và có thể dài hơn màn hình thật. */
+/* A WIDGET SIZED TO ITS CONTENTS — not a scroll frame.
+   `.wbody{overflow:auto}` makes the widget's min-content 0, so the grid can
+   squeeze it as far as it likes and the contents are left to scroll. Drop the
+   overflow and the widget demands the height it needs; the `auto` row grants
+   it; and when the window really is too short THE WHOLE PAGE scrolls —
+   failing the right way, instead of four widgets quietly scrolling at once.
+   Enlarged (.big) it gets scrolling back, because the contents expand then
+   and may genuinely exceed the screen. */
 .wid.vua > .wbody{overflow:visible;min-height:0}
 .wid.vua.big > .wbody{overflow:auto}
 
-/* ---------------- CÀI ĐẶT · CHUNG: màu hệ thống ---------------- */
-/* Ô màu phải TỰ nó là màu đó — bày tên "Tím" bên cạnh một chấm xám thì người
-   dùng phải bấm mới biết mình chọn gì, mà chọn màu là việc của mắt. */
+/* ---------------- SETTINGS · GENERAL: the system colour ---------------- */
+/* A swatch has to BE that colour — showing the name "Purple" beside a grey
+   dot makes the user press to find out what they are choosing, and choosing a
+   colour is the eye's job. */
 .swgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:4px 0 12px}
 .swatch{display:flex;flex-direction:column;align-items:flex-start;gap:6px;
   padding:11px 12px;border-radius:10px;border:1px solid var(--line);
@@ -2368,17 +2512,19 @@ tr.sxong{opacity:.55}
 .swatch b{font-size:11.5px;font-weight:600;color:var(--ink)}
 .swatch i{font-style:normal;font-size:9.5px;color:var(--o);margin-top:-3px}
 
-/* ---------------- CÀI ĐẶT · THÔNG BÁO ---------------- */
-/* Ô chữ trong tấm Cài đặt. Ô token để type=password — không phải vì sợ ai
-   nhìn trộm, mà để trình duyệt đừng tự điền và đừng lưu vào lịch sử form. */
+/* ---------------- SETTINGS · NOTIFICATIONS ---------------- */
+/* Text fields in the Settings panel. The token field is type=password — not
+   because anyone might look over a shoulder, but so the browser does not
+   autofill it or store it in form history. */
 .stext{flex:1;min-width:180px;background:var(--panel-2);color:var(--ink);
   border:1px solid var(--line);border-radius:7px;padding:7px 10px;
   font-size:11.5px;font-family:inherit}
 .stext:focus{outline:none;border-color:var(--acc)}
 .stext::placeholder{color:var(--mute);opacity:.7}
 
-/* Kết quả nút Test — hiện NGAY trên đầu tab, không giấu vào nhật ký: người
-   vừa bấm đang nhìn chỗ này. Hỏng thì màu cảnh báo, được thì màu nhấn. */
+/* The Test button's result — shown RIGHT at the top of the tab, never hidden
+   in the journal: the person who just pressed it is looking here. Warning
+   colour on failure, the accent on success. */
 .testkq{padding:11px 13px;border-radius:9px;margin-bottom:14px;
   border:1px solid var(--line-2);background:var(--panel-2)}
 .testkq.ok{border-color:var(--acc);background:var(--acc-bg)}
@@ -2387,6 +2533,7 @@ tr.sxong{opacity:.55}
 .testkq.ok b{color:var(--acc)}
 .testkq.xau b{color:var(--warn)}
 .testkq span{font-size:11.5px;color:var(--mute);line-height:1.55}
-/* Dòng phụ dưới nhãn ô nhập — chỗ nói cái mà nhãn một dòng không nói hết. */
+/* The secondary line under a field's label — where what a one-line label
+   cannot finish saying goes. */
 .srowphu{display:block;font-style:normal;font-size:9.5px;color:var(--mute);
   margin-top:2px}
