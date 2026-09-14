@@ -320,7 +320,7 @@ check("form thiếu -> chỉ ra đúng ô nào", send.missing(gap) ==
 
 refused = send.submit(gap)
 check("thiếu thì TỪ CHỐI gửi", refused.ok is False)
-check("và nói vì sao", "bắt buộc" in refused.why, refused.why)
+check("và nói vì sao", "required" in refused.why, refused.why)
 check("KHÔNG bấm chuột lần nào", gap.clicks == 0, str(gap.clicks))
 # Ô nhân khẩu học máy không bao giờ điền — nên nó phải nằm trong danh sách
 # chặn, không phải bị bỏ qua cho trôi.
