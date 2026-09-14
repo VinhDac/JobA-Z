@@ -1,11 +1,12 @@
-"""Bảng theo dõi — một dòng cho một lần nộp.
+"""The tracking table — one row per application.
 
-Một dòng sinh ra khi Vin nộp, và đổi trạng thái khi có thư về. Thư là CẢM
-BIẾN, bảng là TRẠNG THÁI — không phải hai tính năng, là một vòng.
+A row is born when Vin applies, and changes status when mail arrives. Mail is
+the SENSOR, the table is the STATE — not two features, one loop.
 
-`im lặng` KHÔNG lưu thành cột. Nó là phép trừ, tính lúc đọc: đã nộp quá lâu
-mà chưa thư nào. Lưu thì phải ngồi cập nhật mỗi ngày, và sẽ có ngày quên —
-đúng cách `khoảng trống` ở lưới project.
+`silence` is NOT stored as a column. It is a subtraction computed at read
+time: applied long ago with no mail since. Stored, it would have to be
+updated every day, and one day it would be forgotten — exactly how `gap` went
+wrong on the project grid.
 """
 
 from __future__ import annotations
@@ -14,38 +15,42 @@ import sqlite3
 
 from ..ingest.base import norm
 
-# Năm chặng. Mỗi chặng ứng với một việc Vin làm khác nhau — chặng nào không
-# ứng với việc nào thì không được tồn tại.
+# Five stages. Each maps to a different thing Vin does — a stage that maps to
+# nothing is not allowed to exist.
 #
-# `draft` sinh ra khi máy mở form và điền hộ. Nó KHÔNG phải "đã nộp": form còn
-# vài câu chỉ Vin trả lời được, và cú bấm Gửi là của Vin. Ghi thẳng "đã nộp"
-# lúc đó thì bảng nói dối ngay dòng đầu tiên — mà bảng này Vin đọc mỗi ngày.
-# Thư xác nhận về sẽ tự đẩy nó sang "đã nộp"; đó đúng là vai trò cảm biến của
-# thư, không phải một cơ chế mới.
+# `draft` is born when the machine opens a form and fills it in. It is NOT
+# "applied": the form still has questions only Vin can answer, and the Send
+# click is his. Writing "applied" there makes the table lie on its very first
+# row — and Vin reads this table every day. The acknowledgement mail will
+# push it to "applied" on its own; that is exactly mail's sensor role, not a
+# new mechanism.
 DRAFT = "draft"
 SENT, INTERVIEW, REJECTED, OFFER = "applied", "interview", "rejected", "offer"
 STAGES = (DRAFT, SENT, INTERVIEW, REJECTED, OFFER)
-STAGE_LABEL = {DRAFT: "đang điền", SENT: "đã nộp", INTERVIEW: "phỏng vấn",
+STAGE_LABEL = {DRAFT: "filling in", SENT: "applied", INTERVIEW: "interview",
                REJECTED: "từ chối", OFFER: "nhận"}
-# Đang chờ KẾT CỤC. Bản nháp không chờ ai cả — nó chờ chính Vin, nên không
-# tính vào đây và không bao giờ bị gọi là "im lặng".
+# Waiting for an OUTCOME. A draft waits on nobody else — it waits on Vin, so
+# it is excluded here and is never called "silent".
 OPEN = (SENT, INTERVIEW)
 
-# MẶC ĐỊNH của "quá bao nhiêu ngày im thì coi như trượt". Người dùng xoay
-# được (⚟ trên thanh Quản lí — xem core/prefs.IM_QUA); con số ở đây chỉ là
-# chỗ dựa khi chưa ai xoay, và khi gọi `all()` mà không truyền gì.
+# The DEFAULT for "how many days of silence counts as a rejection". The user
+# can turn it (⚟ on the Manage deck — see core/prefs.IM_QUA); this number is
+# only the fallback before anyone turns it, and when `all()` is called with
+# nothing passed.
 #
-# 20, không phải 14: 14 là mốc ĐO ĐƯỢC (lá hồi âm muộn nhất trong hộp thư
-# thật về sau đúng 14 ngày), nhưng mốc đo được là mốc của quá khứ — lấy y
-# nguyên nó làm hạn chót là không chừa chỗ cho lá thư thứ 38.
+# 20, not 14: 14 is the MEASURED figure (the latest reply in the real
+# mailbox came back on day 14), but a measured figure is a figure from the
+# past — using it verbatim as the cut-off leaves no room for the 38th reply.
 SILENT_AFTER = 20
 
 
 def nguong(conn: sqlite3.Connection) -> int:
-    """Số ngày im hiện đang dùng. MỘT chỗ đọc, để bảng và thanh đếm giống nhau.
+    """The silence threshold in use. ONE reader, so the table and the deck
+    count the same.
 
-    Hai chỗ tự đọc là có ngày thanh trên báo "32 trượt" còn bảng dưới xếp 34
-    dòng vào nhóm đó, và không ai biết chỗ nào sai.
+    Two separate readers means the deck eventually reports "32 rejected"
+    while the table below files 34 rows under that heading, and nobody can
+    tell which one is wrong.
     """
     from ..core import prefs
     return prefs.num(conn, prefs.IM_QUA, 3, 365)
@@ -60,8 +65,8 @@ def add(conn: sqlite3.Connection, company: str, role: str,
         posting_id: int | None = None, cv_file: str = "",
         origin: str = "manual", applied_at: str = "",
         stage: str = SENT) -> int:
-    """Ghi một lần nộp. Nộp lại đúng vai trò đó ở đúng công ty đó thì KHÔNG
-    đẻ dòng mới — đó là một lần nộp, không phải hai."""
+    """Record an application. Applying again for the same role at the same
+    company does NOT create a new row — that is one application, not two."""
     key = norm(company)
     found = conn.execute(
         "SELECT id, stage, posting_id FROM application"
@@ -71,20 +76,22 @@ def add(conn: sqlite3.Connection, company: str, role: str,
         if cv_file:
             conn.execute("UPDATE application SET cv_file = ? WHERE id = ?",
                          (cv_file, app_id))
-        # Dòng dựng từ thư không có số hiệu tin. Không gắn vào thì nút Gửi đơn
-        # đi tìm cửa sổ theo posting_id và trả "không có tin gốc".
+        # A row rebuilt from mail has no posting id. Without attaching one,
+        # the Send button looks for a window by posting_id and reports "no
+        # original posting".
         if posting_id and not found["posting_id"]:
             conn.execute("UPDATE application SET posting_id = ? WHERE id = ?",
                          (posting_id, app_id))
-        # NỘP LẠI nơi từng bị từ chối (công ty mở lại tin) là một lần nộp MỚI.
-        # Giữ nguyên chặng cũ thì bảng vẫn ghi "từ chối", nút Gửi đơn không
-        # hiện, và đơn Vin vừa điền không bao giờ đi. Kéo về nháp, nhưng NÓI RA
-        # kết cục cũ — mất lịch sử cũng là nói dối.
+        # REAPPLYING somewhere that rejected you (the company reopened the
+        # posting) is a NEW application. Keeping the old stage leaves the
+        # table saying "rejected", the Send button hidden, and the
+        # application Vin just filled in never goes. Pull it back to draft,
+        # but SAY what the old outcome was — losing history is also a lie.
         if stage == DRAFT and found["stage"] in (REJECTED, OFFER):
             conn.execute(
                 "UPDATE application SET stage = ?, last_event = ?,"
                 " last_event_at = ? WHERE id = ?",
-                (DRAFT, f"nộp lại — lần trước: {STAGE_LABEL[found['stage']]}",
+                (DRAFT, f"reapplied — previously: {STAGE_LABEL[found['stage']]}",
                  _now(), app_id))
         conn.commit()
         return app_id
@@ -108,16 +115,16 @@ def set_stage(conn: sqlite3.Connection, app_id: int, stage: str,
     conn.commit()
 
 
-SENDING = "sending"          # đang bấm Gửi — chặng TẠM, không hiện thành nhãn
+SENDING = "sending"          # mid-click — a TEMPORARY stage, never shown as a label
 
 
 def claim(conn: sqlite3.Connection, app_id: int) -> bool:
-    """Giành quyền gửi lá đơn này. Trả True nếu giành được.
+    """Claim the right to send this application. True if the claim succeeds.
 
-    Một câu UPDATE ... WHERE stage = 'draft' là NGUYÊN TỬ: hai cú bấm cách
-    nhau hai giây thì chỉ một câu đổi được dòng, câu kia đếm 0. Đọc-rồi-ghi ở
-    tầng route thì cả hai cùng thấy 'draft' và cùng đi bấm Submit — hai lá đơn
-    giống nhau tới cùng một nhà tuyển dụng.
+    A single UPDATE ... WHERE stage = 'draft' is ATOMIC: two clicks two
+    seconds apart and only one statement changes the row, the other counts 0.
+    Read-then-write at the route layer means both see 'draft' and both go and
+    press Submit — two identical applications to the same employer.
     """
     cur = conn.execute(
         "UPDATE application SET stage = ? WHERE id = ? AND stage = ?",
@@ -127,21 +134,22 @@ def claim(conn: sqlite3.Connection, app_id: int) -> bool:
 
 
 def unclaim(conn: sqlite3.Connection, app_id: int) -> None:
-    """Trả lại về nháp khi gửi không thành."""
+    """Return it to draft when sending failed."""
     conn.execute("UPDATE application SET stage = ? WHERE id = ? AND stage = ?",
                  (DRAFT, app_id, SENDING))
     conn.commit()
 
 
 def drop(conn: sqlite3.Connection, app_id: int) -> bool:
-    """Xoá một dòng — CHỈ khi nó còn là bản nháp.
+    """Delete a row — ONLY while it is still a draft.
 
-    Mở form rồi đổi ý là chuyện thường, và một dòng nháp bỏ quên làm bẩn bảng.
-    Nhưng lần nộp THẬT thì không xoá bằng một cú bấm: đó là lịch sử, và lịch
-    sử mất đi thì 30 ngày nhìn lại chẳng còn gì để nhìn.
+    Opening a form and changing your mind is normal, and a forgotten draft
+    row makes the table dirty. But a REAL application is not deleted by one
+    click: that is history, and with the history gone there is nothing to
+    look back at after 30 days.
 
-    Xoá thư trước rồi mới xoá dòng: `message.application_id` không có
-    ON DELETE CASCADE nên làm ngược lại là vướng khoá ngoại.
+    Mail is deleted before the row: `message.application_id` has no
+    ON DELETE CASCADE, so the other order hits the foreign key.
     """
     row = conn.execute("SELECT stage FROM application WHERE id = ?",
                        (app_id,)).fetchone()
@@ -171,27 +179,30 @@ def _days(stamp: str) -> int | None:
     return int((datetime.now(timezone.utc) - then).total_seconds() // 86400)
 
 
-# SỨC SỐNG của một lần nộp — thứ bảng phải trả lời mà `stage` một mình không
-# trả lời nổi. "Đã nộp" 40 ngày trước, im lặng, khác hẳn "đã nộp" hôm qua.
-SONG_NONG = "nong"        # họ đang nói chuyện với bạn — phỏng vấn, nhận việc
-SONG_CHO = "cho"          # còn trong cửa sổ hồi âm
-SONG_IM = "im"            # quá cửa sổ mà không một chữ
-SONG_XONG = "xong"        # đã có kết cục
+# The VITALITY of an application — what the table has to answer and `stage`
+# alone cannot. "Applied" 40 days ago in silence is nothing like "applied"
+# yesterday.
+SONG_NONG = "nong"        # they are talking to you — interview, offer
+SONG_CHO = "cho"          # still inside the reply window
+SONG_IM = "im"            # past the window with not one word
+SONG_XONG = "xong"        # it has an outcome
 
-# AI NỘP — ba giá trị, và người dùng cần phân biệt rõ cả ba.
-#     mail   bạn tự nộp TRƯỚC KHI dùng app; máy dựng lại từ thư
+# WHO APPLIED — and the user needs all of these kept apart.
+#     mail   you applied yourself BEFORE using the app; rebuilt from mail
 #     apply  bạn nộp qua app
-#     tay    máy định nộp mà không nộp được (LinkedIn khoá) — bạn tự làm
-AI_NOP = {"mail": "tự nộp trước đây", "apply": "nộp qua app",
-          "auto": "máy nộp", "tay": "phải tự nộp tay",
-          "manual": "thêm bằng tay"}
+#     tay    the machine meant to apply and could not (LinkedIn locked) —
+#            you do it yourself
+AI_NOP = {"mail": "applied before the app", "apply": "applied through the app",
+          "auto": "the machine applied", "tay": "you have to apply by hand",
+          "manual": "added by hand"}
 
 
 def nguon_cua(source: str) -> str:
     """`greenhouse:imc` -> board · `linkedin` -> linkedin · `alert` -> alert.
 
-    MỘT chỗ dịch, dùng chung với tab Search (views/search.FOUND_BY). Dịch ở
-    hai chỗ thì có ngày hai tab gọi cùng một tin bằng hai tên nguồn.
+    ONE translation, shared with the Search tab (views/search.FOUND_BY).
+    Translating in two places means the two tabs eventually call the same
+    posting by two different source names.
     """
     s = (source or "").strip().lower()
     if not s:
@@ -200,13 +211,14 @@ def nguon_cua(source: str) -> str:
 
 
 def all(conn: sqlite3.Connection, im_qua: int | None = None) -> list[dict]:
-    """Cả bảng, kèm SỐ ĐO về thời gian và thư.
+    """The whole table, with MEASUREMENTS of time and mail.
 
     IM LẶNG ĐO TỪ LÁ THƯ CUỐI, KHÔNG TỪ `last_event_at`. `last_event_at` chỉ
-    được ghi khi người dùng BẤM NHẬN một đề xuất; nên một công ty đã trả lời
-    bốn lá thư mà người dùng chưa bấm thì vẫn bị đếm là "im lặng". Đo trên hộp
-    thư thật: bảng báo 35 im lặng trong khi chỉ có 28 — 7 công ty đã trả lời
-    bị ghi là im.
+    is only written when the user ACCEPTS a proposal; so a company that has
+    replied four times while the user has not pressed anything was still
+    counted as "silent". Measured on the real mailbox: the table reported 35
+    silent when there were only 28 — 7 companies that had replied were
+    recorded as silent.
     """
     moc = nguong(conn) if im_qua is None else int(im_qua)
     thu = {}
@@ -227,12 +239,12 @@ def all(conn: sqlite3.Connection, im_qua: int | None = None) -> list[dict]:
         row["thu_cuoi"] = cuoi or ""
         row["days"] = _days(row["applied_at"])
         row["event_days"] = _days(row["last_event_at"])
-        # LẦN CHẠM CUỐI CÙNG = mốc muộn nhất trong ba thứ: lá thư mới nhất,
-        # mốc sự kiện người dùng đã xác nhận, và lúc nộp.
+        # THE LAST CONTACT = the latest of three: the newest mail, the event
+        # timestamp the user confirmed, and the time of applying.
         #
-        # Thiếu `last_event_at` là sai: người dùng bấm Nhận cho một thư mời
-        # phỏng vấn thì ĐÓ LÀ một lần chạm, dù thư đó cũ. Bỏ nó ra thì một
-        # dòng đang phỏng vấn vẫn bị đếm là "im lặng".
+        # Leaving out `last_event_at` is wrong: the user accepting an
+        # interview invitation IS a contact, even if that mail is old.
+        # Without it, a row that is mid-interview still counts as "silent".
         row["im_ngay"] = _days(max(
             x for x in (cuoi, row["last_event_at"], row["applied_at"]) if x)
             if any((cuoi, row["last_event_at"], row["applied_at"])) else "")
@@ -249,28 +261,31 @@ def all(conn: sqlite3.Connection, im_qua: int | None = None) -> list[dict]:
         row["ai_nop"] = AI_NOP.get(row.get("origin") or "", row.get("origin") or "")
         row["co_cv"] = bool(row.get("cv_file")) or bool(row.get("posting_id"))
         rows.append(row)
-    # Nháp lên đầu: đó là việc đang dở, và việc đang dở phải đập vào mắt.
+    # Drafts first: that is work in progress, and work in progress has to
+    # be the first thing you see.
     rows.sort(key=lambda r: (r["stage"] != DRAFT, r["stage"] not in OPEN,
                              -(r["days"] or 0)))
     return rows
 
 
 def im_da_pha(conn: sqlite3.Connection) -> dict:
-    """Những khoảng IM LẶNG ĐÃ TỪNG BỊ PHÁ VỠ — số đo để chọn mốc cho đúng.
+    """Every SILENCE THAT WAS EVENTUALLY BROKEN — the measurement for
+    choosing the threshold correctly.
 
-    Câu hỏi thật của cái núm "coi như trượt sau bao nhiêu ngày" không phải
-    "họ thường trả lời trong bao lâu". Nó là: ĐẶT MỐC NÀY THÌ TÔI ĐÓNG NHẦM
-    MẤY LÁ? Và câu đó có đáp án chính xác trong hộp thư đang có — mỗi lần
-    một lá thư về sau một quãng im, quãng đó là một lần mốc-bằng-quãng-ấy
-    đã sai.
+    The real question behind "counts as rejected after how many days" is not
+    "how long do they usually take to reply". It is: WITH THIS THRESHOLD, HOW
+    MANY REPLIES WOULD I HAVE CLOSED WRONGLY? And that has an exact answer in
+    the mailbox already here — each time a reply arrived after a stretch of
+    silence, that stretch is one case where a threshold of that length would
+    have been wrong.
 
-    Nên hàm này trả về MỌI quãng im đã bị phá vỡ. Mốc M đóng nhầm đúng bằng
-    số quãng >= M.
+    So this returns EVERY silence that was broken. A threshold M closes
+    wrongly exactly as many times as there are stretches >= M.
 
-    KHÔNG PHẢI `max(im_ngay)` — đó là cái bảng đang đo nhầm trước đây.
-    `im_ngay` là "lần chạm cuối cách đây bao lâu", tức là quãng im ĐANG KÉO
-    DÀI và chưa ai phá vỡ; lấy nó làm "thư về muộn nhất" thì trên hộp thư
-    thật nó ra 40 ngày trong khi số đúng là 18.
+    NOT `max(im_ngay)` — that is what the table used to measure by mistake.
+    `im_ngay` is "how long ago the last contact was", which is a silence
+    STILL RUNNING and not yet broken; using it as "the latest reply" gave 40
+    days on the real mailbox when the right answer is 18.
     """
     from datetime import datetime, timezone
 
@@ -302,7 +317,7 @@ def im_da_pha(conn: sqlite3.Connection) -> dict:
 
 
 def thu_cua(conn: sqlite3.Connection, app_id: int) -> list[dict]:
-    """Mọi lá thư của MỘT lần nộp, mới nhất trước. Ruột của thẻ chi tiết."""
+    """Every mail of ONE application, newest first. The detail card's content."""
     return [dict(r) for r in conn.execute(
         "SELECT id, subject, snippet, kind, received_at, from_addr"
         " FROM message WHERE application_id = ? ORDER BY received_at DESC",
@@ -316,7 +331,7 @@ def counts(conn: sqlite3.Connection) -> dict:
         out[row["stage"]] = out.get(row["stage"], 0) + 1
         silent += bool(row["silent"])
     out["silent"] = silent
-    # "Tổng" là số lần NỘP THẬT. Bản nháp chưa gửi đi đâu cả, đếm vào là tự
-    # khen mình.
+    # "Total" means applications REALLY SENT. A draft has gone nowhere, and
+    # counting it is flattering yourself.
     out["total"] = sum(out[s] for s in STAGES if s != DRAFT)
     return out

@@ -76,7 +76,7 @@ with tempfile.TemporaryDirectory() as tmp:
     board.add(conn, "Point72", "QR Intern", stage=board.DRAFT)
     _r = board.all(conn)[0]
     check("kéo về nháp để gửi được", _r["stage"] == board.DRAFT)
-    check("nhưng NÓI RA kết cục cũ", "lần trước" in (_r["last_event"] or ""))
+    check("nhưng NÓI RA kết cục cũ", "previously" in (_r["last_event"] or ""))
     check("vẫn một dòng, không đẻ thêm", len(board.all(conn)) == 1)
     # Dòng dựng từ thư không có số hiệu tin; không gắn vào thì nút Gửi đơn
     # trả "không có tin gốc".
@@ -473,7 +473,7 @@ with tempfile.TemporaryDirectory() as tmp:
     board.add(conn, "Point72", "QR Intern", stage=board.DRAFT)
     _r = board.all(conn)[0]
     check("kéo về nháp để gửi được", _r["stage"] == board.DRAFT)
-    check("nhưng NÓI RA kết cục cũ", "lần trước" in (_r["last_event"] or ""))
+    check("nhưng NÓI RA kết cục cũ", "previously" in (_r["last_event"] or ""))
     check("vẫn một dòng, không đẻ thêm", len(board.all(conn)) == 1)
     # Dòng dựng từ thư không có số hiệu tin; không gắn vào thì nút Gửi đơn
     # trả "không có tin gốc".
@@ -1222,7 +1222,7 @@ check("nói rõ đây là suy ra, và nới mốc thì mở lại",
 check("nhắc đúng con số mốc đang đặt", "quá 20 ngày" in _q21)
 _q5 = _rim(5, song="cho")
 check("dòng còn trong cửa sổ vẫn là huy hiệu thật",
-      _huy(_q5) == [("applied", "đã nộp")])
+      _huy(_q5) == [("applied", "applied")])
 _qtu = _rim(30, stage=_bdK.REJECTED, song="xong")
 check("họ ĐÃ nói từ chối thì vẫn là huy hiệu thật",
       _huy(_qtu) == [("rejected", "từ chối")])
