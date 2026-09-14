@@ -200,11 +200,11 @@ with tempfile.TemporaryDirectory() as tmp:
           "<!doctype" not in _trang.lower() or "<!doctype" not in _hm.lower())
     check("chưa đủ thì Home bật tấm phủ ngay khi vào",
           "data-setup='/onboarding'" in _trang)
-    check("nói hồ sơ đang thiếu gì", "Chưa chạy được gì" in _hm)
+    check("nói hồ sơ đang thiếu gì", "Nothing can run yet" in _hm)
     check("và có nút đi thẳng tới chỗ điền", "href='/profile/muc_tieu'" in _hm)
     check("có thanh tiến độ", "class=obar" in _hm)
     check("liệt kê đủ 6 phần", _hm.count("class='blk ostep") == 6)
-    check("phần bắt buộc được đánh dấu", "BẮT BUỘC" in _hm)
+    check("phần bắt buộc được đánh dấu", "REQUIRED" in _hm)
     # Home KHÔNG được tự nghĩ luật: nó phải đọc đúng cổng mà Search đang đọc.
     from jobbot.dashboard import live as _live
     from jobbot.core import db as _db
@@ -472,7 +472,7 @@ with tempfile.TemporaryDirectory() as tmp:
     _, _hm2 = get("/onboarding")
     _ob2 = _live.onboarding(_db.connect())
     check("điền đủ 3 câu thì cổng mở", _ob2["gate_open"])
-    check("và đổi sang mời chạy", "Hồ sơ đủ để chạy" in _hm2)
+    check("và đổi sang mời chạy", "The profile is enough to run" in _hm2)
     check("phần vừa xong được đánh dấu", "ostep done" in _hm2)
     # ĐỦ CÂU BẮT BUỘC THÌ THÔI BẮT. Tấm phủ không tự bật nữa, tab Home trống
     # trơn để dành cho bảng điều khiển pipeline.
@@ -1995,7 +1995,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # Chỗ giữ chỗ đã thành trang thật — canh THỨ nó phải có, không canh câu
     # hứa hẹn cũ. Bốn ô + thanh khúc + nhật ký.
     check("Home có thanh khúc như mọi tab", "class=deckpill" in _blank)
-    for _o in ("Kết quả", "Năng suất", "Chẩn đoán", "Phễu"):
+    for _o in ("Results", "Output per day", "Diagnosis", "Funnel"):
         check(f"Home có ô «{_o}»", _o in _blank)
     check("và có nhật ký", "data-journal" in _blank)
     # Gỡ nội dung mà để lại đống code nuôi nó thì mới là bẩn.

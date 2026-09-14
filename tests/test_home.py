@@ -175,7 +175,7 @@ _h = home.render({"gate_open": True}, so=d,
                  stage={"state": "x", "cho_ban": 3, "label": "Quét việc"})
 check("có thanh khúc như mọi tab", "class=deckpill" in _h)
 check("có nhật ký", "data-journal" in _h)
-for _o in ("Kết quả", "Năng suất", "Chẩn đoán", "Phễu"):
+for _o in ("Results", "Output per day", "Diagnosis", "Funnel"):
     check(f"có ô «{_o}»", _o in _h)
 # HAI CÂU HỎI KHÁC NHAU, và bài test cũ gộp chúng làm một y như code:
 #   data-journal  = ô nhật ký HIỆN dòng của luồng nào ("" = mọi luồng)
@@ -212,7 +212,7 @@ _cd5 = home._chan_doan(_nhieu)
 check("lúc gọn chỉ bày 3 dấu hiệu", _cd5.count("cdrow chac'") == 3)
 check("2 cái còn lại gắn lớp ẩn", _cd5.count("chac chitiet") == 2)
 # Cắt mà không báo thì người dùng tin là hết.
-check("và NÓI RÕ còn mấy cái nữa", "còn <b>2</b> dấu hiệu nữa" in _cd5)
+check("và NÓI RÕ còn mấy cái nữa", "<b>2</b> more signs" in _cd5)
 check("đúng 3 cái thì không bịa ra dòng «còn 0»",
       "dấu hiệu nữa" not in home._chan_doan(_nhieu[:3]))
 
@@ -237,7 +237,8 @@ _trang = home.render({"gate_open": True}, so=T.tat_ca(c3),
 # test đỏ vì một lý do chẳng liên quan gì tới thứ nó mang tên.
 _bar = _trang[_trang.index("<div class=deckpill>"):]
 _bar = _bar[:_bar.index("</div></div>")]
-for _n in ("tin tìm được", "đơn đã nộp", "được gọi tiếp", "báo trượt"):
+for _n in ("postings found", "applications sent", "taken further",
+           "rejections"):
     check(f"thanh có số «{_n}»", f">{_n}<" in _bar)
 # Tổng kết đã nằm ở bốn ô bên dưới. Để chúng trên thanh nữa thì thanh nói một
 # thứ hôm nào nhìn cũng thế, và nó thôi trả lời được câu «hôm nay có gì mới».
@@ -268,13 +269,14 @@ _ra = phien.chay(c3)
 check("tắt cả ba thì phiên NÓI RA, không im lặng chạy không", _ra["tat"])
 check("và không khúc nào chạy", _ra["xong"] == [])
 _adj = home.adjust({k: False for k in prefs.PHIEN})
-check("tấm ⚟ cảnh báo khi cả ba đang tắt", "Cả ba đang TẮT" in _adj)
+check("tấm ⚟ cảnh báo khi cả ba đang tắt", "All three are OFF" in _adj)
 check("và bày đủ ba công tắc", _adj.count("/api/home/num") == 3)
 for _t in ("Search", "Make CV", "Manage mail"):
     check(f"có công tắc «{_t}»", f">{_t}<" in _adj)
 _adj_on = home.adjust({k: True for k in prefs.PHIEN})
 check("đang bật thì nút sáng, không chỉ khác chữ", "swbtn'" in _adj_on)
-check("nói rõ thứ tự cố định và VÌ SAO", "Dựng CV đọc kho tin" in _adj_on)
+check("nói rõ thứ tự cố định và VÌ SAO",
+      "Building CVs reads the posting store" in _adj_on)
 c3.close()
 
 print("\n[BÁO VỀ ĐIỆN THOẠI — báo ÍT thôi, và không báo lại cái cũ]")
@@ -330,8 +332,9 @@ c4.close()
 print("\n[KHÔNG BỊA — kho rỗng vẫn phải vẽ được]")
 _r = db.connect(":memory:")
 _hr = home.render({"gate_open": True}, so=T.tat_ca(_r), stage={})
-check("kho rỗng không làm trang nổ", "Tổng quan" in _hr)
-check("và nói thẳng là chưa có gì để đánh giá", "chưa nộp chỗ nào" in _hr)
+check("kho rỗng không làm trang nổ", "Overview" in _hr)
+check("và nói thẳng là chưa có gì để đánh giá",
+      "nothing applied to yet" in _hr)
 check("không bịa ra tỉ lệ nào", "%" not in re.sub(r"width:[\d.]+%", "", _hr))
 c.close(); c2.close(); _r.close()
 

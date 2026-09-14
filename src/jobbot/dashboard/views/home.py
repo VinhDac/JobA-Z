@@ -1,19 +1,21 @@
-"""Home — chu trình dựng hồ sơ. Đây là CỬA VÀO của app.
+"""Home — the profile-building run. This is the app's FRONT DOOR.
 
-Trước đây trang này trống trơn: người dùng mới mở app ra, đáp xuống đây đầu
-tiên, và không ai nói cho họ biết phải làm gì. Bốn tab kia đều đã biết chỉ
-đường ("chạy Search trước", "còn thiếu ba câu") — chỉ mỗi cửa vào là im.
+This page used to be blank: a new user opened the app, landed here first, and
+nobody told them what to do. The other four tabs all knew how to point the way
+("run Search first", "three sentences still missing") — only the front door
+was silent.
 
-Trang này KHÔNG tự nghĩ ra luật nào. Nó đọc `live.onboarding()` — cùng cái
-cổng mà Search và Profile đang đọc — rồi vẽ ra đường đi: phần nào xong, phần
-nào chưa, bước tiếp theo là gì, bấm vào là tới thẳng chỗ điền.
+This page invents NO rule of its own. It reads `live.onboarding()` — the same
+gate Search and Profile read — and draws the route: what is done, what is not,
+what comes next, and clicking takes you straight to the field.
 
-Ba câu mở cổng, 35 câu là đủ. Nên trang chia làm hai giai đoạn:
+Three sentences open the gate, 35 is enough. So the page has two phases:
 
-    cổng CHƯA mở  -> chỉ có một việc: điền cho xong ba câu đó. Mọi thứ khác
-                     trong app đều chưa chạy được, bày thêm chỉ làm nhiễu.
-    cổng ĐÃ mở    -> danh sách này thành MENU "thêm cho mạnh": mỗi phần nói
-                     rõ thêm nó thì app làm tốt thêm được gì.
+    gate NOT open  -> there is only one job: finish those three sentences.
+                      Nothing else in the app can run yet, and showing more
+                      only gets in the way.
+    gate open      -> this list becomes a "make it stronger" MENU: each part
+                      says what adding it lets the app do better.
 """
 
 from __future__ import annotations
@@ -22,42 +24,44 @@ from html import escape as esc
 
 from ..layout import page
 
-# Thêm phần này thì app làm tốt thêm được gì — nói bằng hệ quả, không bằng
-# tên trường. "Thêm kỹ năng" không thuyết phục ai; "chấm điểm hết đoán mò" thì có.
+# What adding this part lets the app do better — said as a consequence, not as
+# a field name. "Add skills" persuades nobody; "scoring stops guessing" does.
 LOI = {
-    "muc_tieu": "Không có phần này thì app không biết tìm gì — chưa quét được.",
-    "rang_buoc": "Lọc ở đây rẻ hơn nhiều so với đọc rồi mới loại.",
-    # Câu hay bị hỏi nhất: "không có phần kinh nghiệm làm việc à?". Có — nó
-    # đọc thẳng từ CV bạn nhập (mục EXPERIENCE), thành các khối ở tab CV. Gõ
-    # lại ở đây là đẻ hai nguồn cho cùng một sự thật.
-    "nang_luc": "Nguyên liệu để chấm điểm và dựng CV. Thiếu thì chấm là đoán mò.",
-    "kinh_nghiem": "Chỗ nhà tuyển dụng đọc đầu tiên. Mỗi câu bạn viết ở đây là "
-                   "một câu có thể lên CV.",
-    "project": "Khớp thì qua được bộ lọc, bằng chứng mới đưa bạn vào nhóm được gọi.",
-    "danh_tinh": "Cần lúc dựng CV và điền đơn. Chưa tới đó thì để trống cũng được.",
+    "muc_tieu": "Without this the app does not know what to look for — it cannot scan.",
+    "rang_buoc": "Filtering here is far cheaper than reading first and rejecting after.",
+    # The most frequently asked question: "is there no work experience
+    # section?". There is — it is read straight from the CV you imported (the
+    # EXPERIENCE section) into blocks on the CV tab. Typing it again here
+    # would create two sources for one truth.
+    "nang_luc": "The raw material for scoring and CV building. Without it, scoring is guesswork.",
+    "kinh_nghiem": "The first thing an employer reads. Every sentence you write here "
+                   "is a sentence that can go on a CV.",
+    "project": "A match gets you past the filter; evidence gets you into the called-back pile.",
+    "danh_tinh": "Needed when building a CV and filling an application. Until then it can stay empty.",
 }
 
 
 def _thanh(xong: int, tong: int) -> str:
     pc = round(xong * 100 / tong) if tong else 0
     return (f"<div class=obar><span style='width:{pc}%'></span></div>"
-            f"<div class=obarnum><b>{xong}</b>/{tong} câu đã trả lời</div>")
+            f"<div class=obarnum><b>{xong}</b>/{tong} questions answered</div>")
 
 
 def _the(s: dict, mo: bool) -> str:
-    """Một phần hồ sơ. `mo` = cổng đã mở chưa — đổi câu chữ chứ không đổi luật."""
+    """One part of the profile. `mo` = is the gate open — it changes the
+    wording, not the rule."""
     if s["done"]:
-        dau, lop, nut = "✓", " done", "Sửa"
+        dau, lop, nut = "✓", " done", "Edit"
     else:
-        dau, lop, nut = "", "", ("Điền ngay" if s["required"] else "Thêm")
+        dau, lop, nut = "", "", ("Fill it in" if s["required"] else "Add")
 
     nhan = ""
     if s["required"] and not s["done"]:
-        nhan = "<span class='blkkind req'>BẮT BUỘC</span>"
+        nhan = "<span class='blkkind req'>REQUIRED</span>"
     elif s["optional"]:
-        nhan = "<span class=blkkind>tuỳ chọn</span>"
+        nhan = "<span class=blkkind>optional</span>"
 
-    # Cổng chưa mở thì chỉ phần bắt buộc được nói to; phần khác lùi lại.
+    # Before the gate opens only the required parts speak up; the rest recede.
     mo_nhat = " dim" if (not mo and not s["required"] and not s["done"]) else ""
     return (
         f"<a class='blk ostep{lop}{mo_nhat}' href='{esc(s['href'])}'>"
@@ -69,43 +73,44 @@ def _the(s: dict, mo: bool) -> str:
 
 
 def sheet(state: dict) -> str:
-    """Chu trình dựng hồ sơ — MẢNH HTML cho tấm phủ, không phải cả trang.
+    """The profile-building run — an HTML FRAGMENT for the overlay, not a page.
 
-    Nó không chiếm tab Home nữa: việc của nó chỉ có lúc đầu, mà tab Home là
-    chỗ của bảng điều khiển pipeline. Cổng chưa mở thì tấm này tự bật lên khi
-    vào app — đó là chỗ "bắt điền". Mở xong thì nó biến mất, bấm lại được từ
-    tab Profile.
+    It no longer occupies the Home tab: it has a job only at the start, while
+    the Home tab is where the pipeline dashboard belongs. Before the gate
+    opens this overlay raises itself on entering the app — that is the "make
+    them fill it in" moment. Once open it disappears, and can be reopened from
+    the Profile tab.
     """
     mo = state["gate_open"]
     ke = state["next"]
 
     if mo:
-        gate = ("<div class='gate ok'><b>Hồ sơ đủ để chạy.</b> "
-                "Sang tab Search bấm Chạy.</div>")
+        gate = ("<div class='gate ok'><b>The profile is enough to run.</b> "
+                "Go to the Search tab and press Run.</div>")
     else:
         thieu = " · ".join(esc(q["text"]) for q in state["gate_missing"])
-        gate = (f"<div class='gate block'><b>Chưa chạy được gì.</b> "
-                f"App cần đúng {len(state['gate_missing'])} câu này trước: "
-                f"{thieu}</div>")
+        gate = (f"<div class='gate block'><b>Nothing can run yet.</b> "
+                f"The app needs exactly these {len(state['gate_missing'])} "
+                f"answers first: {thieu}</div>")
 
     if state["answered"] == 0:
         nut = ("<div class=octa>"
                "<a class='mbtn apply big' href='/profile/import'>"
-               "Nhập CV — app điền hộ →</a>"
-               + (f"<a class=oalt href='{esc(ke['href'])}'>hoặc tự gõ</a>"
+               "Import a CV — the app fills it in →</a>"
+               + (f"<a class=oalt href='{esc(ke['href'])}'>or type it yourself</a>"
                   if ke else "")
                + "</div>"
-               "<p class=omeo>Máy đọc CV rồi ĐỀ XUẤT từng ô — không ô nào được "
-               "ghi vào cho tới khi bạn tick duyệt. Riêng <b>quyền làm việc</b> "
-               "máy cố tình không đoán: CV không nói, mà đoán sai thì hỏng cả "
-               "lá đơn.</p>")
+               "<p class=omeo>The machine reads the CV and PROPOSES each field "
+               "— nothing is written until you tick it through. It deliberately "
+               "does not guess <b>right to work</b>: the CV does not say, and a "
+               "wrong guess ruins the whole application.</p>")
     elif ke:
         nut = (f"<a class='mbtn apply big' href='{esc(ke['href'])}'>"
-               f"Tiếp tục — {esc(ke['title'])} →</a>")
+               f"Continue — {esc(ke['title'])} →</a>")
     else:
         nut = ""
 
-    return ("<div class=sheethead>Hồ sơ của bạn</div>"
+    return ("<div class=sheethead>Your profile</div>"
             "<div class=setupbody>"
             + _thanh(state["answered"], state["total"])
             + gate + nut
@@ -114,98 +119,107 @@ def sheet(state: dict) -> str:
             + "</div></div>")
 
 
-# ---------------------------------------------------------------- TỔNG QUAN
+# ---------------------------------------------------------------- OVERVIEW
 #
-# Home KHÔNG có việc của riêng nó, và đó là cả điểm của nó: bốn tab kia mỗi
-# tab nhìn một khúc, còn câu hỏi "cả quá trình này có đang chạy được không"
-# thì đứng trong một khúc lẻ không trả lời nổi.
+# Home has NO job of its own, and that is the whole point of it: each of the
+# other four tabs watches one stage, while the question "is this whole process
+# actually working" cannot be answered from inside a single stage.
 #
-# VỪA ĐÚNG MỘT KHUNG MÀN HÌNH, KHÔNG CUỘN. Bản trước bày hết mọi thứ ra và
-# trang dài gấp đôi cửa sổ — bày nhiều không phải là nói nhiều, nó là không
-# chọn. Một trang tổng quan phải cuộn thì nó đã thôi là tổng quan.
+# EXACTLY ONE SCREENFUL, NO SCROLLING. The previous version laid everything
+# out and ran twice the height of the window — showing more is not saying
+# more, it is failing to choose. An overview page that has to scroll has
+# stopped being an overview.
 #
-# Nên mỗi ô chỉ giữ ĐÚNG MỘT câu trả lời, và phần giải thích nằm trong
-# `.chitiet` — chỉ hiện khi bấm ⤢ mở to ô đó. Thuần CSS (`.wid.big .chitiet`),
-# không thêm một dòng JS nào: nút ⤢ đã có sẵn trên mọi ô.
+# So each panel holds EXACTLY ONE answer, and the explanation sits in
+# `.chitiet` — shown only when that panel is opened with ⤢. Pure CSS
+# (`.wid.big .chitiet`), not one extra line of JS: the ⤢ button is already on
+# every panel.
 
 def _ct(x: str) -> str:
-    """Phần CHỈ HIỆN KHI MỞ TO ô. Gọn lúc liếc, đủ lúc soi."""
+    """The part SHOWN ONLY WHEN THE PANEL IS ENLARGED. Brief at a glance,
+    complete under inspection."""
     return f"<div class=chitiet>{x}</div>"
 
 
 def _ket_qua(k: dict) -> str:
-    """TRỌNG TÂM CỦA CẢ TRANG: nộp bằng này chỗ thì mấy chỗ gọi lại.
+    """THE HEART OF THE PAGE: apply to this many places, how many call back.
 
-    Một số to, không phải ba số ngang nhau. Ba số ngang nhau là ba số không
-    có số nào quan trọng, và người đọc phải tự chọn hộ mình — mà chọn hộ
-    người đọc chính là việc của trang tổng quan.
+    One big number, not three equal ones. Three equal numbers are three
+    numbers with none of them important, leaving the reader to choose for
+    themselves — and choosing for the reader is exactly an overview page's
+    job.
     """
     from . import bieudo as bd
     if not k.get("tong"):
-        return ("<div class=empty-box>chưa nộp chỗ nào — chưa có gì để đánh "
-                "giá. Sang <a href='/search'>Search</a> bấm Nộp trên một tin."
+        return ("<div class=empty-box>nothing applied to yet — nothing to judge. "
+                "Go to <a href='/search'>Search</a> and press Apply on a posting."
                 "</div>")
     pc = k["pc_di"]
-    # HERO và hai số phụ NẰM CÙNG HÀNG. Xếp chồng thì riêng khối số đã ăn
-    # 150px, và ô này phải cuộn trên cửa sổ thấp — mà ô tổng quan phải cuộn
-    # thì nó đã thôi là tổng quan.
+    # THE HERO AND THE TWO SECONDARY NUMBERS SHARE A ROW. Stacked, the number
+    # block alone eats 150px and this panel has to scroll on a short window —
+    # and an overview panel that scrolls has stopped being an overview.
     hero = (f"<div class=qtop><div class=hero>"
             f"<b>{'—' if pc is None else f'{pc:g}%'}</b>"
-            f"<span>được gọi đi tiếp</span>"
-            f"<i>{k['di_tiep']}/{k['tong']} lần nộp</i></div>"
+            f"<span>taken further</span>"
+            f"<i>{k['di_tiep']}/{k['tong']} applications</i></div>"
             f"<div class=hphu>"
-            f"<span><b>{k['pc_hoi']:g}%</b>có người hồi âm"
+            f"<span><b>{k['pc_hoi']:g}%</b>got a reply"
             f"<i>{k['hoi_am']}/{k['tong']}</i></span>"
-            f"<span><b>{k['pc_truot']:g}%</b>trượt / coi như trượt"
+            f"<span><b>{k['pc_truot']:g}%</b>rejected / treated as rejected"
             f"<i>{k['truot']}/{k['tong']}</i></span></div></div>")
     phu = ""
     thanh = bd.thanh_chia(
-        [("đi tiếp", k["di_tiep"], "qdi"),
-         ("họ từ chối", k["ho_noi"], "qtu"),
-         (f"im quá {k['nguong_im']} ngày", k["suy"], "qim"),
-         ("còn đang chờ", k["cho"], "qcho")], k["tong"])
-    # CỠ MẪU nói trước mọi kết luận — nhưng nói lúc MỞ TO, vì nó là lời dặn
-    # cách đọc, không phải con số.
-    # CHƯA NGÃ NGŨ LẦN NÀO thì KHÔNG có tỉ lệ nào cả — `pc_di_xong` là None.
+        [("taken further", k["di_tiep"], "qdi"),
+         ("they said no", k["ho_noi"], "qtu"),
+         (f"silent over {k['nguong_im']} days", k["suy"], "qim"),
+         ("still waiting", k["cho"], "qcho")], k["tong"])
+    # THE SAMPLE SIZE comes before any conclusion — but it is said WHEN
+    # ENLARGED, because it is an instruction for reading rather than a number.
+    # NOTHING SETTLED YET means there is NO ratio at all — `pc_di_xong` is
+    # None.
     #
-    # Ca này không hiếm: người dùng ngày đầu, mọi đơn còn trong cửa sổ hồi âm.
-    # Bản trước nhét thẳng vào `:g` và trang Home NỔ — đúng ngay cái ngày quan
-    # trọng nhất phải chạy được.
-    them = (f"<p>Tỉ lệ trên <b>đã ngã ngũ</b> (bỏ {k['cho']} lần còn đang chờ "
-            f"ra): <b>{k['pc_di_xong']:g}%</b> — {k['di_tiep']}/{k['xong']}.</p>"
+    # That case is not rare: a first-day user, every application still inside
+    # the reply window. The previous version fed it straight into `:g` and the
+    # Home page BLEW UP — on precisely the most important day for it to work.
+    them = (f"<p>The ratio above is over the <b>settled</b> ones (leaving out "
+            f"the {k['cho']} still waiting): <b>{k['pc_di_xong']:g}%</b> — "
+            f"{k['di_tiep']}/{k['xong']}.</p>"
             if k["pc_di_xong"] is not None else
-            f"<p>Cả <b>{k['cho']}</b> lần nộp đều còn trong cửa sổ hồi âm — "
-            f"chưa lần nào ngã ngũ, nên chưa có tỉ lệ nào để nói.</p>"
-            + (f"<p>Mới <b>{k['tong']}</b> lần nộp. Dưới 30 thì một lần được "
-               f"gọi cũng làm con số nhảy vài điểm — đọc như hướng đi, đừng "
-               f"đọc như kết luận.</p>" if k["tong"] < 30 else "")
-            + f"<p>«Coi như trượt» là <b>phép suy</b>, không phải họ nói: quá "
-              f"{k['nguong_im']} ngày im thì đóng lại. Đổi mốc ở nút ⚟ bên "
-              f"<a href='/track'>Quản lí</a>.</p>")
+            f"<p>All <b>{k['cho']}</b> applications are still inside the reply "
+            f"window — nothing has settled, so there is no ratio to state "
+            f"yet.</p>"
+            + (f"<p>Only <b>{k['tong']}</b> applications so far. Under 30, a "
+               f"single call-back moves the number several points — read it as "
+               f"a direction, not a conclusion.</p>" if k["tong"] < 30 else "")
+            + f"<p>«Treated as rejected» is an <b>inference</b>, not something "
+              f"they said: over {k['nguong_im']} days of silence and it is "
+              f"closed. Change that mark at the ⚟ button on "
+              f"<a href='/track'>Track</a>.</p>")
     return hero + phu + thanh + _ct(them)
 
 
 def _nang_suat(n: dict, q: dict) -> str:
-    """Mỗi ngày làm được bao nhiêu, và vòng quét có chạy đều không."""
+    """How much gets done each day, and whether the scan loop runs steadily."""
     from . import bieudo as bd
     dai = "".join(bd.dai_viec(v) for v in n["viec"].values())
-    nhip = (f"<div class=nhip><b>{q['luot']}</b> lượt quét / "
-            f"<b>{q['ngay']}</b> ngày"
-            + (f" · <b>{q['pc_ok']}%</b> trót lọt" if q["pc_ok"] is not None else "")
-            + (f" · <b class=xau>{q['hong_luot']}</b> lượt hỏng"
+    nhip = (f"<div class=nhip><b>{q['luot']}</b> scans / "
+            f"<b>{q['ngay']}</b> days"
+            + (f" · <b>{q['pc_ok']}%</b> clean" if q["pc_ok"] is not None else "")
+            + (f" · <b class=xau>{q['hong_luot']}</b> failed scans"
                if q["hong_luot"] else "")
-            + (f" · <b class=xau>{len(q['cam'])}</b> nguồn câm"
+            + (f" · <b class=xau>{len(q['cam'])}</b> silent sources"
                if q["cam"] else "")
             + "</div>") if q["luot"] else ""
     return dai + nhip + _ct(_thoi_quen(n))
 
 
 def _thoi_quen(n: dict) -> str:
-    """Theo THỨ và theo THÁNG — chỉ vẽ chuỗi nào TỰ NÓ đủ dài.
+    """By WEEKDAY and by MONTH — only series long enough IN THEMSELVES are drawn.
 
-    Mỗi chuỗi tự gác lấy mình. Lấy chuỗi dài nhất làm cổng chung thì biểu đồ
-    "tin tìm được theo thứ" được vẽ trên 2 ngày dữ liệu, và nó sẽ nói "thứ
-    sáu gấp chín lần thứ bảy" — đúng phép tính, sai hoàn toàn về nghĩa.
+    Each series guards itself. Use the longest series as a shared gate and the
+    "postings found by weekday" chart gets drawn over 2 days of data, where it
+    will announce "Friday is nine times Saturday" — arithmetically right,
+    entirely wrong in meaning.
     """
     from . import bieudo as bd
     o = ""
@@ -222,33 +236,36 @@ def _thoi_quen(n: dict) -> str:
     if not o:
         return bd.chua_du(n["ngay_co"], n["can_thu"])
     if chua:
-        o += (f"<div class=note>Chưa gộp được: {esc(' · '.join(chua))} — cần "
-              f"đủ {n['can_thu']} ngày số liệu thì mới có nghĩa.</div>")
-    return "<div class=tqhead>Theo thứ · theo tháng</div>" + o
+        o += (f"<div class=note>Not grouped yet: {esc(' · '.join(chua))} — it "
+              f"takes {n['can_thu']} days of data before this means "
+              f"anything.</div>")
+    return "<div class=tqhead>By weekday · by month</div>" + o
 
 
-MUC = {"chac": ("chắc", "đếm trực tiếp, không suy gì"),
-       "vua": ("vừa", "đủ mẫu để tin, chưa đủ để chắc"),
-       "yeu": ("yếu", "mẫu còn bé — coi là gợi ý thôi")}
+MUC = {"chac": ("solid", "counted directly, nothing inferred"),
+       "vua": ("fair", "enough sample to believe, not enough to be sure"),
+       "yeu": ("weak", "small sample — take it as a hint only")}
 
 
 def _chan_doan(ds: list) -> str:
-    """Dấu hiệu đang hỏng, XẾP THEO ĐỘ CHẮC chứ không theo độ giật gân.
+    """Signs of trouble, ORDERED BY HOW SOLID THEY ARE, not by how alarming.
 
-    Nhãn độ chắc nằm ngay trên mặt thẻ: một con số đếm trực tiếp và một suy
-    đoán trên bốn mẫu mà trông giống nhau thì người dùng đi sửa nhầm chỗ — và
-    đó là cách tệ nhất một trang thống kê hỏng: nó không im lặng, nó chỉ sai
-    hướng.
+    The confidence label sits on the face of the card: a directly counted
+    number and an inference drawn from four samples that look alike send the
+    user off fixing the wrong thing — and that is the worst way a statistics
+    page can fail: it is not silent, it points the wrong way.
 
-    Lúc gọn chỉ hiện TÊN; lời giải thích và chỗ khai "đo trên bao nhiêu mẫu"
-    nằm sau nút ⤢. Bốn đoạn văn xếp chồng thì không ai đọc đoạn nào.
+    Collapsed, only the NAME shows; the explanation and the "measured over how
+    many" declaration sit behind ⤢. Four paragraphs stacked and nobody reads
+    any of them.
     """
     if not ds:
-        return ("<div class=empty-box>Chưa thấy dấu hiệu nào đáng lo. "
-                "Chạy thêm vài vòng rồi quay lại.</div>")
-    # BA CÁI ĐẦU LÚC GỌN. Danh sách đã xếp theo độ chắc, nên ba cái đầu là
-    # ba cái đáng tin nhất — và bốn thẻ xếp chồng trên một ô cao 190px thì
-    # không đọc được thẻ nào. Phần còn lại hiện khi bấm ⤢.
+        return ("<div class=empty-box>No sign of trouble so far. "
+                "Run a few more rounds and come back.</div>")
+    # THE FIRST THREE WHEN COLLAPSED. The list is already ordered by how solid
+    # each is, so the first three are the three most trustworthy — and four
+    # cards stacked in a 190px panel means none of them can be read. The rest
+    # appear on ⤢.
     o = ""
     for i, x in enumerate(ds):
         nhan, y = MUC.get(x["muc"], ("", ""))
@@ -257,43 +274,47 @@ def _chan_doan(ds: list) -> str:
               f"<span class=cdso>{esc(x['so'])}</span>"
               f"<span class=cdmain><b>{esc(x['ten'])}</b>"
               f"<span class=chitiet>{esc(x['y'])}</span>"
-              f"<i class=chitiet>đo trên {esc(x['tren'])}</i></span>"
+              f"<i class=chitiet>measured over {esc(x['tren'])}</i></span>"
               f"<span class=cdend><span class='cdmuc {esc(x['muc'])}'"
               f" title='{esc(y)}'>{esc(nhan)}</span>"
               f"<span class='mbtn tiny'>{esc(x['nut'])}</span></span></a>")
     con = len(ds) - 3
-    them = (f"<div class=cdmore>còn <b>{con}</b> dấu hiệu nữa — bấm ⤢ để xem"
+    them = (f"<div class=cdmore><b>{con}</b> more signs — press ⤢ to see them"
             f"</div>" if con > 0 else "")
     return f"<div class=cdlist>{o}</div>{them}"
 
 
 def _pheu(d: dict, k: dict) -> str:
-    """Rơi rụng từ tin lấy về tới lần được gọi — HAI đoạn, nói rõ chỗ nối."""
+    """Drop-off from postings fetched to call-backs — TWO stages, with the join
+    named."""
     from . import bieudo as bd
     noi, dang = d["noi"], d["dang"]
-    chu = (f"<b>{d['cho_nop']}</b> tin đáng nộp đang nằm chờ. "
-           + (f"Mới <b>{noi}</b> tin trong số đó được nộp — nên đoạn dưới gần "
-              f"như KHÔNG phải kết quả của đoạn trên: phần lớn lần nộp có "
-              f"trước khi app tồn tại, dựng lại từ thư."
+    chu = (f"<b>{d['cho_nop']}</b> postings worth applying to are waiting. "
+           + (f"Only <b>{noi}</b> of them have been applied to — so the lower "
+              f"stage is almost NOT the result of the upper one: most of the "
+              f"applications happened before the app existed, and were "
+              f"reconstructed from email."
               if noi < dang else ""))
-    duoi = [("đã nộp", k["tong"], "/track"),
-            ("có người hồi âm", k["hoi_am"], "/track"),
-            ("được gọi đi tiếp", k["di_tiep"], "/track")]
-    return (bd.pheu(d["tim"]) + "<div class=pseam>· nộp ·</div>"
+    duoi = [("applied", k["tong"], "/track"),
+            ("got a reply", k["hoi_am"], "/track"),
+            ("taken further", k["di_tiep"], "/track")]
+    return (bd.pheu(d["tim"]) + "<div class=pseam>· applied ·</div>"
             + bd.pheu(duoi) + _ct(f"<p>{chu}</p>"))
 
 
 def adjust(bat: dict | None = None) -> str:
-    """Tấm ⚟ của Home — BA KHÚC của một phiên.
+    """Home's ⚟ panel — THE THREE STAGES of a session.
 
-    Khác ⚟ bên Search và Quản lí: bên đó hỏi "quét nguồn nào", "nộp tin từ
-    nguồn nào" — câu hỏi trong lòng một khúc. Ở đây câu hỏi là PHIÊN GỒM
-    KHÚC NÀO, tức là ở tầng trên cả ba.
+    Different from Search's and Track's ⚟: those ask "which sources to scan",
+    "apply to postings from which source" — questions inside one stage. Here
+    the question is WHICH STAGES A SESSION CONTAINS, i.e. a layer above all
+    three.
 
-    Vì sao phải tắt được từng khúc: ba khúc có giá rất khác nhau — đọc thư
-    12 giây, dựng CV 5,3 giây, còn quét LinkedIn phải mở Chrome và tốn nửa
-    tiếng. Ai chỉ muốn trực hộp thư ban đêm thì tắt hai khúc kia, chứ không
-    phải chọn giữa "chạy tất" và "không chạy gì".
+    Why each stage has to be switchable: the three cost very different
+    amounts — reading mail 12 seconds, building CVs 5.3 seconds, while
+    scanning LinkedIn has to open Chrome and takes half an hour. Someone who
+    only wants the mailbox watched overnight turns the other two off, rather
+    than choosing between "run everything" and "run nothing".
     """
     from ...core import prefs
     d = bat or {}
@@ -303,36 +324,39 @@ def adjust(bat: dict | None = None) -> str:
         hang += (f"<div class='swrow{'' if on else ' off'}'>"
                  f"<button class='mbtn tiny swbtn{'' if on else ' off'}'"
                  f" data-post='/api/home/num' data-arg='{esc(khoa)}:"
-                 f"{'0' if on else '1'}'>{'BẬT' if on else 'TẮT'}</button>"
+                 f"{'0' if on else '1'}'>{'ON' if on else 'OFF'}</button>"
                  f"<b class=swten>{esc(ten)}</b>"
-                 f"<span class=swnow>{'có chạy' if on else 'bỏ qua'}</span>"
-                 f"<details class=swwhy><summary>vì sao</summary>"
+                 f"<span class=swnow>{'runs' if on else 'skipped'}</span>"
+                 f"<details class=swwhy><summary>why</summary>"
                  f"<div class=swbody>{esc(y)}</div></details></div>")
     so_bat = sum(1 for k in prefs.PHIEN if d.get(k))
-    return ("<div class=sheethead>Điều chỉnh · Phiên</div>"
+    return ("<div class=sheethead>Adjust · Session</div>"
             "<div class=adjbox>"
-            "<div class=adjsec>Một phiên gồm khúc nào"
-            "<span>chạy lần lượt, không song song</span></div>"
+            "<div class=adjsec>What a session contains"
+            "<span>run one after another, never in parallel</span></div>"
             + hang
-            + ("<div class=note>Thứ tự cố định: <b>Search → Make CV → "
-               "Manage mail</b>. Dựng CV đọc kho tin nên phải chạy sau lượt "
-               "tìm; chạy trước thì nó xếp theo kho của vòng trước.</div>"
+            + ("<div class=note>The order is fixed: <b>Search → Make CV → "
+               "Manage mail</b>. Building CVs reads the posting store, so it "
+               "has to run after the search; run first and it lays out against "
+               "the previous round's store.</div>"
                if so_bat else
-               "<div class='note xau'>Cả ba đang TẮT — phiên sẽ chạy mà không "
-               "làm gì. Bật ít nhất một khúc.</div>")
+               "<div class='note xau'>All three are OFF — the session will run "
+               "and do nothing. Turn at least one stage on.</div>")
             + "</div>")
 
 
 def render(state: dict, so: dict | None = None, stage: dict | None = None) -> str:
-    """Tab Home — bảng tổng quan, VỪA MỘT KHUNG, tự cập nhật theo luồng.
+    """The Home tab — the overview board, ONE SCREENFUL, updating on the stream.
 
-    LUỒNG RỖNG (`stream=""`) là cố ý: ô nhật ký không ghi luồng thì nhận MỌI
-    luồng. Còn việc VẼ LẠI trang là tham số RIÊNG (`reload="*"`) — hai câu
-    hỏi khác nhau, gộp làm một thì cả hai đều sai (xem layout.page).
+    AN EMPTY STREAM (`stream=""`) is deliberate: a journal panel with no stream
+    named takes EVERY stream. REDRAWING the page is a parameter of its own
+    (`reload="*"`) — two different questions, and folding them into one gets
+    both wrong (see layout.page).
 
-    BỐN Ô, hai hàng, không cuộn. Trái sang phải là đi từ KẾT LUẬN (tỉ lệ, chẩn
-    đoán) sang DỮ KIỆN ĐỠ NÓ (năng suất, phễu) — người ta mở trang tổng quan
-    để biết "ổn không", không phải để đọc bảng số.
+    FOUR PANELS, two rows, no scrolling. Left to right goes from CONCLUSIONS
+    (the ratio, the diagnosis) to THE EVIDENCE BEHIND THEM (productivity, the
+    funnel) — people open an overview to learn "is this all right", not to read
+    a table of numbers.
     """
     from ..layout import deck
     from . import runtime
@@ -344,66 +368,73 @@ def render(state: dict, so: dict | None = None, stage: dict | None = None) -> st
     q = d.get("nhip") or {}
     hn = d.get("hom_nay") or {}
 
-    # THANH NÀY LÀ BẢN TIN CỦA HÔM NAY, không phải bảng tổng kết.
+    # THIS BAR IS TODAY'S BULLETIN, not a summary.
     #
-    # Tổng kết đã nằm ở bốn ô bên dưới, và một con số như "37 đã nộp" thì hôm
-    # nào nhìn cũng thế — nó không trả lời được câu duy nhất người ta hỏi một
-    # trạm trực 24/7: HÔM NAY nó có làm được gì không.
+    # The summary is already in the four panels below, and a number like "37
+    # applied" looks the same whichever day you look — it cannot answer the one
+    # question people ask a 24/7 watch station: DID IT GET ANYTHING DONE TODAY.
     #
-    # Bốn số đi theo đúng vòng đời một lần nộp: tìm được → nộp đi → họ gọi →
-    # họ loại. Đọc từ trái sang phải là đọc một ngày làm việc.
-    do = [(f"{hn.get('tim', 0)}", "tin tìm được", "stock"),
-          (f"{hn.get('nop', 0)}", "đơn đã nộp", "act"),
-          (f"{hn.get('tiep', 0)}", "được gọi tiếp", "new"),
-          (f"{hn.get('truot', 0)}", "báo trượt", "view")]
+    # The four numbers follow one application's life: found → applied → they
+    # call → they reject. Reading left to right is reading a working day.
+    do = [(f"{hn.get('tim', 0)}", "postings found", "stock"),
+          (f"{hn.get('nop', 0)}", "applications sent", "act"),
+          (f"{hn.get('tiep', 0)}", "taken further", "new"),
+          (f"{hn.get('truot', 0)}", "rejections", "view")]
     return runtime.render(
-        title="Tổng quan", active="/", stream="", journal="bottom", cols=2,
-        # "*" = KHÚC NÀO chạy xong cũng vẽ lại. Đây là chỗ chữ "live" thành
-        # thật; trước đây live.js đọc `stream=""` là "sai" nên nhánh vẽ lại
-        # không bao giờ chạy và Home chỉ đổi số khi người dùng tự bấm F5.
+        title="Overview", active="/", stream="", journal="bottom", cols=2,
+        # "*" = ANY stage finishing redraws it. This is where the word "live"
+        # becomes true; live.js used to read `stream=""` as false, so the
+        # redraw branch never ran and Home only changed its numbers when the
+        # user pressed F5.
         reload="*",
         setup="" if state.get("gate_open") else "/onboarding",
-        # `stage="search"` vẫn là tên khúc gửi kèm nút Dừng — cờ dừng đặt
-        # theo khúc, và Search là khúc duy nhất chạy lâu đủ để cần cắt ngang.
-        bar=deck("search", "Hôm nay", info.get("phien", "phiên đang TẮT"), do,
+        # `stage="search"` is still the stage name sent with the Stop button —
+        # the stop flag is set per stage, and Search is the only stage running
+        # long enough to need interrupting.
+        bar=deck("search", "Today", info.get("phien", "the session is OFF"), do,
                  adjust="/adjust/home",
                  run=info.get("nhan_phien", "Start session"),
-                 run_note="chạy cả dây chuyền — Search → Make CV → Manage "
-                          "mail — rồi lặp lại 24/7. Chỉnh khúc nào chạy ở ⚟",
+                 run_note="runs the whole line — Search → Make CV → Manage "
+                          "mail — then repeats 24/7. Choose which stages run at ⚟",
                  run_path="/api/session/start", stop_path="/api/session/stop"),
-        # HAI HÀNG CO THEO RUỘT, phần thừa dồn hết cho nhật ký.
+        # TWO ROWS SIZED BY THEIR CONTENT, with the slack all going to the
+        # journal.
         #
-        # `1fr 1fr` chia đều là sai ở cả hai đầu: cửa sổ cao thì bốn ô kia
-        # thừa một khoảng trống to đùng dưới đáy mỗi ô, cửa sổ thấp thì chúng
-        # phải cuộn. `auto` thì mỗi ô cao đúng bằng thứ nó chứa — không thừa,
-        # không cuộn — và chỗ dôi ra rơi vào nhật ký, ô DUY NHẤT đáng được
-        # cuộn: dòng nhật ký thì bao nhiêu cũng có.
+        # `1fr 1fr` splitting evenly is wrong at both ends: on a tall window
+        # the other four panels get a big empty band under each, and on a
+        # short one they have to scroll. `auto` makes each panel exactly as
+        # tall as what it holds — no waste, no scrolling — and the slack falls
+        # to the journal, the ONE panel that deserves to scroll: there is
+        # always another journal line.
         #
-        # minmax(130px,1fr) để nhật ký không bị bóp thành một vạch trên màn
-        # thấp; thấp hơn nữa thì cả trang cuộn, và đó là cách hỏng đúng.
-        # `minmax(min-content,auto)`, KHÔNG phải `auto` trần: `auto` vẫn cho
-        # phép lưới nén hàng khi cửa sổ hẹp, và vì ô giờ không còn khung cuộn
-        # nên ruột TRÀN RA NGOÀI ô — xấu hơn cuộn. `min-content` là sàn cứng:
-        # thiếu chỗ thì cả trang cuộn, ô vẫn nguyên vẹn.
+        # minmax(130px,1fr) keeps the journal from being squeezed to a hairline
+        # on a short screen; below that the whole page scrolls, which is the
+        # right way to fail.
+        # `minmax(min-content,auto)`, NOT a bare `auto`: `auto` still lets the
+        # grid compress a row on a narrow window, and since panels no longer
+        # have a scroll frame their contents SPILL OUT — uglier than scrolling.
+        # `min-content` is a hard floor: too little room and the whole page
+        # scrolls, with every panel intact.
         rows_tpl="minmax(min-content,auto) minmax(min-content,auto)"
                  " minmax(130px,1fr)",
-        # `cls="vua"` = ô KHÔNG phải khung cuộn.
+        # `cls="vua"` = this panel is NOT a scroll frame.
         #
-        # Đây là chỗ sửa đúng căn nguyên chứ không phải gọt thêm vài điểm ảnh:
-        # `.wbody` mặc định `overflow:auto`, mà một khung cuộn thì min-content
-        # của nó bằng 0 — nên lưới được phép NÉN ô xuống bao nhiêu cũng được,
-        # và ruột đành cuộn. Bỏ overflow đi thì ô đòi đúng chiều cao nó cần,
-        # hàng `auto` cấp đủ, và khi cửa sổ thật sự quá thấp thì CẢ TRANG cuộn
-        # — hỏng đúng cách, thay vì bốn ô cùng cuộn lén.
+        # This fixes the root cause rather than shaving off a few pixels:
+        # `.wbody` defaults to `overflow:auto`, and a scroll frame has a
+        # min-content of 0 — so the grid is free to SQUEEZE the panel as far as
+        # it likes, leaving the contents to scroll. Drop the overflow and the
+        # panel demands the height it needs, the `auto` row grants it, and when
+        # the window really is too short THE WHOLE PAGE scrolls — failing the
+        # right way, instead of four panels quietly scrolling at once.
         panels=[
-            runtime.panel("Kết quả · cả quá trình", _ket_qua(k),
+            runtime.panel("Results · the whole process", _ket_qua(k),
                           at=(1, 1), cls="vua"),
-            runtime.panel("Năng suất mỗi ngày", _nang_suat(n, q),
+            runtime.panel("Output per day", _nang_suat(n, q),
                           at=(2, 1), cls="vua"),
-            runtime.panel("Chẩn đoán · chỗ nào đang hỏng",
+            runtime.panel("Diagnosis · what is going wrong",
                           _chan_doan(d.get("chan_doan") or []),
                           at=(1, 2), cls="vua"),
-            runtime.panel("Phễu · rơi rụng ở khúc nào",
+            runtime.panel("Funnel · where they drop off",
                           _pheu(pheu, k) if pheu else "",
                           at=(2, 2), cls="vua"),
         ],
