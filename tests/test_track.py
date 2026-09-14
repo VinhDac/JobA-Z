@@ -1169,7 +1169,8 @@ check("và đúng số đo thật", "ended in one was 18 days" in _r20)
 from jobbot.dashboard import live as _lvK
 _st = _lvK.track_stage(_cn)
 check("dòng trạng thái tách 'họ từ chối' khỏi 'coi như trượt'",
-      "họ từ chối" in _st.get("state", "") and "coi như trượt" in _st.get("state", ""))
+      "said no" in _st.get("state", "")
+      and "treated as rejected" in _st.get("state", ""))
 check(f"thanh đếm cả hai vào TRƯỢT — ra {_st.get('truot')}", _st.get("truot") == 1)
 check("mốc đang dùng đi kèm để bảng vẽ theo", _st.get("nguong") == 20)
 _cn.close()
