@@ -1,30 +1,35 @@
-"""Mở trang nộp, điền phần chứng minh được, DỪNG.
+"""Open the application page, fill in what can be proved, STOP.
 
-RANH GIỚI — viết bằng code chứ không bằng lời hứa:
+THE BOUNDARY — written in code, not in promises:
 
-    Máy phát ra đúng HAI loại cú bấm, và mỗi loại có một cái chốt kiểm ngay
-    trước khi bấm:
+    The machine emits exactly TWO kinds of click, and each has a latch checked
+    immediately before the click:
 
-      mở danh sách  -> thẻ đó phải BỌC CHÍNH Ô ĐÓ (`wraps`)
-      chọn một dòng -> thẻ đó phải có role="option" (`_OPTION`)
+      open a dropdown  -> that element must WRAP THAT VERY FIELD (`wraps`)
+      choose a row     -> that element must carry role="option" (`_OPTION`)
 
-    Và chốt chung cho cả hai: điểm sắp bấm phải THẬT SỰ NẰM TRÊN thẻ ấy —
-    `elementFromPoint` phải trả về đúng nó (`hits`). Không có chốt này thì một
-    toạ độ cũ vẫn bấm được, và bấm vào chỗ nào thì không ai biết.
+    And one latch shared by both: the point about to be clicked must REALLY
+    SIT ON that element — `elementFromPoint` has to return it (`hits`).
+    Without this latch a stale coordinate still clicks, and nobody knows what
+    it clicked.
 
-    Không thẻ nào trong hai loại đó là nút Gửi. Nút Gửi không nằm trong bất kỳ
-    đường nào của tệp này — nên máy không thể nộp thay Vin, kể cả khi hỏng.
+    Neither kind of element is a Submit button. The Submit button appears on
+    no path in this file — so the machine cannot apply on Vin's behalf, not
+    even when it breaks.
 
-VÌ SAO PHẢI BẤM CHUỘT THẬT. Đo trên form Point72: Greenhouse bản mới không còn
-thẻ <select>. Mọi danh sách là react-select — một ô chữ. Đặt `.value` cho nó
-chỉ là GÕ VÀO Ô LỌC; menu còn không mở (`aria-expanded` vẫn false), mà đọc lại
-`el.value` thì đúng bằng chữ vừa gõ nên máy tự báo thành công. Bốn ô báo xanh
-mà thật ra rỗng — kiểu hỏng tệ nhất, vì nó im lặng.
+WHY IT HAS TO BE A REAL MOUSE CLICK. Measured on the Point72 form: the
+current Greenhouse has no <select> elements left. Every dropdown is a
+react-select — a text box. Setting its `.value` only TYPES INTO THE FILTER
+BOX; the menu does not even open (`aria-expanded` stays false), and reading
+`el.value` back gives exactly what was typed, so the machine reports success
+to itself. Four fields reported green while actually empty — the worst kind
+of failure, because it is silent.
 
-Cửa sổ ở lại sau khi điền: ba câu như sponsorship hay ngày tốt nghiệp là việc
-của Vin, và cú bấm Gửi cũng vậy.
+The window stays open after filling: three questions like sponsorship or
+graduation date are Vin's to answer, and so is pressing Submit.
 
-Cổng 9335, profile riêng — không đụng vòng quét (9333) hay máy in CV (9334).
+Port 9335, its own profile — it never touches the scan loop (9333) or the CV
+printer (9334).
 """
 
 from __future__ import annotations
@@ -42,23 +47,25 @@ from .answer import Ans
 
 PORT = chrome.APPLY_PORT
 
-# Trang đòi đăng nhập. Gặp cái này mà im lặng là kiểu hỏng tệ nhất: máy báo
-# "không thấy form" trên một trang thật ra chỉ đang hỏi mật khẩu, và Vin ngồi
-# đoán. Nhận ra thì nói thẳng, kèm cách sửa.
+# A page demanding a login. Meeting one of these in silence is the worst kind
+# of failure: the machine reports "no form found" on a page that is only
+# asking for a password, and Vin sits there guessing. Recognise it, say so
+# outright, and say how to fix it.
 LOGIN_WALL = re.compile(
     r"/login|/authwall|/signin|/sign-in|/uas/login|/checkpoint|/challenge", re.I)
 
-MENU_WAIT = 2.5          # giây chờ danh sách bung ra
-SHORT = 3                # tên ngắn hơn thế thì cấm khớp kiểu "nằm trong"
+MENU_WAIT = 2.5          # seconds to wait for a dropdown to open
+SHORT = 3                # a name shorter than this may not match "contains"
 _OPTION = re.compile(r"__option|(^|\s)option(\s|$)")
 
-# Đặt giá trị theo kiểu React hiểu được: gọi setter gốc của prototype rồi bắn
-# sự kiện. Gán thẳng `el.value = x` thì React vẽ lại và xoá — ô nhìn có chữ mà
-# state rỗng, bấm Gửi là báo thiếu.
+# Set a value the way React understands: call the prototype's own setter, then
+# fire the events. Assigning `el.value = x` directly makes React redraw and
+# wipe it — the box looks filled while the state is empty, and Submit reports
+# it missing.
 SET_JS = r"""
 (() => {
   const el = document.querySelector('[data-jb="%KEY%"]');
-  if (!el) return 'mất ô';
+  if (!el) return 'field gone';
   const v = %VALUE%;
   const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype
               : el.tagName === 'SELECT'   ? HTMLSelectElement.prototype
@@ -67,28 +74,29 @@ SET_JS = r"""
   el.dispatchEvent(new Event('input',  {bubbles: true}));
   el.dispatchEvent(new Event('change', {bubbles: true}));
   el.dispatchEvent(new Event('blur',   {bubbles: true}));
-  return el.value === v ? '' : 'không nhận';
+  return el.value === v ? '' : 'not accepted';
 })()
 """
 
-# Kéo ô vào giữa màn hình. TÁCH RIÊNG khỏi bước đo, và ép 'instant':
-# trang này đặt cuộn mượt, nên đo ngay sau khi gọi thì lấy về TOẠ ĐỘ CŨ —
-# đo được y=1252 trong màn hình cao 900, cú bấm rơi ra ngoài trang và không
-# trúng gì cả. Đó là lý do 4 ô danh sách im lặng không mở.
+# Scroll the field to the middle of the screen. KEPT SEPARATE from measuring,
+# and forced to 'instant': this page enables smooth scrolling, so measuring
+# straight after the call returns THE OLD COORDINATES — measured y=1252 in a
+# 900-high window, and the click landed off the page hitting nothing. That is
+# why 4 dropdowns silently failed to open.
 SCROLL_JS = r"""
 (() => {
   const el = document.querySelector('[data-jb="%KEY%"]');
-  if (!el) return 'mất ô';
+  if (!el) return 'field gone';
   el.scrollIntoView({block: 'center', behavior: 'instant'});
   return '';
 })()
 """
 
-# Thẻ bọc ô — chỗ người dùng bấm để danh sách bung ra.
+# The element wrapping the field — where a person clicks to open the dropdown.
 CONTROL_JS = r"""
 (() => {
   const el = document.querySelector('[data-jb="%KEY%"]');
-  if (!el) return JSON.stringify({err: 'mất ô'});
+  if (!el) return JSON.stringify({err: 'field gone'});
   const ctl = el.closest('[class*="control"]') || el.parentElement || el;
   const r = ctl.getBoundingClientRect();
   const x = r.x + r.width / 2, y = r.y + r.height / 2;
@@ -98,16 +106,17 @@ CONTROL_JS = r"""
 })()
 """
 
-# Các dòng đang bung ra của CHÍNH ô này. Lọc bỏ danh sách mã vùng điện thoại
-# (intl-tel-input) — nó luôn nằm sẵn trong trang và không phải của ta.
+# The rows currently open for THIS field. Filters out the phone country-code
+# list (intl-tel-input) — it is always present in the page and is not ours.
 MENU_JS = r"""
 (() => {
   const el = document.querySelector('[data-jb="%KEY%"]');
   if (!el) return '[]';
-  // KHÔNG thu hẹp theo thẻ cha: `closest('[class*="container"]')` bắt trúng
-  // `select__input-container` — thẻ chỉ bọc mỗi ô chữ, menu nằm ngoài nó, nên
-  // lúc nào cũng ra 0 dòng. Chỉ MỘT menu mở được tại một thời điểm, nên lấy
-  // theo cả trang rồi lọc theo ĐANG HIỆN là đủ và đúng.
+  // DO NOT narrow by ancestor: `closest('[class*="container"]')` matches
+  // `select__input-container` — an element wrapping only the text box, with
+  // the menu outside it, so it always yields 0 rows. Only ONE menu can be
+  // open at a time, so taking the whole page and filtering by VISIBLE is
+  // both enough and correct.
   let list = Array.from(document.querySelectorAll('[role="option"]'));
   list = list.filter(o => o.offsetParent && !(o.id || '').startsWith('iti'));
   return JSON.stringify(list.slice(0, 80).map((o, i) => {
@@ -120,7 +129,7 @@ MENU_JS = r"""
 PICK_JS = r"""
 (() => {
   const o = document.querySelector('[data-jbopt="%I%"]');
-  if (!o) return JSON.stringify({err: 'mất dòng'});
+  if (!o) return JSON.stringify({err: 'row gone'});
   o.scrollIntoView({block: 'nearest', behavior: 'instant'});
   const r = o.getBoundingClientRect();
   const x = r.x + r.width / 2, y = r.y + r.height / 2;
@@ -133,7 +142,8 @@ PICK_JS = r"""
 })()
 """
 
-# Đã chọn được hay chưa: react-select vẽ chữ đã chọn thành một "chip" trong ô.
+# Was anything actually chosen: react-select draws the chosen text as a "chip"
+# inside the field.
 CHOSEN_JS = r"""
 (() => {
   const el = document.querySelector('[data-jb="%KEY%"]');
@@ -147,22 +157,24 @@ CHOSEN_JS = r"""
 """
 
 
-# Trang mô tả và trang nộp KHÔNG phải một. Greenhouse nhúng form ngay dưới mô
-# tả; Ashby và Lever để form ở URL riêng (.../application, .../apply) và trang
-# mô tả không có lấy một ô nào — đo được: 0 input trên cả hai.
+# The description page and the application page are NOT the same. Greenhouse
+# embeds the form right below the description; Ashby and Lever put the form on
+# a URL of its own (.../application, .../apply) and the description page has
+# not a single field — measured: 0 inputs on both.
 #
-# Không lập bảng "ATS nào thì thêm đuôi gì": bảng đó phải nuôi mãi và sai ngay
-# khi gặp trang tuyển dụng riêng của công ty. Trang nào cũng tự chỉ đường bằng
-# một thẻ <a> ghi "Apply" — đi theo chính nó, cùng tên miền.
+# No lookup of "which ATS needs which suffix": that table has to be fed
+# forever and is wrong the moment a company's own careers site turns up. Every
+# page points the way itself, with an <a> reading "Apply" — follow that, on
+# the same domain.
 APPLY_LINK_JS = r"""
 (() => {
   for (const a of document.querySelectorAll('a[href]')) {
     const text = (a.innerText || '').trim();
     const raw  = a.getAttribute('href') || '';
     let u; try { u = new URL(raw, location.href); } catch (e) { continue; }
-    if (u.host !== location.host) continue;           // ra ngoài miền: bỏ qua
+    if (u.host !== location.host) continue;           // off-domain: skip
     if (u.href.replace(/#.*$/, '') === location.href.replace(/#.*$/, '')) continue;
-    const named = /^(apply|application)/i.test(text)
+    const named = /^(apply|application)/i.test(text)
                || /\/(apply|application)\/?$/i.test(u.pathname);
     if (named) return u.href;
   }
@@ -177,53 +189,56 @@ class Report:
     total: int = 0
     filled: list[tuple[str, str]] = _field(default_factory=list)
     failed: list[tuple[str, str]] = _field(default_factory=list)
-    asks: list[tuple[str, str, bool]] = _field(default_factory=list)   # nhãn, lý do, bắt buộc
+    asks: list[tuple[str, str, bool]] = _field(default_factory=list)   # label, reason, required
     skipped: list[str] = _field(default_factory=list)
-    missing: list[str] = _field(default_factory=list)                  # hồ sơ thiếu
+    missing: list[str] = _field(default_factory=list)                  # missing from the profile
     note: str = ""
-    needs_login: str = ""          # trang đòi đăng nhập; giá trị là địa chỉ đó
-    # MÁY BÓ TAY, NGƯỜI LÀM ĐƯỢC. Giá trị là địa chỉ người dùng phải tự mở.
+    needs_login: str = ""          # the page demands a login; the value is that address
+    # THE MACHINE CANNOT, A PERSON CAN. The value is the address the user has
+    # to open themselves.
     #
-    # Cờ RIÊNG chứ không đọc chữ trong `note`: bảng Quản lí gắn nhãn "phải tự
-    # nộp tay" theo cờ này, và bắt nhãn bằng cách dò chuỗi tiếng Việt trong
-    # một câu mô tả là thứ hỏng ngay lần đầu ai đó sửa câu chữ.
+    # A FLAG OF ITS OWN rather than reading words out of `note`: the Track
+    # table marks a row "apply by hand" from this flag, and deriving that mark
+    # by searching for a phrase inside a sentence breaks the first time
+    # somebody rewords the sentence.
     tu_lam: str = ""
 
     def line(self) -> str:
         if self.needs_login:
-            return "trang đòi đăng nhập — chưa điền được gì"
+            return "the page demands a login — nothing could be filled"
         if not self.total:
-            return self.note or "không thấy form nộp trên trang này"
+            return self.note or "no application form on this page"
         need = sum(1 for _, _, must in self.asks if must)
-        bits = [f"điền {len(self.filled)}/{self.total} ô"]
+        bits = [f"filled {len(self.filled)}/{self.total} fields"]
         if self.failed:
-            bits.append(f"{len(self.failed)} ô không nhận")
+            bits.append(f"{len(self.failed)} fields not accepted")
         if self.asks:
-            bits.append(f"{len(self.asks)} ô cần bạn"
-                        + (f" ({need} bắt buộc)" if need else ""))
+            bits.append(f"{len(self.asks)} fields need you"
+                        + (f" ({need} required)" if need else ""))
         if self.skipped:
-            bits.append(f"{len(self.skipped)} ô nhân khẩu học bỏ qua")
+            bits.append(f"{len(self.skipped)} demographic fields skipped")
         return " · ".join(bits)
 
 
-# --- so khớp --------------------------------------------------------------
+# --- matching -------------------------------------------------------------
 
 def match(want: Ans, options: list[str]) -> str:
-    """Dòng nào trong danh sách là câu trả lời. Chặt trước, lỏng sau.
+    """Which row in the list is the answer. Strict first, loose after.
 
-    Ba luật, theo đúng thứ tự này:
+    Three rules, in exactly this order:
 
-    1. ĐỘ CHẶT THẮNG. Vòng ngoài là mức chặt, vòng trong mới là các cách gọi.
-       Ngược lại thì "UK" nằm-trong "Ukraine" và máy chọn Ukraine trước khi
-       kịp thử "United Kingdom".
-    2. Tên ngắn (<= 3 chữ) cấm khớp kiểu nằm-trong.
-    3. Nhiều dòng cùng trúng thì trước hết giữ dòng HỢP VỚI PHẦN CÒN LẠI của
-       hồ sơ (`want.prefer`). "London" trúng cả London-UK lẫn London-Ontario;
-       Vin ở UK, nên London-UK.
-    4. Vẫn còn nhiều thì lấy DÒNG NGẮN NHẤT — chữ thừa là lời khai thừa. Gõ
-       "master" thì cả "Master's Degree" lẫn "Master of Business
-       Administration (M.B.A.)" đều bắt đầu bằng "master", và máy đã chọn
-       cái MBA; Vin học MSc.
+    1. STRICTNESS WINS. The outer loop is the strictness level, the inner loop
+       is the alternative names. The other way round and "UK" is contained in
+       "Ukraine", so the machine picks Ukraine before it ever tries "United
+       Kingdom".
+    2. A short name (<= 3 characters) may not match by containment.
+    3. When several rows match, first keep the row that AGREES WITH THE REST
+       of the profile (`want.prefer`). "London" matches both London-UK and
+       London-Ontario; Vin is in the UK, so London-UK.
+    4. Still several, take THE SHORTEST ROW — extra words are extra claims.
+       Type "master" and both "Master's Degree" and "Master of Business
+       Administration (M.B.A.)" start with "master", and the machine picked
+       the MBA; Vin read an MSc.
     """
     if not options:
         return ""
@@ -236,8 +251,9 @@ def match(want: Ans, options: list[str]) -> str:
     for level in ("exact", "prefix", "inside"):
         for cand in tries:
             c = cand.lower().strip()
-            # Chốt tên ngắn áp cho CẢ mức prefix, không riêng mức "nằm trong":
-            # "UK".startswith-khớp "Ukraine" y như "UK" nằm trong "Ukraine".
+            # The short-name latch applies to the prefix level TOO, not just
+            # "contains": "UK".startswith-matches "Ukraine" exactly as "UK"
+            # is contained in "Ukraine".
             if not c or (level != "exact" and len(c) <= SHORT):
                 continue
             hits = [i for i, o in enumerate(low) if o and (
@@ -252,15 +268,17 @@ def match(want: Ans, options: list[str]) -> str:
 
 
 def queries(want: Ans, limit: int = 3) -> list[str]:
-    """Các chữ sẽ lần lượt gõ vào ô lọc, theo thứ tự thử.
+    """The strings to type into the filter box, in the order they are tried.
 
-    KHÔNG có mẹo đoán "chữ nào hay nhất". Đã thử hai mẹo và cả hai đều sai
-    trên form thật: lấy chuỗi dài nhất thì gõ "United Kingdom of Great
-    Britain" — không nước nào tên vậy, danh sách ra rỗng; lấy đúng `value`
-    thì gõ "MSc" — Greenhouse ghi "Master's Degree", cũng rỗng.
+    NO trick for guessing "the best string". Two tricks were tried and both
+    were wrong on real forms: take the longest string and it types "United
+    Kingdom of Great Britain" — no country is named that, the list comes back
+    empty; take `value` exactly and it types "MSc" — Greenhouse writes
+    "Master's Degree", also empty.
 
-    Nên: gõ, nhìn, không trúng thì xoá và gõ tên khác. Cắt ở dấu phẩy vì
-    "Royal Holloway, University of London" viết lệch một dấu là rỗng.
+    So: type, look, and if nothing matches, clear it and type another name.
+    Cut at the comma, because "Royal Holloway, University of London" typed one
+    character off yields nothing.
     """
     out: list[str] = []
     for cand in want.candidates():
@@ -270,7 +288,7 @@ def queries(want: Ans, limit: int = 3) -> list[str]:
     return out[:limit]
 
 
-# --- thao tác trình duyệt -------------------------------------------------
+# --- driving the browser --------------------------------------------------
 
 def _mouse(tab, x: float, y: float) -> None:
     for kind in ("mousePressed", "mouseReleased"):
@@ -286,7 +304,7 @@ def _key(tab, name: str, code: int) -> None:
 
 
 def _clear(tab, count: int) -> None:
-    """Xoá chữ đã gõ trong ô lọc. Backspace không gửi được form đi đâu cả."""
+    """Clear what was typed into the filter box. Backspace submits nothing."""
     for _ in range(min(count, 40)):
         _key(tab, "Backspace", 8)
 
@@ -303,19 +321,20 @@ def _menu(tab, key: int) -> list[dict]:
 
 
 def pick(tab, key: int, want: Ans) -> tuple[str, str]:
-    """Chọn một dòng trong danh sách thả xuống. Trả (đã chọn, lỗi)."""
+    """Choose a row in a dropdown. Returns (what was chosen, error)."""
     if _js(tab, SCROLL_JS, KEY=key):
-        return "", "mất ô"
-    time.sleep(0.45)                            # cuộn xong rồi mới đo
+        return "", "field gone"
+    time.sleep(0.45)                            # measure only once it has scrolled
     box = json.loads(_js(tab, CONTROL_JS, KEY=key))
     if box.get("err"):
         return "", box["err"]
-    # CHỐT 1: thẻ phải đang bọc chính ô này (một thẻ bọc ô chữ thì không phải
-    # nút Gửi), VÀ điểm sắp bấm phải thật sự nằm trên nó.
+    # LATCH 1: the element must be wrapping this very field (an element
+    # wrapping a text box is not a Submit button), AND the point about to be
+    # clicked must really sit on it.
     if not box.get("wraps") or box.get("tag") in ("BUTTON", "A"):
-        return "", "thẻ bọc không an toàn"
+        return "", "the wrapping element is not safe"
     if not box.get("hits"):
-        return "", "điểm bấm không nằm trên ô"
+        return "", "the click point is not on the field"
     _mouse(tab, box["x"], box["y"])
 
     deadline = time.time() + MENU_WAIT
@@ -335,40 +354,41 @@ def pick(tab, key: int, want: Ans) -> tuple[str, str]:
         if chosen:
             break
     if not chosen:
-        _key(tab, "Escape", 27)                 # đóng lại, đừng để trang treo
-        return "", f"không dòng nào khớp ({seen} dòng)"
+        _key(tab, "Escape", 27)                 # close it, do not leave the page stuck
+        return "", f"no row matched ({seen} rows)"
 
     spot = json.loads(_js(tab, PICK_JS, I=next(r["i"] for r in rows if r["text"] == chosen)))
     if spot.get("err"):
         return "", spot["err"]
-    # CHỐT 2: thẻ phải mang vai trò "một dòng lựa chọn", và điểm bấm phải
-    # nằm trên chính nó.
+    # LATCH 2: the element must carry the role of "a choosable row", and the
+    # click point must sit on that row itself.
     if spot.get("role") != "option" and not _OPTION.search(spot.get("cls", "")):
-        return "", "dòng không phải lựa chọn"
+        return "", "that row is not an option"
     if not spot.get("hits"):
-        return "", "điểm bấm không nằm trên dòng"
+        return "", "the click point is not on the row"
     _mouse(tab, spot["x"], spot["y"])
     time.sleep(0.5)
 
     shown = _js(tab, CHOSEN_JS, KEY=key) or ""
     if not shown:
-        return "", "bấm rồi mà ô vẫn trống"
-    # "Có chữ trong ô" CHƯA phải bằng chứng. Ô có thể đã sẵn một giá trị mặc
-    # định từ trước, hoặc widget chọn nhầm dòng đang được tô sáng. Phải so với
-    # ĐÚNG dòng vừa bấm.
+        return "", "clicked, and the field is still empty"
+    # "There is text in the field" is NOT yet proof. The field may have held a
+    # default value already, or the widget may have taken the highlighted row
+    # instead. It has to be compared against THE ROW THAT WAS CLICKED.
     lean = lambda t: re.sub(r"[^a-z0-9]+", "", (t or "").lower())   # noqa: E731
     if lean(chosen) not in lean(shown) and lean(shown) not in lean(chosen):
-        return "", f"bấm '{chosen[:28]}' mà ô hiện '{shown[:28]}'"
+        return "", f"clicked '{chosen[:28]}' and the field shows '{shown[:28]}'"
     return shown, ""
 
 
-KEEP_DAYS = 7            # bản dàn để đính kèm sống bao lâu trước khi dọn
+KEEP_DAYS = 7            # how long an attachable copy lives before cleanup
 
 
 def _prune(root: Path, days: int = KEEP_DAYS) -> int:
-    """Dọn bản dàn cũ. Một thư mục cho một lần nộp, không ai xoá thì nó phình
-    mãi — mỗi bản ~200 KB, một năm tìm việc là vài trăm MB trùng lặp. Dọn ngay
-    trong lúc dựng bản mới, khỏi cần một việc dọn dẹp riêng để rồi quên chạy."""
+    """Clean up old attachable copies. One directory per application, and with
+    nobody deleting them it grows forever — ~200 KB each, so a year of job
+    hunting is a few hundred MB of duplicates. Cleaned while a new one is
+    built, so there is no separate cleanup job to forget to run."""
     if not root.exists():
         return 0
     cutoff = time.time() - days * 86400
@@ -384,21 +404,24 @@ def _prune(root: Path, days: int = KEEP_DAYS) -> int:
             child.rmdir()
             gone += 1
         except OSError:
-            pass                                     # đang mở thì để yên
+            pass                                     # in use: leave it alone
     return gone
 
 
 def sendable(resume: Path, book: dict[str, Ans], job: int | None) -> Path:
-    """Bản CV để ĐÍNH KÈM, đặt tên theo Vin chứ không theo tin.
+    """The CV TO ATTACH, named after Vin rather than after the posting.
 
-    Tên tệp trong kho là tên NHÓM: một bản CV dùng cho nhiều tin, đặt theo tin
-    điểm cao nhất trong nhóm. Đính thẳng tệp đó thì nhà tuyển dụng Prima nhận
-    được "qube-research-technologies-digital-assets-quantitative-trader.pdf" —
-    họ đọc tên tệp trước cả khi mở, và thấy ngay tên đối thủ.
+    The filename in the store is the GROUP's name: one CV serves several
+    postings and is named after the highest-scoring one in the group. Attach
+    that file directly and the recruiter at Prima receives
+    "qube-research-technologies-digital-assets-quantitative-trader.pdf" — they
+    read the filename before they even open it, and a competitor's name is the
+    first thing they see.
 
-    Nên chép sang một chỗ riêng cho từng tin, đặt tên bằng tên Vin. Thư mục
-    riêng theo tin, không dùng chung một tệp: hai đơn mở cùng lúc thì trình
-    duyệt đọc tệp lúc bấm Gửi, ghi đè là đơn này mang CV của đơn kia.
+    So it is copied somewhere of its own for each posting, named with Vin's
+    name. A directory per posting rather than one shared file: with two
+    applications open at once the browser reads the file at the moment Submit
+    is pressed, and overwriting means one application carries the other's CV.
     """
     who = (book.get("full_name") or Ans("")).value or "CV"
     name = re.sub(r"[^A-Za-z0-9]+", "-", who).strip("-") + "-CV.pdf"
@@ -411,33 +434,33 @@ def sendable(resume: Path, book: dict[str, Ans], job: int | None) -> Path:
         out.write_bytes(resume.read_bytes())
         return out
     except OSError:
-        return resume                                # chép hỏng thì đính bản gốc
+        return resume                                # copy failed: attach the original
 
 
 def attach(tab, key: int, path: Path) -> str:
-    """Gắn tệp. JS không đặt được value của input[type=file] — phải đi bằng
-    lệnh CDP, đó là lý do hàm này đứng riêng."""
+    """Attach a file. JS cannot set the value of an input[type=file] — it has
+    to go through a CDP command, which is why this function stands alone."""
     try:
         tab.call("DOM.enable")
         root = tab.call("DOM.getDocument")["root"]["nodeId"]
         node = tab.call("DOM.querySelector",
                         {"nodeId": root, "selector": f'[data-jb="{key}"]'})["nodeId"]
         if not node:
-            return "mất ô"
+            return "field gone"
         tab.call("DOM.setFileInputFiles", {"files": [str(path)], "nodeId": node})
         return ""
     except Exception as exc:                          # noqa: BLE001
         return type(exc).__name__
 
 
-# <select> thật: `value` của nó là GIÁ TRỊ của option, không phải chữ hiện ra.
-# `<option value="GB">United Kingdom</option>` — gán "United Kingdom" vào
-# `.value` thì không chọn được gì. Phải tìm option theo CHỮ rồi đặt
-# selectedIndex.
+# A real <select>: its `value` is the option's VALUE, not the text shown.
+# `<option value="GB">United Kingdom</option>` — assigning "United Kingdom" to
+# `.value` selects nothing. The option has to be found BY TEXT and
+# selectedIndex set.
 CHOOSE_JS = r"""
 (() => {
   const el = document.querySelector('[data-jb="%KEY%"]');
-  if (!el || !el.options) return 'mất ô';
+  if (!el || !el.options) return 'field gone';
   const want = %TEXT%;
   const flat = t => (t || '').replace(/\s+/g, ' ').trim().toLowerCase();
   const target = flat(want);
@@ -446,10 +469,10 @@ CHOOSE_JS = r"""
       el.selectedIndex = i;
       el.dispatchEvent(new Event('input',  {bubbles: true}));
       el.dispatchEvent(new Event('change', {bubbles: true}));
-      return flat(el.options[el.selectedIndex].text) === target ? '' : 'không nhận';
+      return flat(el.options[el.selectedIndex].text) === target ? '' : 'not accepted';
     }
   }
-  return 'không thấy dòng đó';
+  return 'no such row';
 })()
 """
 
@@ -468,16 +491,18 @@ def _set(tab, key: int, value: str) -> str:
         return str(exc)[:40]
 
 
-# --- vòng chính -----------------------------------------------------------
+# --- the main loop --------------------------------------------------------
 
 def fill(tab, book: dict[str, Ans], resume: Path | None,
          wait: float = 12.0, job: int | None = None) -> Report:
-    """Điền form đang mở. KHÔNG mở trang, KHÔNG gửi — tách ra để đo được.
+    """Fill the open form. It does NOT open a page and does NOT submit —
+    separated so it can be measured.
 
-    Chờ Ô chứ không chờ thẻ <form>: boards.greenhouse.io chuyển hướng sang
-    job-boards.greenhouse.io, và `<form>` của trang CŨ khớp điều kiện chờ
-    trước khi trang mới thay DOM — đọc lúc đó ra rỗng, máy báo "không thấy
-    form" trên một trang có 26 ô.
+    It waits for FIELDS, not for a <form> element: boards.greenhouse.io
+    redirects to job-boards.greenhouse.io, and the OLD page's `<form>` matches
+    the wait condition before the new page replaces the DOM — read at that
+    moment it comes back empty, and the machine reports "no form found" on a
+    page with 26 fields.
     """
     found = F.read(tab)
     deadline = time.time() + wait
@@ -493,10 +518,10 @@ def fill(tab, book: dict[str, Ans], resume: Path | None,
         label = item["label"] or item["name"] or "?"
         bucket, key, must = item["bucket"], item["key"], bool(item["required"])
 
-        # Một sự thật điền MỘT ô. Lever có cả "Portfolio URL" lẫn "Other
-        # website"; đổ cùng một đường dẫn vào cả hai là nói một câu hai lần.
+        # One fact fills ONE field. Lever has both "Portfolio URL" and "Other
+        # website"; pouring the same link into both says one thing twice.
         if bucket == F.FILL and key in used:
-            report.asks.append((label, "đã điền ở ô trên", must))
+            report.asks.append((label, "already filled in a field above", must))
             continue
 
         if bucket == F.SKIP:
@@ -515,21 +540,22 @@ def fill(tab, book: dict[str, Ans], resume: Path | None,
                 (report.filled if not bad else report.failed).append(
                     (label, paper.name if not bad else bad))
             else:
-                report.asks.append((label, "chưa in PDF cho tin này", True))
+                report.asks.append((label, "no PDF printed for this posting yet", True))
             continue
 
         want = book.get(key) or Ans("")
         if not want:
-            report.asks.append((label, f"hồ sơ chưa có {key}", must))
+            report.asks.append((label, f"the profile has no {key}", must))
             report.missing.append(key)
             continue
 
         try:
             _one(tab, item, key, want, report, label, must, used)
         except cdp.CDPError as exc:
-            # Một ô hỏng KHÔNG được giết cả lượt điền: mất báo cáo là mất luôn
-            # 10 ô đã điền trước đó, và Vin không biết form đang ở trạng thái nào.
-            report.failed.append((label, f"ô này hỏng: {str(exc)[:40]}"))
+            # One broken field must NOT kill the whole run: losing the report
+            # loses the 10 fields already filled too, and Vin has no idea what
+            # state the form is in.
+            report.failed.append((label, f"this field broke: {str(exc)[:40]}"))
         continue
 
     return report
@@ -537,28 +563,29 @@ def fill(tab, book: dict[str, Ans], resume: Path | None,
 
 def _one(tab, item, key, want: Ans, report: Report, label: str,
          must: bool, used: set) -> None:
-    """Điền MỘT ô. Tách hàm riêng để một ô hỏng chỉ mất một ô, không mất lượt."""
+    """Fill ONE field. A function of its own so a broken field costs one field,
+    not the whole run."""
     if item["kind"] in ("checkbox", "radio"):
-        # KHÔNG bao giờ gọi _set() cho ô đánh dấu. `value` của nó không phải
-        # chữ hiện ra mà là MÃ form sẽ gửi đi; gán vào là viết lại mã đó mà
-        # không tick gì cả, và `el.value === v` vẫn đúng nên máy báo thành
-        # công. Đo trong Chrome thật: form gửi "London" thay vì
-        # "london_office".
-        report.asks.append((label, "ô đánh dấu — bạn tự chọn", must))
+        # NEVER call _set() for a tick box. Its `value` is not the text shown
+        # but the CODE the form will submit; assigning to it rewrites that
+        # code without ticking anything, and `el.value === v` is still true so
+        # the machine reports success. Measured in a real Chrome: the form
+        # submitted "London" instead of "london_office".
+        report.asks.append((label, "a tick box — choose it yourself", must))
         return
 
     if item["kind"] == "combo":
         got, bad = pick(tab, item["k"], want)
     elif item["kind"] == "select":
         got = match(want, item["options"])
-        bad = _choose(tab, item["k"], got) if got else "không dòng nào khớp"
+        bad = _choose(tab, item["k"], got) if got else "no row matched"
     else:
         got, bad = want.value, _set(tab, item["k"], want.value)
         if bad:
-            # Ô chữ mà không nhận chữ thì nó là danh sách gợi ý đội lốt ô chữ —
-            # Lever dựng ô địa điểm bằng Google Places, không một thuộc tính
-            # ARIA nào để nhận ra. Thử đúng đường người dùng đi; không có dòng
-            # nào bung ra thì Escape, thành việc của Vin.
+            # A text box that will not take text is a dropdown in disguise —
+            # Lever builds its location field with Google Places, with not one
+            # ARIA attribute to recognise it by. Try the path a person takes;
+            # if no row opens, press Escape and it becomes Vin's job.
             got, bad = pick(tab, item["k"], want)
 
     if bad:
@@ -569,10 +596,11 @@ def _one(tab, item, key, want: Ans, report: Report, label: str,
 
 
 def login_wall(tab) -> str:
-    """Trang đang đòi đăng nhập? Trả về địa chỉ đó, không thì rỗng.
+    """Is the page demanding a login? Returns that address, else empty.
 
-    Gặp tường đăng nhập mà im lặng là kiểu hỏng tệ nhất: máy báo "không thấy
-    form" trên một trang thật ra chỉ đang hỏi mật khẩu, và Vin ngồi đoán.
+    Meeting a login wall in silence is the worst kind of failure: the machine
+    reports "no form found" on a page that is only asking for a password, and
+    Vin sits there guessing.
     """
     try:
         here = tab.eval("location.href") or ""
@@ -582,27 +610,29 @@ def login_wall(tab) -> str:
 
 
 def _blocked(tab) -> "Report | None":
-    """Trang có đang CHẶN không cho điền không. Có thì trả Report nói rõ.
+    """Is the page BLOCKING the fill. If so, return a Report saying so.
 
-    Ba chỗ trong open_and_fill() gọi hàm này, nhưng nó CHƯA BAO GIỜ được viết
-    — commit f669e66 đổi sang hình dạng `stuck = _blocked(tab)` mà chỉ sửa
-    chỗ gọi, không viết hàm, và xoá luôn hai hàm cũ nó thay thế. Kết quả: mọi
-    lần nộp đơn đều chết bằng NameError trước khi chạm tới ô nào.
+    Three places in open_and_fill() call this function, but it HAD NEVER BEEN
+    WRITTEN — commit f669e66 moved to the shape `stuck = _blocked(tab)` and
+    only changed the call sites, never writing the function, while deleting
+    the two old functions it replaced. The result: every application died with
+    a NameError before touching a single field.
     """
     wall = login_wall(tab)
     return Report(url=wall, needs_login=wall) if wall else None
 
 
 def _await(tab, wait: float) -> list[dict]:
-    """Chờ Ô hiện ra. Chờ Ô chứ không chờ thẻ <form>: boards.greenhouse.io
-    chuyển hướng sang job-boards.greenhouse.io, và <form> của trang CŨ khớp
-    điều kiện chờ trước khi DOM mới thay vào — đọc lúc đó ra rỗng, máy báo
-    "không thấy form" trên một trang có 26 ô.
+    """Wait for FIELDS to appear. Fields, not a <form> element:
+    boards.greenhouse.io redirects to job-boards.greenhouse.io, and the OLD
+    page's <form> matches the wait condition before the new DOM replaces it —
+    read at that moment it comes back empty, and the machine reports "no form
+    found" on a page with 26 fields.
 
-    HÀM NÀY TỪNG BỊ XOÁ NHẦM ở commit f669e66 trong khi HAI chỗ gọi vẫn còn,
-    nên mọi lần nộp đi tới nhánh "chưa thấy ô nào" đều chết bằng
-    `NameError: name '_await' is not defined`. Không test nào bắt được, vì
-    nhánh đó chỉ chạy khi có Chrome thật và một trang tuyển dụng thật.
+    THIS FUNCTION WAS DELETED BY MISTAKE in commit f669e66 while TWO call
+    sites remained, so every application reaching the "no fields yet" branch
+    died with `NameError: name '_await' is not defined`. No test caught it,
+    because that branch only runs with a real Chrome and a real careers page.
     """
     found = F.read(tab)
     deadline = time.time() + wait
@@ -614,17 +644,18 @@ def _await(tab, wait: float) -> list[dict]:
 
 def open_and_fill(url: str, book: dict[str, Ans], resume: Path | None,
                   job: int | None = None) -> tuple[Report, object]:
-    """Mở trang, tìm đến form, điền, TRẢ TAB CÒN MỞ.
+    """Open the page, find the form, fill it, RETURN THE TAB STILL OPEN.
 
-    Ba chặng, chặng nào cũng có thể dừng sớm:
+    Three legs, any of which can stop early:
 
-        1. tin LinkedIn  -> moi đường nộp thật ra (cần đăng nhập)
-        2. chưa thấy ô   -> hoặc trang đòi đăng nhập, hoặc form ở trang riêng
-        3. điền
+        1. a LinkedIn posting -> dig out the real application link (login needed)
+        2. no fields yet      -> either a login wall, or the form is on its own page
+        3. fill
 
-    Mọi lối ra đều đi qua `done()`, nên trang LUÔN được đóng dấu số hiệu tin
-    (`data-jbjob`) — đó là thứ nút Gửi ở tab Quản lí dùng để tìm lại đúng tab
-    này, thay vì giữ tay cầm trong bộ nhớ máy chủ.
+    Every way out goes through `done()`, so the page is ALWAYS stamped with
+    the posting's number (`data-jbjob`) — which is what the Submit button on
+    the Track tab uses to find this tab again, instead of holding a handle in
+    the server's memory.
     """
     from .send import mark
 
@@ -639,9 +670,10 @@ def open_and_fill(url: str, book: dict[str, Ans], resume: Path | None,
 
     hop = ""
 
-    # 1. Tin LinkedIn chỉ là bảng tin; đường nộp thật nằm sau nút Apply và chỉ
-    #    hiện khi đã đăng nhập. Moi ra rồi đi tiếp như mọi tin khác — phần điền
-    #    không có nhánh riêng nào cho LinkedIn.
+    # 1. A LinkedIn posting is only a noticeboard; the real application link
+    #    sits behind the Apply button and only appears once logged in. Dig it
+    #    out and carry on like any other posting — the filling code has no
+    #    LinkedIn-specific branch.
     if lk.JOBS.search(url):
         stuck = _blocked(tab)
         if stuck:
@@ -651,14 +683,15 @@ def open_and_fill(url: str, book: dict[str, Ans], resume: Path | None,
         if not real:
             return done(Report(
                 url=url, tu_lam=url,
-                note="tin LinkedIn này không lộ đường nộp — thường là môi "
-                     "giới, nộp qua LinkedIn hoặc qua người tuyển"))
+                note="this LinkedIn posting does not reveal an application "
+                     "link — usually an agency, applied to through LinkedIn "
+                     "or through the recruiter"))
         tab.go(real, timeout=45)
         hop = real
 
-    # 2. Chưa thấy ô nào. Hai khả năng, và phải phân biệt: trang đòi đăng nhập
-    #    thì nói thẳng, còn form nằm ở trang riêng thì đi theo link Apply của
-    #    chính trang đó.
+    # 2. No fields found. Two possibilities, and they have to be told apart: a
+    #    login wall gets said outright, while a form on its own page is
+    #    reached by following that page's own Apply link.
     if not _await(tab, 8):
         stuck = _blocked(tab)
         if stuck:
@@ -666,15 +699,15 @@ def open_and_fill(url: str, book: dict[str, Ans], resume: Path | None,
         link = tab.eval(APPLY_LINK_JS) or ""
         if link:
             tab.go(link, timeout=45)
-            hop = link                      # GIỮ, không ghi đè bước 1 bằng rỗng
+            hop = link                      # KEEP it, do not blank out step 1
             _await(tab, 10)
             stuck = _blocked(tab)
             if stuck:
                 return done(stuck)
 
-    # 3. Điền.
+    # 3. Fill.
     report = fill(tab, book, resume, wait=4, job=job)
     report.url = tab.eval("location.href") or url
     if hop:
-        report.note = f"form ở trang riêng — {hop}"
+        report.note = f"the form is on its own page — {hop}"
     return done(report)

@@ -200,7 +200,7 @@ check("nhưng tên đủ dài vẫn khớp",
       run.match(Ans("United Kingdom", ("GB", "UK")),
                 ["Ukraine", "United Kingdom"]) == "United Kingdom")
 # (3) "Có chữ trong ô" chưa phải bằng chứng đã chọn ĐÚNG dòng vừa bấm.
-check("pick() so chip với dòng vừa bấm", "mà ô hiện" in _fillsrc)
+check("pick() so chip với dòng vừa bấm", "and the field shows" in _fillsrc)
 # (5)(6)(8) — xem phần "nút Gửi" ở trên.
 
 print("\n== ranh giới: máy KHÔNG bấm Gửi ==")
@@ -388,7 +388,7 @@ check("KHÔNG nhầm trang Greenhouse",
       not run.LOGIN_WALL.search("https://job-boards.greenhouse.io/point72/jobs/729"))
 _wall = run.Report(needs_login="https://www.linkedin.com/login/")
 check("báo cáo nói rõ lý do, không nói 'không thấy form'",
-      "đăng nhập" in _wall.line(), _wall.line())
+      "login" in _wall.line(), _wall.line())
 _routes = (Path(__file__).resolve().parent.parent
            / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
 check("máy chủ ghi LỖI ra nhật ký", "CHƯA ĐĂNG NHẬP" in _routes)
