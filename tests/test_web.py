@@ -705,193 +705,200 @@ with tempfile.TemporaryDirectory() as tmp:
     ]
     _gia_data = {"versions": _gia_ver, "jobs": 2, "gaps": [], "core": 0}
     _co = _cvl._list(_gia_data, "man group")
-    check("tìm theo tên công ty -> chỉ còn bản khớp",
+    check("searching by company name -> only the matching version is left",
           "Man Group" in _co and "Citadel" not in _co)
-    check("và nói rõ lọc còn mấy bản trên tổng", "1</b>/2 versions" in _co)
+    check("and it says how many of the total are left", "1</b>/2 versions" in _co)
     _ct = _cvl._list(_gia_data, "data scientist")
-    check("tìm theo CHỨC DANH cũng được", "Citadel" in _ct and "Man Group" not in _ct)
-    check("không khớp gì -> nói thẳng, không trả danh sách rỗng",
+    check("searching by JOB TITLE works too", "Citadel" in _ct and "Man Group" not in _ct)
+    check("nothing matches -> it says so plainly, it does not return an empty list",
           "no version goes to" in _cvl._list(_gia_data, "zzzz"))
-    check("ô tìm vẫn còn khi không khớp — để sửa chữ ngay tại chỗ",
+    check("the search box stays when nothing matches — to fix the text on the spot",
           "class=jfind" in _cvl._list(_gia_data, "zzzz"))
-    # SỐ HIỆU BẢN phải giữ nguyên khi lọc: "#2" lúc tìm mà là "#1" lúc không
-    # tìm thì không nói chuyện được về một bản cụ thể.
-    check("số hiệu bản giữ nguyên khi lọc", ">#2<" in _ct)
-    check("không tìm thì hiện đủ cả hai",
+    # A VERSION'S NUMBER has to stay put while filtering: "#2" while searching and "#1"
+    # when not means you cannot talk about one particular version.
+    check("a version's number stays put while filtering", ">#2<" in _ct)
+    check("with no search, both show",
           "Man Group" in _cvl._list(_gia_data) and "Citadel" in _cvl._list(_gia_data))
 
-    # DÒNG PHẢI NÓI ĐƯỢC ĐIỀU GÌ THẬT. Bản cũ in ra 4 câu tiếng Anh RIÊNG của
-    # bản đó — chữ chính Vin viết, đọc lại không nắm thêm gì, mà nhân 28 dòng
-    # thì không ai đọc nổi.
+    # A ROW HAS TO SAY SOMETHING REAL. The old version printed the 4 English sentences
+    # UNIQUE to that build — words the user wrote themselves, telling them nothing new on
+    # re-reading, and multiplied by 28 rows nobody could read it at all.
     _ca = _cvl._list(_gia_data)
-    check("dòng KHÔNG còn đổ nguyên câu CV ra danh sách", "cvonly" not in _ca)
-    check("dòng dẫn bằng TIN, không dẫn bằng tài liệu",
+    check("a row no longer dumps whole CV sentences into the list", "cvonly" not in _ca)
+    check("a row leads with THE POSTING, not with the document",
           "Man Group" in _ca and "Quant" in _ca)
-    check("có tỉ lệ phủ của chính tin đó", "4/6" in _ca and "1/7" in _ca)
-    check("và vẽ thành thanh để quét được 28 dòng", "vbarc" in _ca)
-    # BA MỨC = BA HÀNH ĐỘNG: gửi được / yếu / viết thêm đã. Một màu cho tất cả
-    # thì thanh chỉ là trang trí.
-    check("phủ cao -> mức ok", "vbarc ok" in _ca)
-    check("phủ thấp -> mức low", "vbarc low" in _ca)
-    # Hai con số là HAI câu hỏi khác nhau; gộp chữ thì người đọc trừ 6−4=2 rồi
-    # tưởng máy đếm sai khi danh sách chỉ có 1 mục.
-    check("nói rõ 'hồ sơ chưa có câu nào về', không phải 'bản này thiếu'",
+    check("it carries that posting's own coverage ratio", "4/6" in _ca and "1/7" in _ca)
+    check("and draws it as a bar, so 28 rows can be skimmed", "vbarc" in _ca)
+    # THREE LEVELS = THREE ACTIONS: send it / weak / write more first. One colour for
+    # everything makes the bar decoration.
+    check("high coverage -> the ok level", "vbarc ok" in _ca)
+    check("low coverage -> the low level", "vbarc low" in _ca)
+    # The two numbers are TWO DIFFERENT QUESTIONS; merged into one phrase the reader
+    # works out 6−4=2 and thinks the machine miscounted when the list holds only 1 item.
+    check("it says 'the profile has no sentence about', not 'this version is missing'",
           "the profile has no sentence about" in _ca)
     _nhom2 = [{"jobs": [{"id": 5, "company": "A", "title": "X", "score": 90},
                         {"id": 6, "company": "B", "title": "Y", "score": 70}],
                "only": [], "missing": [], "lines": 0,
                "hoi": 4, "tra_loi": 2, "cam": []}]
-    check("nhóm >1 tin -> nói rõ bản dùng chung cho mấy tin",
+    check("a group of >1 posting -> it says how many postings share the version",
           "shared by" in _cvl._list({"versions": _nhom2, "jobs": 2,
                                           "gaps": [], "core": 0}))
-    check("nhóm 1 tin -> KHÔNG ghi 'dùng chung', đó là nói thừa",
+    check("a group of 1 posting -> it does NOT say 'shared by', that would be noise",
           "shared by" not in _ca)
-    # Dòng phải mở đúng tin người ta vừa gõ tên, không mở một tin khác cùng bản.
+    # A row has to open the posting whose name was just typed, not another posting on the same build.
     _hai = [{"jobs": [{"id": 9, "company": "Low Co", "title": "X", "score": 99},
                       {"id": 7, "company": "Man Group", "title": "Y", "score": 10}],
              "only": [], "missing": [], "lines": 0,
              "hoi": 4, "tra_loi": 2, "cam": []}]
-    check("đang tìm thì dòng trỏ tới ĐÚNG tin khớp, không phải tin điểm cao nhất",
+    check("while searching, the row points at THE MATCHING posting, not the highest scoring one",
           "/jobs/7/cv" in _cvl._list({"versions": _hai, "jobs": 2, "gaps": [],
                                       "core": 0}, "man group"))
-    check("POST /cv/pdf id không phải số -> 400",
+    check("POST /cv/pdf with a non-numeric id -> 400",
           post_form("/cv/pdf", "arg=abc") == 400)
 
-    print("\n[tấm phủ: mỗi form phải đi đúng action của nó]")
-    # live.js từng chặn MỌI .setform rồi gửi cứng tới '/settings'. Hậu quả:
-    # bấm "Xoá khối" trong tấm phủ soạn CV lại mở ra Cài đặt. Thử bằng
-    # form.submit() không lộ, vì cách đó bỏ qua trình nghe submit.
+    print("\n[the overlay: every form must go to its own action]")
+    # live.js used to intercept EVERY .setform and post it hard-coded to '/settings'. The
+    # consequence: pressing "Delete block" in the CV compose overlay opened Settings.
+    # Trying it with form.submit() never showed it, because that path skips the submit
+    # listener.
     js = (Path("src/jobbot/dashboard/web/live.js")).read_text()
-    check("live.js chỉ chặn form có action /settings",
+    check("live.js intercepts only forms whose action is /settings",
           "pathname !== '/settings'" in js)
     for url in ("/cv/soan?moi=1", "/cv/draft?id=1"):
         _s, frag = get(url)
         if _s != 200:
             continue
-        check(f"{url:<22} form trỏ đúng action của mình",
+        check(f"{url:<22} the form points at its own action",
               "action='/settings'" not in frag)
 
-    print("\n[CV: project xong -> dòng CV]")
-    # Lỗi trong một route POST làm ĐỨT kết nối, không trả gì cả — curl báo
-    # "empty reply", trình duyệt hiện 404, nhật ký im lặng. Đã xảy ra thật với
-    # /cv/draft (thiếu `self.`). Mọi route POST phải được gọi ít nhất một lần.
-    check("GET /cv/draft với id lạ -> 404, không sập",
+    print("\n[CV: a finished project -> a CV line]")
+    # An error inside a POST route BREAKS the connection and returns nothing at all —
+    # curl says "empty reply", the browser shows 404, the journal is silent. It really
+    # happened with /cv/draft (a missing `self.`). Every POST route has to be called at
+    # least once.
+    check("GET /cv/draft with an unknown id -> 404, no crash",
           get("/cv/draft?id=999999")[0] == 404)
-    check("POST /cv/draft cũng đã bỏ -> 404",
+    check("POST /cv/draft is gone too -> 404",
           post_form("/cv/draft", "id=0&head=&line=") == 404)
 
-    print("\n[CV: mọi bản sẽ gửi, xem trước khi gửi]")
+    print("\n[CV: every build that will be sent, read before sending]")
     _s, body = get("/cv")
-    check("/cv có trong thanh bên", 'href="/cv"' in body or "href='/cv'" in body)
-    check("gộp bản trùng, không liệt kê từng tin",
+    check("/cv is in the sidebar", 'href="/cv"' in body or "href='/cv'" in body)
+    check("identical builds are merged, not listed per posting",
           body.count("class=cvrow") <= 60)
-    check("nói THẲNG mức may đo thật, không khoe số bản",
+    check("it states the REAL degree of tailoring, it does not boast a version count",
           "identical in every version" in body)
-    check("mỗi dòng trỏ tới bản CV đọc được", "/cv'" in body and "cvrow" in body)
-    check("nói ra kỹ năng hồ sơ KHÔNG nói được câu nào",
+    check("every row points at a readable CV", "/cv'" in body and "cvrow" in body)
+    check("it names the skills the profile can say NOTHING about",
           "can say NOTHING about" in body)
 
     from jobbot.dashboard import live as live2
     data = live2.cv_versions(db.connect(Path(tmp) / "jobbot.db"))
     if data["versions"]:
-        check("phần RIÊNG của mỗi bản không lẫn vào phần lõi",
+        check("each build's UNIQUE part does not bleed into the core",
               all(len(v["only"]) == v["lines"] - data["core"]
                   for v in data["versions"]))
-        check("bản nhiều tin nhất đứng đầu",
+        check("the build covering the most postings comes first",
               [len(v["jobs"]) for v in data["versions"]]
               == sorted((len(v["jobs"]) for v in data["versions"]), reverse=True))
 
-    print("\n[personal project ĐÃ BỎ — không được để lại đường cụt]")
-    # Bỏ một tính năng mà quên gỡ đường dẫn thì tab cũ trả 500, còn nút cũ
-    # trong trình duyệt đã mở sẵn vẫn bấm được. Xoá là phải xoá HẾT lối vào.
+    print("\n[personal projects ARE GONE — no dead ends may be left behind]")
+    # Remove a feature and forget to remove its routes, and an old tab returns 500 while
+    # an old button in an already-open browser is still clickable. Deleting means
+    # deleting EVERY way in.
     for _duong in ("/projects",):
-        check(f"GET {_duong} -> 404, không phải 500", get(_duong)[0] == 404)
+        check(f"GET {_duong} -> 404, not 500", get(_duong)[0] == 404)
     for _api in ("/api/project/build", "/api/project/state"):
         check(f"POST {_api} -> 404", post_form(_api, "arg=x") == 404)
-    check("GET /cv/draft cũng đi theo", get("/cv/draft?id=1")[0] == 404)
-    # Tab Projects phải biến khỏi thanh điều hướng, không chỉ khỏi router.
-    check("không còn tab Projects trên thanh bên",
+    check("GET /cv/draft goes with them", get("/cv/draft?id=1")[0] == 404)
+    # The Projects tab has to disappear from the sidebar, not only from the router.
+    check("there is no Projects tab in the sidebar",
           ">Projects<" not in get("/cv")[1])
-    # Hai thứ KHÔNG chết theo, vì chúng chưa bao giờ thuộc tính năng đó.
+    # Two things do NOT die with it, because they never belonged to that feature.
     from jobbot.scoring.market import demand as _dm
     from jobbot.scoring.vocab import INDUSTRY as _ind
     conn2 = db.connect(Path(tmp) / "jobbot.db")
-    check("phép đếm thị trường sống tiếp ở scoring/", isinstance(_dm(conn2), Counter))
+    check("the market count lives on in scoring/", isinstance(_dm(conn2), Counter))
     conn2.close()
-    check("bộ từ ngành sống tiếp ở vocab/", len(_ind) == 7)
-    # Tab CV là chỗ DUY NHẤT còn dùng phép đếm đó. Nó phải mở được, vì đường
-    # import vừa đổi nhà — gãy ở đây thì cả tab CV trắng.
-    check("tab CV vẫn mở được sau khi phép đếm đổi nhà", get("/cv")[0] == 200)
+    check("the industry vocabulary lives on in vocab/", len(_ind) == 7)
+    # The CV tab is the ONLY place still using that count. It has to open, because the
+    # import path has just moved house — break here and the whole CV tab goes white.
+    check("the CV tab still opens after the count moved house", get("/cv")[0] == 200)
 
-    print("\n[tab CV: HAI núm, và cả hai phải thật sự xoay]")
+    print("\n[the CV tab: TWO knobs, and both have to really turn]")
     from jobbot.core import prefs as _pfc
     _adj = get("/adjust/cv")[1]
-    # BẢY NÚM ĐÃ BỎ — xem lời chú ở core/prefs.py. Người dùng cần đúng hai câu
-    # trả lời: bản riêng cho từng tin tới mức nào, và máy có tự lo hay không.
-    # Mọi núm khác đều bắt họ học luật của máy trước khi dùng được máy.
+    # SEVEN KNOBS ARE GONE — see the comment in core/prefs.py. The user needs exactly two
+    # answers: how far each posting's build is tailored, and whether the machine handles
+    # it. Every other knob made them learn the machine's rules before they could use the
+    # machine.
     for _bo in ("khoa:", "giong:", "bo_cuc:", "that_bai:", "y_kien:",
                 "rui_ro:", "giu_muc:", "moi_khoi_viec:"):
-        check(f"bỏ núm {_bo[:-1]}", f"data-arg='{_bo}" not in _adj)
-    check("tấm Điều chỉnh chỉ còn HAI núm",
-          _adj.count("data-post='/api/cv/num'") == 4)   # 3 mức may đo + 1 tự lo
+        check(f"the {_bo[:-1]} knob is gone", f"data-arg='{_bo}" not in _adj)
+    check("the Adjust panel has only TWO knobs left",
+          _adj.count("data-post='/api/cv/num'") == 4)   # 3 tailoring levels + 1 machine-handles-it
 
-    # ĐỘ MAY ĐO — núm đổi thật nhiều nhất. Đo trên kho thật (358 tin):
-    # chung 25 bản · vừa 89 · riêng 157, lõi bất biến rơi 12/16 -> 9/16 câu.
+    # THE TAILORING LEVEL — the knob that changes the most. Measured on the live store
+    # (358 postings): shared 25 builds · medium 89 · per-posting 157, with the unchanging
+    # core falling from 12/16 to 9/16 sentences.
     for _r in ("chung", "vua", "rieng"):
-        check(f"có mức may đo {_r}", f"rieng:{_r}" in _adj)
-    # KHÔNG gõ cứng số bản vào nhãn: nó khác theo từng hồ sơ và từng kho tin.
-    check("nhãn nói VIỆC nó làm, không gõ cứng số bản của một kho khác",
+        check(f"the {_r} tailoring level exists", f"rieng:{_r}" in _adj)
+    # Do NOT hard-code a build count into the label: it differs with every profile and
+    # every store.
+    check("the label says WHAT IT DOES, it hard-codes no other store's build count",
           "moves the skills sections this posting asks for to the front" in _adj
           and "versions/120 postings" not in _adj)
-    check("có công tắc MÁY TỰ LO", "data-arg='tu_lo:" in _adj)
-    # BẬT thì phải SÁNG LÊN — và trạng thái phải đọc được từ HTML, không chỉ
-    # từ màu. Cùng lỗi với `.mbtn.off`: lớp có ở HTML mà không có CSS.
-    check("công tắc TẮT mang lớp off", "swbtn off" in _adj)
+    check("there is a MACHINE-HANDLES-IT switch", "data-arg='tu_lo:" in _adj)
+    # ON has to LIGHT UP — and the state has to be readable from the HTML, not from the
+    # colour alone. The same bug as `.mbtn.off`: a class in the HTML with no CSS.
+    check("the switch carries the off class when OFF", "swbtn off" in _adj)
     _cE = db.connect(Path(tmp) / "jobbot.db")
     _pfc.set_flag(_cE, _pfc.CV_TU_LO, True)
     _cE.close()
     _adjE = get("/adjust/cv")[1]
-    check("bật lên -> nút đổi chữ và BỎ lớp off",
+    check("switched on -> the button changes its word and DROPS the off class",
           ">ON<" in _adjE and "swbtn off" not in _adjE)
-    check("và dòng trạng thái nói ra máy đang lo gì",
+    check("and the status line says what the machine is handling",
           "drafts prepared" in _adjE)
     _cE = db.connect(Path(tmp) / "jobbot.db")
     _pfc.set_flag(_cE, _pfc.CV_TU_LO, False)
     _cE.close()
-    # CSS phải TÔ cả hai trạng thái, không chỉ khai lớp rồi bỏ đó.
+    # The CSS has to PAINT both states, not merely declare a class and leave it there.
     _cssE = (Path(__file__).resolve().parent.parent
              / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
     for _sel in (".swbtn{", ".swbtn.off{", ".mbtn.tiny.on{", ".mbtn.tiny.off{"):
-        check(f"CSS có tô «{_sel[:-1]}»", _sel in _cssE)
-    # MỨC ĐANG DÙNG PHẢI CÓ DẤU TÍCH. Lớp `off` từng được gắn mà không có một
-    # dòng CSS nào, nên ba nút trông y hệt nhau — núm quan trọng nhất của app
-    # không nói được nó đang ở đâu.
-    check("đúng MỘT mức được đánh dấu đang dùng", _adj.count("tiny on'") == 1)
-    check("và đánh dấu bằng ✓, đọc được cả khi màu hỏng", "✓" in _adj)
+        check(f"the CSS paints «{_sel[:-1]}»", _sel in _cssE)
+    # THE LEVEL IN USE MUST CARRY A TICK. The `off` class was once attached with not one
+    # line of CSS behind it, so the three buttons looked identical — the app's most
+    # important knob could not say where it stood.
+    check("exactly ONE level is marked as in use", _adj.count("tiny on'") == 1)
+    check("and it is marked with ✓, readable even if the colour fails", "✓" in _adj)
     _cD = db.connect(Path(tmp) / "jobbot.db")
     _pfc.put(_cD, _pfc.CV_RIENG, "vua")
     _cD.close()
     _adj2 = get("/adjust/cv")[1]
-    check("đổi mức -> dấu tích chạy theo",
+    check("changing the level -> the tick follows",
           "data-arg='rieng:vua' title='+ moves the skills sections this "
           "posting asks for to the front'>✓" in _adj2)
     _cD = db.connect(Path(tmp) / "jobbot.db")
     _pfc.put(_cD, _pfc.CV_RIENG, "rieng")
     _cD.close()
-    check("lý do nằm trong thẻ gấp, không đổ thẳng ra",
+    check("the reasoning sits inside a fold, it is not dumped straight out",
           "<details class=swwhy>" in _adj)
-    check("chữ không chạm viền tấm phủ", "class=adjbox" in _adj)
-    # LUẬT BỎ CÂU vẫn chạy — chỉ là không còn nút để lật. Người dùng mất nút,
-    # không mất thông tin: bản chấm điểm vẫn nói rõ câu nào bị bỏ vì sao.
+    check("the text does not touch the overlay's edge", "class=adjbox" in _adj)
+    # THE SENTENCE-DROPPING RULES still run — there is simply no button left to flip
+    # them. The user loses a button, not the information: the report still says which
+    # sentence was dropped and why.
     from jobbot.cv.rules import sentence_ok as _sok
-    check("luật bỏ câu kể thất bại vẫn chạy dù không còn nút",
+    check("the rule dropping failure sentences still runs, with no button left",
           _sok("The drawdown ran 30% deeper than the model predicted here.")[0]
           == "drop")
 
-    # TẤM ĐIỀU CHỈNH KHÔNG ĐƯỢC GÕ CỨNG CÂU CỦA AI. Bản trước trích thẳng câu
-    # trong CV của một người vào phần giải thích; hồ sơ khác mở lên thì đó là
-    # câu của người lạ, và panel thành tờ quảng cáo chứ không phải bản mô tả
-    # hồ sơ của người đang đọc.
+    # THE ADJUST PANEL MUST NOT HARD-CODE ANYBODY'S SENTENCES. An earlier version quoted
+    # lines straight out of one person's CV into the explanation; opened under another
+    # profile those are a stranger's words, and the panel becomes an advertisement
+    # rather than a description of the reader's own profile.
     import pathlib as _plG
     _cvl_src = "\n".join(
         l.split("#")[0] for l in
@@ -900,43 +907,46 @@ with tempfile.TemporaryDirectory() as tmp:
         .read_text(encoding="utf-8").splitlines())
     for _cau in ("Self-funded", "drawdown ran", "Profit on its own",
                  "WorldQuant", "Compute · Method"):
-        check(f"panel KHÔNG gõ cứng «{_cau[:22]}»", _cau not in _cvl_src)
+        check(f"the panel does NOT hard-code «{_cau[:22]}»", _cau not in _cvl_src)
 
-    check("POST rieng:chung -> lưu được",
+    check("POST rieng:chung -> saves",
           post_form("/api/cv/num", "arg=rieng:chung") == 200)
-    check("POST tu_lo:1 -> lưu được", post_form("/api/cv/num", "arg=tu_lo:1") == 200)
-    check("núm đã bỏ -> 400", post_form("/api/cv/num", "arg=giong:nguyen") == 400)
-    check("núm nhận sai giá trị -> 400",
+    check("POST tu_lo:1 -> saves", post_form("/api/cv/num", "arg=tu_lo:1") == 200)
+    check("a removed knob -> 400", post_form("/api/cv/num", "arg=giong:nguyen") == 400)
+    check("a knob given the wrong value -> 400",
           post_form("/api/cv/num", "arg=rieng:xx") == 400)
-    check("giá trị lạ -> 400, không lưu bừa",
+    check("an unknown value -> 400, nothing saved blindly",
           post_form("/api/cv/num", "arg=khoa:xxx") == 400)
-    # ĐỔI CÂU: máy chỉ nhận câu, không nhận chữ tự do — và id tin phải là số.
-    check("POST /api/cv/pick thiếu id tin -> 400",
+    # SWAPPING A SENTENCE: the machine accepts a sentence only, never free text — and the
+    # posting id has to be a number.
+    check("POST /api/cv/pick with no posting id -> 400",
           post_form("/api/cv/pick", "job=&text=abc") == 400)
-    check("id tin không phải số -> 400",
+    check("a non-numeric posting id -> 400",
           post_form("/api/cv/pick", "job=xyz&text=abc") == 400)
-    check("thiếu câu -> 400", post_form("/api/cv/pick", "job=1&text=") == 400)
-    check("tên núm lạ -> 400", post_form("/api/cv/num", "arg=lung:tung") == 400)
+    check("no sentence -> 400", post_form("/api/cv/pick", "job=1&text=") == 400)
+    check("an unknown knob name -> 400", post_form("/api/cv/num", "arg=lung:tung") == 400)
 
     _cvn = db.connect(Path(tmp) / "jobbot.db")
-    # XOAY NÚM THÌ NÚT PHẢI ĐỔI. Núm mà không đổi được nút là núm trang trí:
-    # người dùng bấm, không thấy gì khác, rồi không tin cả bảng núm nữa.
+    # TURN A KNOB AND THE BUTTON HAS TO CHANGE. A knob that cannot change the button is
+    # decoration: the user presses it, sees nothing different, and then stops trusting
+    # the whole panel.
     #
-    # Khi MÁY TỰ LO đang tắt thì nút đổi và chờ người dùng bấm; bật thì máy
-    # dựng lại ngay và nút về "Dựng lại" — cả hai đều đúng, nhưng phải đo ở
-    # trạng thái biết trước.
+    # With MACHINE-HANDLES-IT off the button changes and waits to be pressed; on, the
+    # machine rebuilds at once and the button returns to "Rebuild" — both are right, but
+    # this has to be measured in a known state.
     from jobbot.core import prefs as _pfN
     _pfN.set_flag(_cvn, _pfN.CV_TU_LO, False)
     _pfN.put(_cvn, _pfN.CV_RIENG, "chung")
     _st_num = _bt.stage(_cvn)
-    check("xoay núm -> nút thành Cập nhật", _st_num["label"] == "Update",
+    check("turning a knob -> the button becomes Update", _st_num["label"] == "Update",
           _st_num["label"])
-    check("và nói rõ CÁI GÌ vừa đổi",
+    check("and it says WHAT just changed",
           "turned a knob" in _st_num["note"], _st_num["note"])
     _pfN.put(_cvn, _pfN.CV_RIENG, "rieng")
-    # ĐỘ MAY ĐO phải đổi được CHỮ IN RA THẬT, không chỉ đổi một dòng trong DB.
-    # Đây là núm đổi nhiều nhất của cả app: đo trên kho thật 358 tin, chung 25
-    # bản · vừa 89 · riêng 157, lõi bất biến rơi 12/16 -> 9/16 câu.
+    # THE TAILORING LEVEL has to change THE WORDS ACTUALLY PRINTED, not merely a row in
+    # the DB. This is the app's most-changed knob: measured on the live store of 358
+    # postings, shared 25 builds · medium 89 · per-posting 157, with the unchanging core
+    # falling from 12/16 to 9/16 sentences.
     from jobbot.cv.build import build as _bcv
     from jobbot.profile import store as _stc
     _ans = _stc.load(_cvn)
@@ -949,12 +959,12 @@ with tempfile.TemporaryDirectory() as tmp:
         return [l.text for s2 in cv.sections if s2.kind == "skill" for l in s2.lines]
     _chung = _ky_cua(_bcv(_ans, _ex, _jd, {"rieng": "chung"}))
     _rieng = _ky_cua(_bcv(_ans, _ex, _jd, {"rieng": "rieng"}))
-    # KHÔNG ĐƯỢC MẤT MỘT CHỮ NÀO — đây là CV gửi nhà tuyển dụng.
+    # NOT ONE WORD MAY BE LOST — this is the CV that goes to an employer.
     import re as _reB
-    check("xếp lại KHÔNG mất chữ nào của mục kỹ năng",
+    check("reordering loses NO word from the skills sections",
           sorted(_reB.findall(r"\w+", " ".join(_chung)))
           == sorted(_reB.findall(r"\w+", " ".join(_rieng))))
-    check("và KHÔNG mất mục nào", len(_chung) == len(_rieng))
+    check("and NO section is lost", len(_chung) == len(_rieng))
     _cvn.close()
     post_form("/api/cv/num", "arg=rieng:rieng")
     post_form("/api/cv/num", "arg=tu_lo:0")
