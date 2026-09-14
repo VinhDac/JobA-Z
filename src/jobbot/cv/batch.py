@@ -1,16 +1,19 @@
-"""Dựng CẢ LOẠT bản CV — và LƯU lại, vì nó tốn 5 giây.
+"""Build the WHOLE BATCH of CV versions — and SAVE it, because it costs 5s.
 
-VÌ SAO PHẢI LƯU. Đo trên kho thật: dựng bản CV cho 364 tin đáng nộp mất 5,3
-giây. Trước đây tab CV gọi nó ngay lúc vẽ trang, nên mở tab là ngồi chờ 5 giây
-— và chờ để xem một thứ mình chưa yêu cầu làm. Người vừa search xong chưa tới
-bước làm CV; đập vào mặt họ 28 bản tiếng Anh là sai nhịp.
+WHY IT HAS TO BE SAVED. Measured on the real store: building CV versions for
+364 worthwhile postings takes 5.3 seconds. The CV tab used to call it during
+the page render, so opening the tab meant waiting 5 seconds — waiting to see
+something you had not asked for. Someone who just finished a search is
+nowhere near making a CV; throwing 28 versions at them is the wrong beat.
 
-Nên giống Search: BẤM THÌ MỚI CHẠY. Chạy xong thì cất, mở tab là thấy ngay.
+So it works like Search: IT RUNS WHEN YOU PRESS IT. It saves when done, and
+opening the tab shows it instantly.
 
-DẤU CŨ-MỚI phải ỔN ĐỊNH QUA CÁC LẦN CHẠY APP. `live._cv_key` dùng `hash(str)`
-— Python muối lại hàm đó mỗi tiến trình, nên nó đúng cho cache trong bộ nhớ mà
-sai hoàn toàn cho dấu ghi xuống đĩa: khởi động lại app là dấu đổi, và bản vừa
-dựng xong bỗng bị coi là cũ. Ở đây dùng sha1.
+THE FRESHNESS STAMP HAS TO BE STABLE ACROSS RUNS. `live._cv_key` uses
+`hash(str)` — Python re-salts that per process, so it is correct for an
+in-memory cache and completely wrong for a stamp written to disk: restart the
+app and the stamp changes, and a build finished a second ago is suddenly
+stale. This uses sha1.
 """
 
 from __future__ import annotations
@@ -25,14 +28,17 @@ from ..core.journal import CV, log as jlog
 
 
 def stamp(conn: sqlite3.Connection, cv_text: str) -> str:
-    """Dấu của MỌI thứ bản dựng phụ thuộc vào.
+    """The stamp over EVERYTHING a build depends on.
 
-    Năm thành phần, và thiếu cái nào cũng để lại một đường sai:
-        chữ CV      sửa khối xong mà bản cũ nằm lại thì nút không đổi
-        luật viết   đổi rules.py mà không dựng lại thì bản cũ sai luật
-        luật chấm   đổi điểm thì "họ hỏi gì" đổi, nên bản phải đổi
-        tập tin     quét về tin mới thì có bản mới phải dựng
-        ba núm      xoay núm mà nút vẫn ghi "Dựng lại" thì núm là đồ trang trí
+    Five components, and leaving any one out leaves a wrong path open:
+        the CV text   edit a block and the old build stays, button unchanged
+        writing rules change rules.py without rebuilding and the old build
+                      follows the old rules
+        scoring rules change the score and "what they ask" changes, so the
+                      build has to change
+        the posting set  new postings scanned means new versions to build
+        the knobs     turn a knob while the button still says "Rebuild" and
+                      the knob is decoration
     """
     from ..dashboard.live import cv_nut
     row = conn.execute(
@@ -47,7 +53,7 @@ def stamp(conn: sqlite3.Connection, cv_text: str) -> str:
 
 
 def _phang(o):
-    """dataclass -> dict. Line/Section/Sua/Yeu đều là dataclass lồng nhau."""
+    """dataclass -> dict. Line/Section/Sua/Yeu are nested dataclasses."""
     try:
         return asdict(o)
     except TypeError:
@@ -55,10 +61,10 @@ def _phang(o):
 
 
 def save(conn: sqlite3.Connection, payload: dict, dau: str) -> None:
-    """Cất bản dựng. ĐÚNG MỘT DÒNG — bảng có CHECK(id = 1).
+    """Save the build. EXACTLY ONE ROW — the table has CHECK(id = 1).
 
-    Không giữ lịch sử: "trước" trong bản so sánh là CV GỐC của Vin, không phải
-    lần dựng trước. Giữ lịch sử ở đây là giữ thứ không ai đọc.
+    No history: the "before" in a comparison is Vin's ORIGINAL CV, not the
+    previous build. Keeping history here is keeping what nobody reads.
     """
     from ..core.postings import now
     conn.execute(
@@ -70,7 +76,7 @@ def save(conn: sqlite3.Connection, payload: dict, dau: str) -> None:
 
 
 def saved(conn: sqlite3.Connection) -> dict | None:
-    """Bản đã cất, hoặc None nếu chưa dựng lần nào."""
+    """The saved build, or None if nothing has been built."""
     row = conn.execute(
         "SELECT made_at, stamp, payload FROM cv_build WHERE id = 1").fetchone()
     if row is None:
@@ -78,18 +84,19 @@ def saved(conn: sqlite3.Connection) -> dict | None:
     try:
         data = json.loads(row["payload"])
     except (TypeError, ValueError):
-        return None                   # dòng hỏng thì coi như chưa dựng
+        return None                   # a corrupt row counts as never built
     data["made_at"] = row["made_at"]
     data["stamp"] = row["stamp"]
     return data
 
 
 def xoa(conn: sqlite3.Connection) -> int:
-    """Vứt bản đã dựng. Trả về số bản vừa bỏ đi.
+    """Throw the build away. Returns how many versions went.
 
-    CHỈ ĐỤNG THỨ MÁY DỰNG RA. `cv_text` — chữ người dùng viết — không hề bị
-    động tới, nên xoá nhầm chỉ tốn một lần bấm Chạy. Đó cũng là lý do chốt ở
-    đây nhẹ hơn chốt của /api/reset: cái kia xoá thứ không dựng lại được.
+    IT ONLY TOUCHES WHAT THE MACHINE MADE. `cv_text` — the user's own words —
+    is not touched at all, so deleting by mistake costs one press of Run.
+    That is also why the confirmation here is lighter than /api/reset's: that
+    one deletes what cannot be rebuilt.
     """
     cu = len((saved(conn) or {}).get("versions") or [])
     conn.execute("DELETE FROM cv_build")
@@ -156,29 +163,33 @@ def _vi_sao_cu(cu: str, moi: str) -> str:
 
 
 def run(conn: sqlite3.Connection, log=None) -> dict:
-    """Dựng mọi bản rồi cất. Đây là việc nút Chạy gọi, ở NỀN.
+    """Build every version and save it. This is what Run calls, in the
+    BACKGROUND.
 
-    Trả về chính bản vừa cất, để người gọi khỏi đọc lại từ đĩa.
+    Returns the build it just saved, so the caller need not re-read the disk.
     """
     say = log or (lambda _m: None)
     from ..profile import store as pstore
     answers = pstore.load(conn)
     cv_text = answers.get("cv_text") or ""
     if not cv_text.strip():
-        jlog.warn(CV, "chưa có CV trong hồ sơ — không dựng được bản nào")
+        jlog.warn(CV, "no CV in the profile — nothing can be built")
         return {}
 
-    jlog.emit(CV, "bắt đầu dựng bản CV — đọc từng tin, hỏi hồ sơ trả lời được gì")
+    jlog.emit(CV, "building CV versions — reading each posting, asking the "
+                  "profile what it can answer")
     from ..dashboard import live
-    live.quen()            # buộc dựng thật, không lấy bản trong bộ nhớ
+    live.quen()            # force a real build, not the in-memory copy
     data = live.cv_versions(conn)
-    # THANG HỤT VÀ BẢN NHÁP ĐI CÙNG BẢN DỰNG, không tính lại lúc vẽ trang.
+    # THE GAP LADDER AND THE DRAFTS TRAVEL WITH THE BUILD; they are not
+    # recomputed during a page render.
     #
-    # Trước đây chúng tính mỗi lần mở trang, và tab CV thành hai cái đồng hồ
-    # chỉ hai giờ khác nhau: sửa một khối xong thì ô "Viết gì để hết hụt" đổi
-    # ngay, còn ô "Bản sẽ gửi" vẫn là bản cũ. Xoá bản thì ô kia vẫn đầy, tức
-    # "xoá hết" không xoá hết. Cùng một đầu vào, cùng một lượt đo, cùng một
-    # lúc hết hạn.
+    # They used to be computed on every page load, which turned the CV tab
+    # into two clocks showing different times: edit a block and the "what to
+    # write to close the gap" panel updated at once while "what will be sent"
+    # was still the old build. Delete the build and the other panel was still
+    # full, so "delete everything" did not. One input, one measurement, one
+    # expiry.
     data["hut"] = live.cv_hut(conn)
     data["nhap"] = live.cv_nhap(conn, data["hut"].get("buoc"))
     dau = stamp(conn, cv_text)

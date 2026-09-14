@@ -1,29 +1,30 @@
-"""Việc từ THƯ BÁO của LinkedIn — nguồn thứ ba, và là nguồn sạch nhất.
+"""Jobs from LinkedIn's ALERT MAIL — the third source, and the cleanest.
 
-LinkedIn tự gửi thư báo việc vào hộp thư của Vin. Đọc hộp thư của chính mình
-thì không đụng gì tới Điều khoản của ai cả — khác hẳn vòng quét Chrome, vốn
-nằm ngoài mục 8.2 và app phải ghi rõ điều đó ở `ingest/web/linkedin.py`.
+LinkedIn sends job alerts into Vin's own mailbox. Reading your own mailbox
+touches nobody's Terms — quite unlike the Chrome scan, which sits outside
+§8.2 and which the app states plainly in `ingest/web/linkedin.py`.
 
-Ba điểm mạnh, đo trên hộp thư thật ngày 12/09:
+Three strengths, measured on the real mailbox on 12 Sep:
 
-    SẠCH   thư gửi cho mình, không cào, không giả làm trình duyệt
-    NHANH  LinkedIn gửi trong vài giờ kể từ lúc tin đăng; vòng quét Chrome
-           đi hết 80 lượt tìm mất nửa tiếng
-    RẺ     381 thư báo, mỗi thư ~6 việc, lọc thẳng trên máy chủ IMAP —
-           vài giây, không mở Chrome, không có nhịp nghỉ nào
+    CLEAN  mail sent to you, no scraping, no pretending to be a browser
+    FAST   LinkedIn sends within hours of a posting going up; the Chrome
+           scan takes half an hour to work through 80 queries
+    CHEAP  381 alert mails, ~6 jobs each, filtered on the IMAP server itself
+           — seconds, no Chrome, no cool-downs
 
-Điểm yếu, nói luôn: thư báo KHÔNG có mô tả việc. Nó cho chức danh, công ty,
-địa điểm và id — đủ để lọc, chưa đủ để chấm điểm. Mô tả vẫn phải do vòng đọc
-kỹ mở từng trang mà lấy.
+The weakness, stated up front: alert mail carries NO job description. It
+gives the title, company, location and id — enough to filter, not enough to
+score. The description still has to come from the deep-read pass opening each
+page.
 
-CẤU TRÚC THƯ. Mỗi việc là một thẻ <a> tới /jobs/view/<id>, và ngay sau nó:
+THE MAIL STRUCTURE. Each job is an <a> to /jobs/view/<id>, and right after it:
 
-    dòng 1   chức danh
-    dòng 2   công ty · địa điểm
-    dòng 3   nhãn ("Fast growing", "Actively recruiting") — bỏ
+    line 1   the title
+    line 2   company · location
+    line 3   a label ("Fast growing", "Actively recruiting") — dropped
 
-Một việc xuất hiện BA lần trong thư (logo, tiêu đề, nút) nhưng chỉ một lần
-mang chữ. Nên gom theo id và lấy khối đầu tiên có đủ hai dòng.
+A job appears THREE times in the mail (logo, title, button) but carries text
+only once. So group by id and take the first block with both lines.
 """
 
 from __future__ import annotations
@@ -35,26 +36,27 @@ from .base import Posting
 
 NAME = "alert"
 
-# Người gửi thư báo. Gõ tay vì đây là địa chỉ cố định của LinkedIn — đoán
-# bằng mẫu chung ("*-noreply@") thì bắt nhầm cả thư từ chối.
+# The alert sender. Typed out because this is LinkedIn's fixed address —
+# guessing with a general pattern ("*-noreply@") also catches rejections.
 SENDER = "jobalerts-noreply@linkedin.com"
 
-# Thẻ <a> trỏ tới một tin. URL trong thư là đường theo dõi dài loằng ngoằng
-# (/comm/jobs/view/...?trk=...), nên chỉ bắt lấy ID rồi dựng lại URL sạch —
-# y như `linkedin._from_row` đã phải làm với href theo nước.
+# The <a> pointing at a posting. The URL in the mail is a long tracking link
+# (/comm/jobs/view/...?trk=...), so only the ID is captured and a clean URL
+# rebuilt — exactly what `linkedin._from_row` already has to do with tracked
+# hrefs.
 JOB_LINK = re.compile(r'<a\b[^>]*href="[^"]*?/jobs/view/(\d{6,})[^"]*"[^>]*>')
 VIEW = "https://www.linkedin.com/jobs/view/{jid}/"
 
-MOC = "\x01"          # ký tự không bao giờ có trong thư, dùng làm dấu cắt
+MOC = "\x01"          # a character never present in mail, used as a cut marker
 
 
 def parse(html: str) -> list[Posting]:
-    """Thân HTML một thư báo -> danh sách tin.
+    """One alert mail's HTML body -> a list of postings.
 
-    Thay THẺ bằng XUỐNG DÒNG chứ không bằng khoảng trắng: chức danh và tên
-    công ty nằm ở hai phần tử cạnh nhau, không có dấu gì ngăn giữa. Nối bằng
-    khoảng trắng thì ra "Data Analyst, Business Intelligence — Entry Level
-    Jobright.ai" và không có cách nào tách lại.
+    Tags are replaced with NEWLINES, not spaces: the title and the company
+    name sit in two adjacent elements with nothing between them. Joining with
+    a space gives "Data Analyst, Business Intelligence — Entry Level
+    Jobright.ai", with no way to split it again.
     """
     if not html:
         return []
@@ -69,7 +71,7 @@ def parse(html: str) -> list[Posting]:
             continue
         dong = [d.strip() for d in sau.split("\n") if d.strip()][:2]
         if len(dong) < 2 or " · " not in dong[1]:
-            continue                      # khối logo/nút — không mang chữ
+            continue                      # a logo/button block — carries no text
         cong_ty, _, noi = dong[1].partition(" · ")
         thay[jid] = Posting(
             source_id=jid, title=dong[0][:200],
@@ -82,10 +84,10 @@ def parse(html: str) -> list[Posting]:
 
 def fetch(address: str, password: str, since_days: int = 30,
           limit: int = 200) -> list[Posting]:
-    """Mọi việc trong thư báo `since_days` ngày gần nhất.
+    """Every job in the alert mail of the last `since_days` days.
 
-    Bỏ trùng theo id: cùng một việc nằm trong nhiều thư báo là chuyện thường,
-    LinkedIn gửi lại cho tới khi mình bấm vào.
+    Deduplicated by id: the same job appearing in several alerts is normal,
+    LinkedIn keeps re-sending until you click it.
     """
     from ..track import mail
     thu = mail.fetch(address, password, since_days=since_days, limit=limit,
@@ -93,7 +95,7 @@ def fetch(address: str, password: str, since_days: int = 30,
     thay: dict[str, Posting] = {}
     for msg in thu:
         for item in parse(msg.get("html") or ""):
-            # Thư MỚI ghi đè thư cũ: fetch trả về theo thứ tự hộp thư, lá sau
-            # là lá mới hơn, và tin trong đó mới hơn.
+            # NEWER mail overwrites older: fetch returns in mailbox order,
+            # so a later message is newer, and so is the posting in it.
             thay[item.source_id] = item
     return list(thay.values())

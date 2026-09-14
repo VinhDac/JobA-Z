@@ -1,10 +1,11 @@
-"""Chi tiết MỘT tin — điểm, từng yêu cầu, bằng chứng, lý do.
+"""ONE posting in detail — the score, each requirement, the evidence, the why.
 
-Trang DANH SÁCH đã bỏ cùng tab Jobs. Danh sách sẽ nằm trong tab Search, vì
-"tìm" và "xem kết quả tìm" là một việc chứ không phải hai.
+The LIST page went with the Jobs tab. The list belongs in the Search tab,
+because "searching" and "looking at what the search found" are one job, not
+two.
 
-Trang này VẪN SỐNG, vào được bằng /jobs/<id> — nó là chỗ danh sách mới sẽ
-trỏ tới, và là chỗ đọc được vì sao một tin được chấm ngần ấy điểm.
+This page IS STILL ALIVE at /jobs/<id> — it is where the new list points, and
+where you read why a posting scored what it scored.
 
 CHỈ VẼ.
 """
@@ -27,7 +28,7 @@ CONF_NOTE = {"high": "", "medium": "few requirements found",
 
 
 def _score(job: dict) -> str:
-    """Không chấm được thì NÓI THẲNG. Điểm bịa còn tệ hơn không có điểm."""
+    """When it cannot score, SAY SO. An invented score is worse than none."""
     if job.get("score") is None:
         return "<span class=noscore>can&#39;t read requirements — judge it yourself</span>"
     note = CONF_NOTE.get(job.get("confidence", ""), "")
@@ -36,7 +37,8 @@ def _score(job: dict) -> str:
 
 
 def _breakdown(job: dict) -> str:
-    """Điểm đến từ đâu. Không giải thích được thì không dùng để quyết định nộp."""
+    """Where the score came from. A score that cannot be explained is not
+    used to decide whether to apply."""
     data = job.get("explain")
     if not data or data.get("score") is None:
         return ""
@@ -69,38 +71,39 @@ def _breakdown(job: dict) -> str:
     return card(f"<div class=bd>{rows}</div>{tail}", "bdcard")
 
 
-# Huy hiệu nguồn — DÙNG CHUNG cả ký hiệu lẫn lớp CSS với danh sách bên tab
-# Search, để cùng một tin nhìn ở hai chỗ ra cùng một thứ.
+# The source badge — SHARES both the glyph and the CSS class with the list in
+# the Search tab, so one posting looks the same in both places.
 #
-# Suy ra từ FOUND_BY chứ không gõ lại: hai bảng ký hiệu ở hai file thì trùng
-# nhau được đúng tới hôm có người sửa một bên.
+# Derived from FOUND_BY rather than retyped: two glyph tables in two files
+# agree right up until the day somebody edits one of them.
 from .search import FOUND_BY
 
 NGUON_DAU = {k: v[0] for k, v in FOUND_BY.items()}
 
 
 def _mo_tin_goc(job: dict) -> str:
-    """Đường sang TIN THẬT. Thiếu nó thì cả trang này là lời kể lại.
+    """The link to the REAL POSTING. Without it this whole page is hearsay.
 
-    Trang chi tiết cho tới giờ hiện điểm, hiện từng yêu cầu, hiện cả bản mô tả
-    — mà không có lấy một đường nào sang xem tin gốc. Người đọc muốn kiểm
-    chứng phải tự đi tìm bằng tay, mà kiểm chứng là việc PHẢI làm trước khi
-    nộp: mô tả trong kho là bản chụp lúc quét, tin thật có thể đã sửa hoặc đã
-    đóng.
+    Until now the detail page showed the score, every requirement, even the
+    full description — and not one link to the original. A reader wanting to
+    verify had to go and find it by hand, and verifying is something that
+    MUST happen before applying: the stored description is a snapshot from
+    scan time, and the real posting may have been edited or closed.
 
-    Một việc đăng ở hai nơi thì hiện CẢ HAI. Chúng không thay thế nhau: board
-    công ty là chỗ nộp thẳng, còn LinkedIn có phần "ai đã ứng tuyển", số người
-    nộp, và tên người đăng tin.
+    A job posted in two places shows BOTH. They do not replace each other:
+    the company board is where you apply directly, while LinkedIn has "who
+    has applied", the applicant count, and who posted it.
     """
     links = job.get("links") or []
     if not links:
-        return empty("Tin này không có đường dẫn nào — nguồn cũ không lưu lại "
-                     "URL. Quét lại là có.")
+        return empty("This posting has no link — the older source did not "
+                     "store the URL. A rescan will bring it back.")
     nut = "".join(
-        # target=_blank: trong trình duyệt thì mở tab mới; trong cửa sổ app thì
-        # Delegate bắt lại và đẩy sang trình duyệt mặc định. Không có nó, bấm
-        # một đường ngoài là CẢ CỬA SỔ APP đi mất, không có nút Back nào.
-        # rel=noopener: trang đích không được cầm tay vào cửa sổ này.
+        # target=_blank: in a browser this opens a new tab; in the app window
+        # the Delegate intercepts it and hands it to the default browser.
+        # Without it, clicking an external link takes THE WHOLE APP WINDOW
+        # away, with no Back button.
+        # rel=noopener: the destination gets no handle on this window.
         f"<a class='jlink {esc(l['kind'])}' href='{esc(l['url'])}'"
         f" target='_blank' rel='noopener noreferrer'>"
         f"<i class='src {esc(l['kind'])}'>{NGUON_DAU.get(l['kind'], '◆')}"
@@ -146,19 +149,21 @@ def render_detail(job: dict, tu: str = "") -> str:
                "Uses the lines the CV builder cut out — that is where they belong.</div>")
         + "<h2>The posting</h2>"
         + card(f"<pre class=jd>{esc(job['jd'])}</pre>")
-        # NÚT THẬT, nối vào đúng đường mà nút Nộp bên danh sách đang dùng.
+        # A REAL BUTTON, wired to the same route the list's Apply uses.
         #
-        # Chỗ này trước đây là hai nút VẼ: "Queue for approval" và "Reject…" —
-        # không mang data-* nào, mà mọi trình nghe trong live.js đều bắt theo
-        # data-*, nên bấm vào không có gì xảy ra. Chúng là tàn dư của bản thiết
-        # kế cũ, hồi trang chi tiết định làm cổng duyệt. Cổng duyệt thật bây
-        # giờ là tab Quản lí.
+        # This used to be two DRAWN buttons: "Queue for approval" and
+        # "Reject…" — carrying no data-*, while every listener in live.js
+        # binds on data-*, so clicking did nothing. They were left over from
+        # an older design, when the detail page was meant to be the approval
+        # gate. The real approval gate is now the Manage tab.
         #
-        # Xoá hẳn thì trang này đọc xong không làm gì được, phải quay ra danh
-        # sách mới bấm Nộp được — nên thay bằng nút thật, không phải bỏ trống.
+        # Removing them outright would leave this page with nothing to do
+        # after reading, forcing a trip back to the list to apply — so they
+        # were replaced with a real button, not deleted.
         + f"<div class=actbar><button class='mbtn go' data-post='/api/apply'"
-          f" data-arg='{esc(job['id'])}'>Nộp tin này</button>"
-          "<span class=muted>Mở form nộp trong Chrome và thêm một dòng vào "
-          "Quản lí. Chưa gửi gì cả — nút Gửi nằm bên Quản lí.</span></div>",
+          f" data-arg='{esc(job['id'])}'>Apply to this</button>"
+          "<span class=muted>Opens the application form in Chrome and adds a "
+          "row to Manage. Nothing is sent — the Send button lives in "
+          "Manage.</span></div>",
         active="/jobs",
     )

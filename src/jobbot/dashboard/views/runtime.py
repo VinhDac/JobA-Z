@@ -1,13 +1,15 @@
-"""Khuôn chung cho mọi tab CÓ THỜI GIAN CHẠY.
+"""The shared frame for every tab WITH RUNNING TIME.
 
-Search, Score, Project là ba việc khác nhau, nhưng câu hỏi người dùng đặt ra
-cho cả ba là một:
+Search, Score and Project are three different jobs, but the question the user
+asks of all three is one:
 
-    đang làm gì · vừa làm gì · ra được cái gì · chỉnh ở đâu · hỏng thì soi đâu
+    what is it doing · what did it just do · what came out · where do I
+    adjust it · where do I look when it breaks
 
-Nên chúng dùng CHUNG một khuôn. Mỗi tab tự nộp phần ruột, còn vị trí các ô,
-cách lọc nhật ký theo luồng, chỗ đặt thanh tiến độ thì giống hệt nhau — học
-một tab là biết cả ba, và thêm tab thứ tư không phải nghĩ lại từ đầu.
+So they SHARE one frame. Each tab supplies its own content, while the panel
+positions, the per-stream journal filtering and where the progress bar sits
+are identical — learn one tab and you know all three, and a fourth tab does
+not need rethinking from scratch.
 
 CHỈ VẼ.
 """
@@ -20,18 +22,19 @@ from ..layout import grid, journal_box, page, progress_box, stat, widget
 
 
 def tiles(rows: list[tuple[str, str, str]]) -> str:
-    """rows = [(số, nhãn, ghi chú)]."""
+    """rows = [(number, label, note)]."""
     return "<div class=stats>" + "".join(stat(v, k, note) for v, k, note in rows) + "</div>"
 
 
 def rows(items: list[tuple[str, str]], empty_note: str = "—") -> str:
-    """Bảng hai cột nhãn/giá trị — dùng cho ô thống kê và ô cài đặt."""
+    """A two-column label/value table — for the stats and settings panels."""
     if not items:
         return f"<div class=empty-box>{esc(empty_note)}</div>"
     out = ""
     for k, v in items:
-        # Dòng "— CHROME —" là TIÊU ĐỀ nhóm, không phải một cài đặt. Nhận ra
-        # bằng chỗ giá trị rỗng, để cài đặt của ba cách tìm không lẫn vào nhau.
+        # A "— CHROME —" row is a group HEADING, not a setting. Recognised by
+        # the empty value, so the settings of the three search routes do not
+        # run together.
         if not v:
             out += f"<div class=kgroup>{esc(k.strip(' —'))}</div>"
         else:
@@ -40,10 +43,11 @@ def rows(items: list[tuple[str, str]], empty_note: str = "—") -> str:
 
 
 def actions(items: list[tuple[str, str, str]]) -> str:
-    """Nút debug. items = [(nhãn, đường dẫn POST, mô tả)].
+    """Debug buttons. items = [(label, POST path, description)].
 
-    Nút nào CHƯA nối backend thì để path rỗng — nó hiện mờ và không bấm được,
-    thay vì bấm vào rồi không có gì xảy ra và người dùng tưởng app hỏng.
+    A button not yet wired to a backend gets an empty path — it renders
+    dimmed and unclickable, rather than doing nothing when pressed and
+    leaving the user thinking the app is broken.
     """
     out = ""
     for label, path, note in items:
@@ -55,18 +59,20 @@ def actions(items: list[tuple[str, str, str]]) -> str:
 
 
 def _rows_needed(panels: list[tuple], width: int, run_span: int = 0) -> int:
-    """Bên trái xếp hết mấy hàng — để nhật ký bên phải cao đúng bằng.
+    """How many rows the left side fills — so the journal on the right is
+    exactly as tall.
 
-    Không dùng CSS 'grid-row: 1 / -1' được: số âm chỉ đếm các hàng KHAI BÁO
-    tường minh, mà lưới ở đây dùng grid-auto-rows nên hàng là hàng ngầm —
-    '1 / -1' rút về đúng một hàng. Còn đếm tay thì thêm bớt một ô là lệch.
+    CSS 'grid-row: 1 / -1' cannot be used: negative numbers only count
+    EXPLICITLY DECLARED rows, and this grid uses grid-auto-rows so the rows
+    are implicit — '1 / -1' collapses to exactly one row. Counting by hand
+    goes wrong the moment a panel is added or removed.
     """
-    # Ô "Đang chạy" nằm ở hàng 1; nếu nó không chiếm trọn hàng thì ô nội dung
-    # đầu tiên xếp ngay cạnh nó, không xuống hàng mới.
-    # run_span=0 -> không có ô "Đang chạy" ở hàng 1, nội dung xếp từ đầu.
+    # The "Running" panel is on row 1; if it does not fill the row, the first
+    # content panel sits beside it rather than starting a new row.
+    # run_span=0 -> no "Running" panel on row 1, content starts at the top.
     row, col, tall = 1, (run_span if run_span else 0), 1
     for _title, _body, span, rows, *_rest in panels:
-        if col + span > width:        # hết chỗ -> xuống hàng mới
+        if col + span > width:        # out of room -> new row
             row += tall
             col, tall = 0, 1
         col += span
@@ -76,11 +82,13 @@ def _rows_needed(panels: list[tuple], width: int, run_span: int = 0) -> int:
 
 def panel(title: str, body: str, span: int = 1, rows: int = 1,
           at: tuple[int, int] | None = None, cls: str = "") -> tuple:
-    """Một ô nội dung riêng của tab. Khuôn lo phần chung, tab lo phần ruột.
+    """One content panel belonging to a tab. The frame handles the shared
+    parts, the tab handles the content.
 
-    at=(cột, hàng) đặt ô vào đúng chỗ. Để None thì trình duyệt tự xếp — đủ
-    cho tab mà mấy ô ngang vai nhau. Tab nào cần bố cục riêng (Search: nhật
-    ký nằm dưới ô lưới, danh sách kéo suốt chiều cao) thì nói rõ ra.
+    at=(column, row) places the panel. Left as None the browser lays it out —
+    enough for a tab whose panels are peers. A tab that needs its own layout
+    (Search: the journal under the grid, the list running full height) says
+    so explicitly.
     """
     return (title, body, span, rows, at, cls)
 
@@ -91,25 +99,29 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
            columns: str = "", journal_h: str = "118px",
            rows_tpl: str = "", journal_at: tuple[int, int] = (1, 2),
            bar: str = "", setup: str = "", reload: str = "") -> str:
-    """Khuôn chung cho mọi tab CÓ THỜI GIAN CHẠY.
+    """The shared frame for every tab WITH RUNNING TIME.
 
     journal="column"  nhật ký chiếm trọn cột cuối, cạnh nội dung
-    journal="bottom"  nhật ký là DẢI NGANG DẸT dưới đáy, gộp cả thanh tiến độ
+    journal="bottom"  the journal is a FLAT STRIP along the bottom, merged
+                      with the progress bar
 
-    Chọn "bottom" khi nội dung chính cần cả bề ngang — như danh sách việc:
-    nhật ký là thứ liếc mắt, không phải thứ đọc lâu, nên ba dòng là đủ. Muốn
-    xem nhiều thì bấm nút mở to.
+    Pick "bottom" when the main content needs the full width — like the job
+    list: the journal is something you glance at, not something you read, so
+    three lines is enough. To see more, press the expand button.
     """
-    # `note` là dòng văn cũ. Tab nào đã có THANH KHÚC (bar) thì không cần nó
-    # nữa: số liệu đã lên thanh, ở dạng số chứ không phải câu.
+    # `note` is the old prose line. A tab that already has a DECK (bar) no
+    # longer needs it: the numbers are on the deck, as numbers rather than a
+    # sentence.
     head = f"<div class=tnote>{esc(note)}</div>" if note and not bar else ""
 
     if journal == "corner":
-        # Nhật ký nằm GÓC DƯỚI TRÁI, dưới ô điều khiển — không kéo hết bề
-        # ngang. Nó là thứ liếc mắt, chiếm cả chiều ngang là ăn mất chỗ của
-        # danh sách, mà danh sách mới là kết quả.
-        # Tab tự đặt cột/hàng và vị trí từng ô: bố cục này không đều nhau nên
-        # để trình duyệt tự xếp là ra lệch.
+        # The journal sits in the BOTTOM-LEFT CORNER, under the controls —
+        # it does not run the full width. It is something you glance at, and
+        # taking the whole width steals room from the list, which is the
+        # actual result.
+        # The tab sets the columns/rows and each panel's position: this
+        # layout is not uniform, so letting the browser lay it out goes
+        # wrong.
         boxes = [widget(t, body, span=sp, rows=rw, at=at, cls=cl)
                  for t, body, sp, rw, at, cl in panels]
         boxes.append(widget(
@@ -124,22 +136,24 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
 
     if journal == "bottom":
         rows = _rows_needed(panels, cols, 0)
-        # `at` ĐI QUA ĐƯỢC. Nhánh này bỏ nó, nên tab nào có ô 2×2 nằm cạnh ô
-        # 1×1 thì auto-flow tự chèn, và bố cục đổi theo thứ tự khai báo chứ
-        # không theo ý người viết. Tab nào không truyền `at` vẫn như cũ.
+        # `at` HAS TO PASS THROUGH. This branch used to drop it, so a tab
+        # with a 2×2 panel beside a 1×1 had auto-flow filling gaps, and the
+        # layout followed declaration order rather than intent. A tab that
+        # passes no `at` behaves exactly as before.
         if any(at for _t, _b, _sp, _rw, at, _c in panels):
             rows = max((at[1] + rw - 1)
                        for _t, _b, _sp, rw, at, _c in panels if at)
         boxes = [widget(t, body, span=sp, rows=rw, at=at, cls=cl)
                  for t, body, sp, rw, at, cl in panels]
-        # Hàng nội dung co giãn, hàng nhật ký cao cố định. Không ghim thì lưới
-        # chia đều và dải nhật ký chiếm nguyên một hàng — cao gấp đôi thứ nó
-        # cần, và ăn mất chỗ của danh sách.
-        # Tab nào tự khai chiều cao hàng thì dùng khai báo của nó — Home có
-        # sáu hàng và chúng KHÔNG ngang vai nhau.
+        # Content rows stretch, the journal row is a fixed height. Unpinned,
+        # the grid divides evenly and the journal strip takes a whole row —
+        # twice as tall as it needs, stealing room from the list.
+        # A tab that declares its own row heights gets them — Home has six
+        # rows and they are NOT peers.
         row_tpl = rows_tpl or (" ".join(["1fr"] * rows) + f" {journal_h}")
-        # Dải nhật ký: tiến độ bên trái, dòng sự kiện bên phải. Hai thứ cùng
-        # trả lời "nó đang làm gì", tách ra hai ô là chia đôi một câu hỏi.
+        # The journal strip: progress on the left, events on the right. Both
+        # answer "what is it doing"; splitting them into two panels splits
+        # one question in half.
         boxes.append(widget(
             f"Nhật ký · {title.lower()}",
             f"<div class=jflat><div class=jprog>{progress_box(stream)}</div>"
