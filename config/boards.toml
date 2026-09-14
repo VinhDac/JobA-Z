@@ -1,11 +1,11 @@
-# Board của từng công ty. Mỗi dòng đã kiểm chứng trả về tin thật (04/09/2026).
-# Thêm công ty: mở trang careers của họ, lấy slug trong URL, chạy lại scan.
+# One board per company. Every line was verified to return real postings (2026-09-04).
+# To add a company: open their careers page, take the slug from the URL, rerun the scan.
 #
-# Đã bỏ: marshallwace, optiver — board trả 200 nhưng RỖNG, họ đăng tin ở chỗ khác.
+# Removed: marshallwace, optiver — the board returns 200 but is EMPTY; they post elsewhere.
 
 [greenhouse]
 boards = [
-  # quỹ / quant — đúng dải của Vin
+  # funds / quant — the band being aimed at
   "mangroup", "janestreet", "imc", "point72", "aqr",
   "squarepointcapital", "gsacapital", "winton", "quadraturecapital",
   # fintech UK

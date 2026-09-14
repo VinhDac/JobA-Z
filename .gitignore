@@ -1,21 +1,21 @@
-# Dữ liệu chạy thật — không bao giờ commit
+# Real run data — never committed
 data/*
 !data/.gitkeep
 *.db
 *.sqlite
 *.sqlite3
 
-# Bí mật
+# Secrets
 .env
 config/config.toml
 config/*.local.*
 
-# Hồ sơ cá nhân sinh ra
+# Generated personal documents
 out/
 *.pdf
 *.docx
 
-# App bundle sinh ra bởi scripts/make_app.py
+# The app bundle produced by scripts/make_app.py
 jobbot.app/
 
 # Python
@@ -30,6 +30,6 @@ venv/
 # macOS
 .DS_Store
 
-# Gói chuyển máy — sinh lại được
+# The handover package — regenerable
 jobbot-handover.zip
 config/profile.seed.json

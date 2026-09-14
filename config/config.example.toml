@@ -1,52 +1,54 @@
-# Copy sang config/config.toml rồi điền. File thật đã bị gitignore.
+# Copy this to config/config.toml and fill it in. The real file is gitignored.
 
 [run]
-# Cửa sổ được phép chạy với nguồn KHÔNG có API công khai (design.md §3).
-# Nguồn có API công khai thì chạy 24/7 thoải mái, không đụng phần này.
+# The window in which sources WITHOUT a public API are allowed to run (design.md §3).
+# Sources with a public API run happily 24/7 and never touch this section.
 human_window_start = "08:00"
 human_window_end   = "22:00"
 
 [sources.greenhouse]
 enabled = true
-boards  = []          # ví dụ: ["stripe", "figma"]
+boards  = []          # for example: ["stripe", "figma"]
 
 [sources.lever]
 enabled = true
-boards  = []          # ví dụ: ["spotify"]
+boards  = []          # for example: ["spotify"]
 
 [sources.ashby]
 enabled = true
 boards  = []
 
 [scoring]
-# Ngưỡng khởi điểm. Sẽ hiệu chỉnh bằng dữ liệu thật ở M9, không đoán.
+# A starting threshold. It will be calibrated against real data at M9, never guessed.
 apply_threshold = 0.75
 
 [mail]
-# HỘP THƯ RIÊNG cho việc làm, KHÔNG phải hộp thư chính.
+# A MAILBOX OF ITS OWN for job hunting, NOT your main mailbox.
 #
-# Vì sao riêng: app password của Google là chìa khoá TOÀN QUYỀN — đọc, gửi,
-# xoá, cả hộp thư, tới khi thu hồi. Google không cho tạo loại chỉ-đọc. Chìa
-# đó nằm dạng chữ ngay dưới đây. Đặt nó lên hộp thư chính là đặt sai chỗ;
-# đặt lên một hộp chỉ chứa thư từ chối việc làm thì mất cũng chẳng sao.
+# Why separate: a Google app password is a FULL-POWER key — read, send, delete,
+# the whole mailbox, until it is revoked. Google offers no read-only kind. That
+# key sits here in plain text. Putting it on your main mailbox is putting it in
+# the wrong place; putting it on a mailbox holding nothing but job rejections
+# means losing it costs nothing.
 #
-# Lấy app password:
-#   1. bật xác minh 2 bước cho tài khoản đó
-#   2. myaccount.google.com/apppasswords  ->  tạo, đặt tên "jobbot"
-#   3. dán chuỗi 16 ký tự vào dưới (KHÔNG phải mật khẩu tài khoản —
-#      Gmail đã ngắt đăng nhập IMAP bằng mật khẩu tài khoản từ 2022)
+# To get an app password:
+#   1. turn on 2-step verification for that account
+#   2. myaccount.google.com/apppasswords  ->  create one, name it "jobbot"
+#   3. paste the 16-character string below (NOT the account password —
+#      Gmail stopped accepting the account password for IMAP in 2022)
 #
-# Tệp này đã nằm trong .gitignore.
+# This file is already in .gitignore.
 address  = ""
 password = ""
 
-# MÁY CHỦ IMAP — để trống thì máy tự suy từ tên miền của địa chỉ trên.
+# THE IMAP SERVER — leave it empty and the machine works it out from the domain
+# of the address above.
 #
-# Gmail, Outlook, iCloud, Yahoo, Fastmail, Zoho, GMX, Yandex… đều có sẵn
-# trong bảng; tên miền lạ thì thử `imap.<tên miền>`. Chỉ điền vào đây khi
-# nhà cung cấp dùng địa chỉ khác, hoặc khi đó là hộp thư công ty.
+# Gmail, Outlook, iCloud, Yahoo, Fastmail, Zoho, GMX, Yandex… are all in the
+# table; an unknown domain is tried as `imap.<domain>`. Fill this in only when
+# the provider uses a different address, or when this is a company mailbox.
 #
-# Proton thì BẮT BUỘC điền: Proton không nói IMAP ra ngoài Internet, phải
-# cài Proton Mail Bridge rồi trỏ vào nó (host = "127.0.0.1", port = 1143).
+# Proton MUST be filled in: Proton does not speak IMAP out to the internet, so
+# you install Proton Mail Bridge and point at it (host = "127.0.0.1", port = 1143).
 host = ""
 port = 993

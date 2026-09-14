@@ -1,7 +1,7 @@
 [project]
 name = "jobbot"
-version = "0.1.0"
-description = "Hệ thống quản lý tìm việc — người giữ quyền quyết định"
+version = "1.0.0"
+description = "A job-search management system — the person keeps every decision"
 requires-python = ">=3.11"
 dependencies = []
 

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Nạp hồ sơ vào DB.  Chạy:  python3 scripts/seed_profile.py
+"""Load the profile into the DB.  Run:  python3 scripts/seed_profile.py
 
-Chạy lại được nhiều lần — mỗi lần tạo một phiên bản mới, không ghi đè lịch sử.
+Safe to rerun — each run makes a new version and overwrites no history.
 
-DỮ LIỆU NẰM NGOÀI MÃ, ở `config/profile.seed.json` (đã gitignore).
+THE DATA LIVES OUTSIDE THE CODE, in `config/profile.seed.json` (gitignored).
 
-Vì sao: repo này công khai trên GitHub, và bản trước để thẳng trong mã họ tên,
-SỐ ĐIỆN THOẠI THẬT, học vấn kèm điểm, chứng chỉ và TOÀN VĂN CV. Số điện thoại
-trên repo công khai là thứ bot quét về để spam và lừa đảo. Dữ liệu cá nhân
-không thuộc về mã nguồn.
+Why: this repo is public on GitHub, and an earlier version put the full name, a
+REAL PHONE NUMBER, education with grades, certifications and THE WHOLE CV
+straight into the source. A phone number in a public repo is what bots harvest
+for spam and fraud. Personal data does not belong in source code.
 
-Chép `config/profile.seed.example.json` sang `config/profile.seed.json` rồi
-điền.
+Copy `config/profile.seed.example.json` to `config/profile.seed.json` and fill
+it in.
 """
 
 import json
@@ -27,22 +27,22 @@ SEED = Path(__file__).resolve().parent.parent / "config" / "profile.seed.json"
 
 
 def load_seed() -> dict:
-    """Đọc hồ sơ từ tệp ngoài. Không có tệp thì nói rõ cách tạo."""
+    """Read the profile from the outside file. With no file, say how to make one."""
     if not SEED.exists():
         raise SystemExit(
-            f"Chưa có {SEED}.\n"
-            f"Chép từ {SEED.with_name('profile.seed.example.json')} rồi điền.")
+            f"There is no {SEED} yet.\n"
+            f"Copy {SEED.with_name('profile.seed.example.json')} and fill it in.")
     return json.loads(SEED.read_text(encoding="utf-8"))
 
 
-# ------------------------------------------------------------ [để trống]
-# visa_expiry    — ngày hết hạn Graduate visa. Vin chưa đưa. ĐÂY LÀ HẠN CHÓT THẬT.
-# sponsor_future — có cần công ty bảo lãnh được về sau không. Chỉ Vin quyết.
-# email          — Vin chưa đưa.
-# available_from — phụ thuộc ngày MSc kết thúc chính thức.
-# urgency        — chỉ Vin biết.
-# salary_floor   — chỉ Vin biết.
-# skills_strong / skills_weak — phải tách từ CV đầy đủ, chưa có.
+# ------------------------------------------------------------ [left blank]
+# visa_expiry    — the Graduate visa expiry date. Not supplied. A REAL DEADLINE.
+# sponsor_future — whether a sponsoring employer will be needed later. The user decides.
+# email          — not supplied.
+# available_from — depends on the official MSc end date.
+# urgency        — only the user knows.
+# salary_floor   — only the user knows.
+# skills_strong / skills_weak — have to be taken from the full CV, not yet available.
 MUST_ASK = ["visa_expiry", "sponsor_future", "email", "available_from",
             "urgency", "salary_floor", "skills_strong"]
 
@@ -50,20 +50,20 @@ MUST_ASK = ["visa_expiry", "sponsor_future", "email", "available_from",
 def main() -> int:
     seed = load_seed()
     conn = db.connect()
-    version = store.save(conn, seed, note="seed: hồ sơ từ config/profile.seed.json")
+    version = store.save(conn, seed, note="seed: profile from config/profile.seed.json")
     answers = store.load(conn)
 
-    print(f"\n  Đã nạp — phiên bản {version}\n")
-    print(f"  {len(seed)} câu từ {SEED.name}")
-    print(f"  {len(MUST_ASK)} câu KHÔNG đoán — Vin phải tự điền\n")
+    print(f"\n  Loaded — version {version}\n")
+    print(f"  {len(seed)} answers from {SEED.name}")
+    print(f"  {len(MUST_ASK)} answers NOT guessed — you have to fill them in yourself\n")
 
     missing = store.missing_for_ingest(answers)
     if missing:
-        print(f"  CHƯA TÌM ĐƯỢC. Còn thiếu: {', '.join(missing)}")
+        print(f"  NOTHING CAN BE SEARCHED YET. Still missing: {', '.join(missing)}")
     else:
-        print("  Đủ điều kiện để bắt đầu tìm.")
+        print("  There is enough to start searching.")
     print()
-    print("  Cần Vin điền tiếp:")
+    print("  Still for you to fill in:")
     for qid in MUST_ASK:
         print(f"     - {qid}")
     print()

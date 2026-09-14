@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Dựng lại TOÀN BỘ tầng suy diễn từ tầng raw.
+"""Rebuild THE WHOLE derived layer from the raw layer.
 
     python3 scripts/rebuild.py
 
-Dùng khi: sửa luật lọc/chấm, sửa hàm bóc HTML, hoặc nghi ngờ dữ liệu suy diễn
-đã hỏng. Không mất gì — tầng raw không bị đụng tới.
+Use it when: the filtering or scoring rules changed, the HTML stripper changed, or
+the derived data is suspect. Nothing is lost — the raw layer is never touched.
 
-Đây là thứ mà kiến trúc cũ KHÔNG có: mô tả chỉ tồn tại ở dạng đã bóc, nên một
-lỗi trong strip_html là hỏng vĩnh viễn.
+This is what the old architecture did NOT have: a description existed only in its
+stripped form, so one bug in strip_html was permanent damage.
 """
 
 import sys, time
@@ -21,6 +21,6 @@ from jobbot.core.derive import rebuild
 if __name__ == "__main__":
     conn = db.connect()
     t0 = time.time()
-    print("\nDựng lại từ tầng raw\n")
+    print("\nRebuilding from the raw layer\n")
     result = rebuild(conn, log=print)
-    print(f"\n  xong trong {time.time() - t0:.1f}s\n")
+    print(f"\n  done in {time.time() - t0:.1f}s\n")

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Quét một lần bằng tay.
+"""One scan, run by hand.
 
-    python3 scripts/scan.py               API + Chrome, đọc kỹ từng tin
-    python3 scripts/scan.py --shallow     Chrome chỉ lấy danh sách, không mở từng tin
-    python3 scripts/scan.py --no-chrome   chỉ nguồn API
+    python3 scripts/scan.py               API + Chrome, deep-reading every posting
+    python3 scripts/scan.py --shallow     Chrome takes the list only, opening no posting
+    python3 scripts/scan.py --no-chrome   the API sources only
 
-App chạy nền cũng gọi đúng hàm này theo lịch — xem src/jobbot/core/scheduler.py.
-Chỉ ĐỌC, không gửi gì ra ngoài. Chạy lại bao nhiêu lần cũng được (có cache).
+The background app calls this very function on a schedule — see
+src/jobbot/core/scheduler.py. READ ONLY; nothing is sent anywhere. Safe to rerun
+as often as you like (it caches).
 """
 
 import sys
@@ -18,19 +19,19 @@ from jobbot.scan_runner import run_scan
 
 
 def main() -> int:
-    # --pages đã bỏ cùng arbeitnow/remotive: nguồn còn lại là board công ty
-    # (lấy trọn board, không phân trang) và LinkedIn (số trang cố định trong
+    # --pages went with arbeitnow/remotive: the sources left are the company boards
+    # (taken whole, with no paging) and LinkedIn (a fixed page count, set in
     # ingest/web/linkedin.py).
     chrome = "--no-chrome" not in sys.argv
     deep = "--shallow" not in sys.argv
 
-    print("\nQuét nguồn\n")
-    # manual=True: người dùng tự bấm, nên không áp cửa sổ giờ người
+    print("\nScanning the sources\n")
+    # manual=True: a person pressed this, so the waking-hours window does not apply
     result = run_scan(log=print, chrome_sources=chrome, deep=deep, manual=True)
     if not result["ok"]:
         print(f"\n{result['summary']}: {result.get('missing')}")
         return 1
-    print(f"\nTổng: {result['summary']}\n")
+    print(f"\nTotal: {result['summary']}\n")
     return 0
 
 

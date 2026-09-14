@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Cài jobbot thành dịch vụ chạy nền của macOS (launchd).
+"""Install jobbot as a macOS background service (launchd).
 
-    python3 scripts/install_agent.py             cài + bật ngay
-    python3 scripts/install_agent.py --status    xem đang chạy không
-    python3 scripts/install_agent.py --uninstall gỡ
+    python3 scripts/install_agent.py             install and start it now
+    python3 scripts/install_agent.py --status    is it running?
+    python3 scripts/install_agent.py --uninstall remove it
 
-Sau khi cài: bật máy là tự chạy, tắt đi tự bật lại nếu crash.
-Bấm "Quit jobbot" trên thanh menu thì nó DỪNG HẲN, không tự bật lại —
-đó là lý do dùng KeepAlive={SuccessfulExit:false} chứ không phải KeepAlive=true.
+Once installed: it starts with the machine, and restarts itself after a crash.
+Pressing "Quit jobbot" in the menu bar STOPS IT FOR GOOD, with no restart — which
+is why this uses KeepAlive={SuccessfulExit:false} rather than KeepAlive=true.
 """
 
 from __future__ import annotations
@@ -27,12 +27,12 @@ LOG = ROOT / "data" / "agent.log"
 def plist_body() -> dict:
     return {
         "Label": LABEL,
-        # Trỏ vào bundle chứ không phải run.py: app mới có đúng icon,
-        # đúng tên ở Dock và cmd-tab.
+        # Point at the bundle, not at run.py: only the app gets the right icon and
+        # the right name in the Dock and in cmd-tab.
         "ProgramArguments": [str(ROOT / "jobbot.app" / "Contents" / "MacOS" / "jobbot")],
         "WorkingDirectory": str(ROOT),
         "RunAtLoad": True,
-        # dict, KHÔNG phải True: crash thì bật lại, tự thoát thì thôi.
+        # a dict, NOT True: restart after a crash, stay down after a clean exit.
         "KeepAlive": {"SuccessfulExit": False},
         "StandardOutPath": str(LOG),
         "StandardErrorPath": str(LOG),
@@ -55,25 +55,27 @@ def domain() -> str:
 def install() -> int:
     bundle = ROOT / "jobbot.app"
     if not bundle.exists():
-        print("\n  Chưa có jobbot.app. Chạy trước:  python3 scripts/make_app.py\n")
+        print("\n  There is no jobbot.app yet. Run this first:  python3 scripts/make_app.py\n")
         return 1
     PLIST.parent.mkdir(parents=True, exist_ok=True)
     LOG.parent.mkdir(parents=True, exist_ok=True)
 
-    _launchctl("bootout", f"{domain()}/{LABEL}")        # gỡ bản cũ nếu có
+    _launchctl("bootout", f"{domain()}/{LABEL}")        # remove an older one, if any
     PLIST.write_bytes(plistlib.dumps(plist_body()))
 
     done = _launchctl("bootstrap", domain(), str(PLIST))
-    if done.returncode != 0:                             # macOS cũ
+    if done.returncode != 0:                             # older macOS
         done = _launchctl("load", "-w", str(PLIST))
     if done.returncode != 0:
-        print(f"Không nạp được: {done.stderr.strip()}")
+        print(f"Could not load it: {done.stderr.strip()}")
         return 1
 
-    print(f"\n  Đã cài: {PLIST}")
-    print(f"  Log:    {LOG}")
-    print("\n  Bật máy là tự chạy. Icon ◆ nằm trên thanh menu.")
-    print("  Dashboard: http://127.0.0.1:8765/\n")
+    print(f"\n  Installed: {PLIST}")
+    print(f"  Log:       {LOG}")
+    print("\n  It starts with the machine. The ◆ icon sits in the menu bar.")
+    # The port is handed out by the operating system, so it changes from run to run.
+    # Printing a fixed 8765 here sends the user to a dead address whenever it differs.
+    print(f"  Dashboard: the address is in {ROOT / 'data' / 'dang-chay.txt'}\n")
     return 0
 
 
@@ -82,14 +84,14 @@ def uninstall() -> int:
     _launchctl("unload", "-w", str(PLIST))
     if PLIST.exists():
         PLIST.unlink()
-    print(f"\n  Đã gỡ {LABEL}\n")
+    print(f"\n  Removed {LABEL}\n")
     return 0
 
 
 def status() -> int:
     found = _launchctl("print", f"{domain()}/{LABEL}")
     if found.returncode != 0:
-        print("\n  Chưa cài.\n")
+        print("\n  Not installed.\n")
         return 1
     state = next((l.strip() for l in found.stdout.splitlines() if "state =" in l), "?")
     pid = next((l.strip() for l in found.stdout.splitlines() if l.strip().startswith("pid =")), "pid = —")

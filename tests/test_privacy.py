@@ -84,7 +84,7 @@ def secrets() -> dict[str, str]:
     return {k: v for k, v in out.items() if v and len(v) >= 8}
 
 
-def co_bi_mat_that() -> bool:
+def machine_has_a_real_secret() -> bool:
     """Does this machine HAVE a real secret to scan for? Read the config file
     directly.
 
@@ -128,10 +128,10 @@ check("the detector works (it found the bait string)", bool(_dinh("jobbot")))
 # outside — both "found nothing" — so they are told apart by a different
 # question: is there a real secret on disk. If there is and 0 items were
 # found, the detector itself is broken.
-_co = co_bi_mat_that()
+_has_secret = machine_has_a_real_secret()
 check(f"{len(marks)} items to scan for" + ("" if marks else " — this machine is unconfigured"),
-      bool(marks) or not _co)
-if _co and not marks:
+      bool(marks) or not _has_secret)
+if _has_secret and not marks:
     check("THE DETECTOR IS BROKEN: config.toml holds a secret and no item was read", False)
 
 for what, needle in marks.items():

@@ -1,10 +1,10 @@
-# Công ty mục tiêu — đi THẲNG trang tuyển dụng của họ, bỏ board trung gian.
-# Danh sách này chỉ là hạt giống: mỗi lần quét, chủ việc thật thấy trong tin
-# sẽ tự được thêm vào và tự dò ATS.
+# Target companies — go STRAIGHT to their careers page, skipping the middleman board.
+# This list is only a seed: on every scan, the real employers seen in postings are
+# added by themselves and their ATS is worked out automatically.
 
 [targets]
 names = [
-  # quỹ / prop trading
+  # funds / prop trading
   "Man Group", "Marshall Wace", "Winton", "GSA Capital", "Quadrature Capital",
   "Squarepoint Capital", "Qube Research and Technologies", "Jane Street",
   "Optiver", "IMC", "Point72", "Citadel", "Two Sigma", "DRW", "XTX Markets",
@@ -12,7 +12,7 @@ names = [
   "Aspect Capital", "Systematica Investments", "Schonfeld", "Maven Securities",
   "Capula Investment Management", "Rokos Capital", "Eisler Capital",
   "ExodusPoint", "Verition", "Florin Court Capital", "AHL",
-  # quản lý tài sản / ngân hàng
+  # asset management / banking
   "Schroders", "Aviva Investors", "Janus Henderson", "Baillie Gifford",
   "abrdn", "Invesco", "Legal and General", "Fidelity International",
   "LSEG", "MSCI", "FactSet", "Bloomberg",
