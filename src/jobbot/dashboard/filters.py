@@ -246,7 +246,7 @@ class JobFilter:
                 "company": "LOWER(company) ASC, LOWER(title) ASC",
                 "title": "LOWER(title) ASC"}[self.sort]
 
-    # --- dựng URL ---------------------------------------------------------
+    # --- building URLs ----------------------------------------------------
     def pairs(self, **changes) -> list[tuple[str, str]]:
         """The filter state as key/value pairs. ONE builder, two consumers.
 

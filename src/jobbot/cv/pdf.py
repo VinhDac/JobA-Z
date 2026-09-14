@@ -6,7 +6,7 @@ paper version drift apart, and it is the paper version the employer reads.
 
 Chrome prints EXACTLY the page on screen, through `@media print` in app.css.
 One
-nguồn sự thật cho cả hai.
+one source of truth for both.
 
 Chrome runs HEADLESS on its own port: 9333 belongs to the scan, which has a
 real window open reading LinkedIn. Pressing Print and stealing the scan's tab
@@ -23,7 +23,7 @@ from pathlib import Path
 from ..browser import cdp, chrome
 from ..core.journal import CV, log as jlog
 
-PORT = chrome.PDF_PORT   # cổng RIÊNG, profile RIÊNG — xem chrome.PROFILE
+PORT = chrome.PDF_PORT   # its OWN port and profile — see chrome.PROFILE
 
 # ONE print at a time. Both single and batch printing open and then CLOSE
 # Chrome on this port; overlapping runs mean the thread that finishes first
@@ -31,7 +31,7 @@ PORT = chrome.PDF_PORT   # cổng RIÊNG, profile RIÊNG — xem chrome.PROFILE
 # never print.
 _ONE_AT_A_TIME = threading.Lock()
 
-PAPER = {                                    # A4, lề 14mm — khớp @page trong CSS
+PAPER = {                                    # A4, 14mm margins — matches @page in the CSS
     "paperWidth": 8.27, "paperHeight": 11.69,
     "marginTop": 0.55, "marginBottom": 0.55,
     "marginLeft": 0.59, "marginRight": 0.59,
@@ -45,7 +45,7 @@ def slug(text: str) -> str:
     return keep[:60] or "cv"
 
 
-# --- KIỂM CHẤT LƯỢNG NGAY TRƯỚC KHI IN ---------------------------------
+# --- A QUALITY CHECK RIGHT BEFORE PRINTING ------------------------------
 #
 # All three bugs below REALLY HAPPENED, and every one of them only showed up
 # by printing a sheet and looking at the image — no HTML test caught any:
@@ -98,7 +98,7 @@ _SOI = r"""(() => {
   // 3. MARGINS: the sheet must start at the left edge and use most of the width.
   const p = to.getBoundingClientRect(), W = document.documentElement.clientWidth;
   if (p.left > 8) loi.push('the CV sheet is inset ' + Math.round(p.left) + 'px — wasted left margin');
-  if (p.width < W * 0.9) loi.push('tờ CV chỉ rộng ' + Math.round(p.width / W * 100) + '% mặt giấy');
+  if (p.width < W * 0.9) loi.push('the CV sheet is only ' + Math.round(p.width / W * 100) + '% of the page wide');
   return JSON.stringify(loi);
 })()"""
 
@@ -119,7 +119,7 @@ def kiem(tab) -> list[str]:
     try:
         return json.loads(tab.eval(js)) or []
     except Exception as exc:            # noqa: BLE001
-        return [f"KHÔNG SOI ĐƯỢC tờ in ({type(exc).__name__}: {exc}) — "
+        return [f"COULD NOT INSPECT the sheet ({type(exc).__name__}: {exc}) — "
                 f"nobody checked this sheet"]
 
 
@@ -134,7 +134,7 @@ def _print_one(tab, url: str, out: Path, timeout: float) -> Path:
 
 
 def render(url: str, out: Path, timeout: float = 45.0) -> Path:
-    """In MỘT bản."""
+    """Print ONE version."""
     return next(iter(render_many([(url, out)], timeout=timeout)))
 
 
@@ -176,7 +176,7 @@ def _render_all(jobs, timeout, on_done):
     return [m for m in made if m]
 
 
-# --- GIAO TỆP TẬN TAY ---------------------------------------------------
+# --- HANDING THE FILE OVER ----------------------------------------------
 
 def tai_ve(src: Path) -> Path | None:
     """Copy the printed file to ~/Downloads and reveal it in Finder.

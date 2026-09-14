@@ -158,7 +158,7 @@ def dem_lai() -> None:
     """Reset the sentence counter. Call BEFORE building each sheet."""
     _DEM[0] = 0
 
-# --- TÔ TỪ KHOÁ ---------------------------------------------------------
+# --- HIGHLIGHTING KEYWORDS ----------------------------------------------
 
 def _vet(text: str, doi: set) -> list:
     """The spans in `text` that are keywords this posting ASKS FOR.

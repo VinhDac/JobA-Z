@@ -116,7 +116,7 @@ def norm_title(title: str) -> str:
 def to_ts(stamp: str) -> int:
     """Convert any date shape to unix. 0 when unreadable.
 
-    Greenhouse/Lever/Ashby trả ISO 8601; Arbeitnow trả unix dạng chuỗi.
+    Greenhouse/Lever/Ashby return ISO 8601; Arbeitnow returns unix as a string.
     """
     if not stamp:
         return 0

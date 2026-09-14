@@ -314,7 +314,7 @@ def run() -> int:
     NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
         2.0, delegate, "tick:", None, True)
 
-    print(f"  jobbot — cửa sổ app · nội dung từ {url}", flush=True)
+    print(f"  jobbot — app window · content from {url}", flush=True)
     AppHelper.runEventLoop()
     httpd.server_close()
     dia_chi.xoa()

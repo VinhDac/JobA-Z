@@ -6,7 +6,7 @@ applying through them puts one more filter between you and the employer.
 
 Two signals, and BOTH are used because each alone misses things:
     the company name — a list of known agencies
-    chữ trong JD — "our client", "on behalf of"
+    wording in the JD — "our client", "on behalf of"
 
 Wording alone misses: a posting naming "Invesco" still says "our client".
 The name alone misses: a new agency is not on the list.

@@ -645,7 +645,7 @@ with tempfile.TemporaryDirectory() as tmp:
         def eval(self, *a, **k): raise RuntimeError("gãy")
     _ra = _pdfm.kiem(_TabHong())
     check("cổng kiểm gãy -> KÊU LÊN, không báo sạch",
-          _ra and "KHÔNG SOI ĐƯỢC" in _ra[0], str(_ra))
+          _ra and "COULD NOT INSPECT" in _ra[0], str(_ra))
     # Bản chấm điểm phải nằm TRONG .cvaudit. Luật ẩn đã có sẵn từ lâu nhưng
     # không chỗ nào GẮN lớp đó, nên nó là một luật không canh gì cả.
     from jobbot.cv.build import TailoredCV as _TC2

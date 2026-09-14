@@ -31,7 +31,7 @@ JUNIOR_WORDS = {
 # WHAT TO KEEP — two separate tables that drifted apart with nobody noticing
 # until someone sat down and counted.
 #
-#   place  chữ gửi cho LinkedIn
+#   place  the text sent to LinkedIn
 #   manh   a CERTAIN signal of this region
 #   thanh  a city name — correct, but COLLIDES with names elsewhere
 NOI = {

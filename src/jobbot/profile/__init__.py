@@ -25,5 +25,5 @@ other module (design.md §1).
 
 NOT here:
     - Match scoring (-> scoring/)
-    - Dựng file CV (-> cv/)
+    - Building the CV file (-> cv/)
 """

@@ -158,7 +158,7 @@ def _o_the(question: Question, answers: Answers,
         f"<span class=tag>{esc(t)}"
         f"<input type=hidden name={esc(question.id)} value='{esc(t)}'>"
         # type=button — without it, clicking × submits the whole form
-        f"<button type=button class=untag data-untag title='bỏ'>×</button>"
+        f"<button type=button class=untag data-untag title='remove'>×</button>"
         f"</span>" for t in co)
     chon = (f"<div class=chosenhead>chosen</div>"
             f"<div class=tagbox data-tags='{esc(question.id)}'>{chips}"
@@ -180,12 +180,12 @@ def _o_the(question: Question, answers: Answers,
     nut = "".join(
         f"<button type=button class=addtag data-addtag='{esc(g)}'>{esc(g)}</button>"
         for g in goi_y)
-    ten = _TEN_KHO.get(question.suggest, "gợi ý")
+    ten = _TEN_KHO.get(question.suggest, "suggestions")
     # For a small store "select all" is one click instead of seven. A large
     # store (titles, skills) does NOT get this button: selecting all 60 titles
     # renders the filter meaningless and keeps every posting.
     tat_ca = ("<button type=button class='mbtn tiny' data-addall>"
-              f"chọn tất cả {len(goi_y)}</button>" if len(goi_y) <= _CHON_HET else "")
+              f"select all {len(goi_y)}</button>" if len(goi_y) <= _CHON_HET else "")
     return (
         f"<div class=tagfield data-tagfield>"
         f"<div class=findrow>"
@@ -199,12 +199,12 @@ def _o_the(question: Question, answers: Answers,
 # The education field: ONE ROW PER DEGREE. Field names repeat across rows —
 # the browser submits them as parallel arrays in row order, and the server
 # zips them back together.
-_COT = (("degree", "Bằng", "MSc"),
+_COT = (("degree", "Degree", "MSc"),
         ("discipline", "Field of study", "Computational Finance"),
         ("school", "University", "Royal Holloway, University of London"),
-        ("start", "Từ", "Sep 2025"),
-        ("end", "Đến", "Sep 2026"),
-        ("note", "Điểm / hạng", "IPM 86 · Data Analysis 83"))
+        ("start", "From", "Sep 2025"),
+        ("end", "To", "Sep 2026"),
+        ("note", "Marks / class", "IPM 86 · Data Analysis 83"))
 
 
 def _hang_hoc_van(e=None) -> str:
@@ -268,7 +268,7 @@ def _o_khoi(question: Question, answers: Answers,
     loai = question.block_kind
     co = [b for b in parse_cv(str(answers.get("cv_text") or "")) if b.kind == loai]
     hang = "".join(_hang_khoi(question, b) for b in co) or _hang_khoi(question)
-    ten = "việc" if loai == "experience" else "project"
+    ten = "a job" if loai == "experience" else "a project"
     return (f"<div class=blockrows data-rows>{hang}</div>"
             f"<button type=button class='mbtn tiny' data-rowadd>+ add {ten}</button>")
 

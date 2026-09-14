@@ -18,7 +18,7 @@ THE MACHINE CHANGES NOTHING HERE BY ITSELF. It proposes, a person clicks.
 This is where that boundary takes visible form — see apply/run.py for the
 same boundary in the applying layer.
 
-CHỈ VẼ.
+DRAWING ONLY.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def _ask(items: list[dict], rows: list[dict] | None = None) -> str:
             f"<div class=asksnip>{esc((p['snippet'] or '')[:130])}</div></div>"
             f"<div class=askact>"
             + (f"<button class='mbtn tiny apply' data-post='/api/track/mail'"
-               f" data-arg='{p['id']}:yes'>Nhận</button>"
+               f" data-arg='{p['id']}:yes'>Accept</button>"
                if p["app_id"] else
                (f"<form class=ganform method=post data-post='/api/track/mail/gan'>"
                 f"<select name=app data-ganfor='{p['id']}'>"
@@ -69,7 +69,7 @@ def _ask(items: list[dict], rows: list[dict] | None = None) -> str:
                 f"{chon}</select></form>" if chon else
                 "<span class=muted>matches no row</span>"))
             + f"<button class='mbtn tiny' data-post='/api/track/mail'"
-              f" data-arg='{p['id']}:no'>Bỏ qua</button></div></div>")
+              f" data-arg='{p['id']}:no'>Skip</button></div></div>")
     return (f"<div class=asklist><div class=askhead>{len(items)} mail waiting "
             f"on you — the machine proposes, it does not change anything"
             f"</div>{rows}</div>")
@@ -77,7 +77,7 @@ def _ask(items: list[dict], rows: list[dict] | None = None) -> str:
 
 # The four outcomes a user can assign to a mail the machine cannot read.
 XEP = (("applied", "acknowledgement"), ("interview", "interview invitation"),
-       ("rejected", "từ chối"), ("offer", "nhận việc"))
+       ("rejected", "rejection"), ("offer", "offer"))
 
 
 def _mu(items: list[dict]) -> str:
@@ -110,7 +110,7 @@ def _mu(items: list[dict]) -> str:
             f"<div class=asksnip>{esc(' '.join((m['snippet'] or '').split())[:130])}</div>"
             f"</div><div class=askact>{nut}"
             f"<button class='mbtn tiny' data-post='/api/track/mail/ignore'"
-            f" data-arg='{m['id']}'>bỏ qua</button></div></div>")
+            f" data-arg='{m['id']}'>skip</button></div></div>")
     return (f"<div class='asklist mu'><div class=askhead>"
             f"<b>{len(items)}</b> mail the machine could NOT read — but they "
             f"belong to an application on the table, so none is left behind"
@@ -120,13 +120,13 @@ def _mu(items: list[dict]) -> str:
 # The stages REACHABLE from each stage. Moved here from the table: changing a
 # stage is EDITING, and the table edits nothing.
 NEXT = {"draft": [("applied", "sent by hand")],
-        "applied": [("interview", "phỏng vấn"), ("rejected", "từ chối")],
-        "interview": [("offer", "nhận"), ("rejected", "từ chối")],
+        "applied": [("interview", "interview"), ("rejected", "rejected")],
+        "interview": [("offer", "offer"), ("rejected", "rejected")],
         "rejected": [], "offer": []}
 
 
 def _nhap(rows: list[dict]) -> str:
-    """MÁY ĐIỀN XONG, CHỜ BẠN BẤM GỬI — việc dở dang thật sự của app.
+    """FILLED IN, WAITING ON YOUR SEND — the app's real work in progress.
 
     The machine opens the form, fills what it can prove, and STOPS: questions
     like sponsorship or the graduation date can only be answered by you, and
@@ -148,7 +148,7 @@ def _nhap(rows: list[dict]) -> str:
               f"<button class='mbtn tiny apply' data-post='/api/apply/send'"
               f" data-arg='{r['id']}'>Send it</button>"
               f"<button class='mbtn tiny' data-post='/api/track/drop'"
-              f" data-arg='{r['id']}'>bỏ</button></div></div>")
+              f" data-arg='{r['id']}'>drop</button></div></div>")
     return (f"<div class=asklist><div class=askhead><b>{len(nhap)}</b> "
             f"application(s) filled in, waiting on your Send</div>{o}</div>")
 
@@ -169,9 +169,9 @@ def _tay(rows: list[dict]) -> str:
     o = ""
     for r in tay:
         mo = (f"<a class='mbtn tiny apply' href='{esc(r['url'])}' target=_blank"
-              f" rel=noopener>Mở trang nộp ↗</a>" if r.get("url") else "")
+              f" rel=noopener>Open the application page ↗</a>" if r.get("url") else "")
         tai = (f"<button class='mbtn tiny' data-post='/api/cv/pdf'"
-               f" data-arg='{r['posting_id']}'>Tải bản CV</button>"
+               f" data-arg='{r['posting_id']}'>Download the CV</button>"
                if r.get("posting_id") else "")
         o += (f"<div class=askrow><div class=askmain>"
               f"<div class=askwho><b>{esc(r['company'][:34])}</b>"
@@ -224,12 +224,12 @@ def _doi(rows: list[dict], doi: str = "") -> str:
         nut = (f"<div class=doinow><b>{esc(kia['company'][:40])}</b>"
                f"<span>currently «{esc(STAGE_LABEL.get(kia['stage'], ''))}»"
                f" — change to:</span><div class=askact>{nut}</div></div>")
-    return (f"<div class=asklist><div class=askhead>Đổi chặng bằng tay"
+    return (f"<div class=asklist><div class=askhead>Change a stage by hand"
             f"<span>for when the outcome arrives outside the mailbox — a "
             f"phone call, a text. The machine cannot see those.</span></div>"
             f"<form class=doiform method=get action='/track/queue'>"
             f"<select name=doi>{chon}</select>"
-            f"<button class='mbtn tiny'>Chọn</button></form>{nut}</div>")
+            f"<button class='mbtn tiny'>Pick</button></form>{nut}</div>")
 
 
 def _trong() -> str:

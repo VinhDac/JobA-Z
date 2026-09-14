@@ -22,9 +22,9 @@ from ..scoring.vocab import ALIASES
 # heading line:
 #     EXPERIENCE          -> experience blocks present, score 92
 #     WORK EXPERIENCE     -> experience blocks GONE, score 22
-#     Experience          -> MẤT
-#     EMPLOYMENT HISTORY  -> MẤT
-#     EXPERIENCE:         -> MẤT
+#     Experience          -> GONE
+#     EMPLOYMENT HISTORY  -> GONE
+#     EXPERIENCE:         -> GONE
 # With the experience blocks gone the evidence index is empty, every
 # requirement line scores NOT MET — and nothing says a word. The app only
 # worked for CVs written exactly as the author writes them; that is a special
@@ -94,7 +94,7 @@ def _looks_like_role(line: str) -> bool:
     """A title line, NOT a prose sentence containing a dash.
 
     A BUG THAT WAS FIXED: a " — " anywhere made it a title, so the sentence
-    "...peak profit in the most recent window — which rewards luck" bị cắt
+    "...peak profit in the most recent window — which rewards luck" was cut
     became a new role and tore the experience block in two.
     """
     if DATE_TAIL.search(line):
@@ -125,7 +125,7 @@ def mo_khoi_project(line: str, truoc: str | None) -> bool:
     demands that the line does not end like a sentence, and that it comes
     after the previous sentence has ended.
 
-    VÀ KHÔNG ĐƯỢC MỞ ĐẦU BẰNG ĐỘNG TỪ HÀNH ĐỘNG. "Improved research
+    AND IT MUST NOT OPEN WITH AN ACTION VERB. "Improved research
     frameworks — cut runtime to 90 s." has every signal of a heading, and it
     is a SENTENCE. A project name does not begin with "Built", "Improved" or
     "Designed" — those are claims. This is the half that saves a line the
@@ -306,8 +306,8 @@ def _keu_neu_khong_hieu(cv_text: str, blocks: list) -> None:
     try:
         from ..core.journal import CV, log as jlog
         jlog.warn(CV, "NO section recognised in the CV — the headings should be "
-                      "EXPERIENCE / PROJECTS / EDUCATION… Mọi tin sẽ bị chấm "
-                      "thiếu bằng chứng cho tới khi sửa.")
+                      "EXPERIENCE / PROJECTS / EDUCATION… Every posting will "
+                      "score as lacking evidence until this is fixed.")
     except Exception:                       # noqa: BLE001
         pass
 
@@ -419,7 +419,7 @@ def write_block(cv_text: str, kind: str, title: str, meta: str,
     # project block written as a bare "Compress EA" (missing " — "), and an
     # experience block written without its date tail.
     if kind == "experience":
-        # 'Chức danh — Tổ chức  Jan 2025 – Sep 2025'
+        # 'Job title — Organisation  Jan 2025 – Sep 2025'
         # Do NOT add "· ": parse() does not strip it, so it sticks to the
         # sentence and goes straight onto the CV.
         head = f"{title.strip()} {meta.strip()}".strip()
@@ -427,7 +427,7 @@ def write_block(cv_text: str, kind: str, title: str, meta: str,
     elif meta.strip():
         chunk = [f"{title.strip()} — {meta.strip()}"] + body
     else:
-        # TÊN PROJECT ĐỨNG RIÊNG MỘT DÒNG.
+        # A PROJECT NAME GOES ON ITS OWN LINE.
         #
         # The old version wrote 'Name — first sentence' because parse() back
         # then ONLY recognised a project title on a line containing " — ".

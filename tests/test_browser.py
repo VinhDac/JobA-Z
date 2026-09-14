@@ -554,7 +554,7 @@ try:
     check("đứt rồi vẫn TRẢ VỀ tin đã tìm được", len(_tin) == 3, f"{len(_tin)} tin")
     check("và đánh dấu lần quét này KHÔNG lành", _suc.ok is False)
     check("nói rõ là ĐỨT, không phải BỊ CHẶN",
-          "ĐỨT" in _suc.summary and "BỊ CHẶN" not in _suc.summary, _suc.summary)
+          "CUT OFF" in _suc.summary and "BLOCKED" not in _suc.summary, _suc.summary)
     check("ghi cả tên lỗi để lần sau còn dò",
           "ConnectionResetError" in _suc.summary, _suc.summary)
     check("đứt thì KHÔNG đọc kỹ tiếp — mở tiếp chỉ nhận thêm lỗi",
@@ -732,7 +732,7 @@ from jobbot.ingest.web.base import Health
 h = Health(attempted=10, failed=6)
 h.note("TimeoutError"); h.note("mô tả rỗng")
 check("Health đếm được hỏng", h.failed == 6)
-check("Health tóm tắt được lý do", "6/10 hỏng" in h.summary and "TimeoutError" in h.summary)
+check("Health tóm tắt được lý do", "6/10 failed" in h.summary and "TimeoutError" in h.summary)
 check("không hỏng -> không báo gì", Health(10, 0).summary == "")
 check("chạy trọn vẹn thì lành", Health(10, 0).ok)
 
@@ -744,7 +744,7 @@ check("chưa chặn thì lành", blocked.ok)
 blocked.block("bị chặn ở tin 3/193", unread=191)
 check("bị chặn -> KHÔNG còn lành", not blocked.ok)
 check("và số tin chưa đọc được tính là hỏng", blocked.failed == 191)
-check("và nói thẳng ra là bị chặn", "BỊ CHẶN" in blocked.summary)
+check("và nói thẳng ra là bị chặn", "BLOCKED" in blocked.summary)
 early = Health(attempted=5)
 early.block("chặn ngay từ tin đầu", unread=5)
 check("bị chặn ngay tin đầu vẫn không lành", not early.ok)

@@ -99,8 +99,8 @@ class Health:
     def summary(self) -> str:
         if not (self.failed or self.blocked or self.cut):
             return ""
-        head = "BỊ CHẶN · " if self.blocked else "ĐỨT · " if self.cut else ""
-        return (f"{head}{self.failed}/{self.attempted} hỏng · "
+        head = "BLOCKED · " if self.blocked else "CUT OFF · " if self.cut else ""
+        return (f"{head}{self.failed}/{self.attempted} failed · "
                 + " · ".join(self.samples[:2]))
 
 

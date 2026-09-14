@@ -8,7 +8,7 @@ Grouped by WHO USES THEM, not by what is convenient to ask:
     4 danh_tinh   who you are           -> cv, mail, outreach
     5 project     personal projects     -> optional, Comp Sci specific
 
-Hai luật:
+Two rules:
 
 - **Ask for what ingest can actually use.** Job boards search by REAL JOB
   TITLES, not by category. Store "backend" and it matches nothing titled
@@ -64,8 +64,8 @@ class Question:
     # spell it correctly, and remember that field's own separator rule —
     # three burdens for one value.
     tags: str = ""
-    suggest: str = ""               # kho gợi ý: "titles" hay "skills"
-    block_kind: str = ""            # với kind=BLOCKS: "experience" hay "project"
+    suggest: str = ""               # the suggestion store: "titles" or "skills"
+    block_kind: str = ""            # for kind=BLOCKS: "experience" or "project"
     # Present in the schema but NOT drawn on the form. store.save() filters
     # by the schema, so removing a question from here makes it UNSAVEABLE —
     # silently. The full CV text was lost to exactly that: importing a CV
@@ -343,7 +343,7 @@ SECTIONS: list[Section] = [
             # and it is the app's heaviest source of truth, with
             # cv/blocks.py reading experience blocks out of it and score.py
             # scoring
-            # theo từng khối.
+            # per block.
             Question(
                 id="cv_text",
                 text="The full CV text",
@@ -427,11 +427,11 @@ SECTIONS: list[Section] = [
         questions=[
             Question(
                 id="project_blocks",
-                text="Project của bạn",
+                text="Your projects",
                 kind=BLOCKS,
                 block_kind="project",
                 why=("Unfinished counts too. Many only need measuring again and "
-                     "viết cho tử tế."),
+                     "written up properly."),
                 placeholder="Sharpe 0.74 in sample against 0.322 out-of-sample",
             ),
         ],

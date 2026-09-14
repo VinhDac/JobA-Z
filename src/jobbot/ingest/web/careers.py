@@ -60,8 +60,8 @@ def slug_guesses(name: str) -> list[str]:
     out = ["".join(words), "-".join(words)]
     if len(words) > 1:
         out.append(words[0])                       # "Man Group" -> "man"
-        out.append("".join(words[:-1]))            # bỏ từ cuối
-        out.append("".join(w[0] for w in words))   # viết tắt
+        out.append("".join(words[:-1]))            # drop the last word
+        out.append("".join(w[0] for w in words))   # the initials
     return [s for s in dict.fromkeys(out) if 2 < len(s) < 40]
 
 
@@ -125,7 +125,7 @@ def sniff_page(html: str) -> tuple[str, str]:
 def resolve_via_chrome(tab, domain: str) -> tuple[str, str, str]:
     """Open the homepage, follow the careers link, see which ATS it runs on.
 
-    Trả về (ats, slug, careers_url).
+    Returns (ats, slug, careers_url).
     """
     from .base import Blocked, open_page
 

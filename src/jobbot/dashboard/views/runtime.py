@@ -11,7 +11,7 @@ positions, the per-stream journal filtering and where the progress bar sits
 are identical — learn one tab and you know all three, and a fourth tab does
 not need rethinking from scratch.
 
-CHỈ VẼ.
+DRAWING ONLY.
 """
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
            bar: str = "", setup: str = "", reload: str = "") -> str:
     """The shared frame for every tab WITH RUNNING TIME.
 
-    journal="column"  nhật ký chiếm trọn cột cuối, cạnh nội dung
+    journal="column"  the journal fills the last column, beside the content
     journal="bottom"  the journal is a FLAT STRIP along the bottom, merged
                       with the progress bar
 
@@ -125,7 +125,7 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
         boxes = [widget(t, body, span=sp, rows=rw, at=at, cls=cl)
                  for t, body, sp, rw, at, cl in panels]
         boxes.append(widget(
-            f"Nhật ký · {title.lower()}",
+            f"Journal · {title.lower()}",
             f"<div class=jflat><div class=jprog>{progress_box(stream)}</div>"
             f"<div class=jfeed>{journal_box(stream)}</div></div>",
             span=1, cls="flat corner", at=journal_at))
@@ -155,7 +155,7 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
         # answer "what is it doing"; splitting them into two panels splits
         # one question in half.
         boxes.append(widget(
-            f"Nhật ký · {title.lower()}",
+            f"Journal · {title.lower()}",
             f"<div class=jflat><div class=jprog>{progress_box(stream)}</div>"
             f"<div class=jfeed>{journal_box(stream)}</div></div>",
             span=cols, cls="flat", at=(1, rows + 1)))
@@ -164,9 +164,9 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
                     active=active, flow=False, bar=bar, setup=setup,
                     reload=reload)
 
-    boxes = [widget("Đang chạy", progress_box(stream) + run_extra,
+    boxes = [widget("Running", progress_box(stream) + run_extra,
                     span=run_span if run_span else cols - 1),
-             widget(f"Nhật ký · {title.lower()}", journal_box(stream), span=1,
+             widget(f"Journal · {title.lower()}", journal_box(stream), span=1,
                     rows=_rows_needed(panels, cols - 1, run_span or 0),
                     cls="tall", at=(cols, 1))]
     boxes += [widget(t, body, span=sp, rows=rw)

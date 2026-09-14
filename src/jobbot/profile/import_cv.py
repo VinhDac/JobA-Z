@@ -52,7 +52,7 @@ class ReadError(RuntimeError):
 # ------------------------------------------------------------ reading files
 
 def from_pdf(data: bytes) -> str:
-    """Đọc chữ trong PDF.
+    """Read the text out of a PDF.
 
     macOS has PDFKit — it handles embedded fonts and custom encodings, so it
     goes first. Elsewhere the standard library does it: inflate the content
@@ -322,8 +322,9 @@ def _job_titles(text: str) -> list[str]:
 
     1. CUT FIRST, MEASURE SECOND. A real CV writes a whole line as "Founder /
        Quantitative
-       Developer — Algorithmic Trading Startup Jan 2024 – …" (81 ký tự). Đo
-       the length before cutting the company half and every line is too long
+       Developer — Algorithmic Trading Startup Jan 2024 – …" (81 chars).
+       Measure the length before cutting the company half and every line is
+       too long
        and all of them are rejected — exactly the bug that left Vin's profile
        with no extracted titles at all.
 
