@@ -1,25 +1,24 @@
-"""Định nghĩa câu hỏi hồ sơ — DỮ LIỆU, không phải giao diện.
+"""The profile questions — DATA, not interface.
 
-Chữ hiện ra màn hình là tiếng Anh (thị trường UK/global).
-Chú thích trong code giữ tiếng Việt — đây là phần giải thích thiết kế, không phải giao diện.
+Grouped by WHO USES THEM, not by what is convenient to ask:
 
-Chia theo AI DÙNG, không theo thứ tự tiện hỏi:
-
-    1 muc_tieu    Bạn muốn gì        -> ingest, scoring
-    2 rang_buoc   Bạn KHÔNG muốn gì  -> bộ lọc (chặn spam)
-    3 nang_luc    Bạn có gì          -> scoring, cv
-    4 danh_tinh   Bạn là ai          -> cv, mail, outreach
-    5 project     Personal project   -> tuỳ chọn, đặc thù Comp Sci
+    1 muc_tieu    what you want         -> ingest, scoring
+    2 rang_buoc   what you do NOT want  -> the filter (blocks noise)
+    3 nang_luc    what you have         -> scoring, cv
+    4 danh_tinh   who you are           -> cv, mail, outreach
+    5 project     personal projects     -> optional, Comp Sci specific
 
 Hai luật:
 
-- **Hỏi cái ingest thật sự dùng được.** Job board tìm theo CHỨC DANH THẬT, không theo
-  phân loại. Lưu "backend" thì không khớp tin nào tên "Software Engineer, Platform".
-  Nên `job_titles` lưu đúng chuỗi sẽ đem đi tìm — không phân loại rồi dịch.
+- **Ask for what ingest can actually use.** Job boards search by REAL JOB
+  TITLES, not by category. Store "backend" and it matches nothing titled
+  "Software Engineer, Platform". So `job_titles` stores exactly the string
+  that will be searched for — no category and then a translation.
 
-- **Không danh sách nào là lồng.** allow_other=True mở ô tự do bên cạnh.
+- **No list is a cage.** allow_other=True opens a free-text box beside it.
 
-Chỉ 3 câu bắt buộc: job_titles + markets + work_auth. Phần còn lại điền dần.
+Only 3 questions are required: job_titles + markets + work_auth. The rest
+fills in over time.
 """
 
 from __future__ import annotations
@@ -27,15 +26,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 SINGLE, MULTI, TEXT, LONGTEXT = "single", "multi", "text", "longtext"
-# ROWS: mỗi bằng một HÀNG có ô rời, không phải một khối chữ thô. Form ghi ra
-# đúng dòng mà apply/answer.educations() đọc lại — một ngữ pháp, hai chiều.
+# ROWS: one degree per ROW of separate fields, not one raw text block. The
+# form writes exactly the line apply/answer.educations() reads back — one
+# grammar, both directions.
 ROWS = "rows"
-# BLOCKS: kinh nghiệm làm việc và project cá nhân. Đây là THÔNG TIN CÁ NHÂN,
-# nên chỗ của nó là hồ sơ — không phải nằm ẩn trong một tài liệu dán vào. Thứ
-# máy đẻ ra sau (CV từng bản, project đề xuất) là đầu ra, chuyện khác.
+# BLOCKS: work experience and personal projects. This is PERSONAL
+# INFORMATION, so it belongs in the profile — not hidden inside a pasted
+# document. What the machine produces afterwards (per-posting CVs, proposed
+# projects) is output, a different matter.
 #
-# Nơi LƯU vẫn là khối trong cv_text, vì bộ chấm điểm và bộ dựng CV đều đọc ở
-# đó — hồ sơ là nơi SỬA, không phải bản sao thứ hai.
+# It is still STORED as a block inside cv_text, because the scorer and the CV
+# builder both read it there — the profile is where you EDIT, not a second
+# copy.
 BLOCKS = "blocks"
 
 
@@ -55,17 +57,19 @@ class Question:
     options: list[Option] = field(default_factory=list)
     placeholder: str = ""
     required: bool = False
-    allow_other: bool = False       # mở ô "add your own" cạnh danh sách
-    # Ô THẺ. Giá trị = dấu nối lúc lưu ("\n" hay ", "). Có dấu nối nghĩa là
-    # câu này thực chất là một DANH SÁCH, nên đừng bắt người dùng gõ chay:
-    # họ phải vừa nghĩ ra nội dung, vừa nhớ đúng chính tả, vừa nhớ luật ngăn
-    # cách của riêng ô đó — ba gánh cho một giá trị.
+    allow_other: bool = False       # opens an "add your own" box beside the list
+    # A TAG FIELD. The value is the separator used when saving ("\n" or
+    # ", "). Having a separator means this question is really a LIST, so do
+    # not make the user type it raw: they would have to invent the content,
+    # spell it correctly, and remember that field's own separator rule —
+    # three burdens for one value.
     tags: str = ""
     suggest: str = ""               # kho gợi ý: "titles" hay "skills"
     block_kind: str = ""            # với kind=BLOCKS: "experience" hay "project"
-    # Có trong schema nhưng KHÔNG vẽ ra form. store.save() lọc theo schema, nên
-    # gỡ một câu khỏi đây là làm nó KHÔNG LƯU ĐƯỢC NỮA — lặng lẽ. Đã mất
-    # nguyên toàn văn CV vì đúng chuyện đó: nhập CV báo "13 fields", lưu 12.
+    # Present in the schema but NOT drawn on the form. store.save() filters
+    # by the schema, so removing a question from here makes it UNSAVEABLE —
+    # silently. The full CV text was lost to exactly that: importing a CV
+    # reported "13 fields" and saved 12.
     hidden: bool = False
 
 
@@ -256,11 +260,12 @@ SECTIONS: list[Section] = [
                 tags=", ", suggest="industries",
                 text="Industries or domains you want",
                 kind=TEXT,
-                # "Tích hết" chính là ĐỂ TRỐNG — nhưng trước đây không chỗ nào
-                # nói ra, nên ô trống trông như một câu bị bỏ quên.
-                why=("Để TRỐNG nghĩa là không kén ngành. Chọn vài ngành chỉ để "
-                     "nói rõ mình ưu tiên chỗ nào — kho này đúng bằng bộ ngành "
-                     "mà máy nhận ra được trên tin thật."),
+                # "Tick everything" IS leaving it empty — but nothing used to
+                # say so, and an empty field looked like a forgotten question.
+                why=("Leaving it EMPTY means no industry preference. Picking a "
+                     "few only states where you lean — this list is exactly "
+                     "the set of industries the machine can recognise on real "
+                     "postings."),
                 placeholder="fintech, healthtech, e-commerce, games…",
             ),
             Question(
@@ -319,8 +324,9 @@ SECTIONS: list[Section] = [
                 id="no_go_other",
                 text="Anything else you won't take?",
                 kind=LONGTEXT,
-                why="Để TRỐNG nghĩa là không kén ngành — app không lọc theo ngành nữa. "
-                    "Chọn vài ngành chỉ để nói rõ mình ưu tiên chỗ nào.",
+                why="Leaving it EMPTY means no industry preference — the app "
+                    "stops filtering by industry. Picking a few only states "
+                    "where you lean.",
                 placeholder="no PHP · no companies under 20 people · no frequent travel",
             ),
         ],
@@ -331,14 +337,16 @@ SECTIONS: list[Section] = [
         title="What you have",
         why="Raw material for matching and for building CVs. Without it, scoring is guesswork.",
         questions=[
-            # `cv_text` KHÔNG vẽ ra form (đã có Import CV và tab CV lo việc
-            # sửa), nhưng PHẢI ở lại schema: store.save() lọc theo schema, gỡ
-            # khỏi đây là nó không lưu được nữa — và đó là nguồn sự thật nặng
-            # nhất app, cv/blocks.py đọc nó ra khối kinh nghiệm, score.py chấm
+            # `cv_text` is NOT drawn on the form (Import CV and the CV tab
+            # handle editing), but it MUST stay in the schema: store.save()
+            # filters by the schema, and removing it makes it unsaveable —
+            # and it is the app's heaviest source of truth, with
+            # cv/blocks.py reading experience blocks out of it and score.py
+            # scoring
             # theo từng khối.
             Question(
                 id="cv_text",
-                text="Toàn văn CV",
+                text="The full CV text",
                 kind=LONGTEXT,
                 hidden=True,
             ),
@@ -391,18 +399,19 @@ SECTIONS: list[Section] = [
     Section(
         id="kinh_nghiem",
         title="Work experience",
-        why=("Chỗ nhà tuyển dụng đọc đầu tiên. Mỗi việc một khối: chức danh, "
-             "nơi làm, thời gian, rồi những câu nói bạn ĐÃ LÀM ĐƯỢC GÌ — "
-             "có số thì càng tốt."),
+        why=("The first thing an employer reads. One block per job: the "
+             "title, where, when, then the sentences saying WHAT YOU "
+             "ACHIEVED — with numbers wherever possible."),
         questions=[
             Question(
                 id="experience_blocks",
-                text="Việc đã làm",
+                text="Work experience",
                 kind=BLOCKS,
                 block_kind="experience",
-                why=("Mỗi dòng trong phần mô tả là một câu có thể lên CV. Máy "
-                     "chọn câu nào hợp tin nào — nên viết thêm câu là CV trúng "
-                     "hơn, không phải chọn khéo hơn."),
+                why=("Each line of the description is one sentence that can "
+                     "go on the CV. The machine picks which sentence fits "
+                     "which posting — so writing more sentences makes the CV "
+                     "hit harder, not picking more cleverly."),
                 placeholder="Backtested alpha signals across 49 industry portfolios",
             ),
         ],
@@ -412,15 +421,16 @@ SECTIONS: list[Section] = [
         id="project",
         title="Personal project",
         optional=True,
-        why=("Thứ tách bạn khỏi 40 người khác cùng khớp một tin: khớp thì qua "
-             "được bộ lọc, còn BẰNG CHỨNG mới đưa bạn vào nhóm được gọi."),
+        why=("What separates you from the 40 other people who also match a "
+             "posting: matching gets you past the filter, EVIDENCE gets you "
+             "into the callback pile."),
         questions=[
             Question(
                 id="project_blocks",
                 text="Project của bạn",
                 kind=BLOCKS,
                 block_kind="project",
-                why=("Làm dở cũng tính. Nhiều cái chỉ thiếu mỗi việc đo lại và "
+                why=("Unfinished counts too. Many only need measuring again and "
                      "viết cho tử tế."),
                 placeholder="Sharpe 0.74 in sample against 0.322 out-of-sample",
             ),
@@ -435,11 +445,12 @@ SECTIONS: list[Section] = [
             Question(id="email", text="Contact email", kind=TEXT,
                      placeholder="used to send applications and catch replies"),
             Question(id="phone", text="Phone", kind=TEXT),
-            # Ô này TỪNG hứa hão: câu why nói nó lọc theo khu vực, mà cho
-            # tới 12/09 không một dòng nào trong tìm/lọc đọc nó — chỉ CV và
-            # điền form dùng. Còn "UK" thì đóng cứng ở ba chỗ trong mã nguồn.
-            # Giờ nó quyết định thật: `filter.noi_o()` suy ra vùng, và việc
-            # ngoài vùng đó bị loại kèm lý do ghi rõ vùng nào.
+            # This field USED to promise something it never did: its `why`
+            # said it filtered by area, while until 12 Sep not one line of
+            # the search or filter read it — only the CV and form filling
+            # did. Meanwhile "UK" was hardcoded in three places. Now it
+            # genuinely decides: `filter.noi_o()` derives the region, and
+            # work outside it is dropped with a reason naming the region.
             Question(id="location", text="Where you're based", kind=TEXT,
                      why="Decides what counts as near you: postings outside "
                          "this area are dropped. Also printed on your CV and "
@@ -483,9 +494,10 @@ SECTIONS: list[Section] = [
                     "For an early-career application this IS the main body of the CV, not a "
                     "footnote. Include module grades and classification — graduate schemes "
                     "filter on them directly.\n"
-                    "MỘT BẰNG MỘT DÒNG, theo đúng dạng này thì máy điền hộ được form xin "
-                    "việc: Bằng — Trường, Tháng Năm – Tháng Năm. Thiếu tháng thì mỗi lá đơn "
-                    "bạn phải tự chọn lại ngày tốt nghiệp."
+                    "ONE DEGREE PER LINE. In exactly this shape the machine "
+                    "can fill in application forms for you: Degree — "
+                    "University, Mon Year – Mon Year. Without the months you "
+                    "pick your graduation date by hand on every application."
                 ),
                 placeholder="MSc Computational Finance — Royal Holloway, University of London, "
                             "2025–2026\n  Investment & Portfolio Management 86 · Deep Learning 83\n"
@@ -535,31 +547,35 @@ def section_index(section_id: str) -> int:
     return next((i for i, s in enumerate(SECTIONS) if s.id == section_id), -1)
 
 
-# Ba câu này là cổng chặn ingest. Thiếu là tìm ra rác.
-#   job_titles  chuỗi đem đi tìm
-#   markets     dùng nguồn nào
-#   work_auth   ở UK đây là bộ lọc gắt nhất — thiếu thì đề xuất toàn tin không nộp được
+# These three are the gate on ingest. Without them the search returns junk.
+#   job_titles  the strings that get searched for
+#   markets     which sources to use
+#   work_auth   in the UK this is the harshest filter — without it every
+#               suggestion is a posting you cannot apply to
 INGEST_GATE = ("job_titles", "markets", "work_auth")
 
 def suggestions(name: str) -> list[str]:
-    """Kho gợi ý cho ô thẻ.
+    """The suggestion stores for tag fields.
 
-    "skills" lấy thẳng từ vựng chấm điểm: đó là danh sách máy THẬT SỰ nhận ra
-    khi đọc tin. Bịa một danh sách riêng cho màn hình thì người dùng chọn được
-    từ mà máy không biết đọc — gợi ý xong vẫn không ăn thua.
+    "skills" comes straight from the scoring vocabulary: that is the list the
+    machine ACTUALLY recognises when reading a posting. Inventing a separate
+    list for the screen lets the user pick words the machine cannot read —
+    suggested and still useless.
 
-    "titles" KHÔNG nằm ở đây, cố ý. Chức danh phải rút từ TIN THẬT (xem
-    profile/titles.py): một danh sách gõ tay trong mã sai ngay từ ngày viết và
-    mục dần từ đó — thị trường đẻ chức danh mới liên tục mà không ai nhớ vào
-    sửa file. Bên gọi truyền kho vào.
+    "titles" is deliberately NOT here. Job titles have to come from REAL
+    POSTINGS (see profile/titles.py): a hand-typed list in the source is
+    wrong on the day it is written and rots from there — the market invents
+    new titles constantly and nobody remembers to edit the file. The caller
+    passes the store in.
     """
     if name == "skills":
         from ..scoring.vocab import ALIASES
         return sorted(set(ALIASES.values()))
     if name == "industries":
-        # Kho ngành ĐÃ CÓ trong scoring/vocab.py — cùng bộ từ máy dùng để
-        # đọc tin. Gõ một danh sách riêng cho màn hình thì người dùng chọn
-        # được ngành mà máy không biết nhận ra.
+        # The industry list ALREADY EXISTS in scoring/vocab.py — the same
+        # vocabulary the machine reads postings with. Typing a separate list
+        # for the screen lets the user pick an industry the machine cannot
+        # recognise.
         from ..scoring.vocab import INDUSTRY
         return sorted(INDUSTRY)
     return []

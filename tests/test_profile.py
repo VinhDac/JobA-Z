@@ -257,7 +257,7 @@ check("certifications là ô thẻ nối bằng xuống dòng",
 # Ngữ pháp học vấn phải được NÓI RA ở chỗ người ta gõ — apply/answer cần đúng
 # dạng đó mới điền hộ được ngày tốt nghiệp trên form xin việc.
 check("ô học vấn nói rõ ngữ pháp hệ thống đọc",
-      "MỘT BẰNG MỘT DÒNG" in all_questions()["education"].why)
+      "ONE DEGREE PER LINE" in all_questions()["education"].why)
 
 print("\n[học vấn — MỘT ngữ pháp, ghi và đọc cùng dùng]")
 # Đây là ô CÓ TẢI: apply/answer đọc nó ra ngày tốt nghiệp để điền form xin
@@ -304,7 +304,7 @@ check("kho ngành lấy từ bộ máy ĐANG dùng để nhận ngành trên tin
       _sug("industries") == sorted(_IND))
 check("ô ngành là ô thẻ", all_questions()["industries"].tags == ", ")
 check("và nói rõ để trống = không kén ngành",
-      "Để TRỐNG" in all_questions()["industries"].why)
+      "Leaving it EMPTY" in all_questions()["industries"].why)
 
 # Tiêu đề thật trông như thế này — dùng nguyên thì vô dụng làm gợi ý.
 _that = ["2027 Point72 Academy Investment Analyst Summer Internship - Japan (BCF)",

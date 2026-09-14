@@ -1,17 +1,21 @@
-"""Quét hộp thư một lượt: đọc → xếp loại → khớp → ĐỀ XUẤT.
+"""One mailbox pass: read → classify → match → PROPOSE.
 
-KHÔNG tự đổi trạng thái. Một thư mở đầu "unfortunately" có thể là từ chối, mà
-cũng có thể là câu mở đầu của thư đổi lịch phỏng vấn. Đoán sai mà tự ghi thì
-bảng thành sai, và Vin không có cách nào biết là nó đã sai.
+It NEVER changes a status by itself. A mail opening with "unfortunately"
+could be a rejection, or it could be the opening line of an
+interview-reschedule. Guess wrong and write it, and the table is wrong with
+no way for Vin to know it is wrong.
 
-Thư dựng lại được QUÁ KHỨ: MỌI thư có kết cục — xác nhận, mời phỏng vấn, từ
-chối, nhận việc — đều là bằng chứng một lần đã nộp. Không khớp dòng nào thì đẻ
-ra dòng mới ở đúng chặng đó. Đó là lần nộp có thật, chỉ là app chưa biết.
+Mail can RECONSTRUCT THE PAST: EVERY mail with an outcome — an
+acknowledgement, an interview invitation, a rejection, an offer — is evidence
+that an application was sent. If it matches no row, a new row is created at
+exactly that stage. That application really happened; the app simply did not
+know.
 
-LỖI ĐÃ SỬA: trước đây chỉ thư XÁC NHẬN mới được dựng lại dòng. Một thư mời
-phỏng vấn từ công ty app chưa có dòng thì hiện ra "chưa khớp dòng nào", Vin
-bấm Nhận và KHÔNG có gì xảy ra — lời mời phỏng vấn biến mất. Mà thư mời còn là
-bằng chứng mạnh hơn thư xác nhận. Một luật cho mọi kết cục, không ngoại lệ.
+A BUG THAT WAS FIXED: only ACKNOWLEDGEMENT mail used to reconstruct a row. An
+interview invitation from a company with no row showed "matches no row", Vin
+pressed Accept and NOTHING happened — the interview invitation vanished. And
+an invitation is stronger evidence than an acknowledgement. One rule for
+every outcome, no exceptions.
 """
 
 from __future__ import annotations
@@ -22,26 +26,29 @@ from ..core.journal import SEARCH, log as jlog
 from . import board, mail, sort
 
 
-# `needs_you` — ba mức, và mức thứ ba là cả ý tưởng của tầng này:
-#     0  không cần bạn
-#     1  máy HIỂU và đề xuất đổi trạng thái
-#     2  máy KHÔNG HIỂU, mà thư này thuộc về một lần nộp trên bảng
+# `needs_you` — three levels, and the third one is this layer's whole idea:
+#     0  you are not needed
+#     1  the machine UNDERSTANDS and proposes a status change
+#     2  the machine does NOT understand, but this mail belongs to an
+#        application on the table
 #
-# VÌ SAO CẦN MỨC 2. Bảng mẫu cách diễn đạt không bao giờ đủ — đo trên hộp thư
-# thật: "Sorry, it's not quite a match" (Maven) và "Your application is in"
-# (Trading 212) đều là thư thật, đều rơi vào `other`, và biến mất không dấu
-# vết. Đua thêm từ khoá là trò không có điểm dừng.
+# WHY LEVEL 2 IS NEEDED. A table of phrasings is never complete — measured on
+# the real mailbox: "Sorry, it's not quite a match" (Maven) and "Your
+# application is in" (Trading 212) are both real mail, both fell into
+# `other`, and both vanished without trace. Racing to add more keywords is a
+# game with no end.
 #
-# Nên đổi luật: KHÔNG hứa hiểu mọi lá thư, mà hứa KHÔNG LÁ NÀO BIẾN MẤT. Thư
-# máy không hiểu mà khớp một lần nộp thì hiện ra để người dùng xếp — và cái
-# họ xếp chính là thứ dạy lại bảng mẫu.
+# So the rule changed: it does NOT promise to understand every mail, it
+# promises NO MAIL DISAPPEARS. Mail the machine cannot read that matches an
+# application is surfaced for the user to classify — and what they classify
+# is what teaches the phrasing table.
 CAN_BAN = 1
 KHONG_HIEU = 2
 
 
 def store(conn: sqlite3.Connection, msg: dict, kind: str,
           company: str, app_id: int | None) -> bool:
-    """Ghi một thư. Trả True nếu là thư MỚI."""
+    """Record one mail. True if it is NEW."""
     found = conn.execute("SELECT id FROM message WHERE msg_id = ?",
                          (msg["msg_id"],)).fetchone()
     if found:
@@ -58,34 +65,35 @@ def store(conn: sqlite3.Connection, msg: dict, kind: str,
 
 
 def _muc(kind: str, app_id: int | None) -> int:
-    """Thư này cần người dùng tới mức nào — xem lời chú ở CAN_BAN."""
+    """How much this mail needs the user — see the note on CAN_BAN."""
     if kind != "other":
         return CAN_BAN
     return KHONG_HIEU if app_id else 0
 
 
 def _so_ngay(conn: sqlite3.Connection) -> int:
-    """Đọc lại bao nhiêu ngày thư — người dùng chỉnh ở Cài đặt · Gmail."""
+    """How many days of mail to re-read — set in Settings · Gmail."""
     from ..core import prefs
     return prefs.num(conn, prefs.MAIL_DAYS, 1, 365)
 
 
 def run(conn: sqlite3.Connection, days: int | None = None) -> dict:
-    """Một lượt quét. Trả về số đo, không trả về chữ."""
+    """One pass. Returns measurements, not prose."""
     address, password = mail.account()
     if not address or not password:
-        jlog.warn(SEARCH, "chưa nối hộp thư — mở Cài đặt · Gmail để nối")
-        return {"ok": False, "why": "chưa nối hộp thư"}
+        jlog.warn(SEARCH, "no mailbox connected — open Settings · Gmail")
+        return {"ok": False, "why": "no mailbox connected"}
 
-    # Số ngày do NGƯỜI DÙNG đặt, đọc lúc chạy chứ không đóng cứng vào chữ ký
-    # hàm: đóng cứng thì đổi trong Cài đặt xong vẫn phải mở lại app mới ăn.
+    # The number of days is THE USER's, read at call time rather than baked
+    # into the signature: baked in, changing it in Settings still needs an app
+    # restart to take effect.
     if days is None:
         days = _so_ngay(conn)
-    jlog.progress(SEARCH, f"đọc thư {days} ngày")
+    jlog.progress(SEARCH, f"reading {days} days of mail")
     try:
         messages = mail.fetch(address, password, since_days=days)
     except Exception as exc:                 # noqa: BLE001
-        jlog.error(SEARCH, f"đọc thư hỏng — {type(exc).__name__}: {exc}")
+        jlog.error(SEARCH, f"reading mail failed — {type(exc).__name__}: {exc}")
         return {"ok": False, "why": str(exc)}
     finally:
         jlog.done(SEARCH)
@@ -97,32 +105,37 @@ def run(conn: sqlite3.Connection, days: int | None = None) -> dict:
         company = sort.company_of(msg)
         app_id = sort.match(conn, msg)
 
-        # Không khớp dòng nào mà thư có kết cục = lần nộp app chưa biết.
-        # Dựng lại ở ĐÚNG chặng thư nói, đừng ép về "đã nộp": một thư từ chối
-        # dựng thành dòng "đang chờ" là bảng sai ngay lúc sinh ra.
+        # No matching row while the mail carries an outcome = an application
+        # the app did not know about. Rebuild it at EXACTLY the stage the
+        # mail states; do not force it to "applied": a rejection turned into
+        # a "waiting" row makes the table wrong the moment it is created.
         # DỊCH VỤ CÔNG KHÔNG PHẢI VIỆC LÀM. "Your application for a National
-        # Insurance number" khớp luật `applied` và đẻ ra một dòng trên bảng
-        # theo dõi việc làm — đo trên hộp thư thật.
+        # Insurance number" matched the `applied` rule and created a row on
+        # the job-tracking table — measured on the real mailbox.
         # BẰNG CHỨNG THẮNG SUY ĐOÁN.
         #
-        # Bộ lọc tên miền là một SUY ĐOÁN ("thư từ chỗ này chắc không phải
-        # việc làm"). `sort.kind()` đọc ra "interview" là một BẰNG CHỨNG đọc
-        # được từ chính lá thư. Suy đoán không được đè lên bằng chứng.
+        # The domain filter is an INFERENCE ("mail from here is probably not
+        # about a job"). `sort.kind()` reading "interview" is EVIDENCE taken
+        # from the mail itself. An inference must not override evidence.
         #
-        # Bản trước đè, và cái giá đo được: thư mời phỏng vấn của Civil
-        # Service (`...service.gov.uk`) và NHS (`jobs.nhs.uk`) đọc đúng là
-        # "interview" rồi bị ép về "other", needs_you = 0, và biến mất khỏi
-        # mọi màn hình — trái đúng lời hứa "không lá nào bị bỏ rơi".
+        # The previous version did override, and the measured cost:
+        # interview invitations from the Civil Service
+        # (`...service.gov.uk`) and the NHS (`jobs.nhs.uk`) were correctly
+        # read as "interview", then forced to "other" with needs_you = 0, and
+        # vanished from every screen — breaking the exact promise that no
+        # mail is left behind.
         #
-        # Luật này còn đúng với tên miền CHƯA AI NGHĨ RA: thêm bao nhiêu vào
-        # danh sách chặn cũng không bao giờ ăn mất một lá thư có kết cục thật.
+        # This rule also holds for domains NOBODY HAS THOUGHT OF YET: however
+        # much is added to the block list, it can never eat a mail carrying a
+        # real outcome.
         if (kind not in sort.MANH
                 and sort.KHONG_PHAI_VIEC.search(msg.get("from_addr") or "")):
             kind, company = "other", ""
         if app_id is None and company and kind in board.STAGES:
-            # VỊ TRÍ và TIN GỐC đọc ngay lúc dựng dòng. Không nối thì bảng
-            # Quản lí không chỉ ngược về được tin nào và bản CV nào — mà đó
-            # chính là chỗ nó nối Search với CV.
+            # The LOCATION and the ORIGINAL POSTING are read as the row is
+            # created. Without that link the Manage table cannot point back
+            # at which posting and which CV version — and that link is
+            # exactly where it joins Search to CV.
             vai_tro = sort.role_of(msg)
             app_id = board.add(conn, company, vai_tro, origin="mail",
                                posting_id=sort.match_posting(conn, company, vai_tro),
@@ -131,15 +144,17 @@ def run(conn: sqlite3.Connection, days: int | None = None) -> dict:
 
         fresh += store(conn, msg, kind, company, app_id)
 
-    jlog.ok(SEARCH, f"thư: đọc {seen} · mới {fresh} · dựng lại {made} lần nộp")
+    jlog.ok(SEARCH, f"mail: read {seen} · new {fresh} · reconstructed {made} applications")
     return {"ok": True, "seen": seen, "fresh": fresh, "made": made}
 
 
 def noi_lai(conn: sqlite3.Connection) -> dict:
-    """Nối lại MỌI dòng đã có với tin trong kho và với vị trí đọc từ thư.
+    """Re-link EVERY existing row to a posting in the store and to the
+    location read from mail.
 
-    Chạy lại được nhiều lần: chỉ điền chỗ còn trống, không đè thứ người dùng
-    đã sửa. Cần có vì 37 dòng đầu tiên dựng ra khi máy chưa biết đọc vị trí.
+    Re-runnable: it only fills what is empty and never overwrites what the
+    user edited. It exists because the first 37 rows were created before the
+    machine could read a location.
     """
     noi = ten_vai = 0
     for a in conn.execute("SELECT id, company, role, posting_id FROM application"
@@ -167,10 +182,11 @@ def noi_lai(conn: sqlite3.Connection) -> dict:
 
 
 def kho_hieu(conn: sqlite3.Connection) -> list[dict]:
-    """Thư máy KHÔNG xếp được, mà lại thuộc về một lần nộp trên bảng.
+    """Mail the machine could NOT classify that belongs to an application.
 
-    Đây là chỗ chặn cuối: không hứa hiểu mọi cách viết, chỉ hứa không lá nào
-    biến mất. Người dùng xếp một cái là trạng thái đổi ngay.
+    This is the last catch: it does not promise to understand every phrasing,
+    only that no mail disappears. One classification from the user and the
+    status changes at once.
     """
     return [dict(r) for r in conn.execute(
         "SELECT m.id, m.subject, m.snippet, m.received_at, m.from_addr,"
@@ -180,10 +196,11 @@ def kho_hieu(conn: sqlite3.Connection) -> list[dict]:
 
 
 def xep(conn: sqlite3.Connection, message_id: int, kind: str) -> bool:
-    """Người dùng tự xếp loại một lá thư máy không hiểu.
+    """The user classifies a mail the machine could not read.
 
-    Ghi lại `kind` rồi đổi trạng thái luôn — người dùng đã đọc thư và đã
-    quyết, hỏi lại lần nữa là bắt họ bấm hai lần cho một việc.
+    It records the `kind` and changes the status immediately — the user has
+    read the mail and decided, and asking again makes them click twice for
+    one thing.
     """
     if kind not in board.STAGES:
         return False
@@ -196,17 +213,18 @@ def xep(conn: sqlite3.Connection, message_id: int, kind: str) -> bool:
     conn.commit()
     board.set_stage(conn, int(row["application_id"]), kind,
                     (row["subject"] or "")[:90])
-    jlog.ok(SEARCH, f"bạn xếp một thư máy không hiểu -> {kind}")
+    jlog.ok(SEARCH, f"you classified an unread mail -> {kind}")
     return True
 
 
 def gan(conn: sqlite3.Connection, message_id: int, app_id: int) -> bool:
-    """Người dùng chỉ tay: lá thư này thuộc lần nộp NÀO.
+    """The user points: this mail belongs to WHICH application.
 
-    NỬA CÒN THIẾU của lời hứa "không lá nào biến mất". Máy đọc được kết cục
-    của lá thư nhưng không đoán ra công ty — đo trên hộp thư thật có 3 lá như
-    thế, và trước đây chúng chỉ có đúng một nút: Bỏ qua. Thấy mà không làm gì
-    được thì cũng là mất, chỉ là mất một cách ồn ào hơn.
+    THE MISSING HALF of the "no mail disappears" promise. The machine can
+    read the mail's outcome but cannot work out the company — measured, the
+    real mailbox has 3 of those, and until now they had exactly one button:
+    Skip. Seeing something you can do nothing about is still losing it, just
+    more loudly.
     """
     m = conn.execute("SELECT kind, subject FROM message WHERE id = ?",
                      (message_id,)).fetchone()
@@ -220,15 +238,15 @@ def gan(conn: sqlite3.Connection, message_id: int, app_id: int) -> bool:
         board.set_stage(conn, app_id, m["kind"], (m["subject"] or "")[:90])
         conn.execute("UPDATE message SET needs_you = 0 WHERE id = ?", (message_id,))
         conn.commit()
-    jlog.ok(SEARCH, f"gán một thư vào lần nộp #{app_id}")
+    jlog.ok(SEARCH, f"attached a mail to application #{app_id}")
     return True
 
 
 def proposals(conn: sqlite3.Connection) -> list[dict]:
-    """Thư đang ĐỀ XUẤT đổi trạng thái — Vin bấm mới đổi.
+    """Mail PROPOSING a status change — nothing changes until Vin presses.
 
-    Chỉ đề xuất khi trạng thái mới KHÁC trạng thái đang có; một thư xác nhận
-    cho một dòng đã ở 'đã nộp' thì không có gì để hỏi.
+    It only proposes when the new status DIFFERS from the current one; an
+    acknowledgement for a row already at 'applied' has nothing to ask.
     """
     out = []
     for r in conn.execute(
@@ -238,19 +256,19 @@ def proposals(conn: sqlite3.Connection) -> list[dict]:
             " WHERE m.needs_you = ? ORDER BY m.received_at DESC", (CAN_BAN,)):
         row = dict(r)
         if row["app_id"] and row["kind"] == row["stage"]:
-            continue                       # đã đúng trạng thái, không hỏi lại
+            continue                       # already at that status, do not ask again
         out.append(row)
     return out
 
 
 def settle(conn: sqlite3.Connection, message_id: int, accept: bool) -> None:
-    """Vin trả lời một đề xuất. Nhận thì đổi trạng thái, bỏ thì im luôn.
+    """Vin answers a proposal. Accept changes the status; skip goes quiet.
 
-    Thư CŨ không được đè trạng thái MỚI. Man Group gửi "thank you for
-    applying" ngày 1 rồi "unfortunately" ngày 20; Vin nhận thư từ chối trước,
-    xong nhận nốt thư xác nhận cũ — và dòng quay ngược về "đang chờ". Bảng nói
-    đơn còn sống trong khi nó đã chết, đúng thứ tệ nhất một bảng theo dõi có
-    thể làm.
+    OLD mail must not overwrite a NEWER status. Man Group sent "thank you for
+    applying" on day 1 and "unfortunately" on day 20; Vin accepted the
+    rejection first, then accepted the older acknowledgement — and the row
+    went back to "waiting". The table said the application was alive when it
+    was dead, which is the worst thing a tracking table can do.
     """
     row = conn.execute(
         "SELECT m.kind, m.subject, m.received_at, m.application_id,"
@@ -265,7 +283,7 @@ def settle(conn: sqlite3.Connection, message_id: int, accept: bool) -> None:
         board.set_stage(conn, row["application_id"], row["kind"],
                         row["subject"][:90])
     elif accept and stale:
-        jlog.warn(SEARCH, f"bỏ qua thư cũ hơn trạng thái đang có — "
+        jlog.warn(SEARCH, f"skipped mail older than the current status — "
                           f"{(row['subject'] or '')[:50]}")
     conn.execute("UPDATE message SET needs_you = 0 WHERE id = ?", (message_id,))
     conn.commit()
