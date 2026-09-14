@@ -1957,7 +1957,10 @@ with tempfile.TemporaryDirectory() as tmp:
     # Cờ `wide=` là nút mà mỗi trang phải NHỚ bật — sẽ có trang quên. Đã bỏ.
     _lay = (Path(__file__).resolve().parent.parent
             / "src/jobbot/dashboard/layout.py").read_text(encoding="utf-8")
-    check("bỏ hẳn cờ wide (đường dễ quên)", "wide" not in _lay)
+    # NHÌN VÀO ĐỊNH DANH, không phải chuỗi con: "as wide as the window" trong
+    # một lời chú là chữ tiếng Anh bình thường, không phải cái cờ đã bỏ.
+    check("bỏ hẳn cờ wide (đường dễ quên)",
+          not _re9.search(r"(?<![\w-])wide(?![\w-])\s*[=:]", _lay))
     check("và không còn luật CSS .wide", "main.wide" not in _bare)
 
     # Duyệt THẬT mọi trang trong thanh bên, không chỉ trang vừa sửa.
@@ -2668,11 +2671,11 @@ with tempfile.TemporaryDirectory() as tmp:
     # chỗ chưa từng đứng.
     from jobbot.dashboard.layout import duong_ve as _dv
     check("từ tab CV -> back về tab CV", _dv("/cv")[0] == "/cv")
-    check("và nhãn nói đúng chỗ sắp về", _dv("/cv")[1] == "Bản CV")
+    check("và nhãn nói đúng chỗ sắp về", _dv("/cv")[1] == "CVs")
     check("từ trang tin -> back về trang tin", _dv("/jobs/7")[0] == "/jobs/7")
     check("và nhãn phân biệt TRANG TIN với BẢN CV của tin đó",
-          _dv("/jobs/7")[1] == "tin này"
-          and _dv("/jobs/7/cv?tu=/cv")[1] == "Bản CV")
+          _dv("/jobs/7")[1] == "this posting"
+          and _dv("/jobs/7/cv?tu=/cv")[1] == "CVs")
     check("giữ nguyên cả tham số tìm", _dv("/cv?q=man")[0] == "/cv?q=man")
     check("không có đường đi kèm -> về đích mặc định", _dv("")[0] == "/cv")
     # `tu` ĐI TỪ URL VÀO THẲNG href. Một giá trị như "//ke-xau" biến nút Back

@@ -1,59 +1,59 @@
-"""Khung trang: sidebar trái + thanh master + vùng widget.
+"""The page frame: left sidebar + master bar + widget area.
 
-CHỈ VẼ. Không luật nghiệp vụ, không đọc DB.
+DRAWING ONLY. No business rules, no DB reads.
 
-Bố cục kiểu app desktop, không phải trang web:
-    sidebar cố định trái, chạy lên tận đỉnh cửa sổ
-    thanh master trên cùng: RUN / PAUSE / trạng thái đang chạy
-    nội dung là các Ô (widget) — mỗi ô tự cuộn bên trong, TRANG thì không cuộn
+Laid out like a desktop app, not a web page:
+    a fixed left sidebar, running to the very top of the window
+    a master bar along the top: RUN / PAUSE / what is running
+    the content is WIDGETS — each scrolls inside itself, THE PAGE does not
 
-Vì sao ô tự cuộn chứ không phải trang cuộn: đây là app chạy 24/7, mở ra là
-phải thấy ngay toàn cảnh. Trang cuộn thì nửa thông tin nằm dưới màn hình,
-và cái đang chạy có thể đang nằm ở chỗ không nhìn thấy.
+Why widgets scroll rather than the page: this app runs 24/7, and opening it
+has to show the whole picture at once. With a scrolling page half the
+information sits below the fold, and the thing that is running may be in the
+part nobody can see.
 """
 
 from __future__ import annotations
 
 from html import escape as esc
 
-# (đường dẫn, nhãn, ký hiệu)
-# Thứ tự = thứ tự công việc chạy thật, không phải thứ tự chữ cái.
-# Tab có (rt) là tab CÓ THỜI GIAN CHẠY -> dùng khuôn views/runtime.py.
-# Thứ tự = thứ tự công việc chạy thật, không phải thứ tự chữ cái.
-# Tab có (rt) là tab CÓ THỜI GIAN CHẠY -> dùng khuôn views/runtime.py.
+# (path, label, symbol)
+# The order is the order the work really runs in, not alphabetical.
+# A tab marked (rt) HAS A RUNTIME -> it uses the views/runtime.py frame.
 #
-# ĐÃ BỎ: Settings (thành menu bánh răng trên thanh trên — nó không phải một
-# việc, chỉ là mấy công tắc mở ra chỉnh rồi đóng), Jobs và Score. Danh sách việc sẽ nằm trong Search — "tìm" và "xem
-# kết quả tìm" là một việc. Chấm điểm không phải một hệ chạy riêng, nó là
-# giai đoạn cuối của cùng một lần quét.
-# /jobs/<id> và /jobs/<id>/cv VẪN SỐNG — danh sách mới sẽ trỏ tới đó.
-# --------------------------------------------------------------- BỘ ICON
+# REMOVED: Settings (now the cog menu on the top bar — it is not a job, just
+# switches you open, adjust and close), Jobs and Score. The job list lives
+# inside Search — "search" and "look at what the search found" are one job.
+# Scoring is not a system of its own, it is the last stage of the same scan.
+# /jobs/<id> and /jobs/<id>/cv ARE STILL LIVE — the new list points at them.
+# --------------------------------------------------------------- ICON SET
 #
-# SVG NÉT, KHÔNG PHẢI KÝ TỰ UNICODE. Bản trước dùng ◈ ⌕ ▤ ▣ ◇ — và chúng
-# không phải một bộ: mỗi ký tự do một nhà thiết kế font vẽ cho một mục đích
-# khác, nên cỡ quang học, độ dày nét và baseline đều lệch nhau. Lúc thanh bên
-# GẬP, CSS phóng chúng lên 22px và cái lệch đó thành lộ hẳn: ⌕ bé tí, ▤ là
-# khối đặc, ◇ mảnh như sợi chỉ. Thêm nữa ◈ ▣ ▤ không nói được nó là cái gì —
-# người dùng phải học thuộc "hình thoi kép = Home".
+# STROKED SVG, NOT UNICODE CHARACTERS. The previous version used ◈ ⌕ ▤ ▣ ◇ —
+# and they are not a set: each glyph was drawn by a different type designer
+# for a different purpose, so optical size, stroke weight and baseline all
+# disagree. With the sidebar COLLAPSED, CSS blows them up to 22px and the
+# mismatch becomes obvious: ⌕ is tiny, ▤ is a solid block, ◇ is thread-thin.
+# On top of that ◈ ▣ ▤ cannot say what they are — the user has to memorise
+# "double diamond = Home".
 #
-# Bộ này: một khung 24×24, một độ dày nét (1.75), đầu nét bo tròn, tô bằng
-# `currentColor` nên đổi màu theo CSS chứ không phải sửa ảnh. Không file
-# ngoài, không font, không CDN — đúng luật không-phụ-thuộc của app.
+# This set: one 24×24 frame, one stroke weight (1.75), rounded caps, painted
+# with `currentColor` so CSS changes the colour rather than an image editor.
+# No external file, no font, no CDN — true to the app's no-dependency rule.
 #
-# TÊN ICON PHẢI TẢ ĐÚNG VIỆC CỦA TAB, không phải tả hình:
-#     home     mái nhà      — chỗ nhìn tổng thể
-#     search   kính lúp     — đi tìm việc
-#     cv       tờ giấy      — mấy bản sẽ gửi đi
-#     track    kẹp + dấu ✓  — theo dõi đơn đã nộp tới đâu
-#     profile  người        — hồ sơ của bạn
-#     setting  bánh răng    — cài đặt cả app
-#     adjust   ba cần gạt   — điều chỉnh RIÊNG màn đang mở (nút ⚟)
-#     to       bốn góc      — mở to một ô
-#     gap      hai mũi <<   — gập thanh bên (CSS xoay 180° khi đã gập)
+# THE ICON NAME MUST DESCRIBE THE TAB'S JOB, not the shape:
+#     home     a roof         — where you see the whole picture
+#     search   a magnifier    — going out to find work
+#     cv       a sheet        — the pages that will be sent
+#     track    clip + tick    — how far the applications have got
+#     profile  a person       — your own profile
+#     setting  a cog          — settings for the whole app
+#     adjust   three sliders  — adjusts ONLY the open screen (the ⚟ button)
+#     to       four corners   — enlarge one widget
+#     gap      two « arrows   — collapse the sidebar (CSS rotates it 180°)
 #
-# Bánh răng dựng bằng lượng giác (6 răng) chứ không gõ tay 24 toạ độ: gõ tay
-# thì lệch một số là răng méo, mà ở 16px mắt không bắt được — chỉ thấy "nhìn
-# hơi bẩn" mà không biết vì sao.
+# The cog is built with trigonometry (6 teeth) rather than 24 hand-typed
+# coordinates: typed by hand, one wrong number warps a tooth, and at 16px the
+# eye cannot catch it — it only looks "slightly dirty" for no visible reason.
 ICON = {
     "home": "<path d='M3.2 10.4 12 3.2l8.8 7.2'/>"
             "<path d='M5.6 9.1V20.3h12.8V9.1'/>"
@@ -86,34 +86,36 @@ ICON = {
 
 
 def ico(ten: str) -> str:
-    """Một icon. `aria-hidden` vì chữ bên cạnh (hoặc title=) đã nói rồi —
-    trình đọc màn hình đọc hai lần là tệ hơn không đọc."""
+    """One icon. `aria-hidden` because the text beside it (or title=) has
+    already said it — a screen reader saying it twice is worse than not
+    saying it."""
     return (f"<svg class=ico viewBox='0 0 24 24' aria-hidden=true>"
             f"{ICON[ten]}</svg>")
 
 
 NAV = [
     ("/",          "Home",     "home"),
-    ("/search",    "Search",   "search"),    # bước 1
-    ("/cv",        "CV",       "cv"),        # mọi bản sẽ gửi
-    ("/track",     "Quản lí",  "track"),     # bước 5-6: nộp và theo dõi
+    ("/search",    "Search",   "search"),    # step 1
+    ("/cv",        "CV",       "cv"),        # everything that will be sent
+    ("/track",     "Track",    "track"),     # steps 5-6: apply and follow up
     ("/profile",   "Profile",  "profile"),
 ]
 
 
-# Logo app — chìa khoá. Vẽ bằng hình cơ bản chứ không phải một path dài:
-# ba vòng là ba <circle> có nét mà không tô, nên lỗ giữa là lỗ thật, sau này
-# đổi độ dày nét chỉ sửa MỘT số. Màu lấy từ `currentColor` nên CSS đổi màu là
-# xong, không phải sửa file ảnh.
+# The app logo — a key. Drawn from primitives rather than one long path:
+# the three rings are three <circle>s with a stroke and no fill, so the hole
+# in the middle is a real hole, and changing the stroke weight later means
+# changing ONE number. The colour comes from `currentColor`, so CSS recolours
+# it without touching an image file.
 LOGO = (
     "<svg class=logo viewBox='0 0 112 38' aria-hidden=true>"
     "<g fill=none stroke=currentColor stroke-width=4.4>"
     "<circle cx=12 cy=17.4 r=7.2 /><circle cx=25 cy=9.4 r=7.2 />"
     "<circle cx=24.4 cy=26 r=7.2 /></g>"
     "<g fill=currentColor>"
-    "<rect x=26 y=14.6 width=84 height=5.6 rx=2.8 />"      # thân chìa
-    "<rect x=67.6 y=8 width=4.8 height=17 rx=2.4 />"       # khấc giữa
-    "<rect x=78 y=20.2 width=24 height=4.8 />"             # sống răng
+    "<rect x=26 y=14.6 width=84 height=5.6 rx=2.8 />"      # the shaft
+    "<rect x=67.6 y=8 width=4.8 height=17 rx=2.4 />"       # the middle notch
+    "<rect x=78 y=20.2 width=24 height=4.8 />"             # the bit spine
     "<rect x=78 y=25 width=6 height=11.6 />"
     "<rect x=87.6 y=25 width=5.4 height=11.6 />"
     "<rect x=96 y=25 width=6 height=11.6 />"
@@ -121,41 +123,45 @@ LOGO = (
 
 
 def deck(stage: str, name: str, state: str, metrics: list,
-         adjust: str = "", run: str = "Chạy", run_note: str = "",
+         adjust: str = "", run: str = "Run", run_note: str = "",
          sua: tuple = (), xoa: tuple = (), them: tuple = (),
          run_path: str = "/api/stage/start",
          stop_path: str = "/api/stage/stop") -> str:
-    """Thanh của MỘT khúc: tên + trạng thái · số liệu · chạy/dừng · điều chỉnh.
+    """ONE stage's bar: name + state · metrics · run/stop · adjust.
 
-    MỘT khối cho mọi chức năng. Trước đây thanh trên cùng là của cả app —
-    cùng nội dung ở mọi tab — mà thứ nó điều khiển ("Chạy ngay", "Bật tự quét")
-    chỉ thuộc về Search. Thanh mang danh toàn app mà làm việc của một khúc.
+    ONE block for every feature. The top bar used to belong to the whole app
+    — the same content on every tab — while what it controlled ("Run now",
+    "Turn auto-scan on") belonged only to Search. A bar claiming to be the
+    app's while doing one stage's job.
 
-    `metrics` là [(số, nhãn, vai)]. Chỉ nhận số nào trả lời được câu "giờ tôi
-    nên làm gì" — Home cũ chết vì đầy số đẹp mà không ai hành động theo.
+    `metrics` is [(number, label, role)]. It only takes numbers that answer
+    "what should I do now" — the old Home died full of pretty numbers nobody
+    acted on.
 
-    VAI quyết định MÀU, và màu ở đây mang nghĩa chứ không phải trang trí:
+    THE ROLE decides THE COLOUR, and colour here carries meaning rather than
+    decoration:
 
-        act    việc phải làm      -> xanh lá (màu hành động của cả app)
-        stock  kho đang giữ       -> xanh dương (tin nền, đọc để biết)
-        new    vừa về, cần xem    -> cam (thời sự)
-        view   số nền / bộ lọc    -> xám (đọc để biết, không phải việc)
+        act    work to be done    -> green (the app's action colour)
+        stock  what is held       -> blue (background, read to know)
+        new    just arrived, look -> orange (news)
+        view   context / filters  -> grey (read to know, not work)
 
-    Và một luật đè lên tất cả: SỐ 0 THÌ KHÔNG SÁNG. "0 mới" mà vẫn rực cam là
-    nói dối — thanh chỉ được sáng lên khi thật sự có chuyện.
+    And one rule over all of them: ZERO NEVER LIGHTS UP. "0 new" glowing
+    orange is a lie — the bar may only light when something has happened.
 
-    Nút ⚟ dùng lại tấm phủ của Cài đặt (`data-settings` nhận URL), nên không
-    đẻ thêm trình nghe nào — mỗi đường mới là một nút có thể chết.
+    The ⚟ button reuses the Settings overlay (`data-settings` takes a URL), so
+    it adds no new listener — every new path is another thing that can die.
 
-    `run` là CHỮ TRÊN NÚT, và nó đổi theo tình huống: Bắt đầu / Tiếp tục /
-    Cập nhật / Đang quét…. Một nút ghi "Chạy" ở mọi hoàn cảnh là nút không
-    nói gì — người mới mở app không biết chạy cái gì, người vừa bấm Dừng
-    tưởng bấm vào là mất hết việc đã làm. Chữ do khúc tự tính (xem
-    live.search_stage), chỗ này chỉ vẽ. `data-run` giữ lại chữ gốc để
-    live.js trả về sau khi hiện "Đang quét…".
+    `run` is THE TEXT ON THE BUTTON, and it changes with the situation: Start
+    / Resume / Update / Scanning…. A button reading "Run" in every situation
+    says nothing — someone opening the app for the first time does not know
+    what it will run, and someone who has just pressed Stop thinks pressing it
+    loses the work already done. The stage computes the text (see
+    live.search_stage), this only draws it. `data-run` keeps the original text
+    so live.js can put it back after showing "Scanning…".
     """
     def _rong(v) -> bool:
-        """Số 0 (hoặc rỗng) thì tắt màu — xem luật ở docstring."""
+        """Zero (or empty) -> colour off — see the rule in the docstring."""
         try:
             return int(str(v).replace(",", "").strip() or 0) == 0
         except ValueError:
@@ -166,35 +172,37 @@ def deck(stage: str, name: str, state: str, metrics: list,
         f"<b>{esc(str(v))}</b>{esc(label)}</span>"
         for v, label, kind in metrics)
     knob = (f"<button class='mbtn knob' data-settings='{esc(adjust)}'"
-            f" title='Điều chỉnh {esc(name)}'>{ico('adjust')}</button>"
+            f" title='Adjust {esc(name)}'>{ico('adjust')}</button>"
             if adjust else "")
-    # `sua` = (đường dẫn, nhãn, mô tả) — nút dẫn sang MÀN KHÁC của cùng khúc.
-    # Là THẺ <a>, không phải nút mở tấm phủ: tấm phủ hợp với mấy công tắc bật
-    # xong đóng lại, không hợp với chỗ ngồi soạn chữ. Màn riêng thì có địa chỉ
-    # riêng, lưu lại được, Back được, và rộng bằng cả cửa sổ.
-    # NÚT PHÁ — chốt HAI NHỊP (xem live.js): nhịp một đổi chữ trên nút, nhịp
-    # hai mới gửi. Máy chủ còn một chốt nữa, đòi arg="xoa" — không bao giờ tin
-    # mỗi phía trình duyệt.
+    # `sua` = (path, label, description) — a button leading to ANOTHER SCREEN
+    # of the same stage. An <a> tag, not an overlay button: an overlay suits a
+    # few switches you flip and close, not a place to sit and write. A screen
+    # of its own has its own address, can be saved, can be gone Back from, and
+    # is as wide as the window.
+    # THE DESTROY BUTTON — a TWO-BEAT latch (see live.js): the first beat
+    # changes the text on the button, only the second sends. The server holds
+    # one more latch, demanding arg="xoa" — never trust the browser side alone.
     #
-    # `xoa` = (đường POST, nhãn, nhãn khi đã nạp đạn, mô tả).
+    # `xoa` = (POST path, label, label once armed, description).
     pha = (f"<button class='mbtn kill' data-post='{esc(xoa[0])}'"
            f" data-arg='xoa' data-arm='{esc(xoa[2])}'"
            f" title='{esc(xoa[3] if len(xoa) > 3 else xoa[1])}'>"
            f"{esc(xoa[1])}</button>" if xoa else "")
-    # `them` = (đường POST, nhãn, mô tả) — một VIỆC NỀN nữa của khúc này,
-    # cạnh nút Chạy. Khác `xoa` ở chỗ nó không phá gì nên không cần chốt.
+    # `them` = (POST path, label, description) — one more BACKGROUND JOB of
+    # this stage, next to Run. Unlike `xoa` it destroys nothing, so it needs
+    # no latch.
     nut_them = (f"<button class='mbtn' data-post='{esc(them[0])}'"
                 f" title='{esc(them[2] if len(them) > 2 else them[1])}'>"
                 f"{esc(them[1])}</button>" if them else "")
     khac = (f"<a class='mbtn qua' href='{esc(sua[0])}'"
             f" title='{esc(sua[2] if len(sua) > 2 else sua[1])}'>"
             f"{esc(sua[1])}</a>" if sua else "")
-    # MỘT viên thuốc NẰM NGANG: được phép RỘNG, chỉ không được CAO. Tất cả
-    # trong một viên — tên khúc, số liệu, nút. Đẩy số liệu ra ngoài thì thanh
-    # vỡ thành ba tầng rời rạc, nhìn bẩn.
+    # ONE HORIZONTAL PILL: allowed to be WIDE, never TALL. Everything inside
+    # one pill — stage name, metrics, buttons. Push the metrics outside and
+    # the bar breaks into three disconnected tiers, which looks a mess.
     #
-    # Dòng trạng thái ("tự động: TẮT · quét lần cuối 09:42") KHÔNG ở đây: nó
-    # là tin chung của cả app, chỗ của nó là thanh trạng thái dưới đáy.
+    # The status line ("auto: OFF · last scan 09:42") is NOT here: it is
+    # app-wide news, and its place is the status bar at the bottom.
     return (
         f"<div class=deckwrap><div class=deckpill>"
         f"<span class=deckpillname><span class=rdot></span>"
@@ -205,103 +213,113 @@ def deck(stage: str, name: str, state: str, metrics: list,
         f" data-arg='{esc(stage)}' data-run='{esc(run)}'"
         f" title='{esc(run_note)}'>{esc(run)}</button>"
         f"<button class=mbtn data-post='{esc(stop_path)}'"
-        f" data-arg='{esc(stage)}'>Dừng</button>"
+        f" data-arg='{esc(stage)}'>Stop</button>"
         f"{nut_them}{khac}{pha}{knob}</span>"
         f"</div></div>")
 
 
-# Nhãn cho nút Back, suy từ ĐƯỜNG đã đi. Không gõ cứng ở từng trang: một
-# trang có ba lối vào thì gõ cứng là hai lối nói dối.
-# Xếp từ RIÊNG tới CHUNG: "/jobs/7/cv" là BẢN CV, không phải trang tin —
-# khớp "/jobs/" trước thì nút ghi "← tin này" trong khi nó về bản CV.
-_TEN_DUONG = (("/cv/soan", "Soạn khối"), ("/cv", "Bản CV"),
-              ("/search", "Search"), ("/track/queue", "Hàng chờ"),
-              ("/track", "Quản lí"),
-              ("/profile", "Hồ sơ"), ("/jobs/", "tin này"))
+# The label for the Back button, inferred from THE PATH TAKEN. Not hardcoded
+# per page: a page with three ways in, hardcoded, lies about two of them.
+# Ordered SPECIFIC to GENERAL: "/jobs/7/cv" is A CV, not a posting page —
+# match "/jobs/" first and the button reads "← this posting" while it goes
+# back to a CV.
+_TEN_DUONG = (("/cv/soan", "Block editor"), ("/cv", "CVs"),
+              ("/search", "Search"), ("/track/queue", "Queue"),
+              ("/track", "Track"),
+              ("/profile", "Profile"), ("/jobs/", "this posting"))
 
 
 def duong_ve(tu: str, mac_dinh: str = "/cv") -> tuple:
-    """(đường, nhãn) cho nút Back. `tu` = trang người dùng vừa rời.
+    """(path, label) for the Back button. `tu` = the page just left.
 
-    BACK PHẢI VỀ TRANG VỪA RỜI, không về một đích gõ cứng. Trang xem bản CV
-    vào được từ tab CV và từ trang chi tiết tin; gõ cứng một đích thì một
-    trong hai lối đi vào ngõ cụt — bấm Back xong lạc sang chỗ chưa từng đứng.
+    BACK MUST RETURN TO THE PAGE JUST LEFT, not to a hardcoded destination.
+    The CV view is reachable from the CV tab and from a posting's detail page;
+    hardcode one destination and one of those two becomes a dead end — you
+    press Back and land somewhere you have never stood.
 
-    Đường đi nằm trên URL (`?tu=`), không dựa vào lịch sử trình duyệt: mở
-    thẳng một địa chỉ, hay mở tab mới, thì lịch sử trống mà nút vẫn phải đúng.
+    The path travelled lives on the URL (`?tu=`), not in browser history: open
+    an address directly, or open a new tab, and history is empty while the
+    button still has to be right.
 
-    CHỈ NHẬN ĐƯỜNG TRONG NHÀ. `tu` đi từ URL vào thẳng thuộc tính href, nên
-    một giá trị như "//ke-xau" hay "https://…" biến nút Back thành cửa ra
-    ngoài. Không bắt đầu bằng "/" hoặc bắt đầu bằng "//" thì vứt.
+    IN-HOUSE PATHS ONLY. `tu` goes from the URL straight into an href
+    attribute, so a value like "//bad-actor" or "https://…" turns Back into an
+    exit. Anything not starting with "/", or starting with "//", is thrown
+    away.
     """
     duong = (tu or "").strip()
     if not duong.startswith("/") or duong.startswith("//"):
         duong = mac_dinh
     goc = duong.split("?")[0]
     if goc.startswith("/jobs/") and goc.endswith("/cv"):
-        return duong, "Bản CV"
-    ten = next((t for d, t in _TEN_DUONG if goc.startswith(d)), "quay lại")
+        return duong, "CVs"
+    ten = next((t for d, t in _TEN_DUONG if goc.startswith(d)), "back")
     return duong, ten
 
 
 def page(title: str, body: str, active: str = "",
          flow: bool = True, bar: str = "", setup: str = "",
          reload: str = "") -> str:
-    """flow=True  trang cuộn như cũ — dành cho trang CHƯA chuyển sang widget
-    flow=False trang không cuộn, nội dung là lưới widget tự cuộn bên trong
+    """flow=True  the page scrolls as before — for pages NOT yet on widgets
+    flow=False the page does not scroll, the content is a grid of widgets
+    that scroll inside themselves
 
-    `reload` — KHÚC NÀO CHẠY XONG THÌ VẼ LẠI TRANG NÀY. "*" là mọi khúc,
-    "track" là chỉ khúc đó, nhiều khúc thì cách nhau khoảng trắng, rỗng là
-    KHÔNG BAO GIỜ tự vẽ lại.
+    `reload` — WHICH STAGE FINISHING SHOULD REDRAW THIS PAGE. "*" is any
+    stage, "track" is that stage only, several stages are separated by spaces,
+    and empty means NEVER redraw by itself.
 
-    Vì sao nó là tham số riêng chứ không dùng lại `stream` của ô nhật ký:
-    hai câu hỏi khác nhau bị gộp làm một, và cả hai đều trả lời sai.
+    Why it is a parameter of its own rather than reusing the journal widget's
+    `stream`: two different questions were folded into one, and both got
+    answered wrongly.
 
-        Home khai `stream=""` (nghĩa là ô nhật ký nhận MỌI luồng). live.js
-        đọc chuỗi rỗng là "sai" nên nhánh vẽ lại KHÔNG BAO GIỜ chạy — trang
-        tự nhận là "live 24/7" mà số liệu chỉ đổi khi người dùng tự bấm F5.
+        Home declared `stream=""` (meaning the journal takes EVERY stream).
+        live.js reads the empty string as false, so the redraw branch NEVER
+        ran — a page calling itself "live 24/7" whose numbers only changed
+        when the user pressed F5.
 
-        Quản lí khai `stream="search"` để xem nhật ký vòng quét. Hậu quả:
-        vòng quét xong là trang NHẢY, đóng sập mọi dòng đang mở dở — người
-        dùng đang đọc một lá thư thì mất chỗ, không hiểu vì sao.
+        Track declared `stream="search"` to watch the scan journal. The
+        result: the page JUMPED the moment a scan finished, slamming shut
+        every row left open — a user reading an email lost their place with
+        no idea why.
     """
     links = ""
     for href, label, mark in NAV:
         on = " on" if href == active else ""
-        # title= để lúc gập còn biết icon nào là gì
+        # title= so the collapsed sidebar still says which icon is which
         links += (f"<a class='navlink{on}' href='{esc(href)}'"
                   f" title='{esc(label)}'>"
                   f"<i>{ico(mark)}</i><span>{esc(label)}</span></a>")
 
-    # Cài đặt: nút, KHÔNG phải link. /settings trả về mảnh HTML cho tấm phủ.
-    # `data-appset` chứ KHÔNG dùng chung `data-settings` với nút ⚟ của khúc:
-    # ⚟ chỉnh thứ MÀN HÌNH NÀY làm việc trên, còn đây là cài đặt CẢ APP. Một
-    # nút không thể vừa là của khúc vừa là của app — nên khác thuộc tính,
-    # khác cả khung (⚟ ra tấm bên phải, Cài đặt ra hộp giữa màn).
+    # Settings: a button, NOT a link. /settings returns an HTML fragment for
+    # the overlay. `data-appset` rather than sharing `data-settings` with a
+    # stage's ⚟ button: ⚟ adjusts what THIS SCREEN works on, this is settings
+    # for THE WHOLE APP. One button cannot belong to both — hence a different
+    # attribute and a different frame (⚟ opens the right-hand panel, Settings
+    # opens a box in the middle).
     settings = ("<div class=navend>"
-                "<button class=navlink data-appset title='Cài đặt'>"
-                f"<i>{ico('setting')}</i><span>Cài đặt</span></button></div>")
+                "<button class=navlink data-appset title='Settings'>"
+                f"<i>{ico('setting')}</i><span>Settings</span></button></div>")
 
-    # Thanh trạng thái ĐÁY APP — tin chung, không thuộc tab nào. Không nhận
-    # dữ liệu từ view: live.js đổ vào từ dòng SSE đang có sẵn, nên không phải
-    # luồn tham số qua cả chục hàm render và không bao giờ cũ.
+    # THE APP'S BOTTOM STATUS BAR — shared news, belonging to no tab. It takes
+    # no data from the view: live.js fills it from the SSE stream that is
+    # already open, so nothing has to be threaded through a dozen render
+    # functions and it is never stale.
     foot = ("<footer class=statusbar>"
-            "<span class=sdot></span><b data-state>đang nối…</b>"
+            "<span class=sdot></span><b data-state>connecting…</b>"
             "<span class=smsg data-lastmsg></span></footer>")
-    # Thanh trên cùng LÀ thanh của khúc đang mở, không phải thanh của app.
-    # Trang chưa có khúc thì KHÔNG có thanh: trạng thái chung đã nằm ở thanh
-    # đáy rồi, vẽ thêm một dòng y hệt trên đầu chỉ là nói hai lần.
+    # The top bar IS the open stage's bar, not the app's. A page with no stage
+    # has NO bar: the shared status already sits on the bottom bar, and
+    # drawing the same line again at the top just says it twice.
     top = ((f"<header class=topbar>{bar}</header>" if bar else "")
-           # Tấm phủ cho menu Cài đặt. Rỗng cho tới khi bấm bánh răng —
-           # nạp nội dung lúc đó, để mọi trang khác không phải mang theo dữ
-           # liệu cài đặt mà chúng không dùng.
+           # The overlay for the Settings menu. Empty until the cog is
+           # pressed — the content is loaded then, so every other page is
+           # spared carrying settings data it does not use.
            + "<div class=sheet hidden data-sheet><div class=sheetbox></div></div>")
 
-    # Đọc lựa chọn gập/mở NGAY trong <head>, trước khi vẽ. Để xuống cuối trang
-    # thì mỗi lần chuyển tab thanh bên bung ra rồi mới co lại — nháy một cái.
-    # Đây là tuỳ chọn hiển thị của riêng máy này, không phải dữ liệu chung,
-    # nên để localStorage; không cần hỏi server, cũng không cần luồn tham số
-    # qua cả chục hàm render.
+    # Read the collapsed/expanded choice INSIDE <head>, before drawing. Put it
+    # at the foot of the page and every tab change flashes the sidebar open
+    # then shut again. This is a display preference belonging to this machine
+    # alone, not shared data, so localStorage: no need to ask the server, and
+    # no parameter threaded through a dozen render functions.
     early = ("<script>try{if(localStorage.jobbotNav==='1')"
              "document.documentElement.classList.add('navmin')}catch(e){}</script>")
 
@@ -310,28 +328,31 @@ def page(title: str, body: str, active: str = "",
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
         f"<title>{esc(title)} · jobbot</title>"
         "<link rel=stylesheet href='/static/app.css'>"
-        # MÀU NHẤN đi qua một tấm CSS RIÊNG, nạp sau app.css để đè lên.
+        # THE ACCENT COLOUR goes through a stylesheet OF ITS OWN, loaded after
+        # app.css so it overrides.
         #
-        # Không đọc tuỳ chọn ngay trong page(): layout là tầng CHỈ VẼ, cho nó
-        # chạm vào DB là mở cửa cho mọi thứ khác cũng chạm. Và tấm riêng thì
-        # trình duyệt không cache nhầm — đổi màu là thấy ngay.
+        # The preference is not read inside page(): layout is a DRAWING-ONLY
+        # layer, and letting it touch the DB opens the door for everything
+        # else to touch it too. A separate sheet also means the browser
+        # cannot cache the wrong one — change the colour and you see it.
         "<link rel=stylesheet href='/static/mau.css'>"
         f"{early}</head><body"
-        # Cờ BẮT ĐIỀN: live.js thấy thuộc tính này thì bật tấm phủ chu
-        # trình dựng hồ sơ ngay khi trang dựng xong. Chỉ trang Home đặt
-        # cờ — đặt ở mọi trang thì nó thành pop-up đuổi theo người dùng.
+        # THE SETUP FLAG: live.js seeing this attribute opens the
+        # profile-building overlay as soon as the page is drawn. Only Home
+        # sets it — set on every page it becomes a pop-up chasing the user.
         + (f" data-setup='{esc(setup)}'" if setup else "")
         + (f" data-reload='{esc(reload)}'" if reload else "") + ">"
-        # THANH TIÊU ĐỀ — dải trên cùng cửa sổ. Cửa sổ app không có khung nên
-        # traffic lights của macOS nằm đè lên trang: chỗ đó phải LUÔN trống,
-        # cuộn nội dung lên tới đây là mất chữ. Có thanh thật thì mọi trang tự
-        # được chừa — không phải mỗi trang tự nhớ chừa bao nhiêu, mà quên một
-        # trang là trang đó hỏng (đúng như trang Home vừa rồi: chừa 16px
-        # trong khi cần 38px).
+        # THE TITLE BAR — the strip along the top of the window. The app
+        # window has no frame, so macOS's traffic lights sit on top of the
+        # page: that spot must ALWAYS be empty, and scrolling content up into
+        # it loses text. With a real bar every page is spared automatically —
+        # rather than each page remembering how much to leave, where
+        # forgetting one breaks that page (exactly what happened to Home:
+        # 16px left while 38px was needed).
         f"<header class=titlebar><b>{esc(title)}</b></header>"
         f"<aside class=side>"
         f"<div class=brandrow><div class=brand>{LOGO}jobbot</div>"
-        f"<button class=navtoggle data-nav title='Gập thanh bên'>"
+        f"<button class=navtoggle data-nav title='Collapse sidebar'>"
         f"{ico('gap')}</button></div>"
         f"<nav>{links}</nav>{settings}</aside>"
         f"<main class='{'flow' if flow else ''}'>{top}"
@@ -341,7 +362,7 @@ def page(title: str, body: str, active: str = "",
     )
 
 
-# ---------------------------------------------------------------- mảnh nhỏ
+# ---------------------------------------------------------------- small parts
 
 def h1(text: str, sub: str = "") -> str:
     return f"<h1>{esc(text)}</h1>" + (f"<p class=lead>{esc(sub)}</p>" if sub else "")
@@ -352,7 +373,7 @@ def badge(text: str, kind: str = "") -> str:
 
 
 def score_bar(score: int) -> str:
-    """Màu theo ngưỡng, không phải dải chuyển màu — đọc nhanh hơn."""
+    """Colour by threshold, not a gradient — quicker to read."""
     kind = "hi" if score >= 75 else ("mid" if score >= 55 else "lo")
     return (f"<span class='score {kind}'><span class=track>"
             f"<span class=fill style='width:{score}%'></span></span><b>{score}</b></span>")
@@ -376,22 +397,23 @@ def section(title: str, inner: str, action: str = "") -> str:
     return f"<h2>{esc(title)}{action}</h2>{inner}"
 
 
-# ---------------------------------------------------------------- ô (widget)
+# ---------------------------------------------------------------- widgets
 
 def widget(title: str, body: str, tools: str = "", span: int = 1,
            rows: int = 1, expand: bool = True, cls: str = "",
            at: tuple[int, int] | None = None) -> str:
-    """Một ô trong lưới. Tự cuộn bên trong, không đẩy trang dài ra.
+    """One widget in the grid. Scrolls inside itself, never lengthens the page.
 
-    span = chiếm mấy cột. expand=True thì có nút mở to ra toàn màn hình để
-    xem kỹ hoặc chỉnh, bấm lại (hoặc Esc) thì thu về.
+    span = how many columns it takes. expand=True gives it a button to open
+    full-screen for a closer look or an edit; press again (or Esc) to shrink.
     """
-    grow = (f"<button class=wexp data-expand title='Mở to (Esc để thu)'>"
+    grow = (f"<button class=wexp data-expand title='Expand (Esc to shrink)'>"
             f"{ico('to')}</button>"
             if expand else "")
-    # at=(cột, hàng) đặt ô vào ĐÚNG chỗ. Không có thì để trình duyệt tự xếp —
-    # nhưng ô nào phải nằm cố định một cột (nhật ký ở cột cuối) thì tự xếp sẽ
-    # trôi vào chỗ trống đầu tiên nó gặp.
+    # at=(column, row) puts the widget in AN EXACT place. Without it the
+    # browser packs them itself — but a widget that must stay in one column
+    # (the journal in the last one) would drift into the first empty slot it
+    # finds.
     place = (f"grid-column:{at[0]} / span {span};grid-row:{at[1]} / span {rows}"
              if at else f"grid-column:span {span};grid-row:span {rows}")
     return (f"<section class='wid {cls}' data-widget style='{place}'>"
@@ -402,11 +424,12 @@ def widget(title: str, body: str, tools: str = "", span: int = 1,
 
 def grid(*widgets: str, cols: int = 3,
          columns: str = "", rows: str = "") -> str:
-    """Lưới ô. Mặc định chia đều; truyền columns/rows để chia theo ý.
+    """A grid of widgets. Equal columns by default; pass columns/rows to split
+    it your own way.
 
-    Chia đều là mặc định ĐÚNG cho phần lớn tab. Nhưng có tab mà mấy ô không
-    ngang vai nhau — danh sách việc đáng chiếm gấp đôi ô lưới lọc, và dải
-    nhật ký chỉ cần cao bằng ba dòng chứ không bằng một hàng đầy.
+    Equal is the RIGHT default for most tabs. But some tabs hold widgets that
+    are not peers — a job list deserves twice the width of a filter grid, and
+    a journal strip only needs the height of three lines, not a full row.
     """
     style = f"grid-template-columns:{columns or f'repeat({cols},1fr)'}"
     if rows:
@@ -415,10 +438,10 @@ def grid(*widgets: str, cols: int = 3,
 
 
 def journal_box(stream: str = "") -> str:
-    """Khung nhật ký. live.js tự đổ dữ liệu vào — ở đây không vẽ sẵn gì cả."""
+    """The journal frame. live.js fills it — nothing is drawn here up front."""
     return f"<div class=journal data-journal='{esc(stream)}'></div>"
 
 
 def progress_box(stream: str = "") -> str:
     return (f"<div class=progress data-progress='{esc(stream)}'>"
-            "<div class=pidle>đang nối…</div></div>")
+            "<div class=pidle>connecting…</div></div>")

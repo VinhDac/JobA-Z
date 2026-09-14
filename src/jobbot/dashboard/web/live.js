@@ -578,7 +578,7 @@
     // thanh đang gập mà nút vẫn mời "Gập thanh bên".
     const min = document.documentElement.classList.contains('navmin');
     $('[data-nav]').forEach((b) => {
-      b.title = min ? 'Mở thanh bên' : 'Gập thanh bên';
+      b.title = min ? 'Expand sidebar' : 'Collapse sidebar';
     });
   }
 
