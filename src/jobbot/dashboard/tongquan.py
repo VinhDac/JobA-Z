@@ -1,23 +1,24 @@
-"""Số liệu cho tab Home — MỘT chỗ tính, không tính rải trong lúc vẽ.
+"""The numbers for the Home tab — ONE place computes them, not scattered
+through the rendering.
 
-Home không có việc của riêng nó. Nó đọc lại việc của bốn tab kia và trả lời
-đúng bốn câu mà đứng trong một tab lẻ không trả lời được:
+Home has no work of its own. It reads back the other four tabs' work and
+answers the four questions no single tab can answer from inside itself:
 
-    PHỄU      rơi rụng ở khúc nào — tìm được bao nhiêu, giữ bao nhiêu, nộp
-              bao nhiêu, ai trả lời
-    KẾT QUẢ   bao nhiêu phần trăm đi tiếp, bao nhiêu phần trăm trượt
-    NĂNG SUẤT mỗi ngày làm được bao nhiêu, có đều không
-    CHẨN ĐOÁN chỗ nào đang hỏng, và có chắc không
+    THE FUNNEL   where things fall away — how many found, kept, applied to,
+                 answered
+    RESULTS      what percentage moved forward, what percentage was rejected
+    PRODUCTIVITY how much gets done per day, and how evenly
+    DIAGNOSIS    what is broken, and how sure we are
 
-LUẬT LỚN NHẤT CỦA FILE NÀY: KHÔNG BỊA CHUỖI SỐ LIỆU.
+THE BIGGEST RULE IN THIS FILE: NEVER INVENT A DATA SERIES.
 
-App mới chạy được vài ngày. Vẽ biểu đồ 30 ngày mà 28 cột bằng 0 thì nó không
-phải "dữ liệu trung thực" — nó ĐỌC RA thành "năng suất sụp đổ", trong khi sự
-thật là app chưa tồn tại vào mấy ngày đó. Nên mọi chuỗi ở đây đều kèm SỐ NGÀY
-CÓ THẬT, và chỗ nào chưa đủ để kết luận thì nói thẳng là chưa đủ, không vẽ
-một cái lưới trống rồi để người đọc tự hiểu sai.
+The app has been running for a few days. A 30-day chart with 28 zero columns
+is not "honest data" — it READS as "productivity collapsed", while the truth
+is the app did not exist on those days. So every series here carries THE
+NUMBER OF REAL DAYS, and anywhere there is not enough to conclude, it says so
+rather than drawing an empty grid and leaving the reader to misread it.
 
-CHỈ ĐỌC. Không ghi gì, không quyết gì.
+READ ONLY. It writes nothing and decides nothing.
 """
 
 from __future__ import annotations
@@ -25,21 +26,23 @@ from __future__ import annotations
 import sqlite3
 from datetime import date, datetime, timedelta, timezone
 
-# Bao nhiêu ngày thì đủ để nói "đều hay không đều".
+# How many days are enough to say "even or uneven".
 #
-# THEO THỨ cần ít nhất ba tuần: hai tuần thì mỗi thứ chỉ có hai điểm, mà hai
-# điểm thì cái nào cũng thành "xu hướng". THEO THÁNG cần hai tháng, vì một
-# tháng không so được với cái gì.
+# BY WEEKDAY needs at least three weeks: over two weeks each weekday has two
+# points, and with two points anything looks like a "trend". BY MONTH needs
+# two months, because one month compares with nothing.
 DU_NGAY = 21
 DU_THANG = 2
 
-# Điểm từ đây trở lên thì máy coi là ĐÁNG nộp. Cùng ngưỡng với nút Nộp bên
-# Quản lí (live.track_stage) — hai chỗ hai ngưỡng là có ngày Home bảo còn 130
-# tin đáng nộp mà bấm Nộp thì nó nói hết.
+# At or above this score the machine calls a posting WORTH applying to. The
+# same threshold as the Apply button in Manage (live.track_stage) — two
+# thresholds in two places means Home eventually says 130 postings are worth
+# applying to while pressing Apply says there are none.
 DIEM_DANG_NOP = 80
 
-# Hai loại thư mang KẾT CỤC. Khai một chỗ, dùng cho cả thanh «hôm nay» lẫn
-# dải theo ngày — hai chỗ định nghĩa "đi tiếp" là có ngày hai con số lệch.
+# The two mail kinds that carry an OUTCOME. Declared once and used by both
+# the «today» bar and the daily strips — defining "moved forward" twice means
+# the two numbers eventually disagree.
 TIEP = ("interview", "offer")
 FAIL = ("rejected",)
 
@@ -54,11 +57,12 @@ def _hom_nay() -> date:
 
 def _chuoi(conn: sqlite3.Connection, bang: str, cot: str, ngay: int,
            loc: str = "") -> dict:
-    """{ngày: số} cho `ngay` ngày gần nhất. Ngày không có gì thì KHÔNG có khoá.
+    """{date: count} for the last `ngay` days. A day with nothing has NO key.
 
-    Trả về thưa (chỉ ngày có số) chứ không điền 0 cho đủ: chỗ vẽ mới biết đâu
-    là "hôm đó làm được 0" và đâu là "hôm đó app chưa chạy" — hai thứ khác
-    hẳn nhau, và trộn lại là nguồn gốc của cái biểu đồ nói dối.
+    Returned sparse (only days with a value) rather than padded with zeros:
+    that is how the renderer can tell "0 done that day" from "the app was not
+    running that day" — two entirely different things, and merging them is
+    the origin of the lying chart.
     """
     tu = (_hom_nay() - timedelta(days=ngay - 1)).isoformat()
     them = f" AND {loc}" if loc else ""
@@ -70,7 +74,7 @@ def _chuoi(conn: sqlite3.Connection, bang: str, cot: str, ngay: int,
 
 def _khoang(conn: sqlite3.Connection, bang: str, cot: str,
             loc: str = "") -> tuple:
-    """(ngày đầu, ngày cuối, số ngày KHÁC NHAU có số) của cả bảng."""
+    """(first day, last day, how many DISTINCT days have a value) for a table."""
     them = f" AND {loc}" if loc else ""
     r = conn.execute(
         f"SELECT MIN(substr({cot},1,10)), MAX(substr({cot},1,10)),"
@@ -79,16 +83,17 @@ def _khoang(conn: sqlite3.Connection, bang: str, cot: str,
     return (r[0] or "", r[1] or "", r[2] or 0)
 
 
-# --------------------------------------------------------------- HÔM NAY
+# ----------------------------------------------------------------- TODAY
 
-# Bốn số của RIÊNG hôm nay. Thanh trên Home là BẢN TIN CỦA HÔM NAY, không
-# phải bảng tổng kết — tổng kết đã nằm ở bốn ô bên dưới, và một con số như
-# "37 đã nộp" thì hôm nào nhìn cũng thế, nên nó không nói được app có đang
-# làm việc hay không.
+# Four numbers for TODAY ALONE. The bar on Home is TODAY'S BULLETIN, not a
+# summary — the summary is in the four panels below, and a number like "37
+# applied" looks the same every day, so it cannot say whether the app is
+# working.
 #
-# Hai số cuối lấy từ THƯ, không lấy từ cột `stage`: "hôm nay nhận được tin
-# gì" là câu hỏi về thư đến trong ngày. Cột stage đổi lúc người dùng bấm
-# Nhận, có thể là ba hôm sau, và lúc đó nó nhảy vào ngày hôm ấy.
+# The last two come from MAIL, not from the `stage` column: "what news
+# arrived today" is a question about mail that arrived today. The stage column
+# changes when the user presses Accept, possibly three days later, and would
+# then land on that day instead.
 def hom_nay(conn: sqlite3.Connection) -> dict:
     t = _hom_nay().isoformat()
 
@@ -111,18 +116,21 @@ def hom_nay(conn: sqlite3.Connection) -> dict:
             "tiep": thu(TIEP), "truot": thu(FAIL)}
 
 
-# ------------------------------------------------------------------ PHỄU
+# ---------------------------------------------------------------- FUNNEL
 
 def pheu(conn: sqlite3.Connection) -> dict:
-    """Rơi rụng qua từng khúc. HAI đoạn, và chỗ nối phải nói thật.
+    """Drop-off through each stage. TWO segments, and the join must be honest.
 
-    Đoạn TÌM đi từ tin lấy về tới tin đáng nộp — đó là việc của Search.
-    Đoạn NỘP đi từ lần nộp tới lần được gọi — đó là việc của Quản lí.
+    The SEARCH segment runs from postings fetched to postings worth applying
+    to — that is Search's work.
+    The APPLY segment runs from applications sent to callbacks — that is
+    Manage's work.
 
-    Chúng KHÔNG phải một phễu liền. Phần lớn lần nộp của người dùng có trước
-    khi app tồn tại (dựng lại từ thư), nên không có tin gốc để nối. Vẽ liền
-    một mạch thì con số "nộp" trông như là kết quả của con số "đáng nộp", mà
-    thật ra hai cái gần như rời nhau. Chỗ nối trả về riêng ở `noi`.
+    They are NOT one continuous funnel. Most of the user's applications
+    predate the app (rebuilt from mail), so there is no original posting to
+    join them to. Drawn as one run, the "applied" number looks like the
+    consequence of the "worth applying to" number, when in fact the two are
+    almost disconnected. The join is returned separately in `noi`.
     """
     def m(sql, *a) -> int:
         return conn.execute(sql, a).fetchone()[0] or 0
@@ -140,28 +148,31 @@ def pheu(conn: sqlite3.Connection) -> dict:
         " AND p.id IN (SELECT posting_id FROM application"
         "              WHERE posting_id IS NOT NULL)", DIEM_DANG_NOP)
     return {
-        "tim": [("tin lấy về", ve, "/search"),
-                ("giữ lại sau lọc", giu, "/search"),
-                ("nộp được thật", that, "/search"),
-                (f"đáng nộp (điểm ≥{DIEM_DANG_NOP})", dang, "/search")],
+        "tim": [("postings fetched", ve, "/search"),
+                ("kept after filtering", giu, "/search"),
+                ("actually applicable", that, "/search"),
+                (f"worth applying to (score ≥{DIEM_DANG_NOP})", dang, "/search")],
         "dang": dang,
         "cho_nop": dang - da_nop_kho,
         "noi": da_nop_kho,
     }
 
 
-# --------------------------------------------------------------- KẾT QUẢ
+# --------------------------------------------------------------- RESULTS
 
 def ket_qua(conn: sqlite3.Connection) -> dict:
-    """% đi tiếp · % trượt · % có hồi âm, kèm MẪU SỐ và CỠ MẪU.
+    """% forward · % rejected · % that replied, with the DENOMINATOR and the
+    SAMPLE SIZE.
 
-    Một tỉ lệ không có mẫu số là một câu nói suông: "2,7%" trên 37 lần nộp và
-    "2,7%" trên 3.700 lần nộp là hai sự thật khác hẳn nhau, mà chỉ nhìn con số
-    phần trăm thì không phân biệt được.
+    A ratio with no denominator is an empty statement: "2.7%" of 37
+    applications and "2.7%" of 3,700 applications are entirely different
+    truths, and the percentage alone cannot tell them apart.
 
-    HAI mẫu số, vì chúng trả lời hai câu khác nhau:
-        trên TỔNG        nộp 37 chỗ thì mấy chỗ gọi — con số của cả quá trình
-        trên ĐÃ NGÃ NGŨ  bỏ mấy chỗ còn đang chờ ra — con số của cái đã xong
+    TWO denominators, because they answer two questions:
+        over the TOTAL     37 applications, how many called back — the number
+                           for the whole process
+        over the SETTLED   excluding what is still waiting — the number for
+                           what is finished
     """
     from ..track import board
     rows = [r for r in board.all(conn) if r["stage"] != board.DRAFT]
@@ -183,58 +194,63 @@ def ket_qua(conn: sqlite3.Connection) -> dict:
             "nguong_im": board.nguong(conn)}
 
 
-# -------------------------------------------------------------- NĂNG SUẤT
+# --------------------------------------------------------- PRODUCTIVITY
 
-# BỐN VIỆC — ĐÚNG BỐN SỐ CỦA THANH MASTER, chỉ khác là theo ngày thay vì
-# riêng hôm nay. Thanh trên nói "hôm nay được bao nhiêu", dải dưới nói "mấy
-# hôm trước thì sao" — cùng một câu hỏi, hai độ dài.
+# FOUR METRICS — EXACTLY THE FOUR NUMBERS ON THE MASTER BAR, only per day
+# rather than today alone. The bar says "how much today", the strips below say
+# "and the days before" — the same question at two lengths.
 #
-# "THƯ VỀ" ĐÃ BỎ. Đo trên hộp thư thật: 1.046 lá thì 991 lá rơi vào `other` —
-# quảng cáo, thư báo việc, xác nhận đăng ký. Một dải 687 lá mà 95% là nhiễu
-# thì nó không nói lên năng suất của bất cứ ai; nó chỉ nói hộp thư đông.
-# Thay bằng hai số KẾT CỤC, và đó mới là thứ đáng nhìn theo ngày.
+# "MAIL RECEIVED" WAS DROPPED. Measured on the real mailbox: of 1,046
+# messages, 991 fell into `other` — adverts, job alerts, signup
+# confirmations. A strip of 687 messages that is 95% noise says nothing about
+# anyone's productivity; it says the mailbox is busy. Replaced with the two
+# OUTCOME numbers, which are what is worth watching daily.
 #
-# CHÚNG KHÔNG CÙNG THANG: một ngày quét ra 4.651 tin mà nộp 4 đơn, và nhận 0
-# lời mời. Vẽ chung một trục thì ba dải dưới phẳng thành ba cái vạch. Nên mỗi
-# dải tự chuẩn hoá theo đỉnh CỦA CHÍNH NÓ, và in đỉnh đó ra bằng chữ.
+# THEY ARE NOT ON ONE SCALE: a day's scan returns 4,651 postings against 4
+# applications and 0 invitations. On a shared axis the lower three strips
+# flatten into three lines. So each strip normalises to ITS OWN peak, and
+# prints that peak in text.
 
 
 def _la(loai) -> str:
-    """Điều kiện SQL lọc theo loại thư. `loai` là hằng số trong code, không
-    phải chữ người dùng gõ — nên nối thẳng được, không cần tham số."""
+    """The SQL condition filtering by mail kind. `loai` is a constant in the
+    code, not user input — so it can be concatenated without a parameter."""
     return "kind IN (" + ",".join(f"'{x}'" for x in loai) + ")"
 
 
 VIEC = (
-    {"ma": "tim", "ten": "tin tìm được", "bang": "raw_posting",
+    {"ma": "tim", "ten": "postings found", "bang": "raw_posting",
      "cot": "fetched_at", "loc": "", "di": "/search", "mau": "kho"},
-    {"ma": "nop", "ten": "đơn đã nộp", "bang": "application",
+    {"ma": "nop", "ten": "applications sent", "bang": "application",
      "cot": "applied_at", "loc": "", "di": "/track", "mau": "lam"},
-    # `goc` = CÁI GÌ ĐỊNH NGHĨA "app đã chạy từ bao giờ" cho dải này.
+    # `goc` = WHAT DEFINES "since when has the app been running" for this strip.
     #
-    # Không có nó thì dải "được gọi tiếp" lấy ngày có LỜI MỜI ĐẦU TIÊN làm mốc
-    # bắt đầu, và mọi ngày trước đó bị ghi là "app chưa chạy" — sai hẳn: hộp
-    # thư chạy suốt 61 ngày, chỉ là không có lời mời nào. Một ngày KHÔNG AI
-    # GỌI là một số 0 có thật, và nó là số 0 đáng nhìn nhất trên trang này.
-    {"ma": "tiep", "ten": "được gọi tiếp", "bang": "message",
+    # Without it, the "moved forward" strip takes the day of the FIRST
+    # INVITATION as its start, and every day before that is recorded as "the
+    # app was not running" — plainly wrong: the mailbox ran for all 61 days,
+    # there simply were no invitations. A day WITH NO CALLBACK is a real zero,
+    # and it is the most worth-looking-at zero on this page.
+    {"ma": "tiep", "ten": "moved forward", "bang": "message",
      "cot": "received_at", "loc": _la(TIEP), "di": "/track", "mau": "tot",
      "goc": ("message", "received_at")},
-    # ĐỎ, không xanh. Một cột cao của thư từ chối mà tô xanh thì đọc thành
-    # "hôm nay được việc" — màu ở đây mang nghĩa, không phải trang trí.
-    {"ma": "truot", "ten": "báo trượt", "bang": "message",
+    # RED, not green. A tall column of rejections drawn in green reads as
+    # "a good day" — colour here carries meaning, it is not decoration.
+    {"ma": "truot", "ten": "rejections", "bang": "message",
      "cot": "received_at", "loc": _la(FAIL), "di": "/track", "mau": "xau",
      "goc": ("message", "received_at")},
 )
 
-THU = ("hai", "ba", "tư", "năm", "sáu", "bảy", "chủ nhật")
+THU = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 
 def nang_suat(conn: sqlite3.Connection, ngay: int = 30) -> dict:
-    """Mỗi việc một dải ngày, kèm số ngày CÓ THẬT và có đủ để kết luận chưa.
+    """One daily strip per metric, with the number of REAL days and whether
+    that is enough to conclude anything.
 
-    `du_thu` / `du_thang` là chỗ file này từ chối kết luận. Gộp theo thứ trên
-    hai ngày dữ liệu sẽ ra "thứ sáu năng suất gấp 9 lần thứ bảy" — đúng phép
-    tính, sai hoàn toàn về nghĩa, và người đọc không có cách nào biết.
+    `du_thu` / `du_thang` is where this file refuses to conclude. Grouping by
+    weekday over two days of data yields "Friday is 9× as productive as
+    Saturday" — arithmetically correct, completely wrong in meaning, and the
+    reader has no way to know.
     """
     het = _hom_nay()
     lich = [(het - timedelta(days=i)).isoformat() for i in range(ngay - 1, -1, -1)]
@@ -243,20 +259,23 @@ def nang_suat(conn: sqlite3.Connection, ngay: int = 30) -> dict:
         ma, bang, cot, loc = v["ma"], v["bang"], v["cot"], v["loc"]
         chuoi = _chuoi(conn, bang, cot, ngay, loc)
         _d, _c, so_ngay = _khoang(conn, bang, cot, loc)
-        # MỐC BẮT ĐẦU lấy từ `goc` (nguồn), không từ chính dải đã lọc — xem
-        # lời chú ở VIEC. Dải nào không khai goc thì chính nó là nguồn.
+        # THE START comes from `goc` (the source), not from the filtered
+        # strip itself — see the note on VIEC. A strip that declares no goc
+        # is its own source.
         g_bang, g_cot = v.get("goc") or (bang, cot)
         dau, cuoi, _n = _khoang(conn, g_bang, g_cot)
-        # CHỈ TÍNH TỪ NGÀY CÓ DỮ LIỆU ĐẦU TIÊN. Trước đó app chưa chạy, và
-        # đếm mấy ngày đó thành 0 là tự dìm con số trung bình của chính mình.
+        # COUNT ONLY FROM THE FIRST DAY WITH DATA. Before that the app was
+        # not running, and counting those days as 0 drags your own average
+        # down for no reason.
         song = [d for d in lich if dau and d >= dau]
         ra[ma] = {
             "ten": v["ten"], "di": v["di"], "mau": v["mau"],
             "cot": [(d, chuoi.get(d, 0)) for d in song],
-            # Mấy ngày TRONG cửa sổ mà NẰM TRƯỚC ngày có dữ liệu đầu tiên.
-            # Chỗ vẽ cần con số này để giữ nguyên bề rộng khung: hai ngày số
-            # liệu mà vẽ thành hai cột choán hết dải thì trông như "lúc nào
-            # cũng có số", trong khi sự thật là app mới chạy hai ngày.
+            # Days INSIDE the window that fall BEFORE the first day with
+            # data. The renderer needs this number to keep the frame width:
+            # two days of data drawn as two columns filling the strip looks
+            # like "there is always data", while the truth is the app has run
+            # for two days.
             "truoc": len(lich) - len(song),
             "mep_trai": lich[0] if lich else "",
             "dinh": max(chuoi.values()) if chuoi else 0,
@@ -267,8 +286,9 @@ def nang_suat(conn: sqlite3.Connection, ngay: int = 30) -> dict:
             if song else 0,
         }
 
-    # THEO THỨ và THEO THÁNG gộp trên TOÀN BỘ lịch sử, không riêng cửa sổ 30
-    # ngày: cả hai là câu hỏi về thói quen, mà thói quen cần dài hơn một tháng.
+    # BY WEEKDAY and BY MONTH group over the WHOLE history, not the 30-day
+    # window: both are questions about habit, and habit needs more than a
+    # month.
     thu, thang = {}, {}
     for v in VIEC:
         ma, bang, cot = v["ma"], v["bang"], v["cot"]
@@ -287,31 +307,32 @@ def nang_suat(conn: sqlite3.Connection, ngay: int = 30) -> dict:
             f" WHERE {cot} IS NOT NULL AND {cot} <> ''{them}"
             f" GROUP BY t ORDER BY t")}
 
-    # MỖI CHUỖI TỰ GÁC LẤY MÌNH, không dùng một con số chung.
+    # EACH SERIES GUARDS ITSELF; there is no shared number.
     #
-    # Đo trên kho thật: chuỗi thư có 61 ngày, chuỗi tin tìm được có 3. Lấy
-    # số lớn nhất làm cổng chung thì biểu đồ "tin tìm được theo thứ" được vẽ
-    # trên 3 ngày — và nó sẽ nói "thứ sáu gấp 9 lần thứ bảy". Đúng phép tính,
-    # sai hoàn toàn về nghĩa, mà người đọc không có cách nào biết.
+    # Measured on the real store: the mail series has 61 days, the
+    # postings-found series has 3. Using the largest as a shared gate draws
+    # "postings found by weekday" over 3 days — and it says "Friday is 9×
+    # Saturday". Arithmetically correct, completely wrong in meaning, and the
+    # reader has no way to know.
     for ma in ra:
         ra[ma]["du_thu"] = ra[ma]["ngay_co"] >= DU_NGAY
         ra[ma]["du_thang"] = len(thang[ma]) >= DU_THANG
         ra[ma]["thang_co"] = len(thang[ma])
     return {"viec": ra, "lich": lich, "thu": thu, "thang": thang,
             "ten_thu": THU, "can_thu": DU_NGAY, "can_thang": DU_THANG,
-            # Số chung CHỈ để nói "app đã chạy được bao lâu", không dùng làm
-            # cổng cho chuỗi nào cả.
+            # The shared number ONLY says "how long the app has been
+            # running"; it gates no series.
             "ngay_co": max((ra[v["ma"]]["ngay_co"] for v in VIEC), default=0)}
 
 
-# ------------------------------------------------------------ TÌM CÓ ĐỀU
+# ------------------------------------------------------ IS SEARCH STEADY
 
 def nhip_quet(conn: sqlite3.Connection) -> dict:
-    """Vòng quét có chạy đều không, và nguồn nào đang câm.
+    """Is the scan running steadily, and which source has gone quiet.
 
-    NGUỒN CÂM là thứ không tab nào khác nhìn thấy: Search chỉ khoe tin nó tìm
-    được, nên một nguồn hỏng lặng lẽ chỉ làm kết quả ít đi chứ không báo gì.
-    Ở đây nó hiện thành tên.
+    A QUIET SOURCE is something no other tab can see: Search only shows what
+    it found, so a source failing silently just makes the results smaller
+    without saying anything. Here it appears by name.
     """
     r = conn.execute("SELECT COUNT(*), SUM(ok), SUM(failed), SUM(new_rows),"
                      " COUNT(DISTINCT substr(started_at,1,10))"
@@ -331,36 +352,40 @@ def nhip_quet(conn: sqlite3.Connection) -> dict:
             "pc_ok": round(ok * 100 / luot) if luot else None}
 
 
-# ------------------------------------------------------------- CHẨN ĐOÁN
+# ------------------------------------------------------------- DIAGNOSIS
 
-# Mức CHẮC CHẮN của một dấu hiệu. Bày dấu hiệu mà không nói mình chắc tới đâu
-# là cách nhanh nhất để người dùng sửa nhầm chỗ: một con số đếm trực tiếp
-# (130 tin chưa nộp) và một suy đoán trên 5 mẫu KHÔNG được trông giống nhau.
+# How CERTAIN a signal is. Showing a signal without saying how sure you are
+# is the fastest way to send the user off fixing the wrong thing: a direct
+# count (130 unapplied postings) and an inference over 5 samples must NOT
+# look the same.
 CHAC, VUA, YEU = "chac", "vua", "yeu"
 MUC_HET = (CHAC, VUA, YEU)
 
 
 def chan_doan(conn: sqlite3.Connection) -> list[dict]:
-    """Dấu hiệu đang hỏng, XẾP THEO ĐỘ CHẮC chứ không theo độ giật gân.
+    """Signals of something broken, ORDERED BY CERTAINTY rather than drama.
 
-    Mỗi dấu hiệu phải nói được: đo trên bao nhiêu mẫu, nghĩa là gì, bấm đi
-    đâu để sửa. Thiếu một trong ba thì nó là câu than, không phải chẩn đoán.
+    Each signal has to say: how many samples it measured, what it means, and
+    where to click to fix it. Missing any of the three makes it a complaint,
+    not a diagnosis.
     """
     from ..cv import batch
     ra = []
     p, k = pheu(conn), ket_qua(conn)
 
-    # 1. ĐẾM TRỰC TIẾP — không suy gì cả, nên chắc nhất.
+    # 1. A DIRECT COUNT — no inference at all, so the most certain.
     if p["cho_nop"] > 0:
         ra.append(dict(
             muc=CHAC, ma="cho_nop", so=f"{p['cho_nop']}",
-            ten=f"{p['cho_nop']} tin đáng nộp chưa nộp",
-            y=f"Máy chấm ≥{DIEM_DANG_NOP} điểm và xếp là nộp được thật. "
-              f"Đây là việc lớn nhất đang nằm chờ.",
-            tren=f"đếm trực tiếp trên {p['dang']} tin đáng nộp",
+            ten=f"{p['cho_nop']} worthwhile postings not applied to",
+            y=f"The machine scored them ≥{DIEM_DANG_NOP} and judged them "
+              f"genuinely applicable. This is the largest piece of work "
+              f"waiting.",
+            tren=f"a direct count over {p['dang']} worthwhile postings",
             di="/search", nut="Xem kho"))
 
-    # 2. NỘP CÓ ĐÚNG CHỖ KHÔNG — chỉ chấm được mấy đơn nối được tin gốc.
+    # 2. ARE THE APPLICATIONS GOING TO THE RIGHT PLACES — only scoreable for
+    #    applications linked to an original posting.
     diem = [r[0] for r in conn.execute(
         "SELECT p.score FROM application a JOIN posting p ON p.id = a.posting_id"
         " WHERE p.score IS NOT NULL")]
@@ -371,31 +396,34 @@ def chan_doan(conn: sqlite3.Connection) -> list[dict]:
             ra.append(dict(
                 muc=VUA if len(diem) >= 5 else YEU, ma="nop_thap",
                 so=f"{len(thap)}/{len(diem)}",
-                ten=f"{len(thap)}/{len(diem)} đơn máy chấm được đều dưới "
-                    f"{DIEM_DANG_NOP} điểm",
-                y=f"Thấp nhất {min(thap)} điểm. Nộp vào chỗ máy đánh giá thấp "
-                  f"trong khi {p['cho_nop']} tin điểm cao đang nằm không.",
-                tren=f"{len(diem)} đơn nối được tin gốc — {ngoai} đơn còn lại "
-                     f"nộp ngoài app nên không chấm được",
-                di="/track", nut="Xem bảng"))
+                ten=f"{len(thap)}/{len(diem)} scoreable applications are all "
+                    f"below {DIEM_DANG_NOP}",
+                y=f"The lowest is {min(thap)}. You are applying where the "
+                  f"machine scores low while {p['cho_nop']} high-scoring "
+                  f"postings sit untouched.",
+                tren=f"{len(diem)} applications linked to an original posting "
+                     f"— the other {ngoai} were applied to outside the app and "
+                     f"cannot be scored",
+                di="/track", nut="Open the table"))
 
-    # 3. RƠI Ở ĐÂU — họ có đọc không, hay đọc rồi mới loại.
+    # 3. WHERE IT FALLS AWAY — did they read it at all, or read it and pass.
     if k["tong"] >= 10 and k["pc_hoi"] is not None:
         doc = k["pc_hoi"] >= 20
         ra.append(dict(
             muc=VUA, ma="roi",
             so=f"{k['pc_hoi']:g}%",
-            ten=("Người có đọc, nhưng không gọi" if doc
-                 else "Phần lớn không ai trả lời"),
-            y=(f"{k['hoi_am']}/{k['tong']} lần nộp có người hồi âm, mà chỉ "
-               f"{k['di_tiep']} lần đi tiếp. Chỗ rơi nằm ở bước họ quyết, "
-               f"không phải ở vòng máy lọc." if doc else
-               f"Chỉ {k['hoi_am']}/{k['tong']} lần nộp từng có một chữ hồi "
-               f"đáp. Im từ đầu thường là bị loại ở vòng máy đọc CV."),
-            tren=f"{k['tong']} lần nộp",
+            ten=("People read it, and did not call" if doc
+                 else "Most of them never replied at all"),
+            y=(f"{k['hoi_am']} of {k['tong']} applications got a reply, and "
+               f"only {k['di_tiep']} moved forward. The loss is at their "
+               f"decision, not at the machine filter." if doc else
+               f"Only {k['hoi_am']} of {k['tong']} applications ever got a "
+               f"word back. Silence from the start usually means being cut by "
+               f"the CV-reading machine."),
+            tren=f"{k['tong']} applications",
             di="/cv", nut="Xem CV"))
 
-    # 4. CV ĐÁP ĐƯỢC BAO NHIÊU PHẦN CỦA KHO — số của chính tầng CV.
+    # 4. HOW MUCH OF THE STORE THE CV ANSWERS — the CV layer's own number.
     luu = batch.saved(conn) or {}
     hut = luu.get("hut") or {}
     if hut.get("tin"):
@@ -404,16 +432,17 @@ def chan_doan(conn: sqlite3.Connection) -> list[dict]:
         if pc < 70:
             ra.append(dict(
                 muc=CHAC, ma="phu", so=f"{pc}%",
-                ten=f"CV đáp trọn {nen}/{tin} tin",
-                y=f"{tin - nen} tin đang đòi thứ chưa có câu nào trên CV nói "
-                  f"tới. Mỗi câu viết thêm đúng chỗ kéo con số này lên.",
+                ten=f"The CV fully answers {nen}/{tin} postings",
+                y=f"{tin - nen} postings ask for something no sentence on the "
+                  f"CV mentions. Each sentence written in the right place "
+                  f"moves this number up.",
                 tren=f"{tin} tin trong kho",
-                di="/cv/soan", nut="Soạn khối"))
+                di="/cv/soan", nut="Edit blocks"))
     return ra
 
 
 def tat_ca(conn: sqlite3.Connection, ngay: int = 30) -> dict:
-    """Cả trang Home trong MỘT lượt đọc."""
+    """The whole Home page in ONE read."""
     return {"hom_nay": hom_nay(conn), "pheu": pheu(conn), "ket_qua": ket_qua(conn),
             "nang_suat": nang_suat(conn, ngay), "nhip": nhip_quet(conn),
             "chan_doan": chan_doan(conn)}
