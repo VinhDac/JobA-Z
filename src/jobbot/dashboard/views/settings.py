@@ -1,33 +1,37 @@
-"""Cài đặt — MENU, không phải một tab.
+"""Settings — a MENU, not a tab.
 
-Trả về một MẢNH HTML, không phải cả trang: live.js nạp nó vào tấm phủ khi bấm
-nút bánh răng. Làm thành tab thì nó chiếm một chỗ trong thanh bên ngang hàng
-với Search và Projects — trong khi nó không phải một việc, nó là mấy cái công
-tắc mở ra chỉnh rồi đóng lại.
+It returns an HTML FRAGMENT, not a whole page: live.js loads it into the
+overlay when the cog is pressed. Made a tab, it would take a place in the
+sidebar alongside Search and Projects — while it is not a job, it is a few
+switches you open, adjust and close.
 
-Chỉ hai núm. Thước để một thứ được vào đây:
+Two knobs only. The measure for letting something in here:
 
-    1. có nhiều hơn một câu trả lời đúng
-    2. NGƯỜI DÙNG là người nên chọn
-    3. đổi nó thì máy chạy khác đi
+    1. it has more than one right answer
+    2. THE USER is the one who should choose
+    3. changing it makes the machine behave differently
 
-Thiếu một trong ba thì nó là thứ khác: một câu trả lời đúng -> đó là LỖI, sửa
-code; máy tự báo về mình -> đó là SỐ ĐỌC VỀ; không đổi được cố ý -> đó là
-RANH GIỚI AN TOÀN. Trang cũ có 18 dòng mà chỉ 2 dòng qua được thước này.
+Miss any of the three and it is something else: one right answer -> that is A
+BUG, fix the code; the machine reporting on itself -> that is A READOUT;
+deliberately unchangeable -> that is A SAFETY BOUNDARY. The old page had 18
+rows and only 2 passed this measure.
 
-Hai núm này đều KHÔNG đụng tới phán quyết — đổi chúng chỉ đổi cách chạy, có
-tác dụng từ lần quét sau. Thứ đổi phán quyết nằm ở ô Lưới lọc bên tab Search,
-và ở đó nút Áp dụng nói rõ sẽ phán lại bao nhiêu tin.
+Neither knob touches any verdict — changing them only changes how it runs,
+from the next scan onwards. What changes a verdict lives in the Sieve panel on
+the Search tab, where the Apply button states how many postings will be
+re-judged.
 
-Ba TAB. Trước đây một cột dài 782px trong hộp cao 660px — phần "Làm lại từ
-đầu" nằm dưới nếp gấp, phải cuộn mới thấy, mà không ai biết là có thể cuộn.
-Chia tab thì mỗi tab vừa một màn, và hộp co lại đúng một hộp thoại nổi thay vì
-một cột chạy gần hết chiều cao cửa sổ.
+THREE TABS. It used to be one 782px column inside a 660px box — the "Start
+over" section sat below the fold, reachable only by scrolling, and nobody knew
+it could be scrolled. Split into tabs, each tab fits one screen and the box
+shrinks to an actual dialog instead of a column running most of the window's
+height.
 
-Chia theo VIỆC, không theo độ dài: thứ đổi được / thứ chỉ đọc / thứ phá huỷ.
-Để việc phá huỷ chung màn với nhịp quét là sớm muộn cũng có người bấm nhầm.
+Split BY JOB, not by length: what can be changed / what is only read / what
+destroys. Leaving the destructive thing on the same screen as the scan
+interval means sooner or later somebody presses it by mistake.
 
-CHỈ VẼ.
+DRAWING ONLY.
 """
 
 from __future__ import annotations
@@ -40,45 +44,47 @@ def _num(name: str, value: int, low: int, high: int, unit: str) -> str:
 
 
 PACE_TEXT = [
-    ("nhe", "Nhẹ nhàng", "4-7 giây mỗi tin · ít bị bóp nhất"),
-    ("thuong", "Thường", "2,5-5 giây · mặc định"),
-    ("nhanh", "Nhanh", "1,2-2,5 giây · gọi dày gấp đôi, dễ bị bóp hơn"),
+    ("nhe", "Gentle", "4-7 seconds per posting · least likely to be throttled"),
+    ("thuong", "Normal", "2.5-5 seconds · the default"),
+    ("nhanh", "Fast", "1.2-2.5 seconds · twice the call density, easier to throttle"),
 ]
 
 
 def _nhip(pace: str) -> str:
-    """Núm hiệu năng THẬT của vòng quét — và nó là núm ĐÁNH ĐỔI.
+    """The scan loop's REAL performance knob — and it is a TRADE-OFF knob.
 
-    Vì sao không phải "chạy mấy tab song song": N tab với nhịp P giống hệt 1
-    tab với nhịp P/N — cùng số lượt gọi mỗi giây, cùng rủi ro bị bóp. Song
-    song chỉ là cách viết phức tạp hơn của một con số nhỏ hơn, cộng thêm N cửa
-    sổ Chrome ăn RAM và N chỗ có thể chết nửa chừng. Nên bày ra đúng cái thật
-    sự đổi: nhịp.
+    Why it is not "how many tabs in parallel": N tabs at pace P is identical
+    to 1 tab at pace P/N — the same calls per second, the same throttling
+    risk. Parallelism is only a more complicated way of writing a smaller
+    number, plus N Chrome windows eating RAM and N places to die halfway. So
+    what is put on screen is the thing that actually changes: the pace.
 
-    Nói thẳng cái ĐÁNH ĐỔI ngay trên màn hình. Một núm ghi "Nhanh" mà không
-    nói nhanh bằng giá gì là núm mời người ta bấm rồi lãnh hậu quả.
+    STATE THE TRADE right on the screen. A knob reading "Fast" that does not
+    say what fast costs is a knob inviting people to press it and take the
+    consequences.
     """
     nut = "".join(
         f"<label class=prow><input type=radio name=pace value='{esc(v)}'"
         f"{' checked' if v == pace else ''}>"
         f"<b>{esc(ten)}</b><span class=muted>{esc(ghi)}</span></label>"
         for v, ten, ghi in PACE_TEXT)
-    return (f"<div class=sthead>Nhịp gọi LinkedIn</div>{nut}"
-            "<div class=safe>Board công ty không đụng tới nhịp này — chúng là "
-            "API công khai, mỗi board một lượt gọi. Nhịp chỉ áp cho LinkedIn, "
-            "bên duy nhất app đang ở nhờ.</div>")
+    return (f"<div class=sthead>LinkedIn call pace</div>{nut}"
+            "<div class=safe>Company boards do not touch this pace — they are "
+            "public APIs, one call per board. The pace applies only to "
+            "LinkedIn, the one place the app is a guest.</div>")
 
 
 def _nguon(sources: list[dict], board_on: bool) -> str:
-    """Bật/tắt từng ATS. BA cái, không phải 34 cái.
+    """Turn each ATS on or off. THREE of them, not 34.
 
-    "API" ở đây là ba nhà cung cấp ATS, không phải 34 board công ty. Giới
-    thiệu từng công ty thì vô nghĩa ("Jane Street — một quỹ"), còn ba ATS thì
-    khác nhau thật: cách trả dữ liệu khác, loại công ty khác, tỉ lệ dùng được
-    khác hẳn.
+    "API" here means three ATS providers, not 34 company boards. Introducing
+    each company would be meaningless ("Jane Street — a fund"), while the
+    three ATS really do differ: different data shapes, different kinds of
+    company, very different usable rates.
 
-    Giới thiệu bằng SỐ THẬT của chính kho này, không bằng tính từ. "Hiện đại",
-    "phổ biến" thì không ai chọn được gì; "600 tin, giữ 6" thì chọn được ngay.
+    Introduced with THIS STORE's REAL NUMBERS, not adjectives. "Modern",
+    "popular" lets nobody choose anything; "600 postings, 6 kept" lets them
+    choose at once.
     """
     hang = ""
     for n in sources:
@@ -89,113 +95,121 @@ def _nguon(sources: list[dict], board_on: bool) -> str:
             f"<b>{esc(n['ten'])}</b>"
             f"<span class=muted>{esc(n['note'])}</span>"
             f"<span class=srcnum>"
-            + (f"{n['boards']} board · " if n["boards"] else "")
-            + f"{n['tin']:,} tin về · giữ {n['giu']:,}"
-            + (f" · {n['remote']:,} khai remote" if n["remote"] else "")
+            + (f"{n['boards']} boards · " if n["boards"] else "")
+            + f"{n['tin']:,} postings in · {n['giu']:,} kept"
+            + (f" · {n['remote']:,} say remote" if n["remote"] else "")
             + "</span></label>")
-    # Công tắc TO đang tắt thì mấy công tắc nhỏ chưa có tác dụng. Không nói ra
-    # thì người dùng bật/tắt ở đây rồi ngồi đợi một thứ không bao giờ tới.
+    # While the BIG switch is off, the small ones have no effect. Without
+    # saying so, the user toggles things here and then waits for something
+    # that never comes.
     canh = ("" if board_on else
-            "<div class=safe><b>Board đang TẮT</b> ở tấm Điều chỉnh · Search — "
-            "mấy công tắc dưới đây chưa có tác dụng cho tới khi bật lại.</div>")
+            "<div class=safe><b>Boards are OFF</b> in Adjust · Search — the "
+            "switches below have no effect until they are turned back on.</div>")
     return (
         "<form class=setform method=post action='/settings'>"
         "<input type=hidden name=phan value=nguon>"
         + canh +
-        "<div class=sthead>Nguồn nhanh</div>"
-        "<div class=safe>Ba nhà cung cấp ATS, cộng thư báo việc LinkedIn gửi "
-        "vào hộp thư. Bỏ tick là lần quét sau không gọi tới nguồn đó nữa — "
-        "tin cũ vẫn nằm nguyên trong kho.</div>"
+        "<div class=sthead>Fast sources</div>"
+        "<div class=safe>Three ATS providers, plus the LinkedIn job alert "
+        "emails in the mailbox. Untick one and the next scan stops calling it "
+        "— the postings already fetched stay in the store.</div>"
         + hang +
         "<div class=setfoot>"
-        "<button class='mbtn apply' type=submit>Lưu</button>"
-        "<span class=applynote>có tác dụng từ lần quét sau · "
-        "không xoá tin đã lấy về</span></div>"
+        "<button class='mbtn apply' type=submit>Save</button>"
+        "<span class=applynote>takes effect from the next scan · deletes "
+        "nothing already fetched</span></div>"
         "</form>")
 
 
 def _gmail(ready: bool, address: str, days: int, ho_so: str = "") -> str:
-    """Nối hộp thư + số ngày đọc lại. KHÔNG bao giờ vẽ mật khẩu ra.
+    """Connect the mailbox + how many days to reread. NEVER draws the password.
 
-    Trước đây ô này nằm trên đầu tab Quản lí — trang Vin mở hàng ngày. Nó là
-    CẤU HÌNH: nối một lần rồi thôi, nên chỗ của nó là Cài đặt. Cái ở lại bên
-    Quản lí là VIỆC: nút Quét thư.
+    This used to sit at the head of the Track tab — the page Vin opens daily.
+    It is CONFIGURATION: connected once and then done, so its place is
+    Settings. What stayed on Track is THE WORK: the Scan mail button.
 
-    Kể cả ở đây cũng chỉ vẽ ĐỊA CHỈ và TRẠNG THÁI. Một ô password có sẵn giá
-    trị là mật khẩu nằm trong HTML — đọc được bằng View Source và bị trình
-    duyệt lưu vào bộ nhớ đệm. Giá trị thật nằm trong config.toml (chmod 600,
-    đã gitignore).
+    Even here, only THE ADDRESS and THE STATE are drawn. A password field with
+    a value is a password sitting in the HTML — readable via View Source and
+    cached by the browser. The real value lives in config.toml (chmod 600,
+    gitignored).
     """
     ngay = (
         "<form class=setform method=post action='/settings'>"
         "<input type=hidden name=phan value=gmail>"
-        "<div class=sthead>Đọc lại bao nhiêu ngày thư</div>"
-        "<label class=srow><span>Mỗi lượt quét đọc lại</span>"
-        + _num("mail_days", days, 1, 365, "ngày") + "</label>"
-        "<div class=safe>Thư trả lời cho đơn nộp tháng trước vẫn cần bắt được, "
-        "nên 30 ngày là mặc định. Đặt ngắn thì quét nhanh hơn nhưng dễ bỏ sót "
-        "thư về muộn.</div>"
+        "<div class=sthead>How many days of mail to reread</div>"
+        "<label class=srow><span>Each scan rereads</span>"
+        + _num("mail_days", days, 1, 365, "days") + "</label>"
+        "<div class=safe>A reply to an application sent last month still has "
+        "to be caught, so 30 days is the default. Set it shorter and scans are "
+        "quicker but late replies are missed.</div>"
         "<div class=setfoot>"
-        "<button class='mbtn apply' type=submit>Lưu</button>"
-        "<span class=applynote>có tác dụng từ lần quét thư sau</span></div>"
+        "<button class='mbtn apply' type=submit>Save</button>"
+        "<span class=applynote>takes effect from the next mail scan</span></div>"
         "</form>")
 
     if ready:
-        # "đã lưu", KHÔNG phải "đã nối": chỗ này chỉ biết config CÓ chuỗi,
-        # không biết chuỗi đó còn đăng nhập được không. App password bị thu
-        # hồi bên Google thì dòng này vẫn xanh, và Vin tin là hộp thư đang
-        # chạy.
-        # KHÔNG có nút xoá ở đây. Nối một lần rồi thôi; đường xoá duy nhất
-        # là "Làm lại từ đầu" bên tab kia. Đổi mật khẩu thì dán đè lên.
-        noi = (f"<div class=safe>Hộp thư <b>{esc(address)}</b> đã lưu — sang "
-               f"tab Quản lí bấm Quét thư để kiểm xem còn đăng nhập được "
-               f"không.<br>Nối một lần là xong: mật khẩu chỉ mất khi bạn bấm "
-               f"<b>Làm lại từ đầu</b>. Muốn đổi thì dán mật khẩu mới đè lên."
+        # "saved", NOT "connected": all this place knows is that the config
+        # HAS a string, not whether that string can still log in. Have Google
+        # revoke the app password and this line stays green, and Vin believes
+        # the mailbox is running.
+        # NO delete button here. It is connected once and done; the only way
+        # to remove it is "Start over" on the other tab. To change it, paste
+        # the new password over the old.
+        noi = (f"<div class=safe>Mailbox <b>{esc(address)}</b> saved — go to "
+               f"the Track tab and press Scan mail to check it can still log "
+               f"in.<br>Connecting is a one-off: the password only goes when "
+               f"you press <b>Start over</b>. To change it, paste a new "
+               f"password over the top."
                f"</div>"
                f"<form class=boxform data-post='/api/mail/setup'>"
                f"<input name=address type=email value='{esc(address)}'"
-               f" placeholder='địa chỉ hộp thư việc làm' required>"
+               f" placeholder='job mailbox address' required>"
                "<input name=password type=password autocomplete=off"
-               " placeholder='dán app password mới để đổi' required>"
-               "<button class='mbtn apply' type=submit>Đổi</button>"
+               " placeholder='paste a new app password to change it' required>"
+               "<button class='mbtn apply' type=submit>Change</button>"
                "<span class=formnote></span></form>")
     else:
         noi = (
             "<form class=boxform data-post='/api/mail/setup'>"
             f"<input name=address type=email value='{esc(address)}'"
-            f" placeholder='địa chỉ hộp thư việc làm' required>"
+            f" placeholder='job mailbox address' required>"
             "<input name=password type=password autocomplete=off"
-            " placeholder='app password 16 ký tự' required>"
-            "<button class='mbtn apply' type=submit>Nối</button>"
-            "<div class=boxwhy>Lấy ở <code>myaccount.google.com/apppasswords</code>"
-            " (bật xác minh 2 bước trước). KHÔNG phải mật khẩu tài khoản —"
-            " Gmail đã ngắt IMAP bằng mật khẩu tài khoản từ 2022. App password"
-            " lưu vào <code>config/config.toml</code>, chmod 600, đã gitignore."
-            "<span class=formnote></span></div></form>")
+            " placeholder='16-character app password' required>"
+            "<button class='mbtn apply' type=submit>Connect</button>"
+            "<div class=boxwhy>Get one at <code>myaccount.google.com/apppasswords</code>"
+            " (turn on 2-step verification first). NOT the account password —"
+            " Gmail cut off IMAP with account passwords back in 2022. The app"
+            " password is stored in <code>config/config.toml</code>, chmod 600,"
+            " gitignored.<span class=formnote></span></div></form>")
 
-    # Nói TRƯỚC là phải khớp, đừng để bấm Nối xong mới báo hỏng. Và điền
-    # sẵn địa chỉ hồ sơ: gõ tay một địa chỉ đã biết là mời gõ sai.
-    khop = (f"<div class=safe>Phải đúng địa chỉ khai trong hồ sơ — "
-            f"<b>{esc(ho_so)}</b>. Đó là địa chỉ in lên CV và điền vào form "
-            f"nộp, tức là chỗ nhà tuyển dụng bấm Trả lời; nối hộp thư khác "
-            f"thì app quét một nơi mà thư về một nơi.</div>"
+    # Say UP FRONT that it has to match, rather than reporting a failure after
+    # Connect is pressed. And prefill the profile address: making someone
+    # retype an address already known is inviting a typo.
+    khop = (f"<div class=safe>It has to be the address declared in the profile "
+            f"— <b>{esc(ho_so)}</b>. That is the address printed on the CV and "
+            f"filled into applications, i.e. the one employers press Reply to; "
+            f"connect a different mailbox and the app watches one place while "
+            f"the mail arrives at another.</div>"
             if ho_so else
-            "<div class=safe>Hồ sơ chưa khai địa chỉ liên hệ — điền ở tab "
-            "Profile trước, rồi nối đúng hộp thư đó.</div>")
-    return (f"<div class=sthead>Hộp thư việc làm</div>"
-            f"<div class=safe>Thư về là thứ tự cập nhật bảng Quản lí — trả "
-            f"lời, hẹn phỏng vấn, từ chối.</div>{khop}{noi}{ngay}")
+            "<div class=safe>The profile has no contact address yet — fill it "
+            "in on the Profile tab first, then connect that same mailbox.</div>")
+    return (f"<div class=sthead>Job mailbox</div>"
+            f"<div class=safe>Incoming mail is what updates the Track table by "
+            f"itself — replies, interview invitations, rejections.</div>"
+            f"{khop}{noi}{ngay}")
 
 
 def _chung(mau_nay: str, tu_truc: bool) -> str:
-    """Tab CHUNG — cài đặt của CẢ APP, không thuộc khúc nào.
+    """The GENERAL tab — settings for THE WHOLE APP, belonging to no stage.
 
-    Ranh giới với mấy tab kia: "Chạy" chỉnh nhịp quét, "Nguồn" chỉnh nơi tìm,
-    "Gmail" chỉnh hộp thư — cả ba đều là cài đặt của MỘT việc. Ở đây là thứ
-    đúng ở mọi tab: màu, và app có tự trực khi mở lên hay không.
+    The boundary with the other tabs: "Run" sets the scan pace, "Sources" sets
+    where it looks, "Gmail" sets the mailbox — all three configure ONE job.
+    Here is what holds on every tab: the colour, and whether the app goes on
+    watch by itself when it opens.
 
-    Bấm là ăn NGAY, không qua nút Lưu. Màu mà phải bấm Lưu mới thấy thì người
-    dùng không so được hai màu với nhau — mà so chính là cách người ta chọn.
+    Pressing takes effect AT ONCE, with no Save button. A colour that needs
+    Save before it shows leaves the user unable to compare two colours — and
+    comparing is how people choose.
     """
     from .. import mau as _mau
     o = ""
@@ -205,108 +219,116 @@ def _chung(mau_nay: str, tu_truc: bool) -> str:
               f" data-post='/api/chung' data-arg='mau:{ma}'"
               f" title='{esc(ten)}' style='--o:{bo['--acc']}'>"
               f"<span class=swdot></span><b>{esc(ten)}</b>"
-              + ("<i>đang dùng</i>" if on else "") + "</button>")
+              + ("<i>in use</i>" if on else "") + "</button>")
     truc = (f"<div class='swrow{'' if tu_truc else ' off'}'>"
             f"<button class='mbtn tiny swbtn{'' if tu_truc else ' off'}'"
             f" data-post='/api/chung' data-arg='truc:"
-            f"{'0' if tu_truc else '1'}'>{'BẬT' if tu_truc else 'TẮT'}</button>"
-            f"<b class=swten>Tự trực khi mở app</b>"
+            f"{'0' if tu_truc else '1'}'>{'ON' if tu_truc else 'OFF'}</button>"
+            f"<b class=swten>Go on watch when the app opens</b>"
             f"<span class=swnow>"
-            + ("chạy phiên theo lịch ngay" if tu_truc else "đợi bạn bấm")
-            + "</span><details class=swwhy><summary>vì sao</summary>"
-            "<div class=swbody>Mặc định TẮT, cố ý: mở app lên mà nó tự mở "
-            "Chrome đi quét trong lúc bạn còn chưa kịp xem gì là sai. Bật khi "
-            "bạn đã yên tâm với cấu hình. Nút Start session trên tab Tổng quan "
-            "cũng bật cái này.</div></details></div>")
-    return ("<div class=sthead>Màu hệ thống</div>"
+            + ("runs sessions on schedule straight away" if tu_truc
+               else "waits for you to press")
+            + "</span><details class=swwhy><summary>why</summary>"
+            "<div class=swbody>OFF by default, deliberately: opening the app "
+            "and having it open Chrome and start scanning before you have even "
+            "looked at anything is wrong. Turn it on once you are comfortable "
+            "with the configuration. The Start session button on the Overview "
+            "tab turns this on too.</div></details></div>")
+    return ("<div class=sthead>System colour</div>"
             f"<div class=swgrid>{o}</div>"
-            "<div class=note>Đổi màu KHÔNG đụng tới màu mang nghĩa: đỏ vẫn là "
-            "trượt, cam vẫn là cảnh báo, xanh dương vẫn là số nền. Chỉ màu "
-            "NHẤN đổi — thứ đánh dấu «cái đang chọn» và «việc phải làm».</div>"
-            "<div class=sthead>Khi mở app</div>" + truc)
+            "<div class=note>Changing the colour does NOT touch the colours "
+            "that carry meaning: red is still rejected, orange is still a "
+            "warning, blue is still background. Only the ACCENT changes — what "
+            "marks «what is selected» and «what has to be done».</div>"
+            "<div class=sthead>When the app opens</div>" + truc)
 
 
 def _thong_bao(noi: bool, token_che: str, chat: str, bat: dict,
                muc: str, nguong: int, gio: int, tin_test: tuple = ()) -> str:
-    """Tab THÔNG BÁO — báo về điện thoại, và điều khiển từ xa.
+    """The NOTIFICATIONS tab — messages to your phone, and remote control.
 
-    KHÔNG BAO GIỜ VẼ TOKEN RA. Một ô có sẵn giá trị là bí mật nằm trong
-    HTML: đọc được bằng View Source và bị trình duyệt lưu vào bộ nhớ đệm.
-    Chỉ hiện bốn ký tự cuối để người dùng biết mình đã dán cái nào.
+    NEVER DRAW THE TOKEN. A field with a value is a secret sitting in the
+    HTML: readable via View Source and cached by the browser. Only the last
+    four characters are shown, so the user knows which one they pasted.
     """
     from ...core import prefs, tele
 
-    # "ĐÃ NỐI" ở đây chỉ nghĩa là CÓ ĐỦ HAI CHUỖI trong config, không phải
-    # chúng đúng. Token bị thu hồi thì dòng này vẫn xanh — nên nó phải mời
-    # bấm Test chứ không được nói "chạy tốt".
-    buoc = ("1. Trên Telegram nhắn <b>@BotFather</b> → <b>/newbot</b>. Nó trả "
-            "về một token dạng <b>7123456789:AAH…</b> — copy TRỌN cả dòng.<br>"
-            "2. Mở con bot vừa tạo, nhắn cho nó <b>/start</b>.<br>"
-            "3. Dán token vào ô dưới rồi bấm <b>Lưu</b> — máy tự tìm nốt "
-            "phần còn lại.<br>"
-            "4. Bấm <b>Test</b>: một tin thử sẽ về điện thoại bạn.")
+    # "CONNECTED" here only means BOTH STRINGS ARE PRESENT in the config, not
+    # that they are right. Have the token revoked and this line stays green —
+    # so it has to invite a Test rather than claim "working".
+    buoc = ("1. On Telegram, message <b>@BotFather</b> → <b>/newbot</b>. It "
+            "returns a token like <b>7123456789:AAH…</b> — copy the WHOLE "
+            "line.<br>"
+            "2. Open the bot you just made and send it <b>/start</b>.<br>"
+            "3. Paste the token in the field below and press <b>Save</b> — the "
+            "machine works out the rest.<br>"
+            "4. Press <b>Test</b>: a test message arrives on your phone.")
     if noi:
-        dau = (f"<div class=safe>Đã nối · token <b>{esc(token_che)}</b> — "
-               f"nhưng <i>đã lưu</i> chưa chắc là <i>đúng</i> (token bị thu "
-               f"hồi thì dòng này vẫn xanh). Bấm <b>Test</b> để biết chắc."
-               f"<br><br>{buoc}</div>")
+        dau = (f"<div class=safe>Connected · token <b>{esc(token_che)}</b> — "
+               f"but <i>saved</i> is not necessarily <i>right</i> (revoke the "
+               f"token and this line stays green). Press <b>Test</b> to know "
+               f"for certain.<br><br>{buoc}</div>")
     else:
-        dau = ("<div class=safe><b>Chưa nối.</b> Máy treo ở nhà thì thông báo "
-               "của macOS không ai thấy — Telegram là đường duy nhất không "
-               f"phải mở cổng router.<br><br>{buoc}</div>")
+        dau = ("<div class=safe><b>Not connected.</b> With the machine left "
+               "running at home, nobody sees a macOS notification — Telegram "
+               "is the only route that does not mean opening a router "
+               f"port.<br><br>{buoc}</div>")
 
     form = (
         "<form class=setform method=post action='/settings'>"
         "<input type=hidden name=phan value=telegram>"
-        "<label class=srow><span>Token của bot</span>"
+        "<label class=srow><span>Bot token</span>"
         "<input class=stext type=password name=token autocomplete=off"
-        " placeholder='dán token từ @BotFather'></label>"
-        # KHÔNG CÓ Ô MÃ CHAT. Mã chat là thứ máy đọc được từ chính Telegram,
-        # hỏi người dùng là hỏi một câu họ không có cách nào biết — và cái ô
-        # đó đã dẫn thẳng tới việc dán số điện thoại vào. Một ô không mang
-        # thông tin mới thì nó là một chỗ để sai.
+        " placeholder='paste the token from @BotFather'></label>"
+        # NO CHAT ID FIELD. The chat id is something the machine can read from
+        # Telegram itself; asking the user is asking a question they have no
+        # way to answer — and that field led straight to people pasting their
+        # phone number in. A field carrying no new information is just a place
+        # to get it wrong.
         "<div class=setfoot>"
-        "<button class='mbtn apply' type=submit>Lưu</button>"
-        # NÚT TEST gửi THẬT một tin. Kiểm từng khúc rồi kết luận "chắc là
-        # chạy" là đúng kiểu tự lừa app này tránh — cả chuỗi token → số chat
-        # → mạng → Telegram chỉ chứng minh được bằng cách đi hết một vòng.
+        "<button class='mbtn apply' type=submit>Save</button>"
+        # THE TEST BUTTON really sends a message. Checking each link and then
+        # concluding "it probably works" is exactly the self-deception this app
+        # avoids — the whole chain token → chat id → network → Telegram can
+        # only be proved by going all the way round it.
         "<button class=mbtn type=submit name=test value=1"
-        " title='Gửi một tin thử về điện thoại — tin đó nói luôn bạn đang ở"
-        " chế độ nào và dùng được lệnh gì'>Test</button>"
-        "<span class=applynote>token chỉ nằm trong config.toml (chmod 600, "
-        "đã gitignore) — không vào DB, không vào nhật ký</span></div>"
+        " title='Send a test message to your phone — it also says which mode"
+        " you are in and which commands you can use'>Test</button>"
+        "<span class=applynote>the token lives only in config.toml (chmod 600, "
+        "gitignored) — never in the DB, never in the journal</span></div>"
         "</form>")
 
-    # KẾT QUẢ TEST hiện ngay trên đầu, không giấu vào nhật ký: người vừa bấm
-    # đang nhìn chỗ này, và hỏng thì phải nói HỎNG Ở ĐÂU chứ không phải
-    # "không gửi được" — câu đó họ tự biết rồi.
+    # THE TEST RESULT goes right at the top, not hidden in the journal: the
+    # person who just pressed it is looking here, and on failure it has to say
+    # WHERE it failed rather than "could not send" — they knew that already.
     if tin_test:
         was_ok, cau = tin_test
-        # KHÔNG esc() Ở ĐÂY: câu này do bao.py soạn, và nó đã tự thoát mọi
-        # mảnh lấy từ Telegram bằng tele.thoat() trước khi ghép. Escape thêm
-        # lần nữa thì <b> hiện nguyên thành chữ — người dùng đọc ra "&lt;b&gt;"
-        # giữa câu hướng dẫn.
+        # NO esc() HERE: this sentence is composed by bao.py, which already
+        # escapes every fragment taken from Telegram with tele.thoat() before
+        # joining. Escaping again prints <b> as literal text — the user reads
+        # "&lt;b&gt;" in the middle of the instructions.
         #
-        # Tiêu đề NÓI CHUNG, vì cùng cái băng này báo cả ba việc: lưu, tìm
-        # mã chat, và gửi tin thử. Ghi "Gửi được" cho một lượt Lưu là sai.
+        # The heading is GENERAL, because the same banner reports all three
+        # jobs: saving, finding the chat id, and sending the test. Writing
+        # "Sent" for a Save would be wrong.
         form = (f"<div class='testkq {'ok' if was_ok else 'xau'}'>"
-                f"<b>{'✅ Được rồi' if was_ok else '⚠️ Chưa được'}</b>"
+                f"<b>{'✅ That worked' if was_ok else '⚠️ Not yet'}</b>"
                 f"<span>{cau}</span></div>") + form
 
-    # --- bốn loại báo
+    # --- the four kinds of message
     hang = ""
     for khoa, (ten, y) in prefs.BAO.items():
         on = bool(bat.get(khoa))
         hang += (f"<div class='swrow{'' if on else ' off'}'>"
                  f"<button class='mbtn tiny swbtn{'' if on else ' off'}'"
                  f" data-post='/api/bao' data-arg='{esc(khoa)}:"
-                 f"{'0' if on else '1'}'>{'BẬT' if on else 'TẮT'}</button>"
+                 f"{'0' if on else '1'}'>{'ON' if on else 'OFF'}</button>"
                  f"<b class=swten>{esc(ten)}</b>"
-                 f"<span class=swnow>{'có nhắn' if on else 'bỏ qua'}</span>"
-                 f"<details class=swwhy><summary>vì sao</summary>"
+                 f"<span class=swnow>{'messages' if on else 'skipped'}</span>"
+                 f"<details class=swwhy><summary>why</summary>"
                  f"<div class=swbody>{esc(y)}</div></details></div>")
 
-    # --- ba mức điều khiển
+    # --- the three control levels
     nut = ""
     for ma, (ten, y) in tele.MUC_DIEU_KHIEN.items():
         on = ma == muc
@@ -317,23 +339,24 @@ def _thong_bao(noi: bool, token_che: str, chat: str, bat: dict,
 
     so = ("<form class=setform method=post action='/settings'>"
           "<input type=hidden name=phan value=bao_so>"
-          "<label class=srow><span>Hàng chờ dồn quá</span>"
-          + _num("bao_nguong", nguong, 1, 999, "việc") + "</label>"
-          "<label class=srow><span>Gửi bản tin cuối ngày lúc</span>"
-          + _num("bao_gio", gio, 0, 23, "giờ") + "</label>"
-          "<div class=setfoot><button class='mbtn apply' type=submit>Lưu"
+          "<label class=srow><span>Queue piled up past</span>"
+          + _num("bao_nguong", nguong, 1, 999, "items") + "</label>"
+          "<label class=srow><span>Send the end-of-day report at</span>"
+          + _num("bao_gio", gio, 0, 23, "o'clock") + "</label>"
+          "<div class=setfoot><button class='mbtn apply' type=submit>Save"
           "</button></div></form>")
 
     return (dau + form
-            + "<div class=sthead>Nhắn về điện thoại khi nào</div>" + hang + so
-            + "<div class=sthead>Điều khiển từ xa</div>"
+            + "<div class=sthead>When to message your phone</div>" + hang + so
+            + "<div class=sthead>Remote control</div>"
             + f"<div class=srcrow>{nut}</div>"
             + f"<div class=note>{esc(y_muc)}</div>"
-            + "<div class=safe><b>Ba chốt cứng, không đổi được ở đây:</b> "
-              "lệnh chỉ nhận từ đúng số chat đã ghim — tin từ chat khác bị bỏ "
-              "và ghi nhật ký. Token không bao giờ vào DB hay nhật ký. Và "
-              "<b>không có lệnh nộp đơn ở bất kỳ mức nào</b>: cú bấm Gửi vẫn "
-              "là của bạn, trước mặt cái form.</div>")
+            + "<div class=safe><b>Three hard latches, not changeable here:</b> "
+              "commands are only accepted from the one pinned chat id — a "
+              "message from any other chat is dropped and journalled. The "
+              "token never reaches the DB or the journal. And there is "
+              "<b>no apply command at any level</b>: pressing Submit is still "
+              "yours, in front of the form.</div>")
 
 
 def render(*, every: int, hours: tuple[int, int],
@@ -354,59 +377,62 @@ def render(*, every: int, hours: tuple[int, int],
     chay = (
         "<form class=setform method=post action='/settings'>"
         "<input type=hidden name=phan value=chay>"
-        "<label class=srow><span>Quét lại mỗi</span>"
-        + _num("every", every, 5, 1440, "phút") + "</label>"
-        "<label class=srow><span>Chrome chạy từ</span>"
-        + _num("from", hours[0], 0, 23, "giờ") + "</label>"
-        "<label class=srow><span>… đến</span>"
-        + _num("to", hours[1], 1, 24, "giờ") + "</label>"
+        "<label class=srow><span>Rescan every</span>"
+        + _num("every", every, 5, 1440, "minutes") + "</label>"
+        "<label class=srow><span>Chrome runs from</span>"
+        + _num("from", hours[0], 0, 23, "o'clock") + "</label>"
+        "<label class=srow><span>… until</span>"
+        + _num("to", hours[1], 1, 24, "o'clock") + "</label>"
         + _nhip(pace) +
         "<div class=setfoot>"
-        "<button class='mbtn apply' type=submit>Lưu</button>"
-        "<span class=applynote>có tác dụng từ lần quét sau · "
-        "không đụng tới điểm hay bộ lọc</span></div>"
+        "<button class='mbtn apply' type=submit>Save</button>"
+        "<span class=applynote>takes effect from the next scan · touches "
+        "neither the scores nor the filters</span></div>"
         "</form>")
 
-    # Số máy tự báo về mình — KHÔNG phải cài đặt, nên tách sang tab riêng và
-    # nói rõ là chỉ để xem. Ranh giới an toàn ở cùng đây vì nó cũng không đổi
-    # được; chỉ giữ những câu CÓ TEST đỡ lưng (xem tests/test_browser.py) —
-    # lời hứa không ai kiểm thì mục dần mà không biết.
+    # Numbers the machine reports about itself — NOT settings, so they get a
+    # tab of their own that says it is read-only. The safety boundaries sit
+    # here too because they are equally unchangeable; only the promises WITH A
+    # TEST BEHIND THEM are kept (see tests/test_browser.py) — a promise nobody
+    # checks rots without anyone noticing.
     tinh_trang = (
         f"<div class=stlist>{rows}</div>"
-        "<div class=sthead>Ranh giới — không đổi được</div>"
-        "<div class=safe>Chrome chạy bằng profile riêng, không đăng nhập tài "
-        "khoản nào, chỉ đọc trang tuyển dụng công khai. Cookie chỉ bấm Từ chối. "
-        "Bị chặn thì dừng và ghi nhật ký, không cãi lại.</div>")
+        "<div class=sthead>Boundaries — not changeable</div>"
+        "<div class=safe>Chrome runs on a profile of its own, logged into no "
+        "account, reading only public careers pages. On cookies it only presses "
+        "Reject. Blocked, it stops and journals it rather than arguing.</div>")
 
-    # CHUNG ĐỨNG ĐẦU: nó là cài đặt của cả app, mấy tab sau là của từng khúc.
-    tab = [("chung", "Chung", _chung(mau_nay, tu_truc)),
-           ("bao", "Thông báo",
+    # GENERAL GOES FIRST: it is the whole app's settings, the later tabs belong
+    # to individual stages.
+    tab = [("chung", "General", _chung(mau_nay, tu_truc)),
+           ("bao", "Notifications",
             _thong_bao(tele_noi, tele_token, tele_chat, bao_bat or {},
                        bao_muc, bao_nguong, bao_gio, tin_test)),
-           ("chay", "Chạy", chay),
-           ("nguon", "Nguồn", _nguon(sources or [], board_on)),
+           ("chay", "Run", chay),
+           ("nguon", "Sources", _nguon(sources or [], board_on)),
            ("gmail", "Gmail",
             _gmail(mail_ready, mail_address or mail_profile, mail_days,
                    mail_profile)),
-           ("xem", "Tình trạng", tinh_trang),
-           ("lam-lai", "Làm lại",
+           ("xem", "Status", tinh_trang),
+           ("lam-lai", "Start over",
             _lam_lai(reset_rows, reset_files, reset_mb, reset_backup_dir))]
 
-    # TAB NÀO MỞ SẴN. `mo` = tab vừa gửi form lên, để sau khi Lưu nó ở lại
-    # đúng chỗ người dùng đang đứng.
+    # WHICH TAB OPENS. `mo` = the tab a form was just submitted from, so that
+    # after Save the user stays exactly where they were standing.
     #
-    # Không có nó thì mọi lượt POST đều văng về tab đầu — bấm Test xong cái
-    # băng kết quả nằm ở tab Thông báo, mà màn hình lại đang mở tab Chung:
-    # người dùng thấy y như không có gì xảy ra.
+    # Without it every POST lands back on the first tab — press Test and the
+    # result banner is on the Notifications tab while the screen is showing
+    # General: to the user it looks as if nothing happened.
     co = {tid for tid, _t, _n in tab}
     dau = mo if mo in co else tab[0][0]
-    # NHÁY ĐƠN BÊN TRONG f-string, không lồng nháy kép.
+    # SINGLE QUOTES INSIDE AN f-string, never nested double quotes.
     #
-    # Bản trước viết f"...{" on" if ... else ""}..." — nháy kép lồng trong
-    # nháy kép. Đó là PEP 701, chỉ hợp lệ TỪ Python 3.12; trên 3.9 (bản macOS
-    # có sẵn) và 3.11 (bản README tự khai) thì cả FILE không biên dịch nổi,
-    # nghĩa là mở tab Cài đặt là app nổ. Máy đang phát triển chạy 3.13 nên
-    # không lộ — đúng kiểu lỗi chỉ hiện ra ở máy người khác.
+    # A previous version wrote f"...{" on" if ... else ""}..." — double quotes
+    # nested inside double quotes. That is PEP 701, valid only FROM Python
+    # 3.12; on 3.9 (the version macOS ships) and 3.11 (the version the README
+    # claims) the WHOLE FILE fails to compile, meaning opening the Settings tab
+    # blows the app up. The development machine runs 3.13 so it never showed —
+    # exactly the kind of bug that only appears on somebody else's machine.
     def _on(dieu_kien: bool) -> str:
         return " on" if dieu_kien else ""
 
@@ -417,29 +443,31 @@ def render(*, every: int, hours: tuple[int, int],
         f"<div class='stpane{_on(tid == dau)}' data-pane='{tid}'>"
         f"{noi}</div>" for tid, _, noi in tab)
 
-    return (f"<div class=sheethead>Cài đặt</div>"
+    return (f"<div class=sheethead>Settings</div>"
             f"<div class=stabs>{chips}</div>{panes}")
 
 
 def _lam_lai(rows: int, files: int, mb: float, backup_dir: str) -> str:
-    """Nút đưa app về trạng thái ban đầu.
+    """The button that returns the app to its original state.
 
-    Hai chốt, cả hai đều do từng làm hỏng thật mà có:
-      - phải gõ đúng chữ XOA rồi mới bấm được (server cũng kiểm lại, không
-        tin mỗi phía trình duyệt);
-      - nói TRƯỚC sẽ mất bao nhiêu, và nói trước sao lưu sẽ nằm ở đâu.
+    Two latches, both of them there because something really went wrong once:
+      - the word DELETE has to be typed correctly before the button works (the
+        server checks again too, never trusting the browser side alone);
+      - it says UP FRONT how much will be lost, and where the backup will be.
     """
-    co = (f"{rows:,} dòng dữ liệu · {files} tệp · ~{mb} MB"
-          if rows or files else "hiện đang trống")
+    co = (f"{rows:,} rows of data · {files} files · ~{mb} MB"
+          if rows or files else "currently empty")
     return (
-        f"<div class=safe>Xoá sạch hồ sơ, tin đã quét, CV đã dựng, đơn đã "
-        f"theo dõi, hộp thư đã nối và cả profile Chrome — đưa app về đúng lúc "
-        f"mới cài. <b>Sẽ mất: {esc(co)}.</b><br>"
-        f"Trước khi xoá, app tự gói tất cả vào một tệp .tar.gz ở "
-        f"<code>{esc(backup_dir)}</code>. Gói hỏng thì KHÔNG xoá gì.</div>"
+        f"<div class=safe>Wipes the profile, the postings scanned, the CVs "
+        f"built, the applications tracked, the mailbox connection and the "
+        f"Chrome profile — returning the app to the moment it was installed. "
+        f"<b>Will be lost: {esc(co)}.</b><br>"
+        f"Before deleting, the app packs everything into a .tar.gz at "
+        f"<code>{esc(backup_dir)}</code>. If that pack fails, NOTHING is "
+        f"deleted.</div>"
         "<div class=dangerrow>"
-        "<input class=search id=resetword placeholder='gõ XOA để mở khoá' "
+        "<input class=search id=resetword placeholder='type DELETE to unlock' "
         "autocomplete=off spellcheck=false>"
         "<button class='mbtn kill' data-post='/api/reset' data-arg=''"
-        " data-needword=resetword disabled>Xoá hết, làm lại</button>"
+        " data-needword=resetword disabled>Delete everything, start over</button>"
         "</div>")

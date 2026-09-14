@@ -304,7 +304,7 @@ _set_on = _sv.render(every=60, hours=(8, 22), status=[], mail_ready=True,
 # NỐI MỘT LẦN, và chỉ "Làm lại từ đầu" mới xoá. Hai đường phá hoại cho cùng
 # một thứ là hai chỗ bấm nhầm — app password này đã mất ba lần trong một ngày.
 check("KHÔNG còn nút xoá mật khẩu riêng", "/api/mail/forget" not in _set_on)
-check("và nói rõ chỉ Làm lại từ đầu mới xoá", "Làm lại từ đầu" in _set_on)
+check("và nói rõ chỉ Làm lại từ đầu mới xoá", "Start over" in _set_on)
 check("nhưng vẫn đổi được bằng cách dán đè", "/api/mail/setup" in _set_on)
 _srv3 = (Path(__file__).resolve().parent.parent
          / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
@@ -319,7 +319,8 @@ _set_khac = _sv.render(every=60, hours=(8, 22), status=[], mail_ready=False,
 check("nói TRƯỚC phải khớp địa chỉ nào", "vin@x.y" in _set_khac)
 check("và điền sẵn để khỏi gõ sai", "value='vin@x.y'" in _set_khac)
 check("hồ sơ chưa khai thì chỉ đường đi khai",
-      "Hồ sơ chưa khai địa chỉ" in _sv.render(every=60, hours=(8, 22), status=[]))
+      "The profile has no contact address yet"
+      in _sv.render(every=60, hours=(8, 22), status=[]))
 check("và có ô đặt số ngày đọc lại thư", "name=mail_days" in _set)
 _srv2 = (Path(__file__).resolve().parent.parent
          / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
@@ -701,7 +702,7 @@ _set_on = _sv.render(every=60, hours=(8, 22), status=[], mail_ready=True,
 # NỐI MỘT LẦN, và chỉ "Làm lại từ đầu" mới xoá. Hai đường phá hoại cho cùng
 # một thứ là hai chỗ bấm nhầm — app password này đã mất ba lần trong một ngày.
 check("KHÔNG còn nút xoá mật khẩu riêng", "/api/mail/forget" not in _set_on)
-check("và nói rõ chỉ Làm lại từ đầu mới xoá", "Làm lại từ đầu" in _set_on)
+check("và nói rõ chỉ Làm lại từ đầu mới xoá", "Start over" in _set_on)
 check("nhưng vẫn đổi được bằng cách dán đè", "/api/mail/setup" in _set_on)
 _srv3 = (Path(__file__).resolve().parent.parent
          / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
@@ -716,7 +717,8 @@ _set_khac = _sv.render(every=60, hours=(8, 22), status=[], mail_ready=False,
 check("nói TRƯỚC phải khớp địa chỉ nào", "vin@x.y" in _set_khac)
 check("và điền sẵn để khỏi gõ sai", "value='vin@x.y'" in _set_khac)
 check("hồ sơ chưa khai thì chỉ đường đi khai",
-      "Hồ sơ chưa khai địa chỉ" in _sv.render(every=60, hours=(8, 22), status=[]))
+      "The profile has no contact address yet"
+      in _sv.render(every=60, hours=(8, 22), status=[]))
 check("và có ô đặt số ngày đọc lại thư", "name=mail_days" in _set)
 _srv2 = (Path(__file__).resolve().parent.parent
          / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")

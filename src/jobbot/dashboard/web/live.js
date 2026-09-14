@@ -487,7 +487,7 @@
       const box = e.target;
       const btn = document.querySelector(`[data-needword="${box.id}"]`);
       if (!box.id || !btn) return;
-      const ok = box.value.trim().toUpperCase() === 'XOA';
+      const ok = box.value.trim().toUpperCase() === 'DELETE';
       btn.disabled = !ok;
       btn.dataset.arg = ok ? 'xoa' : '';
     });

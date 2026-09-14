@@ -366,15 +366,16 @@ with tempfile.TemporaryDirectory() as tmp:
     _cc.close()
     _, _set = get("/settings")
     check("Cài đặt có tab Làm lại", "data-pane='lam-lai'" in _set)
-    check("nói trước sẽ mất gì", "Sẽ mất:" in _set)
+    check("nói trước sẽ mất gì", "Will be lost:" in _set)
     check("nói trước sao lưu nằm ở đâu", "tar.gz" in _set)
     # NÚM NHỊP phải nói ra cái ĐÁNH ĐỔI ngay trên màn hình. Một núm ghi
     # "Nhanh" mà không nói nhanh bằng giá gì là núm mời người ta bấm rồi lãnh
     # hậu quả.
     _, _st = get("/settings")
-    check("cài đặt có núm nhịp gọi", "name=pace" in _st and "Nhịp gọi" in _st)
+    check("cài đặt có núm nhịp gọi",
+          "name=pace" in _st and "call pace" in _st)
     check("ba mức, không hơn", _st.count("type=radio name=pace") == 3)
-    check("và nói thẳng cái đánh đổi", "dễ bị bóp hơn" in _st)
+    check("và nói thẳng cái đánh đổi", "easier to throttle" in _st)
     check("mặc định đang chọn 'thường'", "value='thuong' checked" in _st)
     # Gõ bừa vào form thì rơi về mặc định — không để chuỗi lạ thành nhịp gọi.
     post("/settings", b"every=60&from=8&to=22&pace=bi%E1%BB%8Fa")
@@ -388,10 +389,20 @@ with tempfile.TemporaryDirectory() as tmp:
     _cc.close()
 
     check("nút khoá sẵn, phải gõ chữ mới mở",
-          "disabled>Xoá hết" in _set and "data-needword" in _set)
+          "disabled>Delete everything" in _set and "data-needword" in _set)
     _js = (Path(__file__).resolve().parent.parent
            / "src/jobbot/dashboard/web/live.js").read_text(encoding="utf-8")
     check("và trình duyệt có trình nghe mở khoá", "wireDangerWord" in _js)
+    # CHỮ MỜI GÕ và CHỮ ĐEM SO phải LÀ MỘT. Chúng nằm ở hai tệp khác ngôn
+    # ngữ, nên không có gì buộc chúng đi cùng nhau: đổi lời mời mà quên
+    # live.js thì nút không bao giờ mở, và người dùng gõ đúng thứ màn hình
+    # bảo mà vẫn bị từ chối — hỏng câm.
+    import re as _re0
+    _moi = _re0.search(r"placeholder='type (\w+) to unlock'", _set)
+    _so = _re0.search(r"toUpperCase\(\) === '(\w+)'", _js)
+    check("chữ màn hình mời gõ ĐÚNG BẰNG chữ live.js đem so",
+          bool(_moi and _so) and _moi.group(1) == _so.group(1),
+          f"{_moi and _moi.group(1)} vs {_so and _so.group(1)}")
 
     print("\n[TỰ VẼ LẠI — đúng lúc, và KHÔNG cướp việc đang làm dở]")
     import re as _re
@@ -1145,14 +1156,14 @@ with tempfile.TemporaryDirectory() as tmp:
     # TAB NGUỒN — bật/tắt từng ATS. "API" là ba nhà cung cấp, không phải 34
     # board công ty: giới thiệu từng công ty thì vô nghĩa, còn ba ATS thì khác
     # nhau thật (cách trả dữ liệu, loại công ty, tỉ lệ dùng được).
-    check("có tab Nguồn", "data-stab='nguon'" in panel and ">Nguồn<" in panel)
+    check("có tab Nguồn", "data-stab='nguon'" in panel and ">Sources<" in panel)
     for _ats in ("greenhouse", "lever", "ashby"):
         check(f"có công tắc cho {_ats}", f"name=ats value='{_ats}'" in panel)
     # Giới thiệu bằng SỐ THẬT của chính kho này, không bằng tính từ: "hiện
     # đại", "phổ biến" thì không ai chọn được gì.
     check("có công tắc cho thư báo việc", "name=ats value='alert'" in panel)
     check("mỗi nguồn kèm số thật, không chỉ lời khen",
-          panel.count("class=srcnum") == 4 and "tin về · giữ" in panel,
+          panel.count("class=srcnum") == 4 and "postings in ·" in panel,
           str(panel.count("class=srcnum")))
     # Thư báo không phải ATS: không có board nào để đếm, nên đừng ghi
     # "0 board" — một con số 0 vô nghĩa đọc ra như đang hỏng.
@@ -1215,9 +1226,9 @@ with tempfile.TemporaryDirectory() as tmp:
     # Ba núm — và ĐÚNG ba. Trang cũ có 18 dòng mà chỉ 2 dòng là setting thật.
     for name in ("every", "from", "to"):
         check(f"có ô {name}", f"name={name}" in panel)
-    check("có nút Lưu", "Lưu" in panel)
+    check("có nút Lưu", ">Save<" in panel)
     check("nói rõ hậu quả: chỉ đổi CÁCH CHẠY, không đụng phán quyết",
-          "lần quét sau" in panel and "không đụng" in panel)
+          "from the next scan" in panel and "touches neither" in panel)
     # Số máy tự báo về mình KHÔNG phải cài đặt -> phải ở tab khác với mấy núm
     # chỉnh được, không chỉ là một mục dưới cùng cùng màn.
     _tab_chay = panel.split("data-pane='xem'")[0]
@@ -2352,7 +2363,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check("và KHÔNG có value= trên ô token",
           "name=token value" not in _stb and "name=token autocomplete" in _stb)
     check("nói rõ ba chốt cứng cho người dùng biết",
-          "không có lệnh nộp đơn" in _stb.lower())
+          "no apply command at any level" in _stb.lower())
     check("chỉ dẫn tạo bot cho người chưa nối",
           "@BotFather" in _setm.render(every=60, hours=(8, 22), status=[]))
     # KHUNG PHẢI ĐỦ RỘNG CHO CẢ HÀNG TAB. Đo bề rộng thật: bảy chip chữ 12px
@@ -2551,19 +2562,20 @@ with tempfile.TemporaryDirectory() as tmp:
     # cũng có <b>Lưu</b>, và dò ">Lưu<" thì bắt luôn cả nó.
     check("tab Thông báo chỉ còn MỘT nút Lưu cho phần Telegram",
           _pane.count("name=test") == 1
-          and _pane.count("type=submit>Lưu</button>") == 2)
+          and _pane.count("type=submit>Save</button>") == 2)
     check("hướng dẫn đủ bốn bước", all(f"{i}." in _sn for i in (1, 2, 3, 4)))
     check("bước Lưu nói rõ máy tự lo phần còn lại",
-          "máy tự tìm nốt" in _sn)
+          "the machine works out the rest" in _sn)
     # "Đã lưu" KHÁC "đúng": token bị thu hồi thì config vẫn đủ hai chuỗi.
     _snoi = _setm.render(every=60, hours=(8, 22), status=[], tele_noi=True,
                          tele_token="…BASU", tele_chat="123")
-    check("đã lưu thì KHÔNG dám nói là chạy tốt", "chưa chắc" in _snoi)
-    check("mà mời bấm Test để biết chắc", "để biết chắc" in _snoi)
+    check("đã lưu thì KHÔNG dám nói là chạy tốt",
+          "not necessarily" in _snoi)
+    check("mà mời bấm Test để biết chắc", "to know for certain" in _snoi)
     # Băng kết quả báo CẢ BA việc (lưu · tìm · test) nên tiêu đề phải nói chung.
     _sbang = _setm.render(every=60, hours=(8, 22), status=[],
                           tin_test=(True, "Đã lưu <b>mã chat</b>."))
-    check("tiêu đề băng nói chung, không nói «gửi»", "Được rồi" in _sbang)
+    check("tiêu đề băng nói chung, không nói «gửi»", "That worked" in _sbang)
     check("và KHÔNG escape hai lần — thẻ <b> phải là thẻ, không phải chữ",
           "Đã lưu <b>mã chat</b>." in _sbang and "&lt;b&gt;" not in _sbang)
 
@@ -2619,10 +2631,11 @@ with tempfile.TemporaryDirectory() as tmp:
     check("và nó đứng ĐẦU — cài đặt cả app, không phải của một khúc",
           _sh.index("data-stab='chung'") < _sh.index("data-stab='chay'"))
     check("bày đủ mọi màu để chọn", _sh.count("data-arg='mau:") == len(_mau.BANG))
-    check("đánh dấu màu ĐANG dùng", "swatch on" in _sh and "đang dùng" in _sh)
+    check("đánh dấu màu ĐANG dùng", "swatch on" in _sh and "in use" in _sh)
     check("ô màu tự nó mang màu đó, không phải chấm xám",
           "style='--o:#A78BFA'" in _sh)
-    check("hứa không đụng màu mang nghĩa", "KHÔNG đụng tới màu mang nghĩa" in _sh)
+    check("hứa không đụng màu mang nghĩa",
+          "does NOT touch the colours" in _sh)
     check("và có công tắc tự-trực-khi-mở-app", "data-arg='truc:" in _sh)
 
     print("\n[BỘ ICON — một bộ, không phải nhặt ký tự Unicode mỗi chỗ một cái]")
