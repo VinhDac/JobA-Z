@@ -1,14 +1,15 @@
-"""Trang CV tuỳ biến cho một tin — và CHẤM ĐIỂM NGAY TRÊN BÀI.
+"""The per-posting tailored CV page — WITH THE MARKING ON THE PAGE ITSELF.
 
-Thứ tự có ý, đúng thứ tự người đọc cần:
+The order is deliberate, and it is the order a reader needs:
 
-    điểm + nút Trước/Sau   nắm ngay bản này đủ tốt chưa
-    TỜ CV, đã đánh dấu     bút đỏ nằm trên bài, không nằm ở phụ lục
-    chi tiết theo số câu   bấm dấu trên bài là nhảy xuống đúng chỗ
+    score + Prev/Next      is this version good enough, at a glance
+    THE CV SHEET, marked   the red pen is on the work, not in an appendix
+    detail by sentence     clicking a mark on the sheet jumps to the right place
 
-MỘT tờ giấy, không hai. Bản trước vẽ tờ CV rồi liệt kê lại từng câu ở dưới —
-cùng một câu hiện hai lần, người đọc phải tự ghép "câu 3 ở dưới" với câu nào
-ở trên. Giờ câu chỉ có một chỗ; phần dưới chỉ nói thứ tờ giấy không nói được.
+ONE sheet, not two. The previous version drew the CV and then listed every
+sentence again below — the same sentence appearing twice, leaving the reader
+to match "sentence 3 below" with one above. Now a sentence has one place, and
+the section below only says what the sheet cannot.
 """
 
 from __future__ import annotations
@@ -25,18 +26,18 @@ from ..layout import duong_ve, h1, page
 
 def render(job: dict, cv: TailoredCV, profile: dict | None = None,
            tu: str = "") -> str:
-    dem_lai()          # số câu đếm lại từ 1 cho mỗi tờ
+    dem_lai()          # sentence numbering restarts at 1 for each sheet
     du_bi = bench(profile or {}, cv) if profile else []
     ve, ten = duong_ve(tu, "/cv")
-    # XEM TIN là một CHUYẾN ĐI KHÁC, nên nó là một nút riêng — và nó mang theo
-    # đường về đây, để Back ở trang tin quay lại đúng bản CV này chứ không
-    # rơi về danh sách.
+    # VIEWING THE POSTING is a DIFFERENT JOURNEY, so it is its own button —
+    # and it carries the way back, so Back on the posting page returns to
+    # this exact CV version rather than dropping to the list.
     xem = (f"/jobs/{esc(job['id'])}?tu="
            + quote(f"/jobs/{job['id']}/cv?tu={tu or '/cv'}", safe=""))
     return page(
         f"CV — {job['title']}",
         f"<a class=back href='{esc(ve)}'>← {esc(ten)}</a>"
-        + h1("Bản CV cho tin này",
+        + h1("The CV for this posting",
              f"Dựng cho {job['company']} — {job['title']}.")
         + head(cv, xem)
         + paper(cv, cham=True, du_bi=du_bi, job=str(job['id']))

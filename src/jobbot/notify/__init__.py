@@ -1,6 +1,8 @@
-"""M9 — Báo ra ngoài dashboard.
+"""M9 — Notifications outside the dashboard.
 
-Có việc hợp, hoặc có đề xuất đang chờ duyệt -> biết ngay, không phải mở dashboard.
+A matching job, or a proposal waiting for approval -> know at once, without
+opening the dashboard.
 
-Luật: báo ít thôi. Báo nhiều thì bị phớt lờ, và lúc đó cổng Yes/No thành vô dụng.
+The rule: notify rarely. Notify often and you get ignored, and at that point
+the Yes/No gate is worthless.
 """

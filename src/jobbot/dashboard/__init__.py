@@ -1,7 +1,9 @@
 """M4 — Dashboard live.
 
-Hiện: đang làm gì · đang xử lý cái gì · đề xuất nào đang chờ Yes/No · thống kê.
+Shows: what it is doing · what it is working on · which proposals are waiting
+on a Yes/No · the statistics.
 
-Dashboard chỉ VẼ và chuyển ý muốn của người vào hàng đợi.
-Không có logic nghiệp vụ ở đây. Thấy mình sắp viết luật vào đây -> viết nhầm chỗ.
+The dashboard only DRAWS, and puts the human's decisions into the queue.
+No business logic here. If you are about to write a rule here, you are
+writing it in the wrong place.
 """

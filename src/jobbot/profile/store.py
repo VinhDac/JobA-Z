@@ -1,10 +1,12 @@
-"""Lưu hồ sơ theo phiên bản.
+"""Store the profile by version.
 
-Mỗi lần lưu tạo MỘT PHIÊN BẢN MỚI = ảnh chụp đầy đủ (câu cũ mang sang + câu vừa sửa).
-Không ghi đè. Vì hồ sơ là dữ liệu sống — sau 50 lần bị từ chối thì mong muốn sẽ khác
-lúc đầu, và ta cần nhìn lại được nó đã đổi thế nào.
+Every save creates A NEW VERSION = a full snapshot (the old answers carried
+forward + what was just edited). Nothing is overwritten, because the profile
+is living data — after 50 rejections what someone wants is different from
+what they wanted at the start, and it must be possible to look back at how it
+changed.
 
-Giá phải trả: tốn chỗ. Với vài chục phiên bản text thì không đáng kể.
+The cost: disk space. For a few dozen text versions it is negligible.
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ def latest_version_id(conn: sqlite3.Connection) -> int | None:
 
 
 def load(conn: sqlite3.Connection) -> Answers:
-    """Hồ sơ hiện tại = phiên bản mới nhất. Chưa có gì thì trả về rỗng."""
+    """The current profile = the newest version. Empty if there is none."""
     version_id = latest_version_id(conn)
     if version_id is None:
         return {}
@@ -41,7 +43,7 @@ def load(conn: sqlite3.Connection) -> Answers:
 
 
 def save(conn: sqlite3.Connection, changed: Answers, note: str = "") -> int:
-    """Tạo phiên bản mới = hồ sơ cũ + phần vừa sửa. Trả về id phiên bản."""
+    """Create a new version = the old profile + the edit. Returns its id."""
     known = all_questions()
     merged = load(conn)
     merged.update({k: v for k, v in changed.items() if k in known})
@@ -74,11 +76,12 @@ def _has_value(answers: Answers, question_id: str) -> bool:
 
 
 def has_answer(answers: Answers, question) -> bool:
-    """Câu này đã có nội dung chưa — HỎI ĐÚNG CHỖ NÓ NẰM.
+    """Does this question have content — ASKED WHERE IT ACTUALLY LIVES.
 
-    Câu kiểu BLOCKS (kinh nghiệm, project) không lưu ở profile_answer mà lưu
-    thành khối trong cv_text. Chỉ nhìn profile_answer thì nhập CV xong, máy đã
-    rút ra 2 khối kinh nghiệm và 3 project, mà Home vẫn báo "0/1 — chưa xong".
+    BLOCKS questions (experience, projects) are not stored in
+    profile_answer; they are stored as blocks inside cv_text. Look only at
+    profile_answer and, after importing a CV from which the machine extracted
+    2 experience blocks and 3 projects, Home still reports "0/1 — not done".
     """
     from .schema import BLOCKS
     if getattr(question, "kind", "") == BLOCKS:
@@ -89,13 +92,13 @@ def has_answer(answers: Answers, question) -> bool:
 
 
 def missing_in_section(answers: Answers, section: Section) -> list[str]:
-    """Câu bắt buộc còn thiếu trong một phần."""
+    """The required questions still missing in one section."""
     return [q.id for q in section.questions
             if q.required and not q.hidden and not has_answer(answers, q)]
 
 
 def is_section_done(answers: Answers, section: Section) -> bool:
-    """Xong = không thiếu câu bắt buộc VÀ đã trả lời ít nhất một câu."""
+    """Done = no required question missing AND at least one answer given."""
     if missing_in_section(answers, section):
         return False
     return any(has_answer(answers, q)
@@ -103,7 +106,7 @@ def is_section_done(answers: Answers, section: Section) -> bool:
 
 
 def next_section(section_id: str) -> Section | None:
-    """Phần kế tiếp theo thứ tự. Hết thì None -> về trang tổng kết."""
+    """The next section in order. None at the end -> the summary page."""
     index = section_index(section_id)
     return SECTIONS[index + 1] if 0 <= index < len(SECTIONS) - 1 else None
 
@@ -113,23 +116,25 @@ def first_unfinished_section(answers: Answers) -> Section | None:
 
 
 def missing_for_ingest(answers: Answers) -> list[str]:
-    """Câu còn thiếu để được phép kéo tin về."""
+    """The questions still missing before fetching postings is allowed."""
     return [qid for qid in INGEST_GATE if not _has_value(answers, qid)]
 
 
 def section_of(question_id: str) -> Section | None:
-    """Câu này nằm ở phần nào. Dùng để ĐƯA NGƯỜI DÙNG TỚI chỗ còn thiếu."""
+    """Which section a question belongs to. Used to TAKE THE USER to what
+    is missing."""
     return next((s for s in SECTIONS
                  if any(q.id == question_id for q in s.questions)), None)
 
 
 def next_gate_stop(answers: Answers) -> str | None:
-    """Chỗ tiếp theo BẮT BUỘC phải ghé, hay None nếu đã đủ để app chạy.
+    """The next place that MUST be visited, or None once the app can run.
 
-    Đây là vòng lặp của chu trình khởi tạo: lưu xong một phần thì hỏi lại hàm
-    này — còn thiếu thì quay lại đúng phần chứa câu thiếu, đủ rồi mới thả ra.
-    Không đi tuần tự phần 1 -> 2 -> 3: người dùng chỉ bị giữ lại ở chỗ CÒN
-    THIẾU, không bị lùa qua 35 câu mới được dùng app.
+    This is the loop of the onboarding cycle: after saving a section, ask
+    this function again — still missing means back to the section holding the
+    missing question, complete means released. It does not walk section 1 ->
+    2 -> 3: the user is only held at what is MISSING, not herded through 35
+    questions before they can use the app.
     """
     thieu = missing_for_ingest(answers)
     if not thieu:
@@ -139,5 +144,5 @@ def next_gate_stop(answers: Answers) -> str | None:
 
 
 def can_ingest(answers: Answers) -> bool:
-    """Cổng chặn: không có chức danh và thị trường thì tìm không ra gì."""
+    """The gate: with no job titles and no markets, a search finds nothing."""
     return not missing_for_ingest(answers)

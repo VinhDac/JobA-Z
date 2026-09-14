@@ -1,7 +1,7 @@
-"""Nói chuyện với một tab Chrome qua DevTools Protocol.
+"""Talk to a Chrome tab over the DevTools Protocol.
 
-Chỉ đủ những gì job board cần: mở trang, chờ, chạy JS, lấy HTML, cuộn, bấm.
-Không phải thư viện automation đầy đủ — và cố ý không phải.
+Only what a job board needs: open a page, wait, run JS, take the HTML,
+scroll, click. Not a complete automation library — deliberately not.
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ from dataclasses import dataclass
 from .chrome import PORT
 from .ws import WebSocket
 
-# Nhịp giống người: mỗi thao tác nghỉ một chút, và nghỉ không đều nhau.
-# Không phải để né phát hiện — mà vì trang cần thời gian dựng, và bắn liên
-# tiếp thì lấy về DOM chưa xong.
+# A human-shaped pace: a short pause between actions, and unevenly spaced.
+# Not to dodge detection — but because a page needs time to render, and
+# firing back to back reads a DOM that is not finished.
 PAUSE = (0.6, 1.8)
 
 
@@ -48,11 +48,11 @@ class Tab:
         while time.time() < deadline:
             data = json.loads(self.ws.recv())
             if data.get("id") != message_id:
-                continue                            # sự kiện, không phải phản hồi
+                continue                            # an event, not a response
             if "error" in data:
                 raise CDPError(f"{method}: {data['error'].get('message')}")
             return data.get("result", {})
-        raise CDPError(f"{method}: quá hạn {timeout:g}s")
+        raise CDPError(f"{method}: timed out after {timeout:g}s")
 
     def eval(self, expression: str, timeout: float = 30.0):
         result = self.call("Runtime.evaluate",
@@ -62,13 +62,13 @@ class Tab:
             raise CDPError(result["exceptionDetails"].get("text", "lỗi JS"))
         return result.get("result", {}).get("value")
 
-    # --- thao tác ----------------------------------------------------------
+    # --- actions -----------------------------------------------------------
     def go(self, url: str, wait_for: str = "", timeout: float = 30.0) -> None:
         self.call("Page.navigate", {"url": url}, timeout)
         self.settle(wait_for, timeout)
 
     def settle(self, wait_for: str = "", timeout: float = 30.0) -> None:
-        """Chờ trang dựng xong. Có selector thì chờ đúng nó xuất hiện."""
+        """Wait for the page to settle. With a selector, wait for that."""
         deadline = time.time() + timeout
         while time.time() < deadline:
             time.sleep(0.35)
@@ -100,7 +100,7 @@ class Tab:
         return bool(done)
 
     def scroll_to_end(self, rounds: int = 6) -> None:
-        """Trang cuộn vô hạn: cuộn tới khi chiều cao không tăng nữa."""
+        """Infinite scroll: scroll until the height stops growing."""
         last = 0
         for _ in range(rounds):
             self.eval("window.scrollTo(0, document.body.scrollHeight)")
@@ -125,9 +125,9 @@ class Tab:
 
 
 def pages(port: int = PORT) -> list[dict]:
-    """Các tab đang mở. Dùng để tìm lại một trang đã mở từ trước, thay vì giữ
-    tay cầm trong bộ nhớ máy chủ — tay cầm thì mất khi khởi động lại, còn tab
-    thì vẫn nằm đó."""
+    """The open tabs. Used to find a page opened earlier, rather than keeping
+    a handle in server memory — a handle is lost on restart, the tab is
+    still sitting there."""
     try:
         return [t for t in _targets(port) if t.get("type") == "page"]
     except (OSError, ValueError):
@@ -135,7 +135,7 @@ def pages(port: int = PORT) -> list[dict]:
 
 
 def attach(target_id: str, port: int = PORT) -> Tab:
-    """Nối vào một tab CÓ SẴN. Không mở tab mới, không điều hướng."""
+    """Attach to an EXISTING tab. Opens nothing, navigates nowhere."""
     tab = Tab(WebSocket(f"ws://127.0.0.1:{port}/devtools/page/{target_id}"),
               target_id, port)
     tab.call("Runtime.enable")
@@ -145,8 +145,9 @@ def attach(target_id: str, port: int = PORT) -> Tab:
 def open_tab(url: str = "about:blank", port: int = PORT) -> Tab:
     """Mở tab mới qua Target.createTarget.
 
-    KHÔNG dùng endpoint HTTP /json/new: Chrome mới đòi PUT thay vì GET và trả
-    405, nên cách đó gãy theo phiên bản. Lệnh CDP thì ổn định.
+    Does NOT use the /json/new HTTP endpoint: newer Chrome requires PUT
+    instead of GET and returns 405, so that route breaks per version. The CDP
+    command is stable.
     """
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=5) as r:
         browser_ws = json.load(r)["webSocketDebuggerUrl"]

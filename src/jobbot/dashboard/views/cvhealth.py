@@ -1,7 +1,7 @@
-"""Xếp hạng từng dòng trong CV — không cần JD nào.
+"""Rank every line of the CV — with no JD involved.
 
-Trả lời câu hỏi mà trang CV-theo-JD không trả lời được: *dòng nào trên CV
-đang chiếm chỗ mà không mang thông tin.*
+Answers the question the CV-against-a-JD page cannot: *which line on the CV
+is taking up space without carrying information.*
 """
 
 from __future__ import annotations

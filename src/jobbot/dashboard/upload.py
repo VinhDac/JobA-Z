@@ -1,7 +1,7 @@
-"""Nhận file tải lên — multipart, bằng thư viện chuẩn.
+"""Receiving uploaded files — multipart, with the standard library.
 
-`cgi.FieldStorage` đã bị bỏ khỏi Python 3.13, nên dùng `email.parser`:
-multipart/form-data về bản chất là một thông điệp MIME.
+`cgi.FieldStorage` was removed in Python 3.13, so `email.parser` is used
+instead: multipart/form-data is a MIME message underneath.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 from email.parser import BytesParser
 from email.policy import default
 
-MAX_BYTES = 8 * 1024 * 1024        # 8MB — CV nào cũng nhỏ hơn nhiều
+MAX_BYTES = 8 * 1024 * 1024        # 8MB — every CV is far smaller
 
 
 class TooBig(RuntimeError):
@@ -17,9 +17,10 @@ class TooBig(RuntimeError):
 
 
 def parse(content_type: str, body: bytes) -> dict[str, tuple[str, bytes]]:
-    """Trả về {tên ô: (tên file, nội dung)}. Ô chữ thường thì tên file rỗng."""
+    """Returns {field name: (filename, content)}. A plain text field has an
+    empty filename."""
     if len(body) > MAX_BYTES:
-        raise TooBig(f"File quá lớn (giới hạn {MAX_BYTES // 1024 // 1024}MB)")
+        raise TooBig(f"File too large (limit {MAX_BYTES // 1024 // 1024}MB)")
 
     head = f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode()
     message = BytesParser(policy=default).parsebytes(head + body)

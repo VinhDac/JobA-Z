@@ -1,19 +1,20 @@
-"""Moi đường nộp THẬT ra khỏi một tin LinkedIn. CẦN ĐĂNG NHẬP.
+"""Extract the REAL application link out of a LinkedIn posting. NEEDS A LOGIN.
 
-Tách khỏi `ingest/web/linkedin.py` có chủ ý: tệp kia hứa ngay dòng đầu là
-không đăng nhập, và lời hứa đó vẫn đúng — vòng quét chạy bằng endpoint khách,
-không tài khoản nào để mất. Tệp NÀY chỉ chạy khi Vin bấm Nộp một tin, trên
-trình duyệt nộp, đọc ĐÚNG MỘT trang. Hai ranh giới khác nhau thì hai tệp.
+Kept separate from `ingest/web/linkedin.py` deliberately: that file promises
+in its first line that it never logs in, and that promise still holds — the
+scan runs on the guest endpoint, with no account to lose. THIS file only runs
+when Vin presses Apply on one posting, in the apply browser, reading EXACTLY
+one page. Two different boundaries, two files.
 
-Đo được (trang khách so với trang đã đăng nhập, cùng một tin):
+Measured (the guest page against the logged-in page, same posting):
 
-    khách        0 thẻ apply trong 262 KB, chỉ "sign in to apply"
-    đăng nhập    <a>Apply</a> -> linkedin.com/safety/go/?url=<URL công ty>
+    guest        0 apply elements in 262 KB, only "sign in to apply"
+    logged in    <a>Apply</a> -> linkedin.com/safety/go/?url=<company URL>
 
-Nên 111 tin LinkedIn không phải ngõ cụt — chỉ là cái cửa khoá bằng đăng nhập.
+So 111 LinkedIn postings are not a dead end — just a door locked by a login.
 
-LinkedIn mã hoá cả dấu chấm thành %2E trong tham số `url`, nên phải giải mã
-chứ không cắt chuỗi bằng tay.
+LinkedIn encodes even the dots as %2E inside the `url` parameter, so it has
+to be decoded rather than sliced by hand.
 """
 
 from __future__ import annotations
@@ -21,8 +22,9 @@ from __future__ import annotations
 import re
 import urllib.parse
 
-# Nút nộp trên trang đã đăng nhập. Lớp CSS của LinkedIn là chuỗi băm, đổi liên
-# tục — bám vào CHỮ và vào đường dẫn, hai thứ đó ổn định hơn nhiều.
+# The apply button on the logged-in page. LinkedIn's CSS classes are hashes
+# and change constantly — anchor on the TEXT and on the path instead, both of
+# which are far more stable.
 FIND_JS = r"""
 (() => {
   const out = [];
@@ -41,13 +43,13 @@ JOBS = re.compile(r"linkedin\.com/(jobs|job)/", re.I)
 
 
 def unwrap(href: str) -> str:
-    """'linkedin.com/safety/go/?url=https%3A%2F%2Fcông-ty…' -> URL công ty."""
+    """'linkedin.com/safety/go/?url=https%3A%2F%2Fcompany…' -> the company URL."""
     if not href:
         return ""
     if not SAFETY.search(href):
-        # CHỈ nhận http/https. Nút Apply trên LinkedIn rất hay là
-        # <a href="javascript:void(0)"> mở hộp thoại; trả nguyên si thì
-        # tab.go() điều hướng tới một lược đồ không phải web.
+        # ONLY http/https. LinkedIn's Apply button is very often
+        # <a href="javascript:void(0)"> opening a dialog; returning that
+        # as-is sends tab.go() to a non-web scheme.
         low = href.lower()
         if "linkedin.com" in low or not low.startswith(("http://", "https://")):
             return ""
@@ -59,7 +61,7 @@ def unwrap(href: str) -> str:
 
 
 def apply_url(tab) -> str:
-    """Đường nộp thật của tin đang mở. Không moi được thì trả rỗng."""
+    """The real application link of the open posting. Empty if not found."""
     import json
     try:
         found = json.loads(tab.eval(FIND_JS) or "[]")

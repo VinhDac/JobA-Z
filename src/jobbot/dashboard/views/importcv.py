@@ -1,6 +1,7 @@
-"""Màn hình duyệt đề xuất sau khi tải CV lên.
+"""The approval screen after a CV is uploaded.
 
-Đề xuất, KHÔNG tự ghi. Từng mục có ô tích riêng, mặc định BẬT cho ô đang trống.
+It PROPOSES, it does not write. Each item has its own checkbox, ticked by
+default only where the profile field is currently empty.
 """
 
 from __future__ import annotations
@@ -43,11 +44,12 @@ def render_review(proposals: list[Proposal], text: str) -> str:
                     active="/profile")
 
     def _doc_duoc(p: Proposal) -> str:
-        """Giá trị hiện cho NGƯỜI đọc, không phải cho máy.
+        """The value shown to a PERSON, not to the machine.
 
-        Câu chọn-nhiều lưu bằng mã (`uk_onsite`). Đưa nguyên mã ra màn duyệt
-        thì người dùng không biết mình đang tick đồng ý với cái gì — phải đổi
-        về đúng nhãn họ sẽ thấy trong form hồ sơ.
+        Multi-select answers are stored as codes (`uk_onsite`). Showing the
+        raw code on the approval screen means the user does not know what
+        they are agreeing to — it has to be turned back into the exact label
+        they will see in the profile form.
         """
         if not isinstance(p.value, list):
             return p.value

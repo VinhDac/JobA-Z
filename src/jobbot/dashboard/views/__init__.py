@@ -1,8 +1,9 @@
-"""Các trang của app. Một file một trang.
+"""The app's pages. One file per page.
 
-Trang CHỈ VẼ: nhận dữ liệu, trả HTML. Không đọc DB, không quyết định gì.
-Dữ liệu lấy từ dashboard/live.py — đọc thẳng DB thật, không còn mock.
+A page ONLY DRAWS: take data, return HTML. It never reads the DB and decides
+nothing. The data comes from dashboard/live.py — which reads the real DB;
+there is no mock layer any more.
 
-Tab CÓ THỜI GIAN CHẠY (search, score) dùng chung khuôn runtime.py:
-đang chạy · nhật ký riêng · thống kê · biểu đồ · cài đặt · debug.
+Tabs WITH RUNNING TIME (search, score) share the runtime.py frame:
+what is running · their own journal · statistics · charts · settings · debug.
 """

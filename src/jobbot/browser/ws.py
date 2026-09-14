@@ -1,10 +1,11 @@
-"""Client WebSocket tối thiểu — chỉ đủ để nói chuyện với Chrome DevTools Protocol.
+"""A minimal WebSocket client — just enough to talk to the Chrome DevTools
+Protocol.
 
-Thư viện chuẩn Python không có client WebSocket. Nhưng giao thức phần mình cần
-thì đơn giản: bắt tay bằng HTTP, rồi khung dữ liệu text có mask.
+The Python standard library has no WebSocket client. But the part of the
+protocol needed here is simple: an HTTP handshake, then masked text frames.
 
-KHÔNG phải client WebSocket đầy đủ. Không nén, không phân mảnh khi gửi.
-Đủ cho CDP, và CDP là thứ duy nhất ta dùng nó.
+NOT a complete WebSocket client. No compression, no fragmentation on send.
+Enough for CDP, and CDP is the only thing it is used for.
 """
 
 from __future__ import annotations
@@ -28,9 +29,10 @@ class WebSocket:
         self.sock = socket.create_connection(
             (parts.hostname, parts.port or 80), timeout=timeout)
         self.sock.settimeout(timeout)
-        # _buf phải khai TRƯỚC khi bắt tay: gói tin 101 và khung dữ liệu đầu
-        # tiên có thể về chung một lần đọc TCP, _handshake giữ lại phần thừa
-        # trong _buf. Gán b"" SAU khi bắt tay là ném đúng phần đó đi.
+        # _buf must be declared BEFORE the handshake: the 101 response and
+        # the first data frame can arrive in one TCP read, and _handshake
+        # keeps the remainder in _buf. Assigning b"" AFTER the handshake
+        # throws exactly that remainder away.
         self._buf = b""
         self._handshake(parts.path or "/", parts.hostname, parts.port)
 
@@ -48,7 +50,7 @@ class WebSocket:
         while b"\r\n\r\n" not in head:
             chunk = self.sock.recv(4096)
             if not chunk:
-                raise WSError("Chrome đóng kết nối giữa lúc bắt tay")
+                raise WSError("Chrome closed the connection mid-handshake")
             head += chunk
         if b" 101 " not in head.split(b"\r\n", 1)[0]:
             raise WSError(f"Bắt tay hỏng: {head.split(chr(13).encode())[0][:80]!r}")
@@ -77,13 +79,13 @@ class WebSocket:
         while len(self._buf) < n:
             chunk = self.sock.recv(65536)
             if not chunk:
-                raise WSError("Chrome đóng kết nối")
+                raise WSError("Chrome closed the connection")
             self._buf += chunk
         out, self._buf = self._buf[:n], self._buf[n:]
         return out
 
     def recv(self) -> str:
-        """Trả về một thông điệp text. Tự nối lại nếu bị chia mảnh."""
+        """Return one text message. Reassembles fragments itself."""
         parts: list[bytes] = []
         while True:
             first, second = self._read(2)
@@ -99,7 +101,7 @@ class WebSocket:
                 data = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
 
             if opcode == CLOSE:
-                raise WSError("Chrome gửi frame đóng")
+                raise WSError("Chrome sent a close frame")
             if opcode == PING:
                 self.sock.sendall(bytes([0x80 | PONG, 0x80 | len(data)])
                                   + b"\x00\x00\x00\x00" + data)

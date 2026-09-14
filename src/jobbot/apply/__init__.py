@@ -1,4 +1,5 @@
-"""Nộp — bước cuối.
+"""Applying — the last step.
 
-Máy điền phần chán, Vin bấm cú cuối. Xem `answer.py` cho ranh giới.
+The machine fills in the boring parts, Vin makes the final click. See
+`answer.py` for the boundary.
 """

@@ -1,11 +1,12 @@
-"""M5 — Chấm điểm khớp CV <-> JD.
+"""M5 — Scoring the CV against a JD.
 
-Yêu cầu: ra điểm và GIẢI THÍCH ĐƯỢC vì sao ra điểm đó.
-Điểm không giải thích được thì không dùng để quyết định apply.
+The requirement: produce a score AND be able to EXPLAIN it.
+A score that cannot be explained is not used to decide whether to apply.
 
-Chưa chốt thuật toán (keyword/BM25 | embedding | LLM) — quyết sau khi
-có dữ liệu thật từ M2/M3. Chọn trước khi có dữ liệu là đoán mò.
+The algorithm was deliberately left open (keyword/BM25 | embedding | LLM) —
+to be decided once there is real data from M2/M3. Choosing before there is
+data is guessing.
 
-Nhắc: điểm cao vẫn có thể là false positive. Phân tích chỗ này chính là
-nội dung đáng kể nhất cho personal project (strategy.md §7-8).
+A reminder: a high score can still be a false positive. Analysing that is
+the most substantial material for the personal project (strategy.md §7-8).
 """

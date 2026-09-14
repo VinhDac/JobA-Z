@@ -1,9 +1,10 @@
-"""Điều khiển Chrome — cho những nguồn không có API.
+"""Driving Chrome — for the sources with no API.
 
-Vì sao tự viết client WebSocket thay vì cài Playwright: cả dự án này không cài
-gì cả, chạy được ngay bằng Python có sẵn trên macOS. Việc cần làm với job board
-rất đơn giản — mở trang, chờ, lấy HTML, cuộn, bấm — nên ~120 dòng là đủ.
+Why a hand-written WebSocket client instead of installing Playwright: this
+whole project installs nothing and runs on the Python already on the machine.
+What a job board needs is very simple — open a page, wait, take the HTML,
+scroll, click — so ~120 lines is enough.
 
-Nếu về sau đụng trang phức tạp quá thì Playwright chỉ cách một lệnh pip, và
-giao diện trong `cdp.py` không phải đổi.
+If a page later turns out to be too complex, Playwright is one pip away and
+the interface in `cdp.py` does not have to change.
 """

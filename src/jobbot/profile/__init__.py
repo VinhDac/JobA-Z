@@ -1,28 +1,29 @@
-"""M0 — Hồ sơ người dùng.  KHÔNG CÓ CÁI NÀY THÌ KHÔNG MODULE NÀO CHẠY ĐÚNG.
+"""M0 — The user profile.  WITHOUT IT NO MODULE WORKS CORRECTLY.
 
-Đây là bước MỞ BÀI. Trước khi kéo một tin nào về, hệ thống phải biết
-người dùng là ai và muốn gì. Thiếu nó thì:
-    ingest   kéo về tin không liên quan
-    scoring  chấm điểm dựa trên không khí
-    cv       không có nguyên liệu để viết
-    mail     không có tên, địa chỉ, chữ ký
-    outreach không biết đang đại diện cho ai
+This is the OPENING step. Before a single posting is fetched, the system has
+to know who the user is and what they want. Without it:
+    ingest   pulls in irrelevant postings
+    scoring  scores against thin air
+    cv       has no material to write from
+    mail     has no name, address or signature
+    outreach does not know who it is representing
 
-Ở đây:
-    - Chia câu hỏi theo AI DÙNG: muc_tieu / rang_buoc / nang_luc / danh_tinh / project
-    - Chỉ 2 câu bắt buộc: job_titles + markets. Còn lại điền dần.
-    - Hỏi cái ingest DÙNG ĐƯỢC: chức danh thật, không phải phân loại
-    - Nguyên liệu thô: CV, kinh nghiệm, dự án, kỹ năng
-    - Mong muốn: vai trò, băng tần, thị trường, mức lương, giới hạn
-    - Ràng buộc: cái gì KHÔNG nhận (đây là thứ hay bị quên nhất)
-    - Lưu có phiên bản. Hồ sơ thay đổi theo thời gian.
+Here:
+    - Questions grouped by WHO USES THEM: muc_tieu / rang_buoc / nang_luc /
+      danh_tinh / project
+    - Only 2 required: job_titles + markets. The rest fills in over time.
+    - Ask what ingest CAN USE: real job titles, not a taxonomy
+    - The raw material: CV, experience, projects, skills
+    - What they want: role, band, market, salary, limits
+    - Constraints: what they will NOT take (the most commonly forgotten part)
+    - Stored per version. A profile changes over time.
 
-Luật: hồ sơ là dữ liệu SỐNG, không phải form điền một lần.
-Sau 50 lần bị từ chối thì mong muốn sẽ khác lúc đầu. Hệ thống phải
-nhận ra khoảng trống và tự đề xuất hỏi lại — qua đúng hàng đợi Yes/No
-như mọi module khác (design.md §1).
+The rule: a profile is LIVING data, not a form filled in once.
+After 50 rejections what someone wants is different. The system has to spot
+the gaps and propose asking again — through the same Yes/No queue as every
+other module (design.md §1).
 
-KHÔNG ở đây:
-    - Chấm điểm khớp (-> scoring/)
+NOT here:
+    - Match scoring (-> scoring/)
     - Dựng file CV (-> cv/)
 """

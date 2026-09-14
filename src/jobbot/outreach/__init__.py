@@ -1,7 +1,7 @@
-"""M11 — Profile, bài đăng, kết nối.  [CẦN Yes/No — RỦI RO CAO NHẤT]
+"""M11 — Profile, posts, connections.  [NEEDS Yes/No — THE HIGHEST RISK]
 
-Để cuối cùng. Rủi ro tài khoản cao nhất, giá trị chưa được chứng minh.
+Left until last. The highest account risk, and the value is unproven.
 
-Không tự đăng. Không tự kết nối. Không tự nhắn.
-Soạn -> đưa lên hàng đợi -> người đọc -> người bấm.
+Never posts by itself. Never connects by itself. Never messages by itself.
+Draft -> into the queue -> a human reads -> a human clicks.
 """

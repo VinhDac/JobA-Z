@@ -1,8 +1,8 @@
-"""Greenhouse — theo từng công ty, không cần key.
+"""Greenhouse — per company, no API key needed.
 
-Nhiều quỹ và fintech ở London dùng Greenhouse: Man Group, Marshall Wace,
+Many London funds and fintechs use Greenhouse: Man Group, Marshall Wace,
 Jane Street, Optiver, IMC, Point72, Monzo, Wise, Tide.
-Danh sách board nằm trong config, không nằm cứng ở đây.
+The board list lives in config, not hardcoded here.
 """
 
 from __future__ import annotations
@@ -23,8 +23,9 @@ def fetch_board(board: str) -> list[Posting]:
             company=(row.get("company_name") or board).strip(),
             location=((row.get("location") or {}).get("name") or "").strip(),
             url=row.get("absolute_url", ""),
-            # updated_at, KHÔNG phải first_published: nhiều quỹ để tin mở nhiều năm
-            # (Jane Street có tin first_published 2020). updated_at mới cho biết còn sống.
+            # updated_at, NOT first_published: many funds leave postings
+            # open for years (Jane Street has one first_published in 2020).
+            # updated_at is what says it is still alive.
             posted_at=str(row.get("updated_at") or row.get("first_published") or ""),
             description=strip_html(row.get("content", ""))[:20000],
             raw_body=(row.get("content") or "")[:60000],

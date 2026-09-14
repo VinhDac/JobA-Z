@@ -1,8 +1,8 @@
-"""M3 — Gộp tin trùng.
+"""M3 — Group duplicate postings.
 
-Cùng một việc đăng trên 4 board, tiêu đề khác nhau, công ty viết khác nhau.
-Đây là entity resolution, không phải so chuỗi.
+The same job posted on 4 boards, with different titles and the company name
+spelled differently. This is entity resolution, not string comparison.
 
-Yêu cầu: mỗi lần gộp phải GIẢI THÍCH ĐƯỢC vì sao gộp.
-Gộp nhầm mà không truy được lý do thì mất tin thật.
+The requirement: every merge must be EXPLICABLE.
+A wrong merge whose reason cannot be traced loses a real posting.
 """

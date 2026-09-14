@@ -1,8 +1,8 @@
-"""Nguồn tin phải qua Chrome — nơi không có API.
+"""Sources that need Chrome — the ones with no API.
 
-Đây là chỗ grad scheme UK thật sự nằm: eFinancialCareers, Bright Network,
-Milkround, Prospects. Không nguồn nào có API công khai.
+This is where UK grad schemes actually live: eFinancialCareers, Bright
+Network, Milkround, Prospects. None of them has a public API.
 
-Mỗi file một trang, và trả về đúng kiểu `Posting` như nguồn API — nên bộ lọc,
-gộp trùng, chấm điểm không phải sửa một dòng nào.
+One file per site, returning the same `Posting` type as the API sources — so
+filtering, grouping and scoring need not change a single line.
 """

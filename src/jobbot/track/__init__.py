@@ -1,1 +1,1 @@
-"""Bước 5-6: nộp hồ sơ và theo dõi kết cục."""
+"""Steps 5-6: send applications and follow what happens to them."""

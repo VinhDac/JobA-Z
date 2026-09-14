@@ -1,9 +1,11 @@
-"""M10 — Đếm và đo.
+"""M10 — Counting and measuring.
 
-Tỉ lệ phản hồi theo nguồn. Theo điểm match. Theo ngưỡng. Theo thời gian.
+Reply rate by source. By match score. By threshold. Over time.
 
-Đọc từ tầng `audit`. Vì vậy audit phải được ghi từ M2 —
-thiếu thì đến đây không có gì để đếm, và không lấy lại được.
+Reads from the `audit` layer. Which is why audit has to be written from M2
+onward — without it there is nothing to count here, and it cannot be
+reconstructed.
 
-Đầu ra ở đây chính là số thật cho personal project (strategy.md §7).
+What comes out here is the real data for the personal project
+(strategy.md §7).
 """

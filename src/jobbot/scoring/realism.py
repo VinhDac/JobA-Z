@@ -1,15 +1,15 @@
-"""Tách "KHỚP" khỏi "CÓ CỬA".
+"""Separate "MATCHES" from "STANDS A CHANCE".
 
-Điểm khớp trả lời: hồ sơ này có đúng thứ JD đòi không.
-Nó KHÔNG trả lời: nộp vào có cửa nào không.
+The match score answers: does this profile have what the JD asks for.
+It does NOT answer: is applying worth anything.
 
-Một tin Quantitative Researcher ở Jane Street có thể khớp 84 điểm, nhưng đòi
-PhD và 500 người có PhD cùng nộp. Một tin Graduate Analyst khớp 74 điểm lại là
-chương trình tuyển người mới ra trường, nhận 40 người.
+A Quantitative Researcher posting at Jane Street can match at 84 while
+demanding a PhD, with 500 PhDs applying alongside. A Graduate Analyst posting
+matching at 74 is a graduate intake taking 40 people.
 
-Hai con số khác nhau, và chỉ dùng một con số là đọc sai bảng xếp hạng.
+Two different numbers, and using only one of them misreads the whole ranking.
 
-Không dùng LLM. Toàn bộ là dấu hiệu đọc thẳng từ JD.
+No LLM. Every signal here is read straight out of the JD.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ MONTHS = {m: i + 1 for i, m in enumerate(
 
 
 def find_deadline(text: str) -> tuple[str, int]:
-    """(chữ hạn nộp, unix). Không có thì ('', 0)."""
+    """(the deadline text, unix). ('', 0) when there is none."""
     found = DEADLINE.search(text or "")
     if not found:
         return "", 0
@@ -67,10 +67,11 @@ def find_deadline(text: str) -> tuple[str, int]:
 
 def assess(title: str, description: str, explain: dict | None,
            answers: dict) -> dict:
-    """Phán 'có cửa không', kèm lý do. Không đoán được thì nói không đoán được."""
+    """Judge 'is there a chance', with the reason. When it cannot tell, it
+    says it cannot tell."""
     text = description or ""
     reasons: list[str] = []
-    score = 0                       # âm = cửa hẹp, dương = cửa rộng
+    score = 0                       # negative = narrow, positive = open
 
     if OPEN_DOOR.search(text) or OPEN_DOOR.search(title):
         score += 2
@@ -103,17 +104,17 @@ def assess(title: str, description: str, explain: dict | None,
     if explain and explain.get("capped"):
         score -= 1
 
-    # ĐÁP ỨNG ĐƯỢC THỨ HỌ ĐÒI cũng là bằng chứng, và trước đây nó không được
-    # tính. Thang này chỉ biết TRỪ — PhD, số năm, chức danh senior — còn cộng
-    # thì chỉ có đúng một đường: JD phải viết chữ "graduate". Hậu quả đo được
-    # ngày 10/09: 81 tin khớp ≥80 điểm, không blocker, không bị chặn trần, mà
-    # 75 trong số đó vẫn bị xếp "có thể" hoặc "khó" — kể cả một tin 100 điểm
-    # và một tin 92 điểm ở Point72. Bộ lọc "đáng nộp" đang giấu đi đúng những
-    # tin khớp nhất.
+    # MEETING WHAT THEY ASK FOR is evidence too, and it used to count for
+    # nothing. This scale only knew how to SUBTRACT — a PhD, years, a senior
+    # title — and there was exactly one way to add: the JD had to contain the
+    # word "graduate". The measured cost on 10 Sep: 81 postings matching ≥80
+    # with no blockers and no cap, of which 75 were still filed as "possible"
+    # or "unlikely" — including one at 100 and one at 92 at Point72. The
+    # "worth applying to" filter was hiding exactly the best matches.
     #
-    # Dùng TỈ LỆ YÊU CẦU BẮT BUỘC ĐÁP ỨNG, không dùng điểm tổng: điểm tổng có
-    # cả phần hợp chức danh và hợp cấp bậc, mà hai thứ đó đã được tính riêng
-    # ở trên rồi.
+    # Uses the SHARE OF MUST-HAVES MET, not the total score: the total also
+    # contains title fit and level fit, and both of those are already counted
+    # separately above.
     must = ((explain or {}).get("breakdown") or {}).get("must") or {}
     total, met = must.get("total") or 0, must.get("met") or 0
     if total >= 3 and not (explain or {}).get("blockers"):

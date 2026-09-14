@@ -1,13 +1,14 @@
-"""M2 — Kéo tin tuyển dụng về, mỗi nguồn một file.
+"""M2 — Pull postings in, one file per source.
 
-Ở đây:
+Here:
     - Một file cho một nguồn (greenhouse.py, lever.py, ashby.py, mail_alert.py, ...)
-    - Mỗi nguồn: fetch -> chuẩn hóa về Job -> trả ra. Hết.
+    - Each source: fetch -> normalise to Job -> return. That is all.
 
-KHÔNG ở đây:
-    - Dedup (-> dedup/)     - Chấm điểm (-> scoring/)
+NOT here:
+    - Dedup (-> dedup/)     - Scoring (-> scoring/)
     - Ghi DB trực tiếp (-> core/store)
 
-Nguồn đang dùng: greenhouse, lever, ashby (board công ty) + linkedin (Chrome).
-Nguồn không có API công khai: chạy trong cửa sổ giống người, không 24/7 (design.md §3).
+Sources in use: greenhouse, lever, ashby (company boards) + linkedin (Chrome).
+Sources with no public API run inside a human-shaped window, not 24/7
+(design.md §3).
 """

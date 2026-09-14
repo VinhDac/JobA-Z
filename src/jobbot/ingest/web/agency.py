@@ -1,15 +1,15 @@
-"""Nhận diện tin do MÔI GIỚI đăng, không phải chủ việc.
+"""Recognise postings put up by an AGENCY rather than the employer.
 
-Vì sao quan trọng: 17/28 tin lấy về từ eFinancialCareers là của công ty tuyển
-dụng trung gian. Chúng viết lại JD, giấu tên công ty thật, và nộp qua đó thì
-hồ sơ đi qua thêm một tầng lọc nữa.
+Why it matters: 17 of 28 postings fetched from eFinancialCareers came from a
+recruiting middleman. They rewrite the JD, hide the real company name, and
+applying through them puts one more filter between you and the employer.
 
-Hai tín hiệu, dùng CẢ HAI vì mỗi cái riêng đều hụt:
-    tên công ty  — danh sách hãng môi giới đã biết
+Two signals, and BOTH are used because each alone misses things:
+    the company name — a list of known agencies
     chữ trong JD — "our client", "on behalf of"
 
-Một mình chữ thì hụt: tin ghi "Invesco" vẫn chứa "our client" (môi giới đăng hộ).
-Một mình tên thì hụt: hãng mới không có trong danh sách.
+Wording alone misses: a posting naming "Invesco" still says "our client".
+The name alone misses: a new agency is not on the list.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import re
 
 from ...ingest.base import norm
 
-# Hãng môi giới tài chính/công nghệ ở London, gặp trong dữ liệu thật
+# London finance/tech recruiting agencies, seen in the real data
 KNOWN = {
     "oxford knight", "eka finance", "anson mccade", "mccabe barton",
     "emagine consulting", "quanteam", "selby jennings", "harrington starr",
@@ -29,12 +29,12 @@ KNOWN = {
     "vertus partners", "paragon alpha", "alexander ash", "gerrard white",
 }
 
-# Từ trong TÊN công ty
+# Words inside the company NAME
 NAME_HINTS = re.compile(
     r"\b(recruit\w*|resourcing|staffing|talent|search|consultanc\w+|"
     r"partners?|associates|solutions group|manpower|headhunt\w*)\b", re.I)
 
-# Câu chỉ có môi giới mới viết
+# Phrases only an agency writes
 TEXT_HINTS = re.compile(
     r"\b(our client|my client|our customer|on behalf of (?:our|a)|"
     r"we are (?:working with|partnered with|recruiting for)|"
@@ -44,7 +44,7 @@ TEXT_HINTS = re.compile(
 
 
 def judge(company: str, description: str) -> tuple[bool, str]:
-    """(là môi giới, vì sao). Luôn nói được lý do."""
+    """(is an agency, why). It can always give the reason."""
     key = norm(company).replace("ltd", "").replace("limited", "").strip()
     if key in KNOWN:
         return True, f"'{company}' is a known recruitment agency"

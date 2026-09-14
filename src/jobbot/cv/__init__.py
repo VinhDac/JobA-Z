@@ -1,8 +1,11 @@
-"""M7 — Dựng CV bám theo một JD cụ thể.  [CẦN Yes/No]
+"""M7 — Build a CV against one specific JD.  [NEEDS Yes/No]
 
-Bám ngôn ngữ JD để qua vòng lọc (strategy.md §3).
-Không bịa. Không tô hồng. Chỉ sắp xếp lại sự thật cho đúng trọng tâm.
+Follows the JD's language to get past the filter (strategy.md §3).
+Invents nothing. Embellishes nothing. Only reorders the truth around the
+right emphasis.
 
-Cũng ở đây: sinh "một trang kết quả" cho personal project (strategy.md §5)
-    Vấn đề / Cách làm / Số đo + cách đo / Đánh đổi / Link code
+Also here: producing the "one-page result" for a personal project
+(strategy.md §5)
+    Problem / Approach / The measure + how it was measured / Trade-offs /
+    Link to the code
 """

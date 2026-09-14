@@ -1,11 +1,11 @@
-"""Danh sách công ty mục tiêu — và tự mở rộng theo thời gian.
+"""The target company list — and it grows on its own over time.
 
-Đi thẳng nhà tuyển dụng thay vì qua board. Bảng `company` giữ: tên, ATS nào,
-slug gì, đã dò lúc nào, ra bao nhiêu tin.
+Go straight to the employer rather than through a board. The `company` table
+holds: the name, which ATS, which slug, when it was last probed, how many
 
-Tự mở rộng: mỗi lần quét thấy một chủ việc THẬT (không phải môi giới) trong tin
-lấy về, tên đó được thêm vào danh sách chờ dò. Danh sách lớn dần mà không cần
-ai ngồi gõ tay.
+postings it yielded. Growing on its own: every scan that sees a REAL employer
+(not an agency) in a fetched posting adds that name to the queue to probe.
+The list grows without anyone typing.
 """
 
 from __future__ import annotations
@@ -39,9 +39,9 @@ def seed(conn: sqlite3.Connection, names: list[str], note: str = "seed") -> int:
 
 
 def learn_from_postings(conn: sqlite3.Connection) -> int:
-    """Chủ việc thật thấy trong tin -> thêm vào danh sách chờ dò.
+    """Real employers seen in postings -> queued to be probed.
 
-    Bỏ tin môi giới: tên trên đó là tên hãng trung gian, không phải chủ việc.
+    Agency postings are skipped: the name on them is the middleman, not the employer.
     """
     rows = conn.execute(
         "SELECT DISTINCT company FROM posting"
@@ -60,7 +60,7 @@ def pending(conn: sqlite3.Connection, limit: int = 40) -> list[sqlite3.Row]:
 
 def resolve_pending(conn: sqlite3.Connection, limit: int = 40,
                     log=lambda _m: None) -> dict:
-    """Dò ATS cho các công ty chưa kiểm tra. Chỉ HTTP, không cần Chrome."""
+    """Probe the ATS of companies not yet checked. HTTP only, no Chrome."""
     found = checked = 0
     for row in pending(conn, limit):
         ats, slug, count = resolve_ats(row["name"])
@@ -76,7 +76,7 @@ def resolve_pending(conn: sqlite3.Connection, limit: int = 40,
 
 
 def boards(conn: sqlite3.Connection) -> dict[str, list[str]]:
-    """{ats: [slug...]} để vòng quét dùng. Thay cho boards.toml gõ tay."""
+    """{ats: [slug...]} for the scan to use. Replaces a hand-typed boards.toml."""
     out: dict[str, list[str]] = {}
     for row in conn.execute(
             "SELECT ats, ats_slug FROM company WHERE ats != '' AND ats_slug != ''"

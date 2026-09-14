@@ -1,14 +1,15 @@
-"""Đi THẲNG trang tuyển dụng của công ty, bỏ mọi trung gian.
+"""Go STRAIGHT to the company's careers page, skipping every middleman.
 
-Vì sao: 19/28 tin lấy từ board là của môi giới. Đi thẳng thì
-    - tên công ty không mơ hồ
-    - JD nguyên bản, không bị viết lại
-    - có sẵn đúng form để nộp (bước 5)
-    - thấy được cả tin không bao giờ lên board
+Why: 19 of 28 postings taken off boards belong to agencies. Going direct
+means
+    - the company name is unambiguous
+    - the JD is the original, not rewritten
+    - the right application form is already there (step 5)
+    - postings that never reach a board become visible
 
-Cách dò, rẻ trước đắt sau:
-    1. Đoán slug trên các ATS phổ biến — chỉ là HTTP, không cần Chrome
-    2. Không ra thì mở trang chủ bằng Chrome, tìm link careers
+How it probes, cheap before expensive:
+    1. Guess the slug on the common ATSes — plain HTTP, no Chrome needed
+    2. If that fails, open the homepage with Chrome and find the careers link
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ ATS_PROBE = {
     "ashby":      "https://api.ashbyhq.com/posting-api/job-board/{slug}",
 }
 
-# Dấu vết ATS trên trang careers, khi phải mở bằng Chrome
+# ATS fingerprints on a careers page, when Chrome has to be used
 ATS_MARKS = [
     ("greenhouse", re.compile(r"boards\.greenhouse\.io/([a-z0-9_-]+)", re.I)),
     ("lever", re.compile(r"jobs\.lever\.co/([a-z0-9_-]+)", re.I)),
@@ -41,9 +42,10 @@ CAREERS_PATHS = ["/careers", "/jobs", "/careers/", "/about/careers",
                  "/company/careers", "/join-us", "/work-with-us", "/en/careers"]
 
 
-# Đuôi pháp lý thì bỏ, nhưng "Group"/"Capital"/"Partners" thì GIỮ — chúng nằm
-# trong slug thật. `norm_company` cắt cả những từ này (đúng cho việc so khớp
-# tên công ty, sai cho việc đoán slug): "Man Group" -> "man", mất "mangroup".
+# Legal suffixes are dropped, but "Group"/"Capital"/"Partners" are KEPT —
+# they are part of the real slug. `norm_company` also strips those (right for
+# matching company names, wrong for guessing a slug): "Man Group" -> "man",
+# losing "mangroup".
 LEGAL_TAIL = re.compile(r"\b(ltd|limited|llp|llc|plc|inc|incorporated|"
                         r"gmbh|bv|nv|sa|ag|co)\b", re.I)
 
@@ -64,7 +66,7 @@ def slug_guesses(name: str) -> list[str]:
 
 
 def _probe(url: str) -> tuple[int, str]:
-    """(số tin, tên công ty board tự khai). (0, '') = không phải board này."""
+    """(posting count, the name the board declares). (0, '') = not this board."""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": UA})
         with urllib.request.urlopen(req, timeout=12) as resp:
@@ -82,13 +84,14 @@ def _probe(url: str) -> tuple[int, str]:
 
 
 def _same_company(wanted: str, claimed: str) -> bool:
-    """Board có đúng là của công ty mình đang tìm không.
+    """Is this board really the company being looked for.
 
-    Cần bước này vì đoán slug bắt nhầm: "London Stock Exchange Group" đoán ra
-    slug `london`, và đó là board của một công ty hoàn toàn khác.
+    This step is needed because slug guessing hits the wrong target: "London
+    Stock Exchange Group" guesses the slug `london`, which is the board of an
+    entirely different company.
     """
     if not claimed:
-        return True                      # board không khai tên -> đành tin
+        return True                      # the board declares no name -> trust it
     a, b = set(norm_key(wanted).split()), set(norm_key(claimed).split())
     return bool(a & b)
 
@@ -98,20 +101,20 @@ def norm_key(name: str) -> str:
 
 
 def resolve_ats(name: str) -> tuple[str, str, int]:
-    """Đoán ATS + slug. Trả về (ats, slug, số tin). Không ra thì ('','',0)."""
+    """Guess the ATS + slug. Returns (ats, slug, count). ('','',0) if none."""
     for slug in slug_guesses(name):
         for ats, template in ATS_PROBE.items():
             count, claimed = _probe(template.format(slug=slug))
-            if not count:                   # board rỗng không tính
+            if not count:                   # an empty board does not count
                 continue
             if not _same_company(name, claimed):
-                continue                    # slug bắt nhầm board công ty khác
+                continue                    # the slug hit another company's board
             return ats, slug, count
     return "", "", 0
 
 
 def sniff_page(html: str) -> tuple[str, str]:
-    """Trang careers này chạy trên ATS nào."""
+    """Which ATS this careers page runs on."""
     for ats, pattern in ATS_MARKS:
         found = pattern.search(html or "")
         if found:
@@ -120,7 +123,7 @@ def sniff_page(html: str) -> tuple[str, str]:
 
 
 def resolve_via_chrome(tab, domain: str) -> tuple[str, str, str]:
-    """Mở trang chủ, lần theo link careers, xem nó chạy ATS nào.
+    """Open the homepage, follow the careers link, see which ATS it runs on.
 
     Trả về (ats, slug, careers_url).
     """
@@ -142,5 +145,5 @@ def resolve_via_chrome(tab, domain: str) -> tuple[str, str, str]:
             return ats, slug, url
         if re.search(r"\b(open roles?|current vacanc|job openings?|"
                      r"view (all )?jobs)\b", html, re.I):
-            return "custom", "", url        # có trang tuyển dụng nhưng ATS lạ
+            return "custom", "", url        # a careers page, but an unknown ATS
     return "", "", ""

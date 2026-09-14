@@ -1,23 +1,25 @@
-"""Kho chức danh — rút từ TIN THẬT, không gõ tay.
+"""The job-title store — extracted from REAL POSTINGS, never typed by hand.
 
-Câu hỏi trong hồ sơ nói rõ: "viết ĐÚNG như chức danh xuất hiện trên tin". Vậy
-nguồn đúng duy nhất là chính các tin đó. Một danh sách gõ tay trong mã nguồn
-sai ngay từ ngày viết và mục dần từ đó: thị trường đẻ chức danh mới liên tục
-("Forward Deployed Engineer" không tồn tại vài năm trước), mà không ai nhớ vào
-sửa lại file.
+The profile question says it outright: "write them EXACTLY as they appear on
+postings". So the only correct source is those postings. A hand-typed list in
+the source code is wrong on the day it is written and rots from there: the
+market invents new titles constantly ("Forward Deployed Engineer" did not
+exist a few years ago), and nobody remembers to come back and edit the file.
 
-Hai đường lấy, cùng một hàm rút:
+Two routes in, one extractor:
 
-    từ DB     `posting` đã có tin thì dùng luôn — miễn phí, và tự mới lại sau
-              mỗi lần quét, không cần cơ chế cập nhật riêng nào.
-    từ board  ngày đầu tiên chưa có tin nào thì gọi thẳng board công ty. Đo
-              được: 9 board -> 1.471 tin -> 1.107 tiêu đề trong ~4 giây, thuần
-              HTTP, không cần Chrome và KHÔNG cần hồ sơ (cổng chỉ chặn quét có
-              lọc, không chặn đọc board).
+    from the DB   if `posting` already holds postings, use them — free, and
+                  refreshed after every scan with no separate update
+                  mechanism.
+    from boards   on day one there are no postings, so call the company
+                  boards directly. Measured: 9 boards -> 1,471 postings ->
+                  1,107 titles in ~4 seconds, pure HTTP, no Chrome and NO
+                  profile needed (the gate only blocks a filtered scan, not
+                  reading a board).
 
-Rút CỤM NGHỀ chứ không lấy nguyên tiêu đề: tiêu đề thật là
+It extracts the ROLE PHRASE rather than the whole title: a real title is
 "2027 Point72 Academy Investment Analyst Summer Internship Program - Japan
-(BCF)" — dùng làm gợi ý thì vô dụng. Thứ tìm được việc là cụm "Investment
+(BCF)" — useless as a suggestion. What finds jobs is the phrase "Investment
 Analyst".
 """
 
@@ -28,8 +30,8 @@ import re
 import sqlite3
 from collections import Counter
 
-# Từ cuối của một cụm nghề. Cụm phải KẾT THÚC bằng một trong số này — "Senior
-# Quantitative" không phải chức danh, "Quantitative Researcher" mới là.
+# The last word of a role phrase. A phrase has to END with one of these —
+# "Senior Quantitative" is not a job title, "Quantitative Researcher" is.
 ROLE_TAIL = re.compile(
     r"^(analyst|engineer|scientist|developer|researcher|manager|trader|"
     r"strategist|consultant|associate|specialist|architect|lead|intern|"
@@ -39,15 +41,15 @@ CACHE_KEY = "title_vocab"
 
 
 def extract(titles: list[str], least: int = 3, top: int = 60) -> list[tuple[str, int]]:
-    """Tiêu đề thật -> cụm nghề dùng được, kèm số tin chứa nó.
+    """Real titles -> usable role phrases, with how many postings hold each.
 
-    `least` là sàn: cụm chỉ xuất hiện một hai lần thường là tên chương trình
-    riêng của một công ty, không phải thứ gõ vào ô tìm.
+    `least` is a floor: a phrase appearing once or twice is usually one
+    company's own programme name, not something to type into a search box.
     """
     dem: Counter = Counter()
     for raw in titles:
         t = re.sub(r"\s*[\(\[].*?[\)\]]", "", raw or "")      # bỏ ngoặc
-        t = re.split(r"\s+[-–—,|/]\s+", t)[0]                 # bỏ đuôi địa điểm
+        t = re.split(r"\s+[-–—,|/]\s+", t)[0]                 # drop the location tail
         w = WORD.findall(t)
         for n in (2, 3):
             for i in range(len(w) - n + 1):
@@ -58,13 +60,15 @@ def extract(titles: list[str], least: int = 3, top: int = 60) -> list[tuple[str,
 
     thuong = [(k, v) for k, v in dem.most_common() if v >= least]
 
-    # Bỏ cụm DÀI HƠN mà không phổ biến hơn: "Academy Investment Analyst" (15)
-    # nằm trong "Investment Analyst" (15) — cùng số tin nghĩa là cụm dài chỉ
-    # là một cách gọi riêng của một công ty. Cụm ngắn tìm được rộng hơn.
+    # Drop a LONGER phrase that is no more common: "Academy Investment
+    # Analyst" (15) sits inside "Investment Analyst" (15) — the same count
+    # means the longer one is just one company's name for it. The shorter
+    # phrase searches wider.
     #
-    # Ngược lại, "Machine Learning Researcher" (13) nằm trong "Learning
-    # Researcher" (13) — ở đây cụm NGẮN mới là mảnh vụn. Nên luật là: bỏ cụm
-    # nào là khúc GIỮA/ĐUÔI của một cụm khác cùng số tin, giữ cụm đứng đầu.
+    # The other way round, "Machine Learning Researcher" (13) contains
+    # "Learning Researcher" (13) — here the SHORTER one is the fragment. So
+    # the rule is: drop any phrase that is a MIDDLE/TAIL slice of another
+    # with the same count, and keep the one that starts it.
     giu: list[tuple[str, int]] = []
     for cum, n in thuong:
         thua = False
@@ -72,10 +76,10 @@ def extract(titles: list[str], least: int = 3, top: int = 60) -> list[tuple[str,
             if khac == cum or n != m:
                 continue
             if cum in khac and not khac.startswith(cum):
-                thua = True       # cum là đuôi của khac -> mảnh vụn
+                thua = True       # cum is a tail of khac -> a fragment
                 break
             if khac in cum and cum.endswith(khac):
-                thua = True       # cum dài hơn nhưng không phổ biến hơn
+                thua = True       # cum is longer but no more common
                 break
         if not thua:
             giu.append((cum, n))
@@ -88,10 +92,11 @@ def from_postings(conn: sqlite3.Connection) -> list[tuple[str, int]]:
 
 
 def fetch_boards(boards: dict[str, list[str]], log=None) -> list[str]:
-    """Gọi board công ty lấy tiêu đề. KHÔNG lưu tin — chỉ mượn chữ.
+    """Call the company boards for titles. Saves NO postings — borrows words.
 
-    Board nào hỏng thì bỏ qua: kho chức danh thiếu vài dòng vẫn dùng được,
-    còn ném lỗi ra thì cả nút bấm chết vì một board đang bảo trì.
+    A broken board is skipped: a title store missing a few lines is still
+    usable, while raising would kill the whole button because one board is
+    under maintenance.
     """
     from ..ingest import ashby, greenhouse, lever
     mods = {"greenhouse": greenhouse, "lever": lever, "ashby": ashby}
@@ -110,7 +115,8 @@ def fetch_boards(boards: dict[str, list[str]], log=None) -> list[str]:
 
 
 def cached(conn: sqlite3.Connection) -> list[str]:
-    """Kho để màn hình dùng. Ưu tiên tin đã quét, sau đó mới tới bản đã lưu."""
+    """The store the screen uses. Scanned postings first, the saved copy
+    second."""
     from ..core import prefs
     tu_tin = from_postings(conn)
     if tu_tin:

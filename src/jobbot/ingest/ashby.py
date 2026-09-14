@@ -1,4 +1,4 @@
-"""Ashby — theo từng công ty, không cần key."""
+"""Ashby — per company, no API key needed."""
 
 from __future__ import annotations
 

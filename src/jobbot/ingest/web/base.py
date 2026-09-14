@@ -1,13 +1,15 @@
-"""Nền chung cho nguồn qua Chrome.
+"""The shared base for sources that go through Chrome.
 
-Hai luật:
+Two rules:
 
-1. **Hộp cookie: LUÔN từ chối, KHÔNG BAO GIỜ chấp nhận.** Chỉ bấm nút
-   reject/decline/only-necessary. Không bấm "Accept all" trong bất kỳ trường
-   hợp nào — hệ thống không có quyền đồng ý điều khoản thay người dùng.
+1. **Cookie banners: ALWAYS decline, NEVER accept.** Only press
+   reject/decline/only-necessary. Never press "Accept all" under any
+   circumstances — the system has no authority to agree to terms on the
+   user's behalf.
 
-2. **Không cố vượt tường chặn.** Trang nào trả về thử thách chống bot thì ghi
-   nhận và bỏ qua. Trang đó đang nói không với máy — không cãi lại.
+2. **Never try to get past a block.** A site that returns an anti-bot
+   challenge is noted and skipped. That site is saying no to a machine — do
+   not argue back.
 """
 
 from __future__ import annotations
@@ -19,13 +21,14 @@ from dataclasses import dataclass, field
 
 from ...browser.cdp import CDPError, Tab
 
-# Chỉ nút TỪ CHỐI. Danh sách này cố tình không có từ nào mang nghĩa đồng ý.
+# DECLINE buttons only. This list deliberately contains no word that means
+# consent.
 #
-# LỖI ĐÃ SỬA: trước đây danh sách nằm thẳng trong một regex literal xuống dòng
-# giữa chừng, rồi cả khối bị .replace("\n", " "). Nhánh bị cắt qua dòng thành
-# " strictly necessary" — dính một khoảng trắng ở đầu, mà nhãn nút thì đã
-# .trim(), nên nhánh đó không bao giờ khớp. Tách ra thành DANH SÁCH thì xuống
-# dòng kiểu gì cũng không hỏng được nữa.
+# A BUG THAT WAS FIXED: the list used to sit inside a regex literal that
+# wrapped mid-line, and the whole block was then .replace("\n", " ")'d. The
+# branch split across lines became " strictly necessary" — with a leading
+# space, while the button label had already been .trim()'d, so that branch
+# never matched. Made into a LIST, no line wrapping can break it again.
 REJECT_LABELS = [
     "reject all", "reject", "decline all", "decline", "refuse",
     "only necessary", "strictly necessary", "essential only",
@@ -51,23 +54,25 @@ BLOCKED = re.compile(
 
 @dataclass
 class Health:
-    """Sức khoẻ một lần đọc nguồn.
+    """The health of one read of one source.
 
-    Có nó thì nguồn hỏng TRÔNG KHÁC nguồn chạy tốt. Không có thì
-    `except Exception: continue` biến hỏng 100% thành im lặng hoàn toàn.
+    With it, a broken source LOOKS DIFFERENT from a healthy one. Without it,
+    `except Exception: continue` turns a 100% failure into complete silence.
     """
     attempted: int = 0
     failed: int = 0
-    # Bị chặn là một trạng thái RIÊNG, không phải "hỏng vài tin". Trước đây
-    # linkedin.fetch gặp Blocked giữa vòng đọc kỹ thì chỉ note() rồi break, nên
-    # failed vẫn là 0, record_run thấy 0/193 hỏng và ghi ok=1 — màn hình
-    # Settings hiện huy hiệu xanh cho một lần quét bị cắt ngang từ tin thứ ba.
+    # Being blocked is its OWN state, not "a few postings failed". When
+    # linkedin.fetch hit Blocked mid deep-read it used to just note() and
+    # break, so failed stayed 0, record_run saw 0/193 failures and wrote
+    # ok=1 — and Settings showed a green badge for a scan that was cut off at
+    # the third posting.
     blocked: bool = False
-    # ĐỨT khác BỊ CHẶN. Bị chặn là cổng từ chối mình; đứt là mất kết nối giữa
-    # chừng — máy ngủ dậy, Chrome chết, mạng rớt. Hai thứ này cần cách xử lý
-    # khác nhau (chặn thì đi nhẹ hơn, đứt thì chạy lại là được), nên nhật ký
-    # phải gọi đúng tên. Nhưng cả hai đều là "lần đọc này KHÔNG trọn vẹn", nên
-    # cả hai cùng làm ok = False.
+    # A BREAK is not a BLOCK. Blocked means the gate refused us; a break
+    # means the connection died mid-way — the machine woke from sleep, Chrome
+    # died, the network dropped. The two need different handling (blocked
+    # means go gentler, a break means just run again), so the journal has to
+    # name them correctly. But both mean "this read was NOT complete", so
+    # both set ok = False.
     cut: str = ""
     samples: list[str] = field(default_factory=list)
 
@@ -76,13 +81,13 @@ class Health:
             self.samples.append(message)
 
     def block(self, message: str, unread: int = 0) -> None:
-        """Bị chặn: ghi cờ, và tính số tin CHƯA đọc được vào phần hỏng."""
+        """Blocked: set the flag, and count the postings NOT read as failures."""
         self.blocked = True
         self.failed += max(0, unread)
         self.note(message)
 
     def broke(self, message: str) -> None:
-        """Đứt giữa chừng (không phải bị chặn). Ghi lý do, và đánh dấu KHÔNG lành."""
+        """Cut off mid-way (not blocked). Record why, and mark it UNHEALTHY."""
         self.cut = message
         self.note(message)
 
@@ -100,7 +105,7 @@ class Health:
 
 
 class Blocked(RuntimeError):
-    """Trang từ chối truy cập tự động. Ghi nhận rồi đi tiếp, không cãi."""
+    """The site refused automated access. Note it and move on, do not argue."""
 
 
 def reject_cookies(tab: Tab) -> str:
@@ -114,11 +119,11 @@ def reject_cookies(tab: Tab) -> str:
 
 
 def check_open(tab: Tab) -> None:
-    """Trang có đang chặn không. Chặn thì dừng, không tìm cách lách."""
+    """Is the site blocking us. If so, stop; do not look for a way around."""
     title = (tab.eval("document.title") or "")[:120]
     head = (tab.text() or "")[:400]
     if BLOCKED.search(title) or BLOCKED.search(head):
-        raise Blocked(f"trang từ chối truy cập tự động ({title.strip()[:50]})")
+        raise Blocked(f"the site refused automated access ({title.strip()[:50]})")
 
 
 def open_page(tab: Tab, url: str, wait_for: str = "body", timeout: float = 35.0) -> None:
@@ -128,7 +133,8 @@ def open_page(tab: Tab, url: str, wait_for: str = "body", timeout: float = 35.0)
 
 
 def grab(tab: Tab, js: str, timeout: float = 25.0) -> list[dict]:
-    """Chạy JS trả về JSON. Lỗi thì trả danh sách rỗng, không làm chết cả lần quét."""
+    """Run JS returning JSON. On error return an empty list rather than
+    killing the whole scan."""
     try:
         raw = tab.eval(js, timeout=timeout)
         return json.loads(raw) if raw else []

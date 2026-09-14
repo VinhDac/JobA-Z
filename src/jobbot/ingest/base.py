@@ -1,7 +1,8 @@
-"""Nền chung cho mọi nguồn: kiểu Posting, gọi HTTP, chuẩn hoá chuỗi.
+"""The shared base for every source: the Posting type, HTTP, string
+normalisation.
 
-Mỗi nguồn chỉ phải làm đúng một việc: fetch -> trả về list[Posting]. Hết.
-Ghi DB, gộp trùng, chấm điểm đều là việc của chỗ khác.
+A source does exactly one job: fetch -> return list[Posting]. That is all.
+Writing to the DB, grouping and scoring all belong elsewhere.
 """
 
 from __future__ import annotations
@@ -26,48 +27,51 @@ def get_json(url: str, headers: dict[str, str] | None = None) -> Any:
         return json.loads(resp.read().decode("utf-8", "replace"))
 
 
-# ------------------------------------------------------------ chuẩn hoá
+# --------------------------------------------------------- normalisation
 
 _TAG = re.compile(r"<[^>]+>")
 _WS = re.compile(r"\s+")
-# GIỮ LẠI `+ # /` — chúng là MỘT PHẦN CỦA TÊN, không phải dấu câu.
+# KEEP `+ # /` — they are PART OF THE NAME, not punctuation.
 #
-# Bỏ chúng thì "C++" thành "c", và alias `c++` trong vocab không bao giờ khớp
-# được nữa. Đo trên kho thật: 208 tin đòi C++, mà CV của Vin CÓ C++ — máy
-# không bao giờ nhìn thấy. Cùng lỗi: ci/cd (19 tin), c# (9), kdb+ (3).
+# Strip them and "C++" becomes "c", and the `c++` alias in vocab can never
+# match again. Measured on the real store: 208 postings asking for C++ while
+# Vin's CV HAS C++ — the machine never saw it. Same bug: ci/cd (19 postings),
+# c# (9), kdb+ (3).
 #
-# Chỉ ba ký tự này, không mở rộng thêm: chúng là hậu tố tên công nghệ. Giữ cả
-# dấu chấm thì "python." và "python" thành hai thứ khác nhau.
+# Only these three characters, no more: they are technology-name suffixes.
+# Keep the full stop too and "python." and "python" become different things.
 _PUNCT = re.compile(r"[^a-z0-9+#/ ]+")
 
-# Đuôi công ty — bỏ đi để "Monzo Bank Ltd" và "Monzo Bank" gộp được vào nhau.
+# Company suffixes — stripped so "Monzo Bank Ltd" and "Monzo Bank" group.
 _SUFFIX = re.compile(
     r"\b(ltd|limited|llp|plc|inc|incorporated|llc|gmbh|bv|nv|sa|ag|corp|corporation|"
     r"co|company|group|holdings|international|uk|global)\b")
 
 
 def strip_html(text: str) -> str:
-    """Bóc HTML về chữ thuần, GIỮ cấu trúc xuống dòng và gạch đầu dòng.
+    """Strip HTML to plain text, KEEPING line breaks and bullet structure.
 
-    LỖI ĐÃ SỬA: trước đây bỏ thẻ TRƯỚC rồi mới giải mã &lt; &gt; — nên thẻ bị
-    mã hoá (Greenhouse trả về kiểu này) biến thành thẻ thật sau khi đã bỏ xong,
-    và nằm nguyên trong mô tả. Phải giải mã trước, và lặp cho tới khi sạch.
+    A BUG THAT WAS FIXED: tags used to be removed BEFORE &lt; &gt; were
+    decoded — so encoded tags (which is what Greenhouse returns) turned into
+    real tags after the stripping was done, and sat in the description. The
+    decode has to come first, and repeat until it is clean.
     """
     if not text:
         return ""
-    for _ in range(3):                       # nội dung mã hoá lồng nhiều lớp
+    for _ in range(3):                       # content encoded several layers deep
         before = text
         text = unescape(text)
         if text == before:
             break
 
-    # giữ cấu trúc trước khi xoá thẻ — mất nó là mất luôn danh sách yêu cầu
+    # keep the structure before dropping tags — losing it loses the
+    # requirements list itself
     text = re.sub(r"<\s*br\s*/?>", "\n", text, flags=re.I)
     text = re.sub(r"<\s*/(p|div|h[1-6]|tr)\s*>", "\n\n", text, flags=re.I)
     text = re.sub(r"<\s*li[^>]*>", "\n· ", text, flags=re.I)
     text = re.sub(r"<\s*/(ul|ol)\s*>", "\n", text, flags=re.I)
     text = _TAG.sub("", text)
-    text = unescape(text)                    # thực thể còn sót trong nội dung
+    text = unescape(text)                    # entities left inside the content
 
     text = text.replace("\xa0", " ")
     text = re.sub(r"[ \t]+", " ", text)
@@ -76,20 +80,21 @@ def strip_html(text: str) -> str:
 
 
 def norm(text: str) -> str:
-    """Chuẩn hoá để so khớp: thường hoá, bỏ dấu câu, gộp khoảng trắng."""
+    """Normalise for matching: lowercase, drop punctuation, collapse space."""
     return _WS.sub(" ", _PUNCT.sub(" ", (text or "").lower())).strip()
 
 
-# Đuôi dính liền vào tên, không tách bằng dấu cách: "ocadogroup", "manGroup"
+# Suffixes glued to the name with no space: "ocadogroup", "manGroup"
 _GLUED = re.compile(r"(group|holdings?|capital|partners?|global|international|"
                     r"technologies|solutions|labs?|ltd|inc|plc)$")
 
 
 def norm_company(name: str) -> str:
-    """Bỏ đuôi pháp lý và đuôi mô tả. 'Monzo Bank Ltd' -> 'monzo bank'.
+    """Drop legal and descriptive suffixes. 'Monzo Bank Ltd' -> 'monzo bank'.
 
-    Cắt cả đuôi VIẾT LIỀN: Greenhouse trả slug "ocadogroup" còn tin thì ghi
-    "Ocado Group" — không cắt thì hai bản của cùng một việc không gộp được.
+    Also cuts GLUED suffixes: Greenhouse returns the slug "ocadogroup" while
+    the posting says "Ocado Group" — without the cut, two copies of the same
+    job never group.
     """
     out = _WS.sub(" ", _SUFFIX.sub(" ", norm(name))).strip()
     words = out.split()
@@ -101,14 +106,15 @@ def norm_company(name: str) -> str:
 
 
 def norm_title(title: str) -> str:
-    """Bỏ phần trong ngoặc và đuôi mã tin. 'Analyst (London) - REQ123' -> 'analyst'."""
+    """Drop parentheses and requisition codes. 'Analyst (London) - REQ123' ->
+    'analyst'."""
     title = re.sub(r"\([^)]*\)", " ", title or "")
     title = re.sub(r"\b(req|job|id|ref)[-_ ]?\d+\b", " ", title, flags=re.I)
     return norm(title)
 
 
 def to_ts(stamp: str) -> int:
-    """Đổi mọi kiểu ngày về unix. Không đọc được thì 0.
+    """Convert any date shape to unix. 0 when unreadable.
 
     Greenhouse/Lever/Ashby trả ISO 8601; Arbeitnow trả unix dạng chuỗi.
     """
@@ -132,7 +138,7 @@ def to_ts(stamp: str) -> int:
 
 @dataclass
 class Posting:
-    """Một tin, đã chuẩn hoá về cùng hình dạng dù đến từ nguồn nào."""
+    """One posting, normalised to the same shape whatever source it came from."""
     source_id: str
     title: str
     company: str
@@ -142,13 +148,13 @@ class Posting:
     url: str = ""
     posted_at: str = ""
     description: str = ""
-    raw_body: str = ""          # NGUYÊN VĂN trước khi bóc HTML — không bao giờ sửa
+    raw_body: str = ""          # VERBATIM before HTML stripping — never edited
     payload: dict = field(default_factory=dict)
 
     def fingerprint(self) -> str:
-        """Cùng công ty + cùng chức danh = nhiều khả năng cùng một việc."""
+        """Same company + same title = most likely the same job."""
         return f"{norm_company(self.company)}|{norm_title(self.title)}"
 
     def text(self) -> str:
-        """Toàn bộ chữ để tìm từ khoá."""
+        """All the text, for keyword searching."""
         return f"{self.title}\n{self.company}\n{self.location}\n{self.description}"

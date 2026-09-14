@@ -1,4 +1,4 @@
-"""Lever — theo từng công ty, không cần key. descriptionPlain đã là chữ thuần."""
+"""Lever — per company, no API key needed. descriptionPlain is already plain text."""
 
 from __future__ import annotations
 

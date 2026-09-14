@@ -1,10 +1,11 @@
-"""Gộp tin trùng — cùng một việc đăng trên nhiều board.
+"""Group duplicate postings — one job posted on several boards.
 
-Bước 1 dùng vân tay: công ty đã chuẩn hoá + chức danh đã chuẩn hoá.
-Đủ để bắt phần lớn trùng lặp, và LUÔN GIẢI THÍCH ĐƯỢC vì sao gộp.
+Step 1 uses a fingerprint: normalised company + normalised title.
+Enough to catch most duplicates, and ALWAYS explicable.
 
-Chưa bắt được: cùng việc nhưng tiêu đề khác hẳn ("Grad Analyst 2027" vs
-"Graduate Analyst Programme"). Để bước 2 xử lý khi đã có dữ liệu thật để đo.
+Not yet caught: the same job with a completely different title ("Grad
+Analyst 2027" vs "Graduate Analyst Programme"). Left to step 2, once there
+is real data to measure against.
 """
 
 from __future__ import annotations
@@ -13,10 +14,10 @@ import sqlite3
 
 
 def regroup(conn: sqlite3.Connection, commit: bool = True) -> tuple[int, int]:
-    """Gán group_id cho mọi tin đang giữ. Trả về (số tin, số nhóm).
+    """Assign a group_id to every kept posting. Returns (rows, groups).
 
-    `commit=False` khi bên gọi đang giữ một giao dịch lớn hơn — tự commit ở đây
-    sẽ cắt ngang giao dịch đó và làm mất tính nguyên tử.
+    `commit=False` when the caller holds a larger transaction — committing
+    here would cut that transaction short and lose its atomicity.
     """
     rows = conn.execute(
         "SELECT id, fingerprint FROM posting WHERE kept = 1 ORDER BY id").fetchall()
@@ -33,7 +34,7 @@ def regroup(conn: sqlite3.Connection, commit: bool = True) -> tuple[int, int]:
 
 
 def groups(conn: sqlite3.Connection) -> list[dict]:
-    """Mỗi nhóm một dòng, kèm danh sách nguồn đã thấy nó."""
+    """One row per group, with the list of sources that saw it."""
     rows = conn.execute(
         "SELECT group_id, COUNT(*) AS n, GROUP_CONCAT(DISTINCT source) AS sources,"
         " MIN(id) AS lead_id FROM posting WHERE kept = 1"

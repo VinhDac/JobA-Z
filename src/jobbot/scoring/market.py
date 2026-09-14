@@ -1,13 +1,14 @@
-"""Thị trường đang ĐÒI kỹ năng nào, đếm trên chính kho tin đang giữ.
+"""Which skills the market is ASKING FOR, counted over the kept postings.
 
-Một con số, một mục đích: tab CV hỏi "khối này của tôi chạm được bao nhiêu
-tin". Khối 0 tin là khối chiếm chỗ — nó lên CV vì có ô trống, không vì nó
-chứng minh được gì.
+One number, one purpose: the CV tab asks "how many postings does this block
+of mine reach". A block that reaches 0 is a block taking up space — it is on
+the CV because there was room, not because it proves anything.
 
-Trước ở `projects/inventory.py`. Nó chưa bao giờ thuộc về tính năng đó: chỗ
-này không biết gì về project, nó chỉ cộng `posting.score_json` lại. Tính năng
-personal project bị bỏ (xem docs/changes), phép đếm này ở lại — và ở đúng
-tầng, cạnh bộ từ vựng mà nó dùng.
+It used to live in `projects/inventory.py`. It never belonged to that
+feature: this code knows nothing about projects, it only adds up
+`posting.score_json`. The personal-project feature was dropped (see
+docs/changes); this count stayed — and now sits in the right layer, next
+to the vocabulary it uses.
 """
 
 from __future__ import annotations
@@ -21,13 +22,14 @@ from .vocab import alias_hits
 
 
 def demand(conn: sqlite3.Connection) -> Counter:
-    """Kỹ năng nào bao nhiêu TIN đòi.
+    """How many POSTINGS ask for each skill.
 
-    Đếm theo TIN, không theo dòng yêu cầu — một tin nhắc 'python' năm lần vẫn
-    chỉ là một tin.
+    Counted per POSTING, not per requirement line — a posting that mentions
+    'python' five times is still one posting.
 
-    Đọc phần YÊU CẦU đã tách, không đọc toàn văn: toàn văn có cả đoạn giới
-    thiệu công ty và đoạn phúc lợi, đọc vào là tin nào cũng đòi mọi thứ.
+    Reads the extracted REQUIREMENTS, not the full text: the full text also
+    contains the company blurb and the benefits, and reading that makes every
+    posting appear to ask for everything.
     """
     dem: Counter = Counter()
     for row in conn.execute(
