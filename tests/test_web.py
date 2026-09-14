@@ -1277,7 +1277,7 @@ with tempfile.TemporaryDirectory() as tmp:
         with urllib.request.urlopen(req, timeout=25) as r:
             r.read()
         low, high = human_window()
-        check(f"giá trị rác {junk[:14].decode():14} -> vẫn hợp lệ",
+        check(f"junk value {junk[:14].decode():14} -> still valid",
               5 <= scan_every_min() <= 1440 and 0 <= low <= 23 and 1 <= high <= 24)
 
     req = urllib.request.Request(base.rstrip("/") + "/settings",
@@ -1285,74 +1285,77 @@ with tempfile.TemporaryDirectory() as tmp:
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
     urllib.request.urlopen(req, timeout=25).read()
 
-    print("\n[gập thanh bên]")
+    print("\n[collapsing the sidebar]")
     _, home_html = get("/")
-    check("có nút gập", "data-nav" in home_html)
-    # Đọc localStorage phải nằm trong <head>, TRƯỚC khi vẽ. Để cuối trang thì
-    # mỗi lần chuyển tab thanh bên bung ra rồi mới co lại — nháy một cái.
+    check("there is a collapse button", "data-nav" in home_html)
+    # Reading localStorage has to sit in <head>, BEFORE the paint. Left at the end of
+    # the page, every tab change flashes the sidebar open and then shut again.
     head = home_html.split("</head>")[0]
-    check("đọc lựa chọn ngay trong <head>, không nháy", "navmin" in head)
-    # Cắt theo THẺ, không theo chuỗi "<body>": thẻ body có thuộc tính
-    # (data-setup, data-reload) nên chuỗi cứng không còn tìm thấy, và bài
-    # test đổ IndexError chứ không nói ra điều gì về trang.
+    check("the choice is read inside <head>, so nothing flashes", "navmin" in head)
+    # Cut on THE TAG, not on the string "<body>": the body tag carries attributes
+    # (data-setup, data-reload) so the hard-coded string is no longer found, and the
+    # test dies with an IndexError instead of saying anything about the page.
     _body_o = __import__("re").search(r"<body[^>]*>", home_html)
-    check("trang có thẻ <body>", _body_o is not None)
-    check("và script đọc localStorage nằm TRƯỚC nó",
+    check("the page has a <body> tag", _body_o is not None)
+    check("and the localStorage script stands BEFORE it",
           bool(_body_o) and home_html.index("navmin") < _body_o.start())
     import re as _re2
     _navlinks = _re2.findall(r"<a class='navlink[^>]*>", home_html)
-    check("mọi mục nav có title để lúc gập còn biết là gì",
+    check("every nav item has a title, so it is still identifiable when collapsed",
           bool(_navlinks) and all("title=" in a for a in _navlinks),
-          f"{sum('title=' not in a for a in _navlinks)}/{len(_navlinks)} thiếu")
-    # navfoot ở thanh bên ĐÃ BỎ: nó hiện đúng thông tin mà thanh trạng thái
-    # đáy app đang hiện — hai chỗ một sự thật thì có ngày lệch nhau.
+          f"{sum('title=' not in a for a in _navlinks)}/{len(_navlinks)} missing")
+    # The sidebar's navfoot IS GONE: it showed exactly what the status bar at the
+    # bottom of the app shows — one truth in two places drifts apart sooner or later.
     _, _with_status = get("/profile")
-    check("thanh trạng thái nằm ở ĐÁY APP, không trong thanh bên",
+    check("the status bar is at THE BOTTOM OF THE APP, not in the sidebar",
           "class=statusbar" in _with_status and "class=navfoot" not in _with_status)
 
-    print("\n[thanh của KHÚC — một khối cho mọi chức năng]")
+    print("\n[THE STAGE's bar — one block for every control]")
     _, _srch = get("/search")
-    check("Search có thanh khúc", "<header class=topbar>" in _srch)
-    check("có nút Chạy của riêng nó", "/api/stage/start" in _srch)
-    check("có nút Dừng của riêng nó", "/api/stage/stop" in _srch)
-    check("nút chạy/dừng mang tên khúc", "data-arg='search'" in _srch)
-    check("có nút Điều chỉnh ⚟", "data-settings='/adjust/search'" in _srch)
-    check("có số liệu, không phải câu văn", _srch.count("class='metric ") >= 3)
-    # MÀU MANG NGHĨA. Mỗi số phải khai VAI, vì vai mới quyết định màu; không
-    # khai thì số nào cũng trắng như nhau và thanh điều khiển lẫn vào nội dung.
+    check("Search has a stage bar", "<header class=topbar>" in _srch)
+    check("it has its own Run button", "/api/stage/start" in _srch)
+    check("it has its own Stop button", "/api/stage/stop" in _srch)
+    check("the run/stop buttons carry the stage's name", "data-arg='search'" in _srch)
+    check("there is an Adjust ⚟ button", "data-settings='/adjust/search'" in _srch)
+    check("there are metrics, not prose", _srch.count("class='metric ") >= 3)
+    # COLOUR CARRIES MEANING. Every number has to declare ITS ROLE, because the role
+    # decides the colour; undeclared, every number is the same white and the control
+    # bar dissolves into the content.
     for _vai in ("stock", "act", "new", "view"):
-        check(f"số liệu khai vai '{_vai}'", f"class='metric {_vai}" in _srch)
-    # Luật SỐ 0 KHÔNG SÁNG — thử thẳng vào hàm, không phụ thuộc dữ liệu thật.
+        check(f"the metric declares the '{_vai}' role", f"class='metric {_vai}" in _srch)
+    # The rule A ZERO DOES NOT GLOW — tried straight against the function, with no
+    # dependence on real data.
     from jobbot.dashboard.layout import deck as _deck
-    _d0 = _deck("search", "S", "", [("0", "mới", "new")])
-    _d9 = _deck("search", "S", "", [("9", "mới", "new")])
-    check("số 0 bị tắt màu", "metric new zero" in _d0)
-    check("số khác 0 thì giữ màu", "zero" not in _d9)
-    check("dấu phẩy nghìn không làm hỏng luật",
-          "zero" not in _deck("search", "S", "", [("1,204", "giữ", "stock")]))
-    # NÚT CHẠY PHẢI ĐỔI CHỮ THEO TÌNH HUỐNG. Một nút ghi "Chạy" ở mọi hoàn
-    # cảnh là nút không nói gì: người mới mở app không biết chạy cái gì, người
-    # vừa bấm Dừng giữa chừng tưởng bấm vào là làm lại từ đầu.
+    _d0 = _deck("search", "S", "", [("0", "new", "new")])
+    _d9 = _deck("search", "S", "", [("9", "new", "new")])
+    check("a zero has its colour switched off", "metric new zero" in _d0)
+    check("a non-zero keeps its colour", "zero" not in _d9)
+    check("a thousands comma does not break the rule",
+          "zero" not in _deck("search", "S", "", [("1,204", "kept", "stock")]))
+    # THE RUN BUTTON HAS TO CHANGE ITS WORDS WITH THE SITUATION. A button reading "Run"
+    # in every circumstance says nothing: someone opening the app for the first time
+    # does not know what it would run, and someone who has just pressed Stop halfway
+    # thinks pressing it starts again from the beginning.
     from jobbot.dashboard import live as _lv
     from jobbot.core.postings import HAVE_DESC as _HD
-    # Nút CHỈ NÓI VỀ CHROME. Board API xong trong 22 giây và chạy mọi lượt —
-    # không có trạng thái gì để kể; thứ mất nửa tiếng và dở dang được là
-    # LinkedIn.
+    # The button SPEAKS ONLY ABOUT CHROME. The board API finishes in 22 seconds and
+    # runs on every pass — it has no state worth telling; the thing that takes half an
+    # hour and can be left half-done is LinkedIn.
     _trong = db.connect(Path(tmp) / "nut-trong.db")
-    check("chưa có gì -> nút mời CHẠY",
+    check("nothing there yet -> the button offers RUN",
           _lv.search_stage(_trong)["run_label"] == "Run",
           _lv.search_stage(_trong)["run_label"])
-    # Và nói thẳng vì sao chưa quét được, thay vì mời một việc sẽ bị từ chối.
-    check("hồ sơ rỗng -> nói rõ thiếu chức danh",
+    # And it says plainly why it cannot scan, rather than offering work that would be refused.
+    check("an empty profile -> it says outright the job titles are missing",
           "no job titles" in _lv.search_stage(_trong)["run_note"],
           _lv.search_stage(_trong)["run_note"])
     _trong.close()
 
     _nut = seeded(Path(tmp) / "nut.db")
-    # Kho có tin (board đã về) nhưng LinkedIn chưa quét trọn lượt nào -> vẫn
-    # là CHẠY. "Cập nhật" ở đây là sai: hỏi cửa sổ 24 giờ thì bỏ sót sạch
-    # những gì LinkedIn đang có.
-    check("board đã về nhưng LinkedIn chưa quét -> vẫn CHẠY",
+    # The store has postings (the boards came back) but LinkedIn has never completed a
+    # pass -> still RUN. "Update" would be wrong here: asking only the 24-hour window
+    # misses everything LinkedIn already holds.
+    check("boards came back but LinkedIn has not scanned -> still RUN",
           _lv.search_stage(_nut)["run_label"] == "Run",
           _lv.search_stage(_nut)["run_label"])
 
@@ -1361,339 +1364,348 @@ with tempfile.TemporaryDirectory() as tmp:
     from jobbot.scan_runner import _cap as _capf
     from jobbot.profile import store as _ps3
     _po.record_run(_nut, "linkedin", ok=True, fetched=1, new_rows=0)
-    # Có dòng chạy thôi CHƯA đủ: lượt đó có thể bị dừng giữa chừng, mới đi
-    # được vài cặp đầu. Trí nhớ là DANH SÁCH CẶP, không phải một cái cờ.
-    check("có dòng chạy nhưng chưa phủ cặp nào -> vẫn CHẠY",
+    # A run row is NOT enough on its own: that pass may have been stopped halfway, a
+    # few pairs in. The memory is A LIST OF PAIRS, not a flag.
+    check("a run row but no pair covered -> still RUN",
           _lv.search_stage(_nut)["run_label"] == "Run",
           _lv.search_stage(_nut)["run_label"])
 
     def _phu_het(conn):
-        """Đánh dấu MỌI cặp của lưới hiện tại là đã quét đầy."""
+        """Mark EVERY pair of the current sieve as fully scanned."""
         cap, muc = _capf(_ps3.load(conn))
         _pf3.put(conn, _pf3.LI_DONE,
                  _js3.dumps(sorted(f"{q}|{p}" for q, p in cap)))
         _pf3.put(conn, _pf3.LI_LEVELS, _js3.dumps(sorted(muc)))
 
     _phu_het(_nut)
-    check("phủ hết lưới, không còn việc dở -> CẬP NHẬT",
+    check("the whole sieve covered, nothing half-done -> UPDATE",
           _lv.search_stage(_nut)["run_label"] == "Update",
           _lv.search_stage(_nut)["run_label"])
-    check("và Cập nhật chỉ hỏi cửa sổ 24 giờ",
+    check("and Update asks only the 24-hour window",
           "24 hours" in _lv.search_stage(_nut)["run_note"])
 
-    # THÊM chức danh -> chỉ MẤY CẶP MỚI là chưa phủ. Không bắt cả lưới quét
-    # lại: đó đúng là "chạy đi chạy lại một thứ".
+    # ADDING a job title -> only THE NEW PAIRS are uncovered. Do not make the whole
+    # sieve rescan: that is exactly "running the same thing over and over".
     _ps3.save(_nut, {"job_titles": "Quantitative Analyst\nData Scientist\n"
-                                   "Machine Learning Engineer"}, "thêm chức danh")
+                                   "Machine Learning Engineer"}, "added a job title")
     from jobbot.scan_runner import scan_mode as _sm
     _st_them = _lv.search_stage(_nut)
-    check("thêm chức danh -> quay về CHẠY", _st_them["run_label"] == "Run",
+    check("adding a job title -> back to RUN", _st_them["run_label"] == "Run",
           _st_them["run_label"])
-    check("nhưng CHỈ quét đầy mấy lượt mới, không quét lại cả lưới",
+    check("but it fully scans ONLY the new passes, it does not rescan the whole sieve",
           _sm(_nut)["todo"] == 1, str(_sm(_nut)["todo"]))
-    check("và nói rõ phần còn lại chỉ hỏi tin mới",
+    check("and it says outright the rest only asks for new postings",
           "the rest only asks for new postings" in _st_them["run_note"],
           _st_them["run_note"])
 
-    # BỎ BỚT chức danh -> KHÔNG có gì mới để tìm -> đừng quét lại cái gì cả.
-    # Đây là chỗ luật cũ (vân tay cả lưới) sai: nó bắt quét lại từ đầu.
+    # REMOVING a job title -> there is NOTHING new to search for -> rescan nothing.
+    # This is where the old rule (a fingerprint over the whole sieve) was wrong: it
+    # forced a rescan from the beginning.
     _phu_het(_nut)
-    _ps3.save(_nut, {"job_titles": "Quantitative Analyst"}, "bỏ bớt chức danh")
-    check("bỏ bớt chức danh -> vẫn CẬP NHẬT, không quét lại",
+    _ps3.save(_nut, {"job_titles": "Quantitative Analyst"}, "removed a job title")
+    check("removing a job title -> still UPDATE, no rescan",
           _lv.search_stage(_nut)["run_label"] == "Update",
           _lv.search_stage(_nut)["run_label"])
 
-    # Sửa thứ KHÔNG đụng câu hỏi gửi LinkedIn thì đừng bắt quét lại.
-    _ps3.save(_nut, {"phone": "+44 7000 000000"}, "đổi số điện thoại")
-    check("đổi số điện thoại -> vẫn CẬP NHẬT",
+    # Editing something that does NOT touch the query sent to LinkedIn must force no rescan.
+    _ps3.save(_nut, {"phone": "+44 7000 000000"}, "changed the phone number")
+    check("changing the phone number -> still UPDATE",
           _lv.search_stage(_nut)["run_label"] == "Update",
           _lv.search_stage(_nut)["run_label"])
 
-    # THU HẸP cấp bậc không đẻ ra tin mới -> giữ nguyên phủ.
-    _ps3.save(_nut, {"seniority": ["grad"]}, "thu hẹp cấp bậc")
-    check("thu hẹp cấp bậc -> vẫn CẬP NHẬT",
+    # NARROWING the seniority produces no new postings -> the coverage stands.
+    _ps3.save(_nut, {"seniority": ["grad"]}, "narrowed the seniority")
+    check("narrowing the seniority -> still UPDATE",
           _lv.search_stage(_nut)["run_label"] == "Update",
           _lv.search_stage(_nut)["run_label"])
-    # NỚI RỘNG thì f_E đổi cho MỌI cặp -> phải hỏi đầy lại.
-    _ps3.save(_nut, {"seniority": ["grad", "mid", "senior"]}, "nới cấp bậc")
-    check("nới rộng cấp bậc -> quay về CHẠY",
+    # WIDENING changes f_E for EVERY pair -> it has to ask in full again.
+    _ps3.save(_nut, {"seniority": ["grad", "mid", "senior"]}, "widened the seniority")
+    check("widening the seniority -> back to RUN",
           _lv.search_stage(_nut)["run_label"] == "Run",
           _lv.search_stage(_nut)["run_label"])
     _ps3.save(_nut, {"seniority": ["grad", "junior"],
-                     "job_titles": "Quantitative Analyst\nData Scientist"}, "trả lại")
+                     "job_titles": "Quantitative Analyst\nData Scientist"}, "put back")
     _phu_het(_nut)
-    # Một tin LinkedIn chưa có mô tả = vòng đọc kỹ còn dở dang. Ghi bằng
-    # ĐƯỜNG THẬT của app (save_batch) chứ không INSERT tay: bảng posting có
-    # cột bắt buộc mà chỉ đường thật mới điền đủ, và test đi đường riêng thì
-    # nó kiểm một hình dạng dữ liệu không bao giờ tồn tại ngoài đời.
+    # A LinkedIn posting with no description = the deep-read loop is half-done. Write it
+    # through THE APP'S REAL ROUTE (save_batch), never a hand INSERT: the posting table
+    # has required columns only the real route fills, and a test taking its own route
+    # checks a shape of data that never exists in the wild.
     postings.save_batch(_nut, "linkedin", [
         Posting(source_id="9", title="Quant", company="X", location="London",
                 url="https://x/9", description="")])
-    # kept=1: tin LỌT LƯỚI nhưng chưa kịp đọc kỹ. Đó mới là "việc dở" thật.
-    # Tin lưới sàng đã loại thì đọc bao nhiêu lần cũng không ai dùng tới, nên
-    # không được tính vào con số trên nút.
+    # kept=1: a posting THROUGH THE SIEVE but not yet deep-read. That is the real
+    # "half-done work". A posting the sieve already dropped is of no use however many
+    # times it is read, so it must not count towards the number on the button.
     _nut.execute("UPDATE posting SET kept = 1 WHERE source = 'linkedin'")
     _nut.commit()
     _st = _lv.search_stage(_nut)
-    check("còn tin chưa đọc kỹ -> nút mời TIẾP TỤC",
+    check("postings still unread -> the button offers CONTINUE",
           _st["run_label"] == "Continue", _st["run_label"])
-    check("và nói rõ còn bao nhiêu tin dở", "1 postings still unread" in _st["run_note"])
+    check("and it says how many are left half-done", "1 postings still unread" in _st["run_note"])
 
-    # HÀNG ĐỢI THEO NGUỒN, KHÔNG PHẢI MỘT RỔ. Tin dở ở đây là của nguồn
-    # `linkedin`; tắt nguồn đó thì hàng đợi của nó không phải việc của lượt
-    # này, nên nút không được mời "Tiếp tục" — bấm vào sẽ không đọc tin nào.
+    # A QUEUE PER SOURCE, NOT ONE BASKET. The half-done work here belongs to the
+    # `linkedin` source; switch that source off and its queue is not this pass's work,
+    # so the button must not offer "Continue" — pressing it would read no posting.
     _pf3.set_flag(_nut, _pf3.SRC_LINKEDIN, False)
     _st_tat = _lv.search_stage(_nut)
-    check("tắt LinkedIn -> hàng đợi CỦA NÓ không còn mời Tiếp tục",
+    check("LinkedIn off -> ITS queue no longer offers Continue",
           _st_tat["run_label"] != "Continue", _st_tat["run_label"])
-    check("và nói rõ lượt tới chỉ còn nguồn nào",
+    check("and it says which sources the next pass is left with",
           "LinkedIn is off" in _st_tat["run_note"], _st_tat["run_note"])
-    check("KHÔNG còn đòi bật LinkedIn để đọc tin nguồn khác",
+    check("it no longer demands LinkedIn be switched on to read another source's postings",
           "turn LinkedIn on" not in _st_tat["run_note"], _st_tat["run_note"])
 
-    # Nhưng tin của THƯ BÁO là nguồn KHÁC, công tắc KHÁC. LinkedIn tắt thì nó
-    # vẫn phải đi trọn dây chuyền: "2 cách khác nhau phải làm 2 nguồn khác
-    # nhau, đừng gộp chung". Trước đây cả vòng đọc kỹ nằm sau công tắc
-    # LinkedIn, nên tắt nó là 107 tin thư báo đứng im không ai chấm.
+    # But ALERT MAIL postings are A DIFFERENT source with A DIFFERENT switch. With
+    # LinkedIn off they must still travel the whole line: "two different ways have to be
+    # two different sources, do not merge them". The whole deep-read loop used to sit
+    # behind the LinkedIn switch, so turning it off left 107 alert postings unscored.
     postings.save_batch(_nut, "alert", [
         Posting(source_id="8", title="Quant", company="Y", location="London",
                 url="https://x/8", description="")])
     _nut.execute("UPDATE posting SET kept = 1 WHERE source = 'alert'")
     _nut.commit()
     _st_thu = _lv.search_stage(_nut)
-    check("LinkedIn tắt mà thư báo còn tin dở -> VẪN mời Tiếp tục",
+    check("LinkedIn off but alert mail still half-done -> it STILL offers Continue",
           _st_thu["run_label"] == "Continue", _st_thu["run_label"])
-    check("và chỉ đếm tin của nguồn đang bật, không đếm cả rổ",
+    check("and it counts only the postings of sources that are on, not the whole basket",
           "1 postings still unread" in _st_thu["run_note"], _st_thu["run_note"])
     _pf3.set_flag(_nut, _pf3.SRC_ALERT, False)
-    check("tắt luôn thư báo -> không còn hàng đợi nào để mời",
+    check("alert mail off too -> there is no queue left to offer",
           _lv.search_stage(_nut)["run_label"] != "Continue")
     _pf3.set_flag(_nut, _pf3.SRC_ALERT, True)
     _nut.execute("DELETE FROM posting WHERE source = 'alert'")
     _nut.execute("DELETE FROM raw_posting WHERE source = 'alert'")
     _nut.commit()
     _pf3.set_flag(_nut, _pf3.SRC_LINKEDIN, True)
-    check("bật lại thì mời Tiếp tục như cũ",
+    check("switched back on it offers Continue as before",
           _lv.search_stage(_nut)["run_label"] == "Continue")
-    # Đọc xong tin đó thì lời mời phải đổi lại — nếu không, nút đứng ở
-    # "Tiếp tục" vĩnh viễn và chữ trên nút thành lời nói dối.
+    # Once that posting is read the offer has to change back — otherwise the button
+    # stands on "Continue" for ever and the word on it becomes a lie.
     _nut.execute("UPDATE posting SET description = ? WHERE source='linkedin'",
                  ("x" * (_HD + 1),))
     _nut.commit()
     _phu_het(_nut)
-    check("đọc kỹ xong thì quay về CẬP NHẬT",
+    check("deep-reading done -> back to UPDATE",
           _lv.search_stage(_nut)["run_label"] == "Update",
           _lv.search_stage(_nut)["run_label"])
-    # Tin lưới sàng ĐÃ LOẠI mà thiếu mô tả thì KHÔNG phải việc dở — vòng đọc
-    # kỹ không bao giờ mở chúng. Đếm cả chúng thì nút hứa 1.855 trong khi
-    # việc thật là 11, đo được trên kho thật ngày 12/09.
+    # A posting THE SIEVE ALREADY DROPPED that has no description is NOT half-done work
+    # — the deep-read loop never opens them. Counting them made the button promise
+    # 1,855 while the real work was 11, measured on the live store on 12 September.
     postings.save_batch(_nut, "linkedin", [
-        Posting(source_id="8", title="Rác", company="Y", location="Mars",
+        Posting(source_id="8", title="Junk", company="Y", location="Mars",
                 url="https://x/8", description="")])
     _nut.execute("UPDATE posting SET kept = 0 WHERE source='linkedin'"
                  " AND url = 'https://x/8'")
     _nut.commit()
-    check("tin lưới đã loại KHÔNG được tính là việc dở",
+    check("a posting the sieve dropped does NOT count as half-done work",
           _lv.search_stage(_nut)["run_label"] == "Update",
           _lv.search_stage(_nut)["run_label"])
     _nut.close()
-    # Chữ lúc rảnh phải đi kèm nút, để live.js trả về được sau khi hiện
-    # "Đang quét…". Không có nó thì quét xong nút kẹt ở chữ tạm.
-    check("nút mang theo chữ gốc để khôi phục",
+    # The idle wording has to travel with the button, so live.js can put it back after
+    # showing "Scanning…". Without it the button sticks on the temporary word once the
+    # scan is done.
+    check("the button carries its original word, to be restored",
           "data-run='Update'" in _deck("search", "S", "", [], run="Update"))
-    check("và mang lời giải thích khi rê chuột",
+    check("and it carries the explanation shown on hover",
           "title='3 postings left'" in _deck("search", "S", "", [],
                                           run="Continue", run_note="3 postings left"))
 
-    # Ô TÌM TRONG KHO. Backend nhận `q` từ ngày đầu — lọc theo chức danh hoặc
-    # tên công ty, ràng buộc tham số đàng hoàng — mà chưa bao giờ có chỗ gõ
-    # vào. Cả một bộ lọc nằm đó không ai dùng được.
+    # A SEARCH BOX OVER THE STORE. The backend has taken `q` since day one — filtering
+    # by job title or company name, properly bound as a parameter — but there was never
+    # anywhere to type it. A whole filter sitting there that nobody could use.
     import re as _re2
     _, _s0 = get("/search")
-    check("danh sách có ô tìm", "class=jfind" in _s0)
-    check("ô tìm là form GET — gõ xong là ra URL lưu được",
+    check("the list has a search box", "class=jfind" in _s0)
+    check("the search box is a GET form — typing produces a saveable URL",
           "method=get action='/search'" in _s0)
-    check("chưa tìm thì KHÔNG hiện nút xoá", "jfindx" not in _s0)
+    check("with nothing searched there is NO clear button", "jfindx" not in _s0)
 
     _, _s1 = get("/search?q=quantitative")
-    check("tìm rồi thì ô giữ lại chữ vừa gõ", "name=q value='quantitative'" in _s1)
-    check("và hiện nút xoá để quay lại", "jfindx" in _s1)
-    check("danh sách co lại theo chữ tìm",
+    check("after a search the box keeps what was typed", "name=q value='quantitative'" in _s1)
+    check("and a clear button appears, to go back", "jfindx" in _s1)
+    check("the list shrinks to the search text",
           _s1.count("class='jrow") < _s0.count("class='jrow"),
           f"{_s1.count(chr(39) + 'jrow')} vs {_s0.count(chr(39) + 'jrow')}")
-    check("tìm chữ không có thật -> nói rõ không ra CÁI GÌ",
-          "khongcochunaynhuvay" in get("/search?q=khongcochunaynhuvay")[1])
+    check("searching for text that does not exist -> it says outright WHAT found nothing",
+          "nosuchtexthere" in get("/search?q=nosuchtexthere")[1])
 
-    # GÕ TÌM KHÔNG ĐƯỢC LÀM MẤT BỘ LỌC ĐANG BẬT. Form GET chỉ gửi đúng những
-    # ô nó có, nên các chip phải đi theo dưới dạng <input hidden>.
+    # TYPING A SEARCH MUST NOT LOSE THE FILTERS IN FORCE. A GET form sends only the
+    # fields it holds, so the chips have to travel with it as <input hidden>.
     _, _s2 = get("/search?q=quant&chance=likely&show=dropped")
-    check("bộ lọc đang bật đi theo form dưới dạng ô ẩn",
+    check("the filters in force travel with the form as hidden fields",
           "name='chance' value='likely'" in _s2 and "name='show' value='dropped'" in _s2)
-    check("nhưng KHÔNG mang theo chính chữ tìm (ô nhập lo việc đó)",
+    check("but it does NOT carry the search text itself (the input box does that)",
           "name='q' value=" not in _s2)
     from jobbot.dashboard.filters import JobFilter as _JF
     _f = _JF(q="abc", chance="likely", page=3)
-    check("pairs() bỏ được q và page khi dựng ô ẩn",
+    check("pairs() can drop q and page when building the hidden fields",
           dict(_f.pairs(q="", page="")) == {"chance": "likely"},
           str(_f.pairs(q="", page="")))
-    check("url() và pairs() dựng từ CÙNG một chỗ",
+    check("url() and pairs() are built from THE SAME place",
           "chance=likely" in _f.url() and "q=abc" in _f.url())
 
-    # BỐN LOẠI NÚT, BỐN CÁCH VẼ. Trước đây cả bốn là pill xám giống hệt nhau
-    # trộn chung ba hàng — 20 nút, không nhìn ra nút nào liên quan nút nào.
+    # FOUR KINDS OF BUTTON, FOUR WAYS OF DRAWING THEM. All four used to be identical
+    # grey pills mixed across three rows — 20 buttons, with no way to see which button
+    # related to which.
     _, _f0 = get("/search")
-    check("thứ CÓ THỨ TỰ vẽ thành THANH, không phải pill rời",
+    check("what HAS AN ORDER is drawn as A TRACK, not as loose pills",
           _f0.count("class=lvltrack") == 2, str(_f0.count("class=lvltrack")))
-    check("thanh có tên đứng đầu (Cơ hội / Điểm)",
+    check("the track has its name at the head (Chance / Score)",
           "Chance" in _f0 and "class=lvlname" in _f0)
-    # Xếp KHÔNG lọc gì cả, nên nó phải có nhãn riêng và đứng ở ĐẦU KIA của
-    # hàng — lẫn vào giữa đám chip lọc thì người dùng tưởng nó cũng cắt bớt
-    # danh sách.
-    check("Xếp theo có nhãn riêng", "Sort by" in _f0 and "class=vlabel" in _f0)
-    # Hàng nút chia hai NHÓM, một đẩy trái một đẩy phải: ô này rộng gần
-    # 2000px, nép hết vào mép trái thì nửa màn hình bỏ không.
-    check("mỗi hàng nút có hai đầu", _f0.count("class=vgrp") == 6,
+    # Sorting filters NOTHING, so it needs its own label and has to stand at THE OTHER
+    # END of the row — mixed in among the filter chips, the user thinks it trims the
+    # list too.
+    check("Sort by has its own label", "Sort by" in _f0 and "class=vlabel" in _f0)
+    # A button row splits into two GROUPS, one pushed left and one right: this panel is
+    # nearly 2000px wide, and tucking everything against the left edge leaves half the
+    # screen empty.
+    check("each button row has two ends", _f0.count("class=vgrp") == 6,
           str(_f0.count("class=vgrp")))
-    check("ba hàng nút, không phải bốn", _f0.count("class=vbar") == 3,
+    check("three button rows, not four", _f0.count("class=vbar") == 3,
           str(_f0.count("class=vbar")))
 
-    # TÔ ĐẦY TỚI NẤC ĐANG CHỌN — đó là thứ làm nó đọc ra một cái thang.
+    # FILLED UP TO THE CHOSEN NOTCH — that is what makes it read as a ladder.
     _, _f1 = get("/search?chance=possible")
-    # `.*?` chứ không phải `[^<]*`: nút giờ mang thêm <b>số tin</b> bên trong,
-    # và ý của test này là kiểm LỚP CSS chứ không phải chữ bên trong nút.
+    # `.*?` rather than `[^<]*`: the buttons now carry a <b>count</b> inside, and what
+    # this test means to check is THE CSS CLASS, not the text inside the button.
     _nac = _re2.findall(r"<a class='(lvlstep[^']*)'[^>]*>(.*?)</a>", _f1)[:4]
-    check("nấc đã qua được tô", [c for c, _ in _nac] ==
+    check("the notches already passed are filled", [c for c, _ in _nac] ==
           ["lvlstep on", "lvlstep on", "lvlstep on now", "lvlstep"], str(_nac))
-    check("đúng một nấc là nấc đang chọn",
+    check("exactly one notch is the chosen one",
           sum(1 for c, _ in _nac if "now" in c) == 1)
 
-    # THANG = SÀN. Chọn "Có thể" phải KÈM cả "Đáng nộp" — giấu mất những tin
-    # tốt nhất là hỏng đúng việc người dùng cần.
+    # A LADDER IS A FLOOR. Choosing "Possible" has to INCLUDE "Likely" — hiding the
+    # best postings breaks exactly the thing the user came for.
     _n = lambda h: int(_re2.search(r">Kept ([0-9,]+)<", h).group(1).replace(",", ""))
-    # Bất biến của một cái SÀN: nâng sàn lên thì tập kết quả chỉ co lại, không
-    # bao giờ phình ra. (Bao nhiêu tin ở mỗi mức là chuyện của DỮ LIỆU, nên
-    # không khẳng định co THẬT SỰ ở đây — test_filters.py kiểm phần SQL.)
+    # The invariant of A FLOOR: raise it and the result set can only shrink, never grow.
+    # (How many postings sit at each level is a matter of DATA, so no claim is made
+    # here that it really shrinks — test_filters.py checks the SQL.)
     _cao, _vua, _het = (_n(get("/search?chance=likely")[1]), _n(_f1), _n(_f0))
-    check("nâng sàn thì tập kết quả chỉ co lại",
+    check("raising the floor only shrinks the result set",
           _cao <= _vua <= _het, f"{_cao} <= {_vua} <= {_het}")
 
-    # CÔNG TẮC NGUỒN. Hai cách tìm cho ra hai loại tin khác hẳn nhau — board
-    # xong trong 22 giây, LinkedIn mất nửa tiếng — nên có lúc chỉ chạy một cái.
+    # THE SOURCE SWITCHES. The two ways of searching return quite different postings —
+    # boards finish in 22 seconds, LinkedIn takes half an hour — so sometimes only one
+    # of them should run.
     _, _adj = get("/adjust/search")
-    check("tấm Điều chỉnh có hai công tắc nguồn",
+    check("the Adjust panel has the source switches",
           "data-arg='board'" in _adj and "data-arg='linkedin'" in _adj)
-    check("công tắc nằm NGOÀI form lưới sàng — bấm không phán lại 5.000 tin",
+    check("the switches sit OUTSIDE the sieve form — pressing one re-judges no 5,000 postings",
           _adj.index("srcrow") < _adj.index("<form class=sieve"))
     _bat = lambda arg: __import__("json").loads(
         _post_raw("/api/source", f"arg={arg}".encode()))
-    check("có đủ BA công tắc nguồn",
+    check("all THREE source switches are there",
           all(f"data-arg='{k}'" in _adj for k in ("board", "linkedin", "alert")))
     _tat = _bat("board")
-    check("tắt được một nguồn", _tat["ok"] and _tat["on"] is False)
-    check("nút bấm lại được ngay, không bị khoá", _tat.get("again") is True)
-    check("và tấm Điều chỉnh hiện ra là đang tắt",
+    check("a source can be switched off", _tat["ok"] and _tat["on"] is False)
+    check("the button is pressable again at once, not locked", _tat.get("again") is True)
+    check("and the Adjust panel shows it as off",
           "srcbtn board off" in get("/adjust/search")[1])
-    # TẮT NỐT CÁI CUỐI = quét mà không lấy ở đâu cả. Đường đó không được là
-    # đường bấm nhầm một cái là vào.
+    # SWITCHING OFF THE LAST ONE = scanning with nowhere to scan. That must not be a
+    # route you fall into with one misplaced click.
     #
-    # Luật phải đếm CẢ BA nguồn còn lại. Bản cũ chỉ biết hai nguồn nên khi có
-    # nguồn thứ ba, nó cho tắt sạch mà vẫn tưởng còn.
-    # Đặt trạng thái RÕ RÀNG trước khi thử: một bài test bên trên đã lưu tab
-    # Nguồn không tick "alert", nên không đoán được cái nào đang bật.
+    # The rule has to count ALL THREE remaining sources. The old version knew only two,
+    # so once a third existed it allowed them all off while believing one was left.
+    # Set the state EXPLICITLY before trying: a test above saved the Sources tab with
+    # "alert" unticked, so which ones are on cannot be guessed.
     _adj2 = get("/adjust/search")[1]
     for _k in ("linkedin", "alert"):
         if f"srcbtn {_k} off" in _adj2:
-            _bat(_k)                      # bật lên cho chắc
-    _bat("linkedin")                      # giờ chỉ còn alert
+            _bat(_k)                      # switch it on, to be sure
+    _bat("linkedin")                      # only alert is left on now
     _cuoi = _bat("alert")
-    check("còn đúng một nguồn thì KHÔNG cho tắt nốt", _cuoi["ok"] is False,
+    check("with exactly one source left it will NOT switch that one off", _cuoi["ok"] is False,
           str(_cuoi))
-    check("và nói rõ vì sao", "at least one source" in _cuoi["note"])
+    check("and it says why", "at least one source" in _cuoi["note"])
     _bat("linkedin")
     _bat("board")
-    check("bật lại được", "srcbtn board off" not in get("/adjust/search")[1])
-    check("nguồn lạ thì từ chối", post("/api/source", b"arg=bia") == 400)
+    check("it can be switched back on", "srcbtn board off" not in get("/adjust/search")[1])
+    check("an unknown source is refused", post("/api/source", b"arg=bia") == 400)
 
-    # HUY HIỆU KHÔNG ĐƯỢC ĐỤNG TÊN LỚP CSS KHÁC.
+    # A BADGE MUST NOT COLLIDE WITH ANOTHER CSS CLASS NAME.
     #
-    # LỖI THẬT: đổi `api` -> `board` xong, `<i class='src board'>` thừa hưởng
-    # `.board{width:100%;font-size:12.5px}` của BẢNG Quản lí — huy hiệu phình
-    # thành một cái hộp to bằng cả dòng. Cùng lớp lỗi .pill và .prow đã dính.
-    # Kiểm bằng CSS thật, không bằng mắt: lỗi này không làm hỏng test nào,
-    # chỉ nhìn mới thấy.
+    # A REAL BUG: after renaming `api` -> `board`, `<i class='src board'>` inherited
+    # `.board{width:100%;font-size:12.5px}` from the Manage TABLE — the badge swelled
+    # into a box as wide as the whole row. The same class of bug .pill and .prow both
+    # fell into. Checked against the real CSS, not by eye: this bug breaks no test, it
+    # is only visible by looking.
     _css = (Path(__file__).resolve().parent.parent
             / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
     from jobbot.dashboard.views.search import FOUND_BY as _FB
     _dung = [k for k in _FB
              if _re2.search(r"(?m)^\.%s\b[^,{]*\{" % _re2.escape(k), _css)]
-    check("tên huy hiệu không trùng lớp CSS nào khác", not _dung, str(_dung))
-    # Bộ kiểm tự chứng minh nó bắt được.
-    check("và bộ kiểm này thật sự bắt được",
+    check("no badge name collides with another CSS class", not _dung, str(_dung))
+    # The detector proves it can catch one.
+    check("and this detector really does catch one",
           bool(_re2.search(r"(?m)^\.trackboard\b[^,{]*\{", _css)))
 
-    # NƠI CHỐN — chữ trên nút lấy từ ô "Where you're based", không đóng cứng.
-    check("có hàng lọc theo nơi", "name=loc" in _f0 or "loc=" in _f0)
-    check("nút 'Gần tôi' nói rõ gần ĐÂU", "Near me ·" in _f0, "")
-    # Nơi ở không CẮT, nó chỉ ƯU TIÊN: "Cả nước" vẫn còn đó để xem hết.
-    check("và vẫn có nút xem cả nước", "All of " in _f0)
-    # Chưa khai nơi ở thì GIẤU nút "Gần tôi": một nút không lọc được gì là
-    # nút bấm vào thấy y nguyên, và người dùng thôi tin cả hàng nút.
+    # PLACE — the text on the button comes from the "Where you're based" field, never
+    # hard-coded.
+    check("there is a filter row for place", "name=loc" in _f0 or "loc=" in _f0)
+    check("the 'Near me' button says near WHERE", "Near me ·" in _f0, "")
+    # Place does not CUT, it only PRIORITISES: "All of …" is still there to see everything.
+    check("and there is still a button to see the whole country", "All of " in _f0)
+    # With no place declared, HIDE the 'Near me' button: a button that filters nothing
+    # is a button you press and see no change, and then the user stops trusting the
+    # whole row.
     from jobbot.dashboard.views import search as _sv
     _trong = _sv._noi(_lv.JobFilter.from_query({}) if hasattr(_lv, "JobFilter")
                       else __import__("jobbot.dashboard.filters", fromlist=["x"])
                       .JobFilter.from_query({}), "", "UK")
-    check("chưa khai nơi ở -> giấu luôn nút 'Gần tôi'", "Near me" not in _trong)
+    check("no place declared -> the 'Near me' button is hidden", "Near me" not in _trong)
     _n2 = lambda h: int(_re2.search(r">Kept ([0-9,]+)<", h).group(1).replace(",", ""))
     _, _gan = get("/search?loc=near")
-    check("lọc 'gần tôi' thì danh sách hẹp lại, không rỗng",
+    check("filtering by 'near me' narrows the list without emptying it",
           0 < _n2(_gan) <= _n2(_f0), f"{_n2(_gan)} / {_n2(_f0)}")
-    check("và 'cả nước' rộng hơn 'gần tôi'",
+    check("and 'the whole country' is wider than 'near me'",
           _n2(get("/search?loc=home")[1]) >= _n2(_gan))
 
-    # TAG NGUỒN — Vin nhìn thấy badge board/linkedin trên từng dòng rồi, nên lọc
-    # theo chính hai badge đó là thứ tiếp theo người ta thò tay tìm.
-    check("có tag lọc theo nguồn", ">board<" in _f0 and ">linkedin<" in _f0)
+    # THE SOURCE TAG — the board/linkedin badge is already visible on every row, so
+    # filtering by those same two badges is the next thing anyone reaches for.
+    check("there is a filter tag for source", ">board<" in _f0 and ">linkedin<" in _f0)
     _, _fc = get("/search?found=linkedin")
-    check("lọc linkedin thì mọi dòng đều mang badge linkedin",
+    check("filtering by linkedin leaves every row carrying the linkedin badge",
           _fc.count("class='src linkedin'") >= _fc.count("class='jrow"),
           f"{_fc.count(chr(39)+'src linkedin'+chr(39))} badge / "
-          f"{_fc.count(chr(39)+'jrow')} dòng")
+          f"{_fc.count(chr(39)+'jrow')} rows")
 
-    # MỘT nút thay cho hai: "Can't tell" và "Not scorable" là cùng một chồng.
-    check("chỉ còn MỘT nút cho tin máy chưa đọc",
+    # ONE button instead of two: "Can't tell" and "Not scorable" are the same pile.
+    check("there is only ONE button for postings the machine has not read",
           "Not read yet" in _f0 and "Not scorable" not in _f0
           and "Can't tell" not in _f0)
-    # Hai thang đòi máy ĐỌC ĐƯỢC, nút này đòi ngược lại — cùng bật thì danh
-    # sách luôn rỗng, nên bấm nút phải thả hai thang về Tất cả.
-    check("bấm 'Máy chưa đọc' thì thả hai thang ra",
+    # The two ladders ask for postings the machine COULD read, this button asks for the
+    # opposite — both on and the list is always empty, so pressing it has to release
+    # both ladders back to All.
+    check("pressing 'Not read yet' releases both ladders",
           "raw=1" in _f1 and "chance" not in
           _re2.search(r"href='([^']*raw=1[^']*)'", _f1).group(1))
 
-    # THANH KHÚC nói về KHO, chip nói về KHUNG NHÌN — đừng trộn. Trộn thì gõ
-    # tìm "quant" xong thanh báo "64 giữ · 91 đáng nộp", trong khi đáng nộp là
-    # tập con của giữ: 91 > 64 là con số không thể tồn tại.
+    # THE STAGE BAR speaks about THE STORE, the chips speak about THE VIEW — never mix
+    # them. Mixed, typing "quant" gives a bar reading "64 kept · 91 worth applying to",
+    # while worth-applying-to is a subset of kept: 91 > 64 cannot exist.
     import re as _re
     _giu = lambda h: _re.search(
         r"class='metric stock[^']*'><b>([0-9,]+)</b>worth applying", h)
-    check("thanh khúc giữ nguyên số KHO khi đang tìm — "
+    check("the stage bar keeps THE STORE's number while a search is typed — "
           f"{_giu(_s1) and _giu(_s1).group(1)} vs {_giu(_s0) and _giu(_s0).group(1)}",
           bool(_giu(_s1) and _giu(_s0) and _giu(_s1).group(1) == _giu(_s0).group(1)))
-    # MỖI SỐ PHẢI HÀNH ĐỘNG ĐƯỢC. Thanh cũ có "363 giữ" cạnh "364 đáng nộp" —
-    # hai cách đếm cùng một chồng, gần trùng nhau nên không nói thêm gì; và
-    # "50 đang hiện" chỉ là cỡ trang, danh sách ngay dưới đã nói rồi.
-    # Canh đúng Ô SỐ trên thanh, không dò chữ "shown" khắp trang: chữ đó
-    # còn nằm trong lời chú và nhãn khác, và một bài canh đỏ vì lý do chẳng
-    # liên quan thì người sửa học được đúng một điều — tắt nó đi.
-    check("bỏ số 'đang hiện' — đó là cỡ trang, không phải tin tức",
+    # EVERY NUMBER HAS TO BE ACTIONABLE. The old bar had "363 kept" beside "364 worth
+    # applying to" — two counts of the same pile, near enough identical to say nothing
+    # extra; and "50 shown" is only the page size, which the list right below already
+    # states.
+    # Watch THE METRIC BOX on the bar, not the word "shown" anywhere on the page: that
+    # word also appears in comments and other labels, and a check that goes red for an
+    # unrelated reason teaches whoever is fixing it exactly one thing — switch it off.
+    check("the 'shown' number is gone — that is the page size, not news",
           not _re.search(r"class='metric [^']*'><b>[0-9,]+</b>shown", _s0))
-    check("có hàng đợi THẬT: điểm cao mà chưa nộp", "to apply to" in _s0)
-    check("và số đó mang vai HÀNH ĐỘNG (xanh), không phải số nền",
+    check("there is a REAL queue: scored high and not applied to", "to apply to" in _s0)
+    check("and that number takes the ACTION role (green), not the background role",
           _re.search(r"class='metric act[^']*'><b>[0-9,]+</b>to apply to", _s0))
 
-    # Con số trên chip phải ĐI THEO chữ tìm, không thì nó nói dối.
+    # The number on a chip has to FOLLOW the search text, or it lies.
     import re as _re
     _dem = lambda h, n: int(_re.search(f">{n} ([0-9,]+)<", h).group(1).replace(",", ""))
-    check("đếm lại theo chữ tìm, không giữ số cũ",
+    check("it recounts for the search text, it does not keep the old number",
           _dem(_s1, "Kept") < _dem(_s0, "Kept"),
           f"{_dem(_s1, 'Kept')} vs {_dem(_s0, 'Kept')}")
     # What the user types goes straight into the SQL. It has to be a bound parameter.
