@@ -1623,7 +1623,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check("có hàng lọc theo nơi", "name=loc" in _f0 or "loc=" in _f0)
     check("nút 'Gần tôi' nói rõ gần ĐÂU", "Near me ·" in _f0, "")
     # Nơi ở không CẮT, nó chỉ ƯU TIÊN: "Cả nước" vẫn còn đó để xem hết.
-    check("và vẫn có nút xem cả nước", "Cả " in _f0)
+    check("và vẫn có nút xem cả nước", "All of " in _f0)
     # Chưa khai nơi ở thì GIẤU nút "Gần tôi": một nút không lọc được gì là
     # nút bấm vào thấy y nguyên, và người dùng thôi tin cả hàng nút.
     from jobbot.dashboard.views import search as _sv
