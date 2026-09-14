@@ -1696,93 +1696,97 @@ with tempfile.TemporaryDirectory() as tmp:
     check("đếm lại theo chữ tìm, không giữ số cũ",
           _dem(_s1, "Kept") < _dem(_s0, "Kept"),
           f"{_dem(_s1, 'Kept')} vs {_dem(_s0, 'Kept')}")
-    # Chữ người dùng gõ đi thẳng vào câu SQL. Phải là tham số ràng buộc.
+    # What the user types goes straight into the SQL. It has to be a bound parameter.
     _ma_nhay, _ = get("/search?q=%27%20OR%201%3D1%20--")
-    check("dấu nháy trong ô tìm không làm sập trang", _ma_nhay == 200, str(_ma_nhay))
+    check("a quote in the search box does not crash the page", _ma_nhay == 200, str(_ma_nhay))
 
-    # GIỮ LẠI tin máy đã loại. Bộ lọc là luật máy móc — riêng "chức danh không
-    # khớp" đã loại 2.595 tin trên kho thật, mà luật đó chỉ là so chuỗi con với
-    # 19 chức danh khai trong hồ sơ. Người liếc qua đống bị loại chắc chắn nhặt
-    # được tin thật, nên phải có đường nhặt.
+    # KEEPING a posting the machine dropped. The filters are mechanical rules — "the
+    # job title does not match" alone dropped 2,595 postings in the live store, and
+    # that rule is only a substring compare against the 19 job titles in the profile.
+    # Anyone glancing over the dropped pile will find real postings, so there has to be
+    # a way to pick them out.
     _, _bo = get("/search?show=dropped")
-    check("dòng bị loại có nút Giữ lại", "Keep it" in _bo and "/api/keep" in _bo)
+    check("a dropped row has a Keep it button", "Keep it" in _bo and "/api/keep" in _bo)
     _, _giu = get("/search")
-    check("dòng đang giữ KHÔNG có nút đó — không có gì để giữ thêm",
-          "Giữ lại" not in _giu)
+    check("a kept row does NOT have that button — there is nothing left to keep",
+          "Keep it" not in _giu)
 
     _bo_id = _re2.search(r"data-post='/api/keep' data-arg='(\d+)'", _bo).group(1)
     gui = lambda i: post("/api/keep", f"arg={i}".encode())
-    check("bấm Giữ thì server nhận", gui(_bo_id) == 200)
+    check("pressing Keep is accepted by the server", gui(_bo_id) == 200)
     _, _sau = get("/search")
-    check("tin đó chuyển sang danh sách giữ", f"/jobs/{_bo_id}" in _sau)
-    check("và nói rõ nó nằm đây vì NGƯỜI, không phải vì máy chấm đạt",
+    check("that posting moves to the kept list", f"/jobs/{_bo_id}" in _sau)
+    check("and it says outright it is here because A PERSON kept it, not because it scored",
           "you kept" in _sau)
-    check("nút đổi chiều thành Bỏ giữ", "Unkeep" in _sau)
-    check("không còn nằm bên danh sách bị loại",
+    check("the button turns into Unkeep", "Unkeep" in _sau)
+    check("it is no longer in the dropped list",
           f"/jobs/{_bo_id}" not in get("/search?show=dropped")[1])
-    check("bấm lần nữa thì trả về cho máy", gui(_bo_id) == 200
+    check("pressing again hands it back to the machine", gui(_bo_id) == 200
           and f"/jobs/{_bo_id}" in get("/search?show=dropped")[1])
-    check("id bịa thì từ chối, không đổi gì", gui("khong-phai-so") == 400)
+    check("a made-up id is refused and changes nothing", gui("not-a-number") == 400)
 
-    # NỘP KHÔNG ĐỨNG Ở DANH SÁCH. Nộp là một quyết định — mở Chrome, điền
-    # form, ghi một dòng vào Quản lí — nên nó phải đứng SAU khi đọc. Chỗ đọc
-    # là trang chi tiết: có điểm từng yêu cầu, bằng chứng, và đường sang tin
-    # gốc. Bấm nộp từ danh sách là nộp mù.
-    check("dòng việc KHÔNG có nút Nộp", "/api/apply" not in _giu)
-    check("nhưng trang chi tiết thì có",
+    # APPLYING DOES NOT BELONG ON THE LIST. Applying is a decision — open Chrome, fill
+    # the form, write a row into Manage — so it has to come AFTER reading. The place to
+    # read is the detail page: the score for each requirement, the evidence, and a link
+    # to the original posting. Pressing apply from the list is applying blind.
+    check("a list row has NO Apply button", "/api/apply" not in _giu)
+    check("but the detail page does",
           "data-post='/api/apply'" in get(f"/jobs/{job_id}")[1])
-    # Giữ lại thì NGƯỢC LẠI: sàng đống bị loại là việc lướt, quét mắt qua hàng
-    # chục dòng. Bắt mở từng trang chi tiết là giết luôn việc sàng.
-    check("nhưng Giữ lại thì vẫn ở danh sách — đó là việc lướt, không phải đọc",
+    # Keeping is THE OPPOSITE: sifting the dropped pile is a skim, eyes running down
+    # dozens of rows. Forcing a detail page open for each one kills the sifting.
+    check("but Keep it stays on the list — that is a skim, not a read",
           "/api/keep" in _bo)
 
-    # MỖI TIN PHẢI CÓ ĐƯỜNG SANG TIN GỐC. Trang chi tiết hiện điểm, hiện từng
-    # yêu cầu, hiện cả bản mô tả — mà không có đường nào sang xem tin thật thì
-    # cả trang đó là lời kể lại: mô tả trong kho là bản chụp lúc quét, tin thật
-    # có thể đã sửa hoặc đã đóng.
+    # EVERY POSTING NEEDS A WAY TO THE ORIGINAL. The detail page shows the score, each
+    # requirement, the whole description — but with no way through to the real posting
+    # the page is hearsay: the description in the store is a snapshot from scan time,
+    # and the real posting may have been edited or closed since.
     _jid = str(job_id)
-    _ma, _ct = get(f"/jobs/{_jid}")       # get() trả (mã, thân), không phải chuỗi
-    check("trang chi tiết mở được", _ma == 200, str(_ma))
-    check("trang chi tiết có ô Mở tin gốc", "Open the original posting" in _ct)
-    # KHÔNG ĐƯỢC CÓ NÚT VẼ. Mọi trình nghe trong live.js đều bắt theo data-*,
-    # nên một <button> không mang data-* nào là nút bấm vào không có gì xảy ra
-    # — và không báo lỗi, nên người dùng tưởng app hỏng. Trang này từng có hai
-    # cái: "Queue for approval" và "Reject…".
+    _ma, _ct = get(f"/jobs/{_jid}")       # get() returns (status, body), not a string
+    check("the detail page opens", _ma == 200, str(_ma))
+    check("the detail page has an Open the original posting box", "Open the original posting" in _ct)
+    # NO DECORATIVE BUTTONS. Every listener in live.js binds on data-*, so a <button>
+    # carrying no data-* is a button where pressing it does nothing — and nothing
+    # reports an error, so the user concludes the app is broken. This page once had
+    # two: "Queue for approval" and "Reject…".
     import re as _re3
     _chet = [b for b in _re3.findall(r"<button[^>]*>", _ct)
              if "data-" not in b and "type=submit" not in b]
-    check("không còn nút nào không nối vào đâu", not _chet, str(_chet[:2]))
-    check("và có nút Nộp thật, dùng chung đường với danh sách",
+    check("no button is left wired to nothing", not _chet, str(_chet[:2]))
+    check("and there is a real Apply button, on the same route as the list",
           "data-post='/api/apply'" in _ct)
-    check("và có đường THẬT, không phải đường nội bộ",
+    check("and there is a REAL link, not an internal one",
           "class='jlink" in _ct and "href='https://" in _ct)
-    # Trong cửa sổ app không có thanh địa chỉ và không có nút Back: mở đường
-    # ngoài ngay trong đó là mất luôn dashboard.
-    check("đường ngoài mở ra ngoài, không nuốt mất cửa sổ app",
+    # The app window has no address bar and no Back button: opening an outside link
+    # inside it loses the dashboard altogether.
+    check("an outside link opens outside, it does not swallow the app window",
           "target='_blank'" in _ct and "rel='noopener noreferrer'" in _ct)
-    # MỘT VIỆC ĐĂNG HAI NƠI THÌ GẮN CẢ HAI. Chúng không thay nhau: board công
-    # ty là chỗ nộp thẳng, LinkedIn có số người đã nộp và tên người đăng.
+    # ONE JOB POSTED IN TWO PLACES GETS BOTH LINKS. They do not replace each other: the
+    # company board is where you apply directly, LinkedIn carries the applicant count
+    # and the name of whoever posted it.
     from jobbot.dashboard import live as _lv2
     _hai = _lv2._links([("greenhouse:x", "https://boards.greenhouse.io/x/jobs/1"),
                         ("linkedin", "https://www.linkedin.com/jobs/view/9/")],
                        "https://www.linkedin.com/jobs/view/9/")
-    check("hai nguồn -> hai đường", len(_hai) == 2, str(_hai))
-    check("board công ty đứng TRƯỚC LinkedIn — đó là chỗ nộp thẳng",
+    check("two sources -> two links", len(_hai) == 2, str(_hai))
+    check("the company board comes BEFORE LinkedIn — that is where you apply directly",
           [l["kind"] for l in _hai] == ["board", "linkedin"])
-    check("nói rõ tên miền sắp đi tới",
+    check("it names the domain it is about to send you to",
           _hai[1]["host"] == "www.linkedin.com", _hai[1]["host"])
-    check("trùng url thì không hiện hai lần",
+    check("the same url does not appear twice",
           len(_lv2._links([("a", "https://x/1"), ("b", "https://x/1")], "https://x/1")) == 1)
-    check("url rỗng thì bỏ, không đẻ ra nút chết",
+    check("an empty url is dropped, it does not produce a dead button",
           _lv2._links([("a", "")], "") == [])
 
-    # MỘT viên pill căn giữa, không phải dải kéo hết bề ngang: trên màn 1900px
-    # dải đẩy tên khúc sang trái và nút sang phải cách nhau cả gang tay.
-    check("có viên thuốc điều khiển", "class=deckpill" in _srch)
-    # .pill ĐÃ CÓ SẴN: huy hiệu trạng thái trên bảng Quản lí (.pill.applied,
-    # .pill.interview…). Đặt trùng tên là đúng lớp lỗi .frow/.prow đã sửa.
-    # Vẽ thẳng view với một dòng mẫu: DB thử không có lần nộp nào nên bảng
-    # thật không vẽ huy hiệu, và bài test sẽ xanh mà chẳng kiểm gì.
+    # ONE centred pill, not a strip stretched across the whole width: on a 1900px
+    # screen the strip pushed the stage name to the far left and the buttons to the far
+    # right, a hand's span apart.
+    check("there is a control pill", "class=deckpill" in _srch)
+    # .pill ALREADY EXISTED: the status badges on the Manage table (.pill.applied,
+    # .pill.interview…). Reusing the name is exactly the .frow/.prow class of bug
+    # already fixed. Render the view directly with one sample row: the test DB has no
+    # applications, so the real table draws no badge and the test would go green while
+    # checking nothing.
     from jobbot.dashboard.views import track as _tk
     from jobbot.track import board as _bd2
     _trk = _tk.render(
@@ -1790,390 +1794,399 @@ with tempfile.TemporaryDirectory() as tmp:
                    event_days=None, last_event="", silent=False, cv_file="",
                    posting_id=None, url="", score=0)],
         asks=[], counts={"total": 1}, mail_ready=False, mail_address="")
-    check("bảng Quản lí vẫn vẽ huy hiệu .pill", "class='pill " in _trk)
-    # KHÔNG DÒNG NÀO ĐƯỢC BIẾN MẤT. Bảng xếp theo nhóm sức sống; dòng thiếu
-    # trường đó phải rơi vào nhóm cuối chứ không được lặng lẽ mất khỏi màn.
-    check("dòng chưa xếp được nhóm vẫn hiện ra",
+    check("the Manage table still draws .pill badges", "class='pill " in _trk)
+    # NO ROW MAY VANISH. The table groups by liveness; a row missing that field has to
+    # fall into the last group, never quietly disappear from the screen.
+    check("a row that could not be grouped still shows",
           "X" in _trk and "Could not be grouped" in _trk)
-    # QUÁ CỬA SỔ HỒI ÂM THÌ PHẢI ĐỎ, kể cả dòng đang phỏng vấn: một lời mời
-    # 20 ngày trước chưa ai nhắc lại là chuyện đáng lo nhất trên bảng.
+    # PAST THE REPLY WINDOW IT HAS TO GO RED, interviews included: an invitation from
+    # 20 days ago that nobody has followed up is the most worrying thing on the table.
     _nong = _tk.render(
         rows=[dict(id=1, stage=_bd2.INTERVIEW, company="Kappa Lab", role="",
                    days=20, event_days=None, last_event="", silent=False,
                    cv_file="", posting_id=None, url="", score=0,
                    song="nong", im_ngay=20, so_thu=1, ho_tra_loi=False)],
         asks=[], counts={"total": 1}, mail_ready=False, mail_address="")
-    check("dòng phỏng vấn im quá lâu -> vẫn tô cảnh báo", "snong qua" in _nong)
+    check("an interview row silent too long -> still painted as a warning", "snong qua" in _nong)
     _moi = _tk.render(
         rows=[dict(id=1, stage=_bd2.INTERVIEW, company="Kappa Lab", role="",
                    days=2, event_days=None, last_event="", silent=False,
                    cv_file="", posting_id=None, url="", score=0,
                    song="nong", im_ngay=2, so_thu=1, ho_tra_loi=False)],
         asks=[], counts={"total": 1}, mail_ready=False, mail_address="")
-    check("còn trong cửa sổ thì không tô cảnh báo", "snong qua" not in _moi)
-    # Quản lí GIỜ CÓ thanh khúc, như Search và CV. Thứ bài này canh vẫn còn
-    # nguyên giá trị: huy hiệu trạng thái (`.pill`) và viên thuốc thanh trên
-    # (`.deckpill`) phải là HAI lớp khác nhau, không lớp nào ăn kiểu của lớp kia.
-    check("Quản lí có thanh khúc như Search và CV", "class=deckpill" in _trk)
-    check("huy hiệu trạng thái vẫn là lớp riêng",
+    check("still inside the window -> no warning paint", "snong qua" not in _moi)
+    # Manage NOW HAS a stage bar, like Search and CV. What this test guards keeps its
+    # full value: the status badge (`.pill`) and the top-bar pill (`.deckpill`) have to
+    # be TWO different classes, neither taking the other's styling.
+    check("Manage has a stage bar, like Search and CV", "class=deckpill" in _trk)
+    check("the status badge is still its own class",
           "class='pill " in _trk and "class='deckpill" not in _trk)
     _cssP = (Path(__file__).resolve().parent.parent
              / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
-    check("viên thuốc căn giữa", "align-items:center" in _cssP)
-    check("viên thuốc bo tròn", ".deckpill{" in _cssP)
-    # HẸP THÌ XUỐNG DÒNG, KHÔNG CUỘN NGANG RỒI GIẤU THANH CUỘN.
+    check("the pill is centred", "align-items:center" in _cssP)
+    check("the pill is rounded", ".deckpill{" in _cssP)
+    # NARROW MEANS WRAP, NOT SCROLL SIDEWAYS WITH THE SCROLLBAR HIDDEN.
     #
-    # Bài test cũ đòi đúng hai thứ `flex-wrap:nowrap` + `overflow-x:auto` và
-    # tự nhủ "cuộn ngang, KHÔNG giấu nút" — trong khi ngay dòng dưới, CSS có
-    # `scrollbar-width:none` và `::-webkit-scrollbar{display:none}`. Tức là
-    # nó canh CÁCH LÀM chứ không canh KẾT QUẢ, và cách làm đó giấu nút thật.
+    # The old test demanded exactly `flex-wrap:nowrap` + `overflow-x:auto` and told
+    # itself "scrolls sideways, does NOT hide buttons" — while one line below, the CSS
+    # carried `scrollbar-width:none` and `::-webkit-scrollbar{display:none}`. It was
+    # guarding THE METHOD, not THE RESULT, and that method really did hide buttons.
     #
-    # Đo trên /track/queue (viên rộng nhất, 900px): cửa sổ 1180 vừa khít 7px
-    # · 1100 mất nút «← Bảng» · 980 mất «Quét thư», «Dừng», «← Bảng». Cửa sổ
-    # app mặc định đúng 1180 — kéo nhỏ một chút là mất nút, không báo gì.
+    # Measured on /track/queue (the widest pill, 900px): a 1180 window fits with 7px to
+    # spare · 1100 loses «← Table» · 980 loses «Scan mail», «Stop» and «← Table». The
+    # app window defaults to exactly 1180 — drag it a little smaller and buttons
+    # disappear with no warning.
     _pl = _cssP[_cssP.index(".deckpill{"):_cssP.index(".deckpill{") + 320]
-    check("viên thuốc XUỐNG DÒNG khi hết chỗ", "flex-wrap:wrap" in _pl)
-    check("và KHÔNG cuộn ngang nữa", "overflow-x:auto" not in _pl)
-    check("KHÔNG giấu thanh cuộn ở đâu trong viên thuốc",
+    check("the pill WRAPS when it runs out of room", "flex-wrap:wrap" in _pl)
+    check("and it no longer scrolls sideways", "overflow-x:auto" not in _pl)
+    check("the scrollbar is hidden NOWHERE in the pill",
           "scrollbar-width:none" not in _pl
           and ".deckpill::-webkit-scrollbar" not in _cssP)
-    check("hàng số liệu cũng xuống dòng được",
+    check("the metrics row can wrap too",
           "flex-wrap:wrap" in _cssP[_cssP.index(".metrics{"):
                                     _cssP.index(".metrics{") + 160])
-    # Bo góc vẫn phải kẹp thành viên thuốc ở hàng đơn: hàng đơn cao 45px nên
-    # bán kính phải >= 23. Dưới ngưỡng đó là đổi hình dáng cả thanh.
+    # The corner radius still has to close into a pill on a single row: a single row is
+    # 45px tall, so the radius must be >= 23. Below that the whole bar changes shape.
     _bo = int(_re.search(r"\.deckpill\{[^}]*border-radius:(\d+)px", _cssP,
                          _re.S).group(1))
-    check(f"bo góc {_bo}px vẫn đủ để hàng đơn là viên thuốc", _bo >= 23)
-    # Tất cả trong MỘT viên: tên khúc, số liệu, nút. Đẩy số liệu ra ngoài thì
-    # thanh vỡ thành ba tầng rời rạc.
+    check(f"a {_bo}px radius is still enough to make a single row a pill", _bo >= 23)
+    # Everything in ONE pill: the stage name, the metrics, the buttons. Push the metrics
+    # outside and the bar breaks into three disconnected tiers.
     _pillhtml = _srch[_srch.index("class=deckpill"):]
     _pillhtml = _pillhtml[:_pillhtml.index("</div>")]
-    check("số liệu nằm TRONG viên thuốc", "class=metric" in _pillhtml)
-    check("nút cũng trong viên thuốc", "/api/stage/start" in _pillhtml)
-    # `nowrap` trần thì màn hẹp là dòng trạng thái chạy quá mép pill rồi bị
-    # cắt cụt giữa chữ.
+    check("the metrics are INSIDE the pill", "class=metric" in _pillhtml)
+    check("the buttons are inside the pill too", "/api/stage/start" in _pillhtml)
+    # With a bare `nowrap`, a narrow screen runs the status line past the pill's edge
+    # and cuts it off mid-word.
 
-    print("\n[thanh TRẠNG THÁI đáy app]")
-    # Tin CHUNG của cả app, không thuộc tab nào. Dòng "tự động: TẮT · quét lần
-    # cuối…" trước nằm trong thanh của tab — sai chỗ: nó không phải số liệu của
-    # khúc, nó là trạng thái của app.
+    print("\n[the STATUS bar at the bottom of the app]")
+    # News belonging to the WHOLE app, to no single tab. The line "automatic: OFF ·
+    # last scan…" used to sit in the tab's own bar — the wrong place: it is not a
+    # stage's metric, it is the app's state.
     for _pg2 in ("/", "/search", "/track", "/profile"):
         _b2 = get(_pg2)[1]
-        check(f"{_pg2} có thanh trạng thái", "class=statusbar" in _b2)
-    # Thanh trạng thái chạy HẾT bề ngang, kể cả dưới thanh bên — nó là tin của
-    # cả app. Kèm đó thanh bên phải chừa chỗ, không thì nút Cài đặt bị che.
+        check(f"{_pg2} has the status bar", "class=statusbar" in _b2)
+    # The status bar runs the FULL width, under the sidebar too — it is the whole app's
+    # news. And the sidebar has to leave room for it, or the Settings button is covered.
     _cssb = (Path(__file__).resolve().parent.parent
              / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
-    check("thanh trạng thái tràn hết bề ngang",
+    check("the status bar spans the full width",
           ".statusbar{position:fixed;left:0;right:0" in _cssb)
-    check("thanh bên dừng ngay trên thanh trạng thái",
+    check("the sidebar stops right above the status bar",
           "bottom:var(--status-h);\n  width:var(--nav-w)" in _cssb)
-    # Cửa sổ app không có khung: traffic lights đè lên trang. Có thanh tiêu đề
-    # THẬT thì mọi trang tự được chừa — trước đây mỗi trang tự nhớ, và trang
-    # Home nhớ sai (chừa 16px trong khi cần 38px) nên ô nội dung chui lên đó.
+    # The app window is frameless: the traffic lights sit on top of the page. With a
+    # REAL title bar every page gets the room automatically — before, each page had to
+    # remember for itself, and Home remembered wrong (16px reserved where 38px was
+    # needed), so its content box crawled up underneath them.
     for _pg4 in ("/", "/search", "/cv", "/track", "/profile"):
         _, _b4 = get(_pg4)
-        check(f"{_pg4} có thanh tiêu đề", "class=titlebar" in _b4)
-    check("thanh tiêu đề cao đúng --top", "z-index:40;height:var(--top)" in _cssb)
-    check("khung chính bắt đầu DƯỚI thanh tiêu đề",
+        check(f"{_pg4} has the title bar", "class=titlebar" in _b4)
+    check("the title bar is exactly --top tall", "z-index:40;height:var(--top)" in _cssb)
+    check("the main frame starts BELOW the title bar",
           "main{position:fixed;top:var(--top);left:var(--main-l)" in _cssb)
-    check("thanh bên cũng vậy",
+    check("and so does the sidebar",
           ".side{position:fixed;top:var(--top);left:var(--gap)" in _cssb)
-    # HAI KHUNG, KHÔNG KẺ VẠCH. Thanh tiêu đề và thanh trạng thái không có nền
-    # riêng cũng không có viền — chúng LÀ mảng xám của body. Nổi trên mảng đó
-    # là HAI khung bo tròn cùng viền --rim: cột nút chuyển tab và vùng làm
-    # việc. Ngăn cách là khoảng --gap giữa hai khung, không phải vạch kẻ.
-    for _ten, _rule in (("cột nút chuyển tab", "\n.side{"), ("vùng làm việc", "\nmain{")):
+    # TWO FRAMES, NO RULED LINES. The title bar and the status bar have no ground of
+    # their own and no border — they ARE the body's grey field. Floating on that field
+    # are TWO rounded frames sharing the --rim border: the tab-button column and the
+    # working area. What separates them is the --gap between the two frames, not a line.
+    for _ten, _rule in (("the tab-button column", "\n.side{"), ("the working area", "\nmain{")):
         _blk = _cssb[_cssb.index(_rule) + 1:]
         _blk = _blk[:_blk.index("}")]
-        check(f"{_ten} là khung bo tròn có viền",
+        check(f"{_ten} is a rounded frame with a border",
               "border:1px solid var(--rim)" in _blk
               and "border-radius:var(--round)" in _blk, _blk[:90])
-    # Xám VIỀN phải tách được khỏi xám KHUNG, không thì đường bo chìm mất.
+    # The BORDER grey has to separate from the FRAME grey, or the rounded edge sinks
+    # out of sight.
     _tach = _ls(_var["rim"]) - _ls(_var["side"])
-    check(f"xám viền sáng hơn xám khung ({_tach:+.1f} L*)", 6.0 <= _tach <= 15.0)
-    check("nền cửa sổ là mảng xám khung", "body{margin:0;background:var(--side)" in _cssb)
-    for _ten, _rule in (("thanh tiêu đề", ".titlebar{"), ("thanh trạng thái", ".statusbar{")):
+    check(f"the border grey is lighter than the frame grey ({_tach:+.1f} L*)", 6.0 <= _tach <= 15.0)
+    check("the window ground is the frame grey", "body{margin:0;background:var(--side)" in _cssb)
+    for _ten, _rule in (("the title bar", ".titlebar{"), ("the status bar", ".statusbar{")):
         _blk = _cssb[_cssb.index(_rule):]
         _blk = _blk[:_blk.index("}")]
-        check(f"{_ten} không kẻ vạch ngăn", "border" not in _blk, _blk[:70])
-        check(f"{_ten} không có nền riêng", "background" not in _blk, _blk[:70])
-    check("thanh đáy có ô trạng thái sống", "data-state" in _srch)
-    check("và ô tin gần nhất", "data-lastmsg" in _srch)
-    # Một trang chỉ được nói trạng thái chung MỘT lần. live.js ghi vào MỌI
-    # [data-state], nên hai ô là hai dòng chữ y hệt nhau nằm hai đầu màn.
+        check(f"{_ten} draws no dividing line", "border" not in _blk, _blk[:70])
+        check(f"{_ten} has no ground of its own", "background" not in _blk, _blk[:70])
+    check("the bottom bar has a live status box", "data-state" in _srch)
+    check("and a latest-news box", "data-lastmsg" in _srch)
+    # A page may state the shared status ONCE. live.js writes into EVERY [data-state],
+    # so two boxes means the same sentence twice, at opposite ends of the screen.
     for _pg3 in ("/", "/search", "/cv", "/track", "/profile"):
         _, _b3 = get(_pg3)
-        check(f"{_pg3} chỉ có một ô trạng thái", _b3.count("data-state") == 1)
-    # live.js đổ vào từ dòng SSE — không luồn tham số qua chục hàm render.
+        check(f"{_pg3} has exactly one status box", _b3.count("data-state") == 1)
+    # live.js fills it from the SSE stream — no threading a parameter through a dozen
+    # render functions.
     _js2 = (Path(__file__).resolve().parent.parent
             / "src/jobbot/dashboard/web/live.js").read_text(encoding="utf-8")
-    check("live.js có hàm đổ tin", "function setLastMessage" in _js2)
-    check("gọi khi có sự kiện mới", _js2.count("setLastMessage(") >= 3)
-    check("nội dung không nấp sau thanh đáy", "var(--status-h)" in _cssP)
-    # navfoot cũ hiện đúng thông tin đó ở thanh bên — hai chỗ một sự thật.
+    check("live.js has the function that fills it", "function setLastMessage" in _js2)
+    check("it is called on every new event", _js2.count("setLastMessage(") >= 3)
+    check("content does not hide behind the bottom bar", "var(--status-h)" in _cssP)
+    # The old navfoot showed that same information on the sidebar — one truth in two places.
     _lay2 = (Path(__file__).resolve().parent.parent
              / "src/jobbot/dashboard/layout.py").read_text(encoding="utf-8")
-    check("bỏ hẳn navfoot ở thanh bên", "navfoot" not in _lay2)
-    check("và bỏ tham số status= đã chết", "status: str" not in _lay2)
-    # Hai nút "Chạy ngay"/"Bật tự quét" cũ nằm trên thanh TOÀN APP nhưng chỉ
-    # điều khiển đúng khúc Search. Thanh mang danh cả app mà làm việc một khúc.
-    check("bỏ hẳn nút toàn app", "data-act=run" not in _srch
+    check("navfoot is gone from the sidebar entirely", "navfoot" not in _lay2)
+    check("and the dead status= parameter is gone", "status: str" not in _lay2)
+    # The old "Run now"/"Turn on auto-scan" buttons sat on the WHOLE-APP bar while
+    # driving only the Search stage. A bar in the app's name doing one stage's work.
+    check("the whole-app buttons are gone", "data-act=run" not in _srch
           and "data-act=pause" not in _srch)
-    # ⚟ dùng LẠI tấm phủ của Cài đặt — mỗi đường mới là một nút có thể chết.
+    # ⚟ REUSES the Settings overlay — every new route is another button that can die.
     _cA, _adj = get("/adjust/search")
-    check("/adjust/search trả mảnh HTML", _cA == 200 and "Adjust" in _adj)
-    check("và chứa lưới sàng", "/api/sieve" in _adj)
-    check("khúc lạ thì 404", get("/adjust/khong-co-that")[0] == 404)
-    # Lọc (bấm vài giây một lần) phải ở NGAY trên trang, không giấu vào menu.
-    check("bộ lọc vẫn ở trên trang", "?show=" in _srch or "show=" in _srch)
+    check("/adjust/search returns an HTML fragment", _cA == 200 and "Adjust" in _adj)
+    check("and it contains the sieve", "/api/sieve" in _adj)
+    check("an unknown stage is 404", get("/adjust/khong-co-that")[0] == 404)
+    # Filtering (pressed every few seconds) has to be RIGHT on the page, not hidden in a menu.
+    check("the filters are still on the page", "?show=" in _srch or "show=" in _srch)
 
-    print("\n[dừng phải dừng THẬT, không phải nút cho có]")
+    print("\n[stop has to REALLY stop, not be a button for show]")
     _run = (Path(__file__).resolve().parent.parent
             / "src/jobbot/scan_runner.py").read_text(encoding="utf-8")
     _li = (Path(__file__).resolve().parent.parent
            / "src/jobbot/ingest/web/linkedin.py").read_text(encoding="utf-8")
-    # `stop()` của lịch trình chỉ chặn lần chạy SAU. Một vòng quét chạy 8-16
-    # phút vì mở Chrome đọc từng tin — nút Dừng mà không ngắt được là nút chết.
-    check("ngắt giữa hai nguồn API", "halt.wanted(STAGE)" in _run)
-    check("truyền cờ xuống LinkedIn", "stop=lambda: halt.wanted(STAGE)" in _run)
-    check("ngắt trong vòng ĐỌC KỸ (chỗ tốn 8-16 phút)", "deep-read" in _li)
-    check("ngắt cả trong vòng tìm", "queries done" in _li)
+    # The scheduler's `stop()` only blocks the NEXT run. One scan runs 8-16 minutes
+    # because it opens Chrome and reads each posting — a Stop button that cannot
+    # interrupt is a dead button.
+    check("it breaks between API sources", "halt.wanted(STAGE)" in _run)
+    check("it passes the flag down into LinkedIn", "stop=lambda: halt.wanted(STAGE)" in _run)
+    check("it breaks inside the DEEP-READ loop (where the 8-16 minutes go)", "deep-read" in _li)
+    check("and inside the search loop too", "queries done" in _li)
     _halt = (Path(__file__).resolve().parent.parent
              / "src/jobbot/core/halt.py").read_text(encoding="utf-8")
-    # Dừng vòng quét KHÔNG được dừng luôn việc quét thư đang chạy song song.
-    check("cờ theo TỪNG khúc, không phải một cờ chung", "stage: str" in _halt)
+    # Stopping the scan must NOT also stop the mail sweep running alongside it.
+    check("the flag is PER STAGE, not one shared flag", "stage: str" in _halt)
     _srv = (Path(__file__).resolve().parent.parent
             / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
-    # Thêm một chức năng mới thì không được đẻ thêm route.
-    check("hai route dùng chung cho mọi khúc",
+    # Adding a new capability must not spawn another route.
+    check("two routes shared by every stage",
           '"/api/stage/start", "/api/stage/stop"' in _srv)
-    check("khúc lạ bị từ chối", 'stage not in STAGES' in _srv)
+    check("an unknown stage is refused", 'stage not in STAGES' in _srv)
 
-    print("\n[khung không được bỏ phí — MỌI trang, không riêng trang nào]")
+    print("\n[the frame must not be wasted — ON EVERY page, not one of them]")
     import re as _re9
     _css9 = (Path(__file__).resolve().parent.parent
              / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
     _bare = _re9.sub(r"/\*.*?\*/", "", _css9, flags=_re9.S)
 
-    # Lỗi gốc: `.inner{max-width:840px}` chặn cứng MỌI trang kiểu dòng chảy.
-    # Đo trên màn 1900px: khung 1684, nội dung 840 -> bỏ trống 844px, ở BỐN
-    # trang cùng lúc. Vá một trang là để ba trang kia y nguyên.
+    # The original bug: `.inner{max-width:840px}` capped EVERY flow-style page. Measured
+    # on a 1900px screen: the frame was 1684, the content 840 -> 844px left empty, on
+    # FOUR pages at once. Patching one page leaves the other three exactly as they were.
     _inner = _re9.search(r"\.inner\{([^}]*)\}", _bare)
-    check("có luật .inner", bool(_inner))
+    check("there is an .inner rule", bool(_inner))
     _mw = _re9.search(r"max-width:([^;}]+)", _inner.group(1)) if _inner else None
-    check(".inner KHÔNG còn trần cố định",
+    check(".inner has NO fixed cap any more",
           bool(_mw) and _mw.group(1).strip() == "none",
-          _mw.group(1).strip() if _mw else "không có max-width")
-    # Bề rộng là tính chất của NỘI DUNG: chỉ đoạn văn mới cần bề rộng đọc được.
-    check("nhưng đoạn văn vẫn giữ bề rộng đọc được",
+          _mw.group(1).strip() if _mw else "no max-width")
+    # Width is a property of THE CONTENT: only prose needs a readable measure.
+    check("but prose still keeps a readable measure",
           bool(_re9.search(r"\.inner p[^{]*\{[^}]*max-width:\d+ch", _bare)))
-    # Cờ `wide=` là nút mà mỗi trang phải NHỚ bật — sẽ có trang quên. Đã bỏ.
+    # The `wide=` flag was a switch every page had to REMEMBER to turn on — some page
+    # would forget. It is gone.
     _lay = (Path(__file__).resolve().parent.parent
             / "src/jobbot/dashboard/layout.py").read_text(encoding="utf-8")
-    # NHÌN VÀO ĐỊNH DANH, không phải chuỗi con: "as wide as the window" trong
-    # một lời chú là chữ tiếng Anh bình thường, không phải cái cờ đã bỏ.
-    check("bỏ hẳn cờ wide (đường dễ quên)",
+    # LOOK FOR THE IDENTIFIER, not a substring: "as wide as the window" inside a comment
+    # is ordinary English prose, not the flag that was removed.
+    check("the wide flag is gone (the easily-forgotten route)",
           not _re9.search(r"(?<![\w-])wide(?![\w-])\s*[=:]", _lay))
-    check("và không còn luật CSS .wide", "main.wide" not in _bare)
+    check("and there is no .wide CSS rule left", "main.wide" not in _bare)
 
-    # Duyệt THẬT mọi trang trong thanh bên, không chỉ trang vừa sửa.
+    # Really walk EVERY page in the sidebar, not just the page just edited.
     _c9, _nav = get("/")
     _pages = set(_re9.findall(r"<a class='navlink[^']*' href='([^']+)'", _nav))
     _pages |= {"/profile/health", "/profile/import", f"/jobs/{job_id}"}
-    check("tìm được đủ trang để kiểm", len(_pages) >= 7, str(sorted(_pages)))
+    check("enough pages were found to check", len(_pages) >= 7, str(sorted(_pages)))
     for _pg in sorted(_pages):
         _code, _body = get(_pg)
         if _code != 200:
-            check(f"{_pg} mở được", False, f"HTTP {_code}")
+            check(f"{_pg} opens", False, f"HTTP {_code}")
             continue
         _m = _re9.search(r"<main class='([^']*)'", _body)
-        check(f"{_pg} không mang lớp cố định bề rộng",
+        check(f"{_pg} carries no width-fixing class",
               bool(_m) and "wide" not in _m.group(1))
 
-    # Bảng: `width` trên ô chỉ là GỢI Ý khi bảng tự dàn cột — nhãn dài kéo cột
-    # ra 650px. Và dàn cột cố định thì Chrome BỎ QUA min()/clamp() (đo được:
-    # rơi về 803px), chỉ nhận px hoặc phần trăm.
-    check("bảng hồ sơ dàn cột cố định", "table-layout:fixed" in _bare)
+    # A table: `width` on a cell is only A HINT while the table lays itself out — a
+    # long label dragged the column out to 650px. And with a fixed layout Chrome
+    # IGNORES min()/clamp() (measured: back to 803px), taking only px or per cent.
+    check("the profile table uses a fixed column layout", "table-layout:fixed" in _bare)
     _th = _bare[_bare.index(".sum th{"):_bare.index(".sum th{") + 260]
-    check("cột nhãn dùng bề rộng trần, không min()/clamp()",
+    check("the label column uses a bare width, no min()/clamp()",
           "width:340px" in _th and "min(" not in _th and "clamp(" not in _th)
-    check("màn hẹp có luật riêng cho cột nhãn", ".sum th{width:40%}" in _bare)
+    check("a narrow screen has its own rule for the label column", ".sum th{width:40%}" in _bare)
 
-    print("\n[Home KHÔNG còn là trang trống]")
-    # Luật cũ ở đây là "Home phải nói mình đang trống". Home giờ là cửa vào và
-    # là chu trình dựng hồ sơ, nên luật đảo lại: nó KHÔNG được trống nữa.
+    print("\n[Home is NO LONGER a blank page]")
+    # The old law here was "Home has to say it is empty". Home is now the front door
+    # and the profile-building run, so the law flips: it must NOT be empty any more.
     _, _blank = get("/")
-    check("Home vẫn mở được", "Home" in _blank)
-    check("và không còn là trang trống", "đang trống" not in _blank)
-    # Chỗ giữ chỗ đã thành trang thật — canh THỨ nó phải có, không canh câu
-    # hứa hẹn cũ. Bốn ô + thanh khúc + nhật ký.
-    check("Home có thanh khúc như mọi tab", "class=deckpill" in _blank)
+    check("Home still opens", "Home" in _blank)
+    # The placeholder became a real page — check WHAT IT MUST HAVE, not the old
+    # promise. Four panels + the stage bar + the journal.
+    check("Home has the stage bar, like every tab", "class=deckpill" in _blank)
     for _o in ("Results", "Output per day", "Diagnosis", "Funnel"):
-        check(f"Home có ô «{_o}»", _o in _blank)
-    check("và có nhật ký", "data-journal" in _blank)
-    # Gỡ nội dung mà để lại đống code nuôi nó thì mới là bẩn.
+        check(f"Home has the «{_o}» panel", _o in _blank)
+    check("and it has the journal", "data-journal" in _blank)
+    # Removing the content while leaving the code that fed it behind is the dirty part.
     for _gone in ("class=funnel", "class=needs", "class=stats", "class=plot"):
-        check(f"không còn {_gone}", _gone not in _blank)
+        check(f"{_gone} is gone", _gone not in _blank)
     _live8 = (Path(__file__).resolve().parent.parent
               / "src/jobbot/dashboard/live.py").read_text(encoding="utf-8")
     for _fn in ("def run_status", "def counters", "def needs_you", "def activity",
                 "def per_day", "def chances", "def funnel"):
-        check(f"live.py đã gỡ {_fn[4:]}", _fn not in _live8)
-    check("dashboard/plot.py đã xoá",
+        check(f"live.py has dropped {_fn[4:]}", _fn not in _live8)
+    check("dashboard/plot.py is deleted",
           not (Path(__file__).resolve().parent.parent
                / "src/jobbot/dashboard/plot.py").exists())
 
-    print("\n[nhật ký: dòng mới nhất phải NHÌN RA NGAY]")
-    # "cái message mới nhất cho highlight nổi bật cho dễ nhận biết"
+    print("\n[the journal: the newest line has to be SEEN AT ONCE]")
+    # "highlight the newest message so it stands out and is easy to spot"
     #
-    # Dấu là THUẦN CSS (:first-child), không có class nào để JS gắn — nên
-    # không có cách nào dấu đứng lại ở dòng cũ khi dòng mới tới. Nhưng nó
-    # dựa vào MỘT ràng buộc: live.js chèn dòng mới vào ĐỈNH. Ai đổi sang
-    # chèn xuống đáy là dấu lặng lẽ trỏ vào dòng CŨ NHẤT, mà giao diện vẫn
-    # trông bình thường. Nên chốt cả hai đầu ở đây.
+    # The mark is PURE CSS (:first-child), with no class for JS to attach — so there
+    # is no way for the mark to stay on an old line when a new one arrives. But it
+    # rests on ONE constraint: live.js inserts new lines at THE TOP. Change that to
+    # append at the bottom and the mark quietly points at the OLDEST line while the
+    # interface still looks perfectly normal. So both ends are pinned here.
     _css_j = (Path(__file__).resolve().parent.parent
               / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
     _js_j = (Path(__file__).resolve().parent.parent
              / "src/jobbot/dashboard/web/live.js").read_text(encoding="utf-8")
-    check("dòng mới chèn vào ĐỈNH — nền tảng của cả luật đánh dấu",
+    check("new lines are inserted at THE TOP — the foundation of the whole marking rule",
           "insertBefore(row, box.firstChild)" in _js_j)
-    check("chỉ MỘT chỗ đẻ ra .jline, nên không có thứ tự ngược nào khác",
+    check("exactly ONE place produces .jline, so no other order can exist",
           sum(1 for _f in (Path(__file__).resolve().parent.parent
                            / "src/jobbot/dashboard").rglob("*")
               if _f.is_file() and _f.suffix in (".js", ".py")
               and "'jline" in _f.read_text(encoding="utf-8")) == 1)
-    check("dòng mới nhất có dấu riêng", ".journal .jline:first-child{" in _css_j)
-    check("dấu bằng NỀN, không phải màu chữ",
+    check("the newest line has its own mark", ".journal .jline:first-child{" in _css_j)
+    check("the mark is A GROUND, not a text colour",
           "background:rgba(255,255,255,.062)" in _css_j)
-    check("và có vạch trái", "border-left-color:var(--mute)" in _css_j)
-    # Vạch trái ăn theo MỨC. Nếu dấu mới nhất đè lên màu mức thì người dùng
-    # mất thứ cần đọc trước tiên — dòng này là hỏng hay chỉ là tin thường.
-    _khit = "".join(_css_j.split())      # bỏ khoảng trắng căn lề trong CSS
+    check("and it has a left rule", "border-left-color:var(--mute)" in _css_j)
+    # The left rule follows THE LEVEL. If the newest-line mark overrode the level
+    # colour the user would lose the first thing they need to read — is this line a
+    # failure, or just ordinary news.
+    _khit = "".join(_css_j.split())      # drop the indentation whitespace in the CSS
     for _m, _mau in (("ok", "--acc"), ("warn", "--warn"), ("error", "--bad")):
-        check(f"vạch trái giữ đúng màu mức {_m}",
+        check(f"the left rule keeps the right colour for level {_m}",
               f".journal.jline.{_m}:first-child{{border-left-color:var({_mau})}}"
               in _khit)
-    check("KHÔNG đổi màu chữ của ok/warn/error — mức độ không được nói dối",
+    check("the ok/warn/error text colour is NOT changed — the level must not lie",
           not any(f".journal .jline.{_m}:first-child .jtext{{color" in _css_j
                   for _m in ("ok", "warn", "error")))
-    # Mọi dòng có sẵn vạch trong suốt -> dấu chuyển sang dòng khác thì không
-    # dòng nào bị đẩy ngang một nấc.
-    check("mọi dòng chừa sẵn chỗ cho vạch, không dòng nào nhảy ngang",
+    # Every line already carries a transparent rule -> when the mark moves to another
+    # line, no line is nudged sideways by a notch.
+    check("every line reserves the space for the rule, so nothing jumps sideways",
           "border-left:2px solid transparent" in _css_j)
-    check("loé một cái lúc vừa tới", "@keyframes jnew" in _css_j)
-    check("nhưng tôn trọng máy đã tắt hiệu ứng",
+    check("it flashes once on arrival", "@keyframes jnew" in _css_j)
+    check("but it respects a machine with motion turned off",
           "prefers-reduced-motion" in _css_j)
 
-    print("\n[Search: ba ô — danh sách · lưới lọc · nhật ký dẹt]")
+    print("\n[Search: three panels — the list · the sieve · the flat journal]")
     from jobbot.dashboard.views.runtime import _rows_needed
-    check("đếm hàng: nhật ký dưới đáy nên không có ô 'Đang chạy' hàng 1",
+    check("row count: the journal sits at the bottom, so there is no 'Running' box on row 1",
           _rows_needed([("a", "", 1, 4), ("b", "", 2, 4)], 3, 0) == 4)
 
     _, search_html = get("/search")
     _, adj_html = get("/adjust/search")
-    check("ô danh sách việc", "What it found" in search_html)
-    check("ô nhật ký dạng dẹt", "class=jflat" in search_html)
-    check("tiến độ gộp vào dải nhật ký", "data-progress='search'" in search_html)
-    # Lưới sàng đã chuyển vào ⚟ nên cột trái hết việc: danh sách — thứ Vin
-    # thật sự đọc — lấy cả bề ngang, nhật ký về dải dẹt dưới đáy.
-    check("danh sách ăn cả bề ngang", "Lưới lọc" not in search_html)
-    check("nhật ký là dải dưới đáy, không phải ô góc",
+    check("the list panel", "What it found" in search_html)
+    check("the journal in its flat form", "class=jflat" in search_html)
+    check("progress folded into the journal strip", "data-progress='search'" in search_html)
+    # The sieve moved behind ⚟, so the left column has no job left: the list — the
+    # thing actually read — takes the full width, and the journal becomes a flat strip
+    # along the bottom.
+    check("the list takes the full width", "class=srcrow" not in search_html)
+    check("the journal is a strip at the bottom, not a corner box",
           "wid flat corner" not in search_html)
 
-    # Lưới sàng phải SỬA ĐƯỢC — và giờ nó nằm sau nút ⚟, không chiếm chỗ
-    # thường trực trên trang. LỌC thì vẫn ở trên trang (bấm vài giây một lần);
-    # SÀNG đổi vài tháng một lần và mỗi lần là phán lại toàn kho.
-    check("lưới sàng là FORM thật", "form class=sieve" in adj_html)
-    check("và KHÔNG còn chiếm chỗ trên trang", "form class=sieve" not in search_html)
-    # Chức danh là Ô THẺ, không phải khối chữ: gõ rồi Enter là thêm, bấm ×
-    # là bỏ. Khối chữ bắt người dùng tự nhớ luật "mỗi dòng một cái", và một
-    # dòng trống hay dấu phẩy thừa là ra chức danh rác.
-    check("chức danh là ô thẻ, KHÔNG phải khối chữ",
+    # The sieve has to be EDITABLE — and it now sits behind the ⚟ button, taking no
+    # permanent space on the page. FILTERING stays on the page (pressed every few
+    # seconds); THE SIEVE changes every few months, and each change re-judges the
+    # whole store.
+    check("the sieve is a real FORM", "form class=sieve" in adj_html)
+    check("and it no longer takes space on the page", "form class=sieve" not in search_html)
+    # Job titles are A TAG BOX, not a text area: type and press Enter to add, press ×
+    # to remove. A text area makes the user remember the rule "one per line", and a
+    # blank line or a stray comma produces a junk job title.
+    check("job titles are a tag box, NOT a text area",
           "class=tagbox" in adj_html and "<textarea" not in adj_html)
     n_tags = adj_html.count("<span class=tag>")
-    check("có ít nhất một thẻ", n_tags > 0)
-    check("mỗi thẻ có đúng một dấu × để bỏ",
+    check("there is at least one tag", n_tags > 0)
+    check("each tag has exactly one × to remove it",
           adj_html.count("data-untag") == n_tags)
-    check("mỗi thẻ mang đúng một giá trị gửi lên",
+    check("each tag carries exactly one value to send",
           adj_html.count("name=job_titles") == n_tags)
-    check("nút × là type=button, không gửi nhầm cả form",
+    check("the × is type=button, so it does not submit the whole form by accident",
           "<button type=button class=untag" in adj_html)
-    check("có ô để gõ thêm", "class=taginput" in adj_html)
-    check("có ô tích cấp bậc và thị trường",
+    check("there is a box to type another", "class=taginput" in adj_html)
+    check("there are tick boxes for seniority and markets",
           "name=seniority" in adj_html and "name=markets" in adj_html)
-    check("có nút Áp dụng", ">Apply<" in adj_html)
-    # Nút phải nói TRƯỚC hậu quả, không phải "Lưu" trống không.
-    check("nút nói rõ sẽ phán lại bao nhiêu tin", "re-judges" in adj_html)
-    check("và nói rõ đây là hồ sơ, sửa là đổi cả điểm",
+    check("there is an Apply button", ">Apply<" in adj_html)
+    # The button has to state the consequence BEFORE the press, not be a blank "Save".
+    check("the button says how many postings will be re-judged", "re-judges" in adj_html)
+    check("and says outright this is the profile — editing it changes the scores too",
           "profile" in adj_html and "changes the scores too" in adj_html)
 
-    # Nút XEM tách khỏi lưới: bấm là đổi ngay, không qua Áp dụng.
-    check("nút XEM là link, không nằm trong form",
+    # The VIEW buttons are separate from the sieve: pressing one changes the view at
+    # once, with no Apply in between.
+    check("a VIEW button is a link, not inside the form",
           "class='vchip" in search_html
           and search_html.index("class=jlist") > search_html.index("class=vbar"))
-    check("nút XEM trỏ về /search, không phải /jobs đã xoá",
+    check("a VIEW button points at /search, not the deleted /jobs",
           "href='/search?" in search_html and "href='/jobs?" not in search_html)
 
-    # Badge nguồn — thứ nói cách nào tìm ra tin nào.
-    check("mỗi dòng có badge nguồn",
+    # The source badge — what says which way found which posting.
+    check("every row has a source badge",
           "class='src board'" in search_html or "class='src linkedin'" in search_html)
-    check("badge ghi rõ chữ chrome / api",
+    check("the badge spells the source out",
           ">board<" in search_html or ">linkedin<" in search_html)
 
-    print("\n[Search: đổi cách xem KHÔNG cần Áp dụng]")
+    print("\n[Search: changing the view needs NO Apply]")
     _, dropped = get("/search?show=dropped")
-    check("xem được tin đã bỏ", "dropped:" in dropped)
-    check("và kèm lý do bỏ thật",
+    check("the dropped postings can be viewed", "dropped:" in dropped)
+    check("and each carries the real reason it was dropped",
           "title does not match" in dropped or "senior level" in dropped)
     for q in ("?show=all", "?chance=likely", "?via=all", "?band=75",
               "?sort=company", "?q=%27%20OR%201%3D1--", "?page=99"):
         code, body = get("/search" + q)
         check(f"/search{q:24} {code}", code == 200, body[:60])
 
-    print("\n[Search: phân trang — 132 việc không được kẹt ở 50]")
-    # Không có nút sang trang thì 82 việc còn lại có tồn tại cũng như không.
+    print("\n[Search: paging — 132 postings must not be stuck at 50]")
+    # With no next-page button, the other 82 postings might as well not exist.
     import re as _re3
     import jobbot.dashboard.filters as _filters
     rows = lambda html: len(_re3.findall(r"class='jrow", html))
     real_per = _filters.PER_PAGE
-    _filters.PER_PAGE = 2            # fixture chỉ có vài tin -> ép nhiều trang
+    _filters.PER_PAGE = 2            # the fixture has only a few postings -> force several pages
     _, p1 = get("/search?show=all")
     _, p2 = get("/search?show=all&page=2")
-    check("trang 1 đầy", rows(p1) > 0)
-    check("có nút sang trang", "class=pager" in p1 and "next →" in p1)
-    check("trang 2 ra thẻ KHÁC trang 1", rows(p2) > 0 and p1 != p2)
-    check("nói rõ đang ở trang mấy trên mấy", "page 1/" in p1 and "page 2/" in p2)
+    check("page 1 is full", rows(p1) > 0)
+    check("there is a next-page button", "class=pager" in p1 and "next →" in p1)
+    check("page 2 shows DIFFERENT cards from page 1", rows(p2) > 0 and p1 != p2)
+    check("it says which page of how many", "page 1/" in p1 and "page 2/" in p2)
     _, far = get("/search?page=9999")
-    check("trang vượt quá thì rỗng, không sập", far and rows(far) == 0)
+    check("a page past the end is empty, it does not crash", far and rows(far) == 0)
     _filters.PER_PAGE = real_per
 
-    print("\n[trang chi tiết một tin PHẢI sống dù tab Jobs đã bỏ]")
-    # /jobs danh sách bỏ rồi, nhưng /jobs/<id> là chỗ đọc VÌ SAO một tin được
-    # chấm ngần ấy điểm — danh sách mới trong Search sẽ trỏ vào đây.
+    print("\n[a posting's detail page MUST stay alive even though the Jobs tab is gone]")
+    # The /jobs list is gone, but /jobs/<id> is where you read WHY a posting scored
+    # what it scored — the new list in Search points here.
     code, detail = get(f"/jobs/{job_id}")
-    check("chi tiết một tin vẫn mở được", code == 200, detail[:80])
-    check("và hiện tin thật của DB", "Man Group" in detail or "Monzo" in detail)
-    check("kèm bằng chứng từng yêu cầu", "requirement" in detail.lower()
-          or "yêu cầu" in detail.lower() or "evidence" in detail.lower())
+    check("a posting's detail still opens", code == 200, detail[:80])
+    check("and it shows a real posting from the DB", "Man Group" in detail or "Monzo" in detail)
+    check("with the evidence for each requirement", "requirement" in detail.lower()
+          or "evidence" in detail.lower())
     for sub in ("cv", "project"):
         code, _ = get(f"/jobs/{job_id}/{sub}")
-        check(f"/jobs/<id>/{sub} vẫn sống", code == 200)
+        check(f"/jobs/<id>/{sub} is still alive", code == 200)
 
-    # MỌI trang trong thanh bên. Đã sập trắng vì một tham số thừa ở chỗ gọi
-    # (`mail.account(conn)` sau khi hàm bỏ tham số) — 906 bài test xanh mà
-    # trang /track chết, vì không bài nào mở nó.
+    # EVERY page in the sidebar. One went white over a surplus argument at the call
+    # site (`mail.account(conn)` after the function dropped its parameter) — 906 tests
+    # green while /track was dead, because no test opened it.
     for page in ("/", "/search", "/track", "/track/queue", "/cv", "/profile",
                  "/settings"):
         code, body = get(page)
-        check(f"{page} mở được", code == 200, f"HTTP {code}")
-        check(f"{page} không trả trang lỗi", "Traceback" not in body)
+        check(f"{page} opens", code == 200, f"HTTP {code}")
+        check(f"{page} returns no error page", "Traceback" not in body)
 
-    print("\n[mọi liên kết trong trang phải tới được]")
+    print("\n[every link on a page has to be reachable]")
     _links = set()
-    # Không tìm thấy link nào nghĩa là bài test này KHÔNG kiểm gì —
-    # tệ hơn không có, vì nó vẫn xanh.
+    # Finding no links at all means this test is checking NOTHING — worse than not
+    # existing, because it still goes green.
     for _page in ("/", "/search", "/track", "/cv", "/profile"):
         _s3, _b3 = get(_page)
         if _s3 != 200:
