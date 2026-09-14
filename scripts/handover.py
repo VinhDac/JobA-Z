@@ -10,6 +10,7 @@ KHÔNG mang: chrome-profile (311 MB, tự sinh lại, chép sang còn dễ hỏn
 
 from __future__ import annotations
 
+import re
 import sys
 import zipfile
 from pathlib import Path
@@ -24,6 +25,40 @@ TAKE_DATA = ["data/jobbot.db"]
 
 SKIP = {"__pycache__", ".pyc", ".DS_Store", "chrome-profile", "chrome-ui"}
 
+# --- BÍ MẬT KHÔNG BAO GIỜ ĐI THEO ---------------------------------------
+#
+# Luật nền số 5: app password Gmail và token Telegram chỉ được nằm trong
+# config/config.toml (chmod 600, đã gitignore). Một gói zip thì đi qua
+# AirDrop, USB, thư, cloud — tức là đi qua đúng những chỗ file 600 tránh.
+#
+# HAI LỚP, và lớp thứ hai mới là lớp hệ thống:
+#   1. chặn theo TÊN những file đã biết
+#   2. chặn theo NỘI DUNG: bất kỳ file văn bản nào có dòng gán bí mật.
+# Lớp 2 bắt được cả file bí mật CHƯA TỒN TẠI — mai mốt thêm
+# config/stripe.toml mà quên khai tên thì nó vẫn không lọt.
+CAM_TEN = {"config.toml"}
+
+# Dòng kiểu `app_password = "..."`. Bỏ qua giá trị rỗng và file .example:
+# mẫu trống thì không phải bí mật, và mang nó đi mới là có ích.
+CAM_NOI_DUNG = re.compile(
+    r"^\s*(app_password|password|passwd|token|api_key|apikey|secret|"
+    r"client_secret|chat_id)\s*=\s*[\"']?\S", re.I | re.M)
+
+VAN_BAN = {".toml", ".json", ".env", ".ini", ".cfg", ".yaml", ".yml", ".txt"}
+
+
+def co_bi_mat(path: Path) -> bool:
+    """File này có chứa một dòng gán bí mật không."""
+    if path.name in CAM_TEN:
+        return True
+    if "example" in path.name or "seed" in path.name or path.suffix not in VAN_BAN:
+        return False
+    try:
+        return bool(CAM_NOI_DUNG.search(path.read_text(encoding="utf-8",
+                                                       errors="replace")))
+    except OSError:
+        return False
+
 
 def wanted(path: Path) -> bool:
     return not any(s in str(path) for s in SKIP)
@@ -37,7 +72,19 @@ def collect() -> list[Path]:
         path = ROOT / name
         if path.is_file():
             out.append(path)
-    return sorted(out)
+    # LỌC BÍ MẬT SAU CÙNG, và không có đường nào bỏ qua bước này.
+    return sorted(p for p in set(out) if not co_bi_mat(p))
+
+
+def bi_bo() -> list[Path]:
+    """Mấy file bị chặn — để NÓI RA, không bỏ im lặng."""
+    o = []
+    for name in TAKE_DIRS:
+        o += [p for p in (ROOT / name).rglob("*") if p.is_file() and wanted(p)]
+    for name in TAKE_FILES + TAKE_DATA:
+        if (ROOT / name).is_file():
+            o.append(ROOT / name)
+    return sorted(p for p in set(o) if co_bi_mat(p))
 
 
 def human(size: int) -> str:
@@ -60,6 +107,17 @@ def main() -> int:
         if path.is_dir():
             size = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
             print(f"  bỏ lại      {name} ({human(size)}) — tự sinh lại")
+
+    # NÓI RA ĐÃ CHẶN GÌ. Bỏ im lặng thì người dùng bê gói sang máy mới, mở
+    # app lên thấy hộp thư không nối, và không biết vì sao — rồi đi tìm lỗi
+    # ở chỗ khác. Chặn thì phải kèm việc phải làm.
+    chan = bi_bo()
+    if chan:
+        print()
+        for path in chan:
+            print(f"  KHÔNG mang  {path.relative_to(ROOT)} — có bí mật trong đó")
+        print("  -> sang máy mới: mở Cài đặt, nhập lại app password Gmail và "
+              "token Telegram.")
 
     if "--check" in sys.argv:
         print("\n  (--check: chưa đóng gói gì)\n")

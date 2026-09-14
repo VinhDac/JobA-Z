@@ -413,6 +413,12 @@ def render(*, rows: list[dict], asks: list[dict] | None = None,
     # làm gì. Thay bằng `_tom`, bốn số mỗi số một việc.
     return runtime.render(
         title="Quản lí", active="/track", stream="search", journal="bottom",
+        # VẼ LẠI khi khúc QUẢN LÍ chạy xong, không phải khi vòng quét xong.
+        # Bảng này dựng từ đơn + thư, mà vòng quét chỉ đẻ ra tin — quét xong
+        # mà nhảy trang thì nó đóng sập mọi dòng đang mở dở, đúng lúc người
+        # dùng đang đọc một lá thư. Ô nhật ký vẫn xem luồng `search` vì đó
+        # là khúc chạy lâu, đáng nhìn nhất; hai việc khác nhau.
+        reload="track",
         cols=1,
         bar=deck("track", "Quản lí", info.get("state", "chưa nộp chỗ nào"),
                  # TRƯỢT và IM LẶNG là HAI số, không gộp: trượt là họ ĐÃ

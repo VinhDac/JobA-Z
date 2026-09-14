@@ -242,5 +242,65 @@ We believe in people and in building software that lasts a long time.
 check("đoạn văn lẻ không bị coi là danh sách",
       not [r for r in extract.requirements(PROSE_ONLY) if r.source == "list"])
 
+print("\n[CẤP BẬC — phải chạy cho MỌI người, không chỉ cho một hồ sơ grad]")
+from jobbot.scoring.score import _level_fit as _lf, _bac_tieu_de as _bt, BAC as _BAC
+
+def _diem(title, muc):
+    return _lf(title, {"seniority": muc})
+
+# Đây là bài quan trọng nhất của khối: bản cũ CHỈ hỏi "có nhắm junior không",
+# nên hồ sơ nhắm senior nhận 0.6 cho mọi tin — kể cả tin ghi "Graduate" to
+# tướng ở đầu đề. Chạy đúng cho một người không phải là chạy đúng.
+check("người nhắm SENIOR: tin senior được điểm cao",
+      _diem("Senior Software Engineer", ["senior"])[0] == 1.0)
+check("người nhắm SENIOR: tin graduate bị loại, không phải 0.6",
+      _diem("Graduate Software Engineer", ["senior"])[0] == 0.0)
+check("người nhắm SENIOR: tin lệch một bậc được nửa điểm",
+      _diem("Staff Engineer", ["senior"])[0] == 0.5)
+check("người nhắm MID: tin mid khớp", _diem("Mid-level Developer", ["mid"])[0] == 1.0)
+check("người nhắm LEAD: tin thực tập lệch xa nhất",
+      _diem("Summer Internship", ["lead"])[0] == 0.0)
+check("người nhắm grad+junior: tin senior vẫn bị loại như cũ",
+      _diem("Senior Software Engineer", ["grad", "junior"])[0] == 0.0)
+check("người nhắm grad+junior: tin graduate vẫn 1.0 như cũ",
+      _diem("Graduate Analyst", ["grad", "junior"])[0] == 1.0)
+
+# Không biết thì phải NÓI không biết, và nói không biết CÁI GÌ.
+check("đầu đề không nói cấp bậc -> 0.6 và nói đúng vậy",
+      _diem("Software Engineer", ["senior"]) == (0.6, "level not stated in the title"))
+_d, _vi = _diem("Senior Software Engineer", [])
+check("hồ sơ bỏ trống cấp bậc -> vẫn 0.6 nhưng nói LÝ DO THẬT",
+      _d == 0.6 and "haven't said" in _vi)
+check("chữ tự do lạ trong hồ sơ không làm nó nói dối",
+      "haven't said" in _diem("Senior Software Engineer", ["cap-bac-la"])[1])
+
+# "Program Manager" KHÔNG phải tin sinh viên mới ra trường. Đo thật: 34 tin
+# trong DB khớp "program|programme" mà không phải tin grad, và luật cũ cho
+# chúng 1.0 "explicitly graduate/junior" — tin senior nhảy từ 0 lên 20 điểm.
+check("«Program Manager» không bị coi là tin graduate",
+      _bt("Technical Program Manager") is None)
+check("«Senior Technical Program Manager» là SENIOR, không phải graduate",
+      _diem("Senior Technical Program Manager", ["grad", "junior"])[0] == 0.0)
+check("nhưng «Summer Analyst Programme» thì đúng là tin graduate",
+      _bt("2027 MUFG UK Summer Analyst Programme") == 0)
+check("«Graduate Programme» cũng vậy", _bt("Graduate Programme, Technology") == 0)
+
+# Từ cấp cao mà bản cũ bỏ sót.
+for _t in ("Portfolio Analytics Engineer - Vice President", "Chief of Staff",
+           "Head of Engineering", "Director of Data"):
+    check(f"«{_t[:34]}» nhận ra là cấp cao", _bt(_t) == 4)
+check("«Early Careers» nhận ra là tin entry", _bt("Software Engineer, Early Careers") == 0)
+
+# Đầu đề khớp cả hai đầu thang -> lấy bậc THẤP: mất tin tệ hơn thấy thừa.
+check("đầu đề có cả graduate lẫn senior -> tính là graduate",
+      _bt("Graduate Programme — Senior Analyst track") == 0)
+
+# Thang phải phủ HẾT lựa chọn trong hồ sơ, không sót cái nào.
+from jobbot.profile.schema import all_questions as _aq
+_o = _aq()["seniority"].options
+_thieu = [x.value for x in _o if x.value not in _BAC]
+check(f"mọi lựa chọn cấp bậc trong hồ sơ đều có chỗ trên thang{' — thiếu: ' + str(_thieu) if _thieu else ''}",
+      not _thieu)
+
 print(f"\n{ok} ok, {fail} fail")
 sys.exit(1 if fail else 0)

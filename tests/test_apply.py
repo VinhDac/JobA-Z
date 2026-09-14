@@ -213,6 +213,34 @@ for node in ast.walk(tree):
         calls.append(fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", ""))
 check("không gọi .click() ở đâu cả", "click" not in calls)
 check("không gọi .submit() ở đâu cả", "submit" not in calls)
+# AST PYTHON MÙ VỚI JAVASCRIPT, mà JS mới là chỗ app THẬT SỰ điều khiển
+# trang: mấy đoạn script gửi qua CDP nằm trong chuỗi Python, nên
+# `ast.walk` không thấy `el.click()` ở đó. Luật nền số 4 — máy KHÔNG bấm Gửi
+# — phải được canh ở cả hai tầng.
+import re as _reJ
+_apply_dir = source.parent
+_js_xau = []
+for _f in sorted(_apply_dir.glob("*.py")):
+    _t = _f.read_text(encoding="utf-8")
+    for _m in _reJ.finditer(r"\.(click|submit)\s*\(", _t):
+        _js_xau.append(f"{_f.name}:{_t[:_m.start()].count(chr(10)) + 1}")
+check("KHÔNG chỗ nào — kể cả trong JS — gọi .click()/.submit()"
+      + (f" — {', '.join(_js_xau[:3])}" if _js_xau else ""), not _js_xau)
+# HAI CHỖ BẤM, VÀ SỰ TÁCH ĐÔI ĐÓ CHÍNH LÀ LUẬT NỀN SỐ 4:
+#   run.py  — điền form hộ, chỉ bấm để mở dropdown và chọn dòng. Máy tự chạy.
+#   send.py — CÚ BẤM GỬI. Chỉ tới được từ /api/apply/send, tức là từ đúng
+#             một cú bấm của người dùng trên màn hình.
+# Đếm gộp thì mất phân biệt đó; một cú bấm Gửi lọt vào run.py sẽ không ai
+# thấy, mà đó đúng là điều luật này tồn tại để cấm.
+_dem = {_f.name: _f.read_text(encoding="utf-8").count("Input.dispatchMouseEvent")
+        for _f in sorted(_apply_dir.glob("*.py"))}
+check("máy tự điền (run.py) chỉ có ĐÚNG MỘT chỗ bấm, đã được soi",
+      _dem.get("run.py") == 1, str(_dem))
+check("cú bấm GỬI nằm riêng ở send.py, cũng đúng một chỗ",
+      _dem.get("send.py") == 1, str(_dem))
+check("KHÔNG file nào khác trong apply/ bấm chuột",
+      all(v == 0 for k, v in _dem.items() if k not in ("run.py", "send.py")),
+      str(_dem))
 
 body = source.read_text(encoding="utf-8")
 check("không gõ phím Enter", '"Enter"' not in body and "'Enter'" not in body)

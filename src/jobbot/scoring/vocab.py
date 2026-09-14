@@ -155,6 +155,9 @@ ALIASES = alias_map()
 # là: phải đúng RANH GIỚI TỪ ở đầu, và chỉ cho phép một cái ĐUÔI CHIA ở cuối.
 _TAIL = r"(?:s|es|ed|ing|ings|ation|ations|isation|isations|ization|izations)?"
 
+# Alias ngắn hơn con số này thì KHÔNG được gắn đuôi chia — xem _alias_pattern.
+DU_DAI_CHO_DUOI = 3
+
 
 def _alias_pattern(alias: str) -> re.Pattern:
     """Ranh giới bằng (?<!\\w) / (?!\\w), KHÔNG bằng \\b.
@@ -169,7 +172,19 @@ def _alias_pattern(alias: str) -> re.Pattern:
     (?<!\\w) và (?!\\w) nói đúng thứ mình muốn: "không có ký tự từ dính liền".
     Với alias thường ("python") nó cho kết quả y hệt \\b.
     """
-    return re.compile(r"(?<!\w)" + re.escape(alias) + _TAIL + r"(?!\w)")
+    # ĐUÔI CHIA CHỈ GẮN CHO ALIAS ĐỦ DÀI.
+    #
+    # "r" + "ed" = "red", "r" + "ing" = "ring", "go" + "ing" = "going". Đo
+    # thật: câu "the red car is going fast" cho ra kỹ năng {Go, R}, và "a ring
+    # of trust during the day" cho ra {R}. Một tin tuyển dụng bất kỳ có chữ
+    # "red"/"ring"/"going" là được cộng điểm cho hai ngôn ngữ mà JD không hề
+    # nhắc tới — điểm sai mà không ai chỉ ra được chỗ sai.
+    #
+    # Alias ngắn (r, go, c, js, ai, ml) gần như không bao giờ cần đuôi chia:
+    # người ta viết "R", "Go", "C" chứ không viết "Rs", "Going". Alias dài
+    # thì cần: "api" -> "apis", "model" -> "modelling".
+    duoi = _TAIL if len(alias) >= DU_DAI_CHO_DUOI else ""
+    return re.compile(r"(?<!\w)" + re.escape(alias) + duoi + r"(?!\w)")
 
 
 _ALIAS_RE: dict[str, tuple[re.Pattern, str]] = {

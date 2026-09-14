@@ -9,6 +9,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+# KHÔNG GỌI MẠNG. Bài này kiểm mail.check(), mà check() mở socket IMAP thật —
+# chạy lẻ bài test là nó vác địa chỉ thật ra Internet. run_all.py đã đặt cờ
+# này; đặt lại ở đây để chạy lẻ cũng an toàn.
+os.environ.setdefault("JOBBOT_OFFLINE", "1")
+
 from jobbot.core import db
 from jobbot.track import board, mail, scan, sort
 
@@ -22,7 +27,22 @@ def check(name, cond):
 print("\n[hộp thư — CHỈ ĐỌC, và ràng buộc nằm trong code]")
 src = inspect.getsource(mail)
 code = "\n".join(l for l in src.splitlines() if not l.strip().startswith("#"))
-check("mở hộp thư ở chế độ readonly", "readonly=True" in code)
+# ĐẾM TỪNG CHỖ GỌI, KHÔNG DÒ MỘT CHUỖI.
+#
+# `"readonly=True" in code` xanh ngay cả khi chỉ MỘT trong hai chỗ mở hộp thư
+# còn giữ nó. Đã chứng minh: bỏ readonly ở đúng vòng quét 24/7 (chỗ chạy
+# nhiều nhất, chỗ đáng canh nhất) mà bài test vẫn báo ok — luật nền số 3 chỉ
+# còn là một lời hứa trong tài liệu.
+import ast as _astR
+_mo = [n for n in _astR.walk(_astR.parse(src))
+       if isinstance(n, _astR.Call) and isinstance(n.func, _astR.Attribute)
+       and n.func.attr == "select"]
+check(f"có {len(_mo)} chỗ mở hộp thư — phải canh HẾT", len(_mo) >= 2)
+_thieu = [n.lineno for n in _mo
+          if not any(k.arg == "readonly" and getattr(k.value, "value", None) is True
+                     for k in n.keywords)]
+check("MỌI chỗ mở hộp thư đều readonly=True"
+      + (f" — thiếu ở dòng {_thieu}" if _thieu else ""), not _thieu)
 check("lấy thư bằng BODY.PEEK — không đặt cờ đã đọc", "BODY.PEEK" in code)
 # Kiểm CHÍNH XÁC: mọi lệnh gọi lên đối tượng IMAP (biến `box`), không phải
 # tìm chuỗi ký tự — `out.append(...)` của list từng bị bắt nhầm là lệnh APPEND
@@ -314,8 +334,14 @@ check("chưa điền thì nói ngay, không gọi mạng",
 # Dán nhầm MẬT KHẨU TÀI KHOẢN là chuyện thường. Bắt bằng hình dạng, TRƯỚC khi
 # gửi nó qua mạng — không thì mật khẩu thật đã bay đi rồi mới biết là vô ích.
 check("mật khẩu tài khoản bị chặn tại chỗ",
-      "không phải app password" in mail.check("a@b.c", "Work123@"))
-check("và không hề gọi mạng", "Gmail từ chối" not in mail.check("a@b.c", "Work123@"))
+      "không phải app password" in mail.check("a@gmail.com", "Work123@"))
+check("và không hề gọi mạng",
+      "Gmail từ chối" not in mail.check("a@gmail.com", "Work123@"))
+# HÌNH DẠNG ĐÓ LÀ CỦA GOOGLE. Bản cũ áp nó cho MỌI địa chỉ, nên ai dùng
+# Outlook / iCloud / hộp thư công ty bị chặn ngay cửa bằng một câu chẳng
+# liên quan gì tới lý do thật — mà mật khẩu của họ có thể hoàn toàn đúng.
+check("nhà cung cấp khác KHÔNG bị bộ lọc của Google chặn",
+      "không phải app password" not in mail.check("a@outlook.com", "Work123@"))
 check("app password đúng hình dạng thì cho qua vòng kiểm hình dạng",
       "không phải app password" not in mail.check.__doc__ or
       bool(mail.APP_PASSWORD.fullmatch("abcdefghijklmnop")))
@@ -705,8 +731,14 @@ check("chưa điền thì nói ngay, không gọi mạng",
 # Dán nhầm MẬT KHẨU TÀI KHOẢN là chuyện thường. Bắt bằng hình dạng, TRƯỚC khi
 # gửi nó qua mạng — không thì mật khẩu thật đã bay đi rồi mới biết là vô ích.
 check("mật khẩu tài khoản bị chặn tại chỗ",
-      "không phải app password" in mail.check("a@b.c", "Work123@"))
-check("và không hề gọi mạng", "Gmail từ chối" not in mail.check("a@b.c", "Work123@"))
+      "không phải app password" in mail.check("a@gmail.com", "Work123@"))
+check("và không hề gọi mạng",
+      "Gmail từ chối" not in mail.check("a@gmail.com", "Work123@"))
+# HÌNH DẠNG ĐÓ LÀ CỦA GOOGLE. Bản cũ áp nó cho MỌI địa chỉ, nên ai dùng
+# Outlook / iCloud / hộp thư công ty bị chặn ngay cửa bằng một câu chẳng
+# liên quan gì tới lý do thật — mà mật khẩu của họ có thể hoàn toàn đúng.
+check("nhà cung cấp khác KHÔNG bị bộ lọc của Google chặn",
+      "không phải app password" not in mail.check("a@outlook.com", "Work123@"))
 check("app password đúng hình dạng thì cho qua vòng kiểm hình dạng",
       "không phải app password" not in mail.check.__doc__ or
       bool(mail.APP_PASSWORD.fullmatch("abcdefghijklmnop")))
@@ -1223,6 +1255,63 @@ check(f"số track ({len(_track)}) đúng bằng số nhãn cột ({len(_tkD.COT
 check("tiêu đề và dòng vẫn dùng chung một khai báo",
       _css.count("grid-template-columns:var(--cot)") == 2)
 check("bảng không còn cột hành động", "\"\"" not in str(_tkD.COT))
+
+print("\n[MỐC THỜI GIAN — chuẩn UTC lúc GHI, nên so chuỗi = so giờ]")
+from datetime import datetime as _dtz, timezone as _tzz
+# Ba chỗ trong app so mốc thời gian bằng SO CHUỖI: scan.settle (thư cũ có đè
+# trạng thái mới không), board.all (max() tìm lần chạm cuối), ORDER BY. So
+# chuỗi trên ISO KHÁC múi giờ là sai — và đo trên hộp thư thật, 200/1.046 lá
+# mang múi giờ khác UTC. Sửa tại NGUỒN GHI thì cả ba chỗ đúng cùng lúc.
+_thu_my = _dtz(2026, 9, 14, 1, 30, tzinfo=_tzz(__import__('datetime').timedelta(hours=-4)))
+_utc = mail._utc(_thu_my)
+check(f"ghi xong luôn ở UTC ({_utc})", _utc.endswith("+00:00"))
+check("và đúng thời điểm", _dtz.fromisoformat(_utc) == _thu_my)
+check("thư không ghi múi giờ thì coi là UTC",
+      mail._utc(_dtz(2026, 9, 14, 2, 0)).endswith("+00:00"))
+check("rỗng thì trả rỗng, không nổ", mail._utc(None) == "")
+# Sau khi chuẩn hoá, SO CHUỖI mới cho cùng đáp án với SO GIỜ.
+_bang = "2026-09-14T02:00:00+00:00"
+check("thư mới hơn thì so chuỗi cũng ra mới hơn", _utc > _bang)
+# Di trú phải vá được dòng CŨ, và không được đụng dòng đã đúng.
+_cm = _dbK.connect(":memory:")
+_cm.execute("INSERT INTO message (msg_id, from_addr, subject, received_at,"
+            " snippet, kind) VALUES ('z','a@b.c','s','2026-09-14T01:30:00-04:00','','other')")
+_cm.commit()
+from jobbot.core import db as _dbm
+for _sql in _dbm.MIGRATIONS[21:]:
+    _cm.executescript(_sql)
+_ra = _cm.execute("SELECT received_at FROM message").fetchone()[0]
+check(f"di trú đổi dòng cũ sang UTC (ra {_ra})",
+      _ra == "2026-09-14T05:30:00+00:00")
+_cm.close()
+
+print("\n[TUỲ CHỌN ĐÃ CHẾT — xoá khỏi DB, không để nằm đó nói dối]")
+# Ba khoá của một bản dựng CV cũ. Mã đọc chúng bị xoá từ lâu mà HÀNG VẪN NẰM
+# TRONG DB — đo thật trên máy đang chạy: cả ba còn đó. Mở bảng pref ra đọc
+# thì chúng nói dối rằng có ba cái nút đâu đó đang điều khiển chúng.
+_CHET = ("cv_bo_cuc", "cv_giong", "cv_giu_rui_ro")
+_cp = _dbK.connect(":memory:")
+for _k in _CHET + ("title_vocab", "autorun"):
+    _cp.execute("INSERT OR REPLACE INTO pref (key, value) VALUES (?, 'x')", (_k,))
+_cp.commit()
+_cp.executescript(_dbm.MIGRATIONS[22])
+_con = {r[0] for r in _cp.execute("SELECT key FROM pref")}
+for _k in _CHET:
+    check(f"di trú xoá «{_k}»", _k not in _con)
+# XOÁ ĐÍCH DANH. Quét sạch "mọi khoá không có trong DEFAULTS" là xoá luôn
+# title_vocab — 60 chức danh người dùng tự gõ.
+check("và KHÔNG đụng title_vocab", "title_vocab" in _con)
+check("cũng không đụng khoá thường", "autorun" in _con)
+_cp.close()
+# Không chỗ nào trong mã còn ghi ba khoá đó nữa — nếu còn, di trú chỉ dọn
+# được một lần rồi chúng mọc lại.
+# TRỪ core/db.py: chính di trú phải gọi tên ba khoá đó để xoá chúng.
+_nguon = "\n".join(
+    _p.read_text(encoding="utf-8")
+    for _p in sorted((Path(__file__).resolve().parent.parent / "src").rglob("*.py"))
+    if _p.name != "db.py")
+for _k in _CHET:
+    check(f"và mã nguồn không còn ghi «{_k}» ở đâu", _k not in _nguon)
 
 print(f"\n{ok} ok, {fail} fail")
 sys.exit(1 if fail else 0)

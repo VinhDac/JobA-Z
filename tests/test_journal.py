@@ -3,7 +3,7 @@
     python3 tests/test_journal.py
 """
 
-import os, sys, tempfile, threading, time
+import os, sqlite3, sys, tempfile, threading, time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
@@ -17,7 +17,7 @@ def check(name, cond, extra=""):
 
 with tempfile.TemporaryDirectory() as tmp:
     os.environ["JOBBOT_DATA_DIR"] = tmp
-    from jobbot.core import db
+    from jobbot.core import db, postings
     from jobbot.core.journal import (ERROR, SEARCH, SCORE, SYSTEM,
                                      Journal, RING)
 
@@ -195,6 +195,57 @@ with tempfile.TemporaryDirectory() as tmp:
     check("mức 'info' chứ không phải 'ok' — không có gì để mừng",
           _sau[0].level == "info")
     _c.close()
+
+    print("\n[một nguồn rác KHÔNG được giết cả lượt quét]")
+    # Bản cũ chỉ bọc khúc lấy tin. Nguồn trả về đàng hoàng mà save_batch()
+    # nổ (DB khoá, tin thiếu trường) thì ngoại lệ bay ra vòng gọi và mọi
+    # nguồn sau KHÔNG chạy — lại còn không ghi lại rằng nó đã hỏng.
+    _c2 = db.connect()
+    _that_save = postings.save_batch
+    _lan = []
+    def _no(*_a, **_k):
+        _lan.append(1)
+        raise sqlite3.OperationalError("database is locked")
+    postings.save_batch = _no
+    try:
+        _kq = _sr._run_source(_c2, "greenhouse:khoa", lambda: [1, 2, 3],
+                              log=lambda _m: None)
+        check("save_batch nổ -> KHÔNG ném ra ngoài", True)
+        check("và trả về (0, 0) để vòng quét đi tiếp", _kq == (0, 0), str(_kq))
+    except Exception as exc:                   # noqa: BLE001
+        check("save_batch nổ -> KHÔNG ném ra ngoài", False,
+              f"{type(exc).__name__}: {exc}")
+    finally:
+        postings.save_batch = _that_save
+    check("thật sự đã đi tới khúc ghi DB", _lan == [1])
+    _dong = _c2.execute("SELECT ok, error FROM source_run"
+                        " WHERE source='greenhouse:khoa'").fetchone()
+    check("vẫn ghi lại một lượt HỎNG, không im", _dong is not None)
+    if _dong:
+        check("đánh dấu ok=0", _dong[0] == 0)
+        # Câu lỗi phải nói ĐÚNG khúc: "hỏng" chung chung thì người đọc đi
+        # kiểm mạng, trong khi lỗi nằm ở đĩa.
+        check("và nói rõ hỏng ở khúc ghi DB, không phải khúc lấy tin",
+              "ghi vào DB" in (_dong[1] or ""), str(_dong[1]))
+    _hong = chung.tail(SEARCH, 999)
+    check("nhật ký cũng có dòng đỏ", any("greenhouse:khoa" in r.text and
+                                         r.level == "error" for r in _hong))
+
+    # Đường GHI LỖI cũng phải chịu được DB chết — record_run() viết vào
+    # đúng cái DB vừa làm save_batch() nổ.
+    postings.save_batch = _no
+    _that_rec = postings.record_run
+    postings.record_run = _no
+    try:
+        _kq2 = _sr._run_source(_c2, "greenhouse:chet", lambda: [1],
+                               log=lambda _m: None)
+        check("cả đường ghi lỗi hỏng nốt cũng không ném ra ngoài", _kq2 == (0, 0))
+    except Exception as exc:                   # noqa: BLE001
+        check("cả đường ghi lỗi hỏng nốt cũng không ném ra ngoài", False,
+              f"{type(exc).__name__}: {exc}")
+    finally:
+        postings.save_batch, postings.record_run = _that_save, _that_rec
+    _c2.close()
 
     print("\n[nhật ký hỏng KHÔNG được giết việc đang chạy]")
     broken = Journal()

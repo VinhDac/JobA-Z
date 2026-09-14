@@ -149,13 +149,37 @@
 
   // --------------------------------------------------------------- kết nối
   // Nạp lại trang, TRỪ KHI làm thế là cướp mất việc người dùng đang làm dở.
-  function refreshIfIdle() {
+  //
+  // Ba thứ được coi là "đang làm dở", và cái thứ ba mới thêm: một dòng chi
+  // tiết đang MỞ. Bảng Quản lí mở dòng ra để đọc một lá thư; vòng chạy xong
+  // là trang nhảy, dòng đóng sập, và người đọc mất chỗ mà không hiểu vì sao.
+  //
+  // Hoãn thì phải NHỚ, không được nuốt: `choLamMoi` giữ lại ý định, và lần
+  // sau người dùng đóng dòng (hay rời ô gõ) thì vẽ lại ngay. Bỏ luôn thì
+  // trang đứng im vĩnh viễn, đúng kiểu hỏng câm.
+  let choLamMoi = false;
+
+  function dangBan() {
     const here = document.activeElement;
-    if (here && here.matches('input, textarea, select')) return;  // đang gõ
+    if (here && here.matches('input, textarea, select')) return true;  // đang gõ
     const sheet = document.querySelector('[data-sheet]');
-    if (sheet && !sheet.hidden) return;                           // menu đang mở
+    if (sheet && !sheet.hidden) return true;                           // menu đang mở
+    if (document.querySelector('main details[open]')) return true;      // đang mở dòng
+    return false;
+  }
+
+  function refreshIfIdle() {
+    if (dangBan()) { choLamMoi = true; return; }
     location.reload();
   }
+
+  // Vừa xong việc đang dở -> trả nốt lần vẽ lại đã hoãn.
+  document.addEventListener('toggle', () => {
+    if (choLamMoi && !dangBan()) location.reload();
+  }, true);
+  document.addEventListener('focusout', () => {
+    setTimeout(() => { if (choLamMoi && !dangBan()) location.reload(); }, 0);
+  });
 
   let live = null;
 
@@ -180,9 +204,14 @@
         // sách việc, kho đề bài) do máy chủ dựng thành HTML; SSE chỉ đẩy được
         // nhật ký và tiến độ. Không nạp lại thì máy làm xong mà màn hình vẫn
         // y nguyên — người dùng đọc ra là hỏng.
-        const box = document.querySelector('[data-journal]');
-        const mine = box && box.dataset.journal;      // "" ở Home = mọi luồng
-        if (!m.what && mine && m.stream === mine) { refreshIfIdle(); return; }
+        // KHÚC NÀO XONG THÌ VẼ LẠI TRANG NÀY — trang tự khai ở
+        // <body data-reload>. KHÔNG hỏi ô nhật ký nữa: `data-journal` trả
+        // lời câu "hiện dòng của luồng nào", một câu khác hẳn. Gộp hai câu
+        // làm một thì Home (`journal=""`) không bao giờ vẽ lại, còn Quản lí
+        // (`journal="search"`) lại nhảy mỗi lần vòng quét xong.
+        const muon = document.body.dataset.reload || '';
+        const hop = muon === '*' || muon.split(' ').indexOf(m.stream) >= 0;
+        if (!m.what && muon && hop) { refreshIfIdle(); return; }
         // Còn lại: hỏi lại toàn cảnh, vì khung tiến độ vẽ TẤT CẢ luồng đang
         // chạy chứ không riêng luồng vừa báo.
         fetch('/api/state').then((r) => r.json()).then((s) => {

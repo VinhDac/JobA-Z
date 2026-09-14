@@ -24,11 +24,53 @@ from .vocab import (DEGREE_WORDS, QUANT_FIELD, SKILLS, YEARS,
                     alias_hits)
 
 YEARS_BAND = {"0-1": 0.5, "1-3": 2, "3-5": 4, "5-8": 6.5, "8+": 10}
+# ---------------------------------------------------------------- cấp bậc
+#
+# MỘT TRỤC SỐ, không phải một cái cờ "có phải junior không".
+#
+# Bản cũ chỉ biết đúng một câu hỏi: người dùng có nhắm junior không. Vin nhắm
+# grad+junior nên nó chạy đúng CHO VIN, và sai hẳn cho mọi người khác: ai
+# chọn "senior" thì `junior` là False, và hàm trả 0.6 "level not stated in
+# the title" cho MỌI tin — kể cả tin ghi to "Graduate Intern" ngay đầu đề.
+# Cấp bậc chiếm 20 trên 100 điểm, nên cả bảng xếp hạng lệch mà không có gì
+# kêu lên. Đó là lối mòn "chạy được cho trường hợp của mình", không phải
+# phương án.
+#
+# Số là KHOẢNG CÁCH, không phải thứ hạng: grad và senior cách nhau 3 bậc, nên
+# "hợp hay không" đo bằng cách trừ, và cùng một phép trừ chạy cho mọi người —
+# người nhắm senior gặp tin thực tập cũng lệch 3 bậc y như chiều ngược lại.
+BAC = {"intern": 0, "grad": 0, "grad_scheme": 0, "junior": 1,
+       "mid": 2, "senior": 3, "lead": 4}
+TEN_BAC = {0: "entry/graduate", 1: "junior", 2: "mid", 3: "senior",
+           4: "lead/principal"}
+
+# Đọc cấp bậc TỪ ĐẦU ĐỀ. Xếp từ cao xuống thấp: đầu đề khớp nhiều mức thì
+# giữ mức THẤP NHẤT khớp được (xem `_bac_tieu_de`).
+#
+# "programme" TRẦN KHÔNG tính là tin sinh viên mới ra trường, và đây là lỗi
+# đo được: 34 tin trong DB khớp "program|programme" mà không phải tin grad —
+# "Senior Technical Program Manager", "GRC Program Manager", "Swag Program
+# Manager". Luật cũ cho chúng 1.0 "explicitly graduate/junior" VÀ xoá luôn
+# hình phạt cấp cao, tức tin senior nhảy từ 0 lên 20 điểm. Nên chữ đó chỉ
+# tính khi đi kèm thứ làm nó thành chương trình tuyển mới: graduate, summer,
+# analyst, internship, rotational, pathway, campus, early careers.
+BAC_TIEU_DE = (
+    (4, re.compile(r"\b(lead|principal|staff|head of|director|vp|chief|"
+                   r"vice president)\b", re.I)),
+    (3, re.compile(r"\b(senior|snr|sr)\b", re.I)),
+    (2, re.compile(r"\b(mid[- ]?level|midweight|intermediate)\b", re.I)),
+    (1, re.compile(r"\b(junior|jr)\b", re.I)),
+    (0, re.compile(r"\b(graduate|grad|intern|internship|placement|entry|"
+                   r"trainee|campus|academy|apprentice|scheme|rotational|"
+                   r"early careers?)\b"
+                   r"|\b(graduate|summer|analyst|internship|rotational|"
+                   r"pathway|campus|early careers?)\s+programme?\b", re.I)),
+)
+
+# Giữ tên cũ: realism.py và vài chỗ khác vẫn hỏi "tin này có phải cấp cao không".
+SENIOR_TITLE = BAC_TIEU_DE[1][1]
+JUNIOR_TITLE = BAC_TIEU_DE[4][1]
 JUNIOR_LEVELS = {"intern", "grad", "grad_scheme", "junior"}
-SENIOR_TITLE = re.compile(r"\b(senior|snr|lead|principal|staff|head of|director|vp)\b", re.I)
-JUNIOR_TITLE = re.compile(
-    r"\b(graduate|grad|junior|intern|internship|placement|entry|trainee|campus|"
-    r"academy|programme|program|scheme|rotational|analyst program)\b", re.I)
 
 
 @dataclass
@@ -236,16 +278,44 @@ def judge_one(req: extract.Requirement, index: list[Evidence], answers: dict) ->
                   f"nothing on your profile mentions: {', '.join(signals[:4])}", signals)
 
 
+def _bac_tieu_de(title: str) -> int | None:
+    """Cấp bậc đọc được từ đầu đề, hoặc None nếu đầu đề không nói.
+
+    Khớp nhiều mức thì lấy mức THẤP NHẤT. "Graduate Programme — Senior
+    Analyst track" là tin tuyển sinh viên mới ra trường, không phải tin
+    senior; và đoán nhầm theo chiều đó thì người nhắm entry mất tin họ cần,
+    còn đoán nhầm chiều kia chỉ làm người nhắm senior thấy thêm một tin lạc.
+    Mất tin tệ hơn thấy thừa một tin.
+    """
+    thay = [bac for bac, mau in BAC_TIEU_DE if mau.search(title or "")]
+    return min(thay) if thay else None
+
+
 def _level_fit(title: str, answers: dict) -> tuple[float, str]:
-    wants = set(answers.get("seniority") or [])
-    junior = bool(wants & JUNIOR_LEVELS)
-    senior_ad = bool(SENIOR_TITLE.search(title))
-    junior_ad = bool(JUNIOR_TITLE.search(title))
-    if junior and senior_ad and not junior_ad:
-        return 0.0, "posting is senior level, you target graduate/junior"
-    if junior and junior_ad:
-        return 1.0, "posting is explicitly graduate/junior — matches your target"
-    return 0.6, "level not stated in the title"
+    """Điểm hợp cấp bậc, 0..1 — và một câu nói THẬT vì sao.
+
+    Ba trường hợp, không trường hợp nào được im: đầu đề không nói cấp bậc,
+    hồ sơ không nói nhắm cấp nào, và cả hai đều nói (lúc đó mới trừ được).
+    """
+    muon = sorted({BAC[w] for w in (answers.get("seniority") or []) if w in BAC})
+    tin = _bac_tieu_de(title)
+
+    if tin is None:
+        return 0.6, "level not stated in the title"
+    if not muon:
+        # Hồ sơ bỏ trống, hoặc chỉ điền chữ tự do mà thang này chưa biết.
+        # Nói đúng như vậy — 0.6 kèm câu "không rõ đầu đề" là câu SAI.
+        return 0.6, (f"posting is {TEN_BAC[tin]} level, but you haven't said "
+                     "which levels you'd accept")
+
+    lech = min(abs(tin - m) for m in muon)
+    cua_ban = ", ".join(TEN_BAC[m] for m in muon)
+    if lech == 0:
+        return 1.0, f"posting is {TEN_BAC[tin]} level — matches your target"
+    if lech == 1:
+        return 0.5, (f"posting is {TEN_BAC[tin]} level, you target "
+                     f"{cua_ban} — one step off")
+    return 0.0, f"posting is {TEN_BAC[tin]} level, you target {cua_ban}"
 
 
 def _title_fit(title: str, answers: dict) -> tuple[float, str]:

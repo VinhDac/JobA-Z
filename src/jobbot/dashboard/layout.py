@@ -245,9 +245,25 @@ def duong_ve(tu: str, mac_dinh: str = "/cv") -> tuple:
 
 
 def page(title: str, body: str, active: str = "",
-         flow: bool = True, bar: str = "", setup: str = "") -> str:
+         flow: bool = True, bar: str = "", setup: str = "",
+         reload: str = "") -> str:
     """flow=True  trang cuộn như cũ — dành cho trang CHƯA chuyển sang widget
     flow=False trang không cuộn, nội dung là lưới widget tự cuộn bên trong
+
+    `reload` — KHÚC NÀO CHẠY XONG THÌ VẼ LẠI TRANG NÀY. "*" là mọi khúc,
+    "track" là chỉ khúc đó, nhiều khúc thì cách nhau khoảng trắng, rỗng là
+    KHÔNG BAO GIỜ tự vẽ lại.
+
+    Vì sao nó là tham số riêng chứ không dùng lại `stream` của ô nhật ký:
+    hai câu hỏi khác nhau bị gộp làm một, và cả hai đều trả lời sai.
+
+        Home khai `stream=""` (nghĩa là ô nhật ký nhận MỌI luồng). live.js
+        đọc chuỗi rỗng là "sai" nên nhánh vẽ lại KHÔNG BAO GIỜ chạy — trang
+        tự nhận là "live 24/7" mà số liệu chỉ đổi khi người dùng tự bấm F5.
+
+        Quản lí khai `stream="search"` để xem nhật ký vòng quét. Hậu quả:
+        vòng quét xong là trang NHẢY, đóng sập mọi dòng đang mở dở — người
+        dùng đang đọc một lá thư thì mất chỗ, không hiểu vì sao.
     """
     links = ""
     for href, label, mark in NAV:
@@ -304,7 +320,8 @@ def page(title: str, body: str, active: str = "",
         # Cờ BẮT ĐIỀN: live.js thấy thuộc tính này thì bật tấm phủ chu
         # trình dựng hồ sơ ngay khi trang dựng xong. Chỉ trang Home đặt
         # cờ — đặt ở mọi trang thì nó thành pop-up đuổi theo người dùng.
-        + (f" data-setup='{esc(setup)}'" if setup else "") + ">"
+        + (f" data-setup='{esc(setup)}'" if setup else "")
+        + (f" data-reload='{esc(reload)}'" if reload else "") + ">"
         # THANH TIÊU ĐỀ — dải trên cùng cửa sổ. Cửa sổ app không có khung nên
         # traffic lights của macOS nằm đè lên trang: chỗ đó phải LUÔN trống,
         # cuộn nội dung lên tới đây là mất chữ. Có thanh thật thì mọi trang tự

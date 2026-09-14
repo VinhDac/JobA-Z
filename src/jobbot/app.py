@@ -3,8 +3,12 @@
 Giống hệt cách Discord/Slack/VS Code làm: nội dung là HTML, nhưng nó nằm trong
 cửa sổ native chứ không phải tab trình duyệt. Khác biệt với người dùng là toàn bộ.
 
-Không cài gì thêm:
-    AppKit/Foundation  — PyObjC có sẵn trên máy
+    AppKit/Foundation  — PyObjC. KHÔNG có sẵn trên macOS: /usr/bin/python3
+                         (3.9.6) không có objc, và bản đó cũng dưới 3.11.
+                         Nó đến từ bản Python người dùng thật sự chạy bằng
+                         (Anaconda ở máy này). Thiếu nó KHÔNG phải lỗi —
+                         shell.has_mac_native() trả False và app lùi về cửa
+                         sổ Chrome --app.
     WebKit             — nạp động bằng objc.loadBundle, không cần bindings dựng sẵn
 
 Một tiến trình, ba phần:
@@ -31,7 +35,7 @@ from AppKit import (NSApplication, NSApplicationActivationPolicyRegular,
 from Foundation import NSMakeRect, NSObject, NSTimer, NSURL, NSURLRequest
 from PyObjCTools import AppHelper
 
-from .core import db, postings
+from .core import db, dia_chi, postings
 from .core import journal
 from .core import scheduler as scheduler_mod
 from .dashboard.server import serve
@@ -237,6 +241,7 @@ def _build_status_item(delegate: Delegate):
 
 def run() -> int:
     httpd, url = serve()
+    dia_chi.ghi(url)        # xem core/dia_chi.py — cổng không còn cố định
     threading.Thread(target=httpd.serve_forever, daemon=True, name="web").start()
 
     # Gắn nhật ký vào DB thật — trước dòng này nó chỉ sống trong bộ nhớ.
@@ -300,4 +305,5 @@ def run() -> int:
     print(f"  jobbot — cửa sổ app · nội dung từ {url}", flush=True)
     AppHelper.runEventLoop()
     httpd.server_close()
+    dia_chi.xoa()
     return 0

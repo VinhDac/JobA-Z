@@ -357,6 +357,38 @@ MIGRATIONS: list[str] = [
     """
     DELETE FROM pref WHERE key = 'cv_khoa';
     """,
+    # 22 — CHUẨN HOÁ received_at VỀ UTC.
+    #
+    # Trước đây thư được lưu nguyên múi giờ người gửi. Ba chỗ so mốc thời
+    # gian bằng SO CHUỖI (scan.settle, board.all max(), ORDER BY) nên sai với
+    # mọi lá không ở UTC: '...01:30-04:00' (05:30 UTC) đứng TRƯỚC
+    # '...02:00+00:00' theo bảng chữ cái, nên thư mới hơn 3,5 tiếng bị coi là
+    # cũ rồi bị bỏ. Đo trên hộp thư thật: 200/1.046 lá.
+    #
+    # Chỉ đụng dòng CÓ offset và KHÔNG phải +00:00 — không viết lại cái đã đúng.
+    """
+    UPDATE message
+       SET received_at = strftime('%Y-%m-%dT%H:%M:%S+00:00', received_at)
+     WHERE received_at IS NOT NULL
+       AND length(received_at) >= 25
+       AND substr(received_at, -6) <> '+00:00'
+       AND strftime('%Y-%m-%dT%H:%M:%S+00:00', received_at) IS NOT NULL;
+    """,
+
+    # 23 — dọn ba tuỳ chọn ĐÃ CHẾT khỏi bảng pref.
+    #
+    # `cv_bo_cuc`, `cv_giong`, `cv_giu_rui_ro` là tuỳ chọn của một bản dựng CV
+    # cũ. Mã đọc chúng đã bị xoá từ lâu, nhưng HÀNG THÌ CÒN NẰM TRONG DB —
+    # đo thật trên máy Vin: cả ba vẫn ở đó. Không hại gì, nhưng mở bảng pref
+    # ra đọc thì ba hàng đó nói dối rằng có ba cái nút đâu đó đang điều khiển
+    # chúng, và lần sau ai đó sẽ đi tìm cái nút không tồn tại.
+    #
+    # XOÁ ĐÍCH DANH, không xoá "mọi khoá lạ": `title_vocab` và vài khoá khác
+    # cũng không có trong DEFAULTS mà vẫn sống — quét sạch theo danh sách
+    # trắng là xoá mất 60 chức danh người dùng tự gõ.
+    """
+    DELETE FROM pref WHERE key IN ('cv_bo_cuc', 'cv_giong', 'cv_giu_rui_ro');
+    """,
 ]
 
 SECRET = 0o600      # chỉ chủ máy đọc — xem _lock_down
@@ -394,8 +426,32 @@ def migrate(conn: sqlite3.Connection) -> int:
     current = conn.execute("PRAGMA user_version").fetchone()[0]
     ran = 0
     for index in range(current, len(MIGRATIONS)):
-        conn.executescript(MIGRATIONS[index])
-        conn.execute(f"PRAGMA user_version = {index + 1}")
-        conn.commit()
+        # MỖI MIGRATION LÀ MỘT GIAO DỊCH, và `user_version` nhích lên TRONG
+        # cùng giao dịch đó.
+        #
+        # Bản trước chạy executescript rồi mới commit: executescript TỰ commit
+        # trước khi chạy, nên nếu câu lệnh thứ ba trong một migration hỏng
+        # (mất điện, đĩa đầy, khoá ngoại), hai câu đầu đã vào DB mà
+        # user_version vẫn là số cũ. Lần mở app sau nó chạy LẠI migration đó
+        # từ đầu — và một migration chạy hai lần thì "ADD COLUMN" nổ, "INSERT"
+        # nhân đôi. DB chết vĩnh viễn, không có đường lùi.
+        try:
+            conn.execute("BEGIN")
+            for cau in _tach_cau(MIGRATIONS[index]):
+                conn.execute(cau)
+            conn.execute(f"PRAGMA user_version = {index + 1}")
+            conn.commit()
+        except Exception:                   # noqa: BLE001
+            conn.rollback()
+            raise
         ran += 1
     return ran
+
+
+def _tach_cau(script: str) -> list[str]:
+    """Tách một migration thành từng câu lệnh, để chạy TRONG giao dịch.
+
+    `executescript` tiện hơn nhưng nó tự COMMIT trước khi chạy — tức là
+    không thể nằm trong giao dịch nào cả. Đó chính là lý do phải tự tách.
+    """
+    return [c.strip() for c in script.split(";") if c.strip()]

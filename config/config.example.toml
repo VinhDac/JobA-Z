@@ -39,3 +39,14 @@ apply_threshold = 0.75
 # Tệp này đã nằm trong .gitignore.
 address  = ""
 password = ""
+
+# MÁY CHỦ IMAP — để trống thì máy tự suy từ tên miền của địa chỉ trên.
+#
+# Gmail, Outlook, iCloud, Yahoo, Fastmail, Zoho, GMX, Yandex… đều có sẵn
+# trong bảng; tên miền lạ thì thử `imap.<tên miền>`. Chỉ điền vào đây khi
+# nhà cung cấp dùng địa chỉ khác, hoặc khi đó là hộp thư công ty.
+#
+# Proton thì BẮT BUỘC điền: Proton không nói IMAP ra ngoài Internet, phải
+# cài Proton Mail Bridge rồi trỏ vào nó (host = "127.0.0.1", port = 1143).
+host = ""
+port = 993

@@ -400,11 +400,21 @@ def render(*, every: int, hours: tuple[int, int],
     # người dùng thấy y như không có gì xảy ra.
     co = {tid for tid, _t, _n in tab}
     dau = mo if mo in co else tab[0][0]
+    # NHÁY ĐƠN BÊN TRONG f-string, không lồng nháy kép.
+    #
+    # Bản trước viết f"...{" on" if ... else ""}..." — nháy kép lồng trong
+    # nháy kép. Đó là PEP 701, chỉ hợp lệ TỪ Python 3.12; trên 3.9 (bản macOS
+    # có sẵn) và 3.11 (bản README tự khai) thì cả FILE không biên dịch nổi,
+    # nghĩa là mở tab Cài đặt là app nổ. Máy đang phát triển chạy 3.13 nên
+    # không lộ — đúng kiểu lỗi chỉ hiện ra ở máy người khác.
+    def _on(dieu_kien: bool) -> str:
+        return " on" if dieu_kien else ""
+
     chips = "".join(
-        f"<button class='stab{" on" if tid == dau else ""}' data-stab='{tid}'>"
+        f"<button class='stab{_on(tid == dau)}' data-stab='{tid}'>"
         f"{esc(ten)}</button>" for tid, ten, _ in tab)
     panes = "".join(
-        f"<div class='stpane{" on" if tid == dau else ""}' data-pane='{tid}'>"
+        f"<div class='stpane{_on(tid == dau)}' data-pane='{tid}'>"
         f"{noi}</div>" for tid, _, noi in tab)
 
     return (f"<div class=sheethead>Cài đặt</div>"

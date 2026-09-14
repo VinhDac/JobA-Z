@@ -106,7 +106,7 @@ def _mu(items: list[dict]) -> str:
             f"</div><div class=askact>{nut}"
             f"<button class='mbtn tiny' data-post='/api/track/mail/ignore'"
             f" data-arg='{m['id']}'>bỏ qua</button></div></div>")
-    return (f"<div class='askbox mu'><div class=askhead>"
+    return (f"<div class='asklist mu'><div class=askhead>"
             f"<b>{len(items)}</b> thư máy KHÔNG đọc được — nhưng chúng thuộc "
             f"về một lần nộp trên bảng, nên không lá nào bị bỏ rơi"
             f"</div>{rows}</div>")
@@ -256,6 +256,12 @@ def render(*, rows: list[dict], asks: list[dict], mu: list[dict] | None = None,
         + sum(1 for r in rows if (r.get("origin") or "") == "tay")
     return runtime.render(
         title="Hàng chờ", active="/track", stream="search", journal="bottom",
+        # VẼ LẠI khi khúc QUẢN LÍ chạy xong, không phải khi vòng quét xong.
+        # Bảng này dựng từ đơn + thư, mà vòng quét chỉ đẻ ra tin — quét xong
+        # mà nhảy trang thì nó đóng sập mọi dòng đang mở dở, đúng lúc người
+        # dùng đang đọc một lá thư. Ô nhật ký vẫn xem luồng `search` vì đó
+        # là khúc chạy lâu, đáng nhìn nhất; hai việc khác nhau.
+        reload="track",
         cols=2,
         bar=deck("track", "Quản lí · hàng chờ",
                  (f"{con} việc đang đợi bạn" if con else "không còn gì đợi bạn"),

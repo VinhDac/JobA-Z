@@ -90,9 +90,38 @@ def run(conn: sqlite3.Connection) -> dict:
     """Sao lưu rồi dọn sạch. Sao lưu hỏng thì KHÔNG dọn gì cả."""
     sao_luu = backup()        # lỗi ở đây là ném ra ngoài — cố ý, đừng nuốt
     bang = _tables(conn)
-    for t in bang:
-        conn.execute(f'DELETE FROM "{t}"')
-    conn.commit()
+    try:
+        # TẮT KHOÁ NGOẠI TRONG LÚC DỌN.
+        #
+        # Bản trước xoá theo thứ tự `_tables()` trả về và nổ ngay bảng đầu
+        # tiên: IntegrityError FOREIGN KEY constraint failed. Kết quả đo
+        # được trên bản sao DB thật: 5.177 tin và 37 đơn còn NGUYÊN, mà gói
+        # sao lưu (có app password trong đó) thì đã ghi ra Desktop rồi —
+        # mỗi lần bấm lại đẻ thêm một gói.
+        #
+        # Sắp xếp lại thứ tự xoá cũng chữa được, nhưng đó là cách KHÔNG hệ
+        # thống: thêm một bảng mới có khoá ngoại là hỏng lại, và hỏng đúng
+        # lúc người ta cần nó nhất. Tắt khoá ngoại thì thứ tự hết vai trò —
+        # ta đang xoá SẠCH, không có dòng nào phải trỏ tới dòng nào.
+        #
+        # MỘT GIAO DỊCH: đứt giữa chừng thì cuộn lại hết, không để DB nửa vời.
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("BEGIN")
+        for t in bang:
+            conn.execute(f'DELETE FROM "{t}"')
+        conn.commit()
+    except Exception:                       # noqa: BLE001
+        conn.rollback()
+        # DỌN KHÔNG XONG THÌ BỎ LUÔN GÓI SAO LƯU. Giữ lại một tệp chứa app
+        # password cho một việc KHÔNG xảy ra là để lại rủi ro mà không đổi
+        # được gì.
+        try:
+            sao_luu.unlink()
+        except OSError:
+            pass
+        raise
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
     # VACUUM trả lại chỗ trống cho đĩa; không có nó thì tệp DB vẫn to như cũ
     # và người dùng tưởng chưa xoá được gì.
     conn.execute("VACUUM")

@@ -24,8 +24,91 @@ import re
 from datetime import datetime, timedelta, timezone
 from email.header import decode_header
 
-HOST = "imap.gmail.com"
+# --------------------------------------------------------------- máy chủ thư
+#
+# GMAIL LÀ MẶC ĐỊNH, KHÔNG PHẢI LÀ LUẬT. Bản cũ đóng cứng `HOST =
+# "imap.gmail.com"`, và kèm theo đó là một bộ lọc chỉ nhận app password của
+# Google (16 chữ cái thường). Ai dùng Outlook, iCloud, Fastmail hay hộp thư
+# công ty thì KHÔNG dùng được khúc quản lí thư — mà lời từ chối họ nhận được
+# là "đây không phải app password", một câu chẳng liên quan gì tới lý do thật.
+#
+# Ba tầng, theo đúng thứ tự đó:
+#   1. `host` trong [mail] của config.toml — người dùng nói gì thì nghe nấy
+#   2. tên miền của địa chỉ, tra bảng dưới đây
+#   3. `imap.<tên miền>` — quy ước phổ biến, và hỏng thì câu lỗi chỉ đúng
+#      chỗ phải sửa
+MAC_DINH_HOST = "imap.gmail.com"
 PORT = 993
+
+NHA_CUNG_CAP = {
+    "gmail.com": "imap.gmail.com", "googlemail.com": "imap.gmail.com",
+    "outlook.com": "outlook.office365.com", "hotmail.com": "outlook.office365.com",
+    "hotmail.co.uk": "outlook.office365.com", "live.com": "outlook.office365.com",
+    "live.co.uk": "outlook.office365.com", "msn.com": "outlook.office365.com",
+    "yahoo.com": "imap.mail.yahoo.com", "yahoo.co.uk": "imap.mail.yahoo.com",
+    "ymail.com": "imap.mail.yahoo.com",
+    "icloud.com": "imap.mail.me.com", "me.com": "imap.mail.me.com",
+    "mac.com": "imap.mail.me.com",
+    "fastmail.com": "imap.fastmail.com", "fastmail.fm": "imap.fastmail.com",
+    "zoho.com": "imap.zoho.com", "zohomail.com": "imap.zoho.com",
+    "aol.com": "imap.aol.com",
+    "gmx.com": "imap.gmx.com", "gmx.net": "imap.gmx.net", "gmx.de": "imap.gmx.net",
+    "yandex.com": "imap.yandex.com", "yandex.ru": "imap.yandex.ru",
+    "mail.com": "imap.mail.com", "hey.com": "imap.hey.com",
+}
+
+# Proton KHÔNG nói IMAP ra ngoài Internet — phải qua Proton Mail Bridge chạy
+# trên chính máy này, cổng 1143, và cổng đó KHÔNG phải SSL. Đoán bừa một máy
+# chủ cho họ là để họ ngồi chờ một lỗi mạng vô nghĩa; nói thẳng thì họ biết
+# phải làm gì.
+CAN_CAU = {"proton.me", "protonmail.com", "protonmail.ch", "pm.me"}
+
+
+def ten_mien(address: str) -> str:
+    return address.strip().rpartition("@")[2].lower()
+
+
+def may_chu(address: str = "") -> str:
+    """Máy chủ IMAP cho địa chỉ này. Rỗng = phải hỏi người dùng (xem CAN_CAU)."""
+    from ..core.config import section
+    cfg = section("mail")
+    khai = str(cfg.get("host") or "").strip()
+    if khai:
+        return khai
+    mien = ten_mien(address or str(cfg.get("address") or ""))
+    if not mien:
+        return MAC_DINH_HOST
+    if mien in CAN_CAU:
+        return ""
+    return NHA_CUNG_CAP.get(mien) or f"imap.{mien}"
+
+
+def cong() -> int:
+    """Cổng IMAP. Đổi được để còn nối vào Bridge hay máy chủ công ty."""
+    from ..core.config import section
+    try:
+        return int(str(section("mail").get("port") or PORT))
+    except (TypeError, ValueError):
+        return PORT
+
+
+def _chi_cach(mien: str) -> str:
+    """Câu chỉ đường khi không đoán được máy chủ — phải NÓI RA phải sửa ở đâu."""
+    return (f"không biết máy chủ thư của «{mien}». Mở "
+            "config/config.toml, mục [mail], thêm dòng:\n"
+            '  host = "imap.ten-nha-cung-cap.com"')
+
+# THỜI HẠN CHỜ CHO MỌI CÚ GỌI IMAP.
+#
+# Không đặt thì socket chờ VÔ HẠN. Hậu quả không phải "chậm": khúc đọc thư
+# chạy trong vòng nền và đang GIỮ KHOÁ của scheduler (`_gate`), nên một lần
+# treo là trạm trực đứng im vĩnh viễn — màn hình vẫn báo "đang chạy", không
+# vòng nào sau đó chạy được, và không có gì nói ra điều đó. Đúng kiểu hỏng
+# câm tệ nhất.
+#
+# 30 giây: Gmail trả lời trong một hai giây khi mạng bình thường; quá 30 là
+# đã hỏng chứ không phải chậm. Mạng chập chờn thì vòng sau chạy lại.
+HET_GIO = 30
 SINCE_DAYS = 30
 # TRẦN CỨNG, để một hộp thư to không treo vòng quét. 400 là quá thấp và nó
 # CẮT ÂM THẦM: hộp thư thật có 1.041 thư trong 60 ngày, lấy 400 thư mới nhất
@@ -68,12 +151,30 @@ def check(address: str, password: str) -> str:
     # Google luôn là 16 chữ cái thường, không số, không ký tự đặc biệt. Dán
     # nhầm mật khẩu tài khoản là chuyện thường, và nếu cứ thử đăng nhập thì
     # mật khẩu thật đã bay qua mạng rồi mới biết là vô ích.
-    if not APP_PASSWORD.fullmatch(password.replace(" ", "")):
+    host = may_chu(address)
+    mien = ten_mien(address)
+    if not host:
+        return (f"{mien} chỉ cho IMAP qua Proton Mail Bridge chạy trên chính "
+                "máy này. Cài Bridge, rồi điền host/port của nó vào [mail] "
+                "trong config/config.toml.")
+    # BỘ LỌC NÀY LÀ CỦA GOOGLE, chỉ áp cho Google. Áp cho mọi người là chặn
+    # cửa ngay từ đầu với một câu chẳng liên quan gì tới lý do thật.
+    if _la_google(host) and not APP_PASSWORD.fullmatch(password.replace(" ", "")):
         return ("đây không phải app password. App password là 16 chữ cái "
                 "thường, không số, không ký tự đặc biệt. Lấy ở "
                 "myaccount.google.com/apppasswords sau khi bật xác minh 2 bước.")
+    # KHOÁ MẠNG lúc chạy thử — CÙNG một cái công tắc với Telegram. Đặt ở
+    # ĐÂY, sau mọi lần kiểm tại chỗ: kiểm hình dạng không tốn gói tin nào,
+    # và bài test vẫn phải kiểm được chúng.
+    #
+    # Không có chốt này thì một bài test gọi check() là mở socket thật ra
+    # Internet, mang theo địa chỉ thật. Đúng lớp lỗi đã xảy ra một lần với
+    # Telegram: bộ test nhắn tin thật về điện thoại mỗi lần chạy.
+    from ..core.tele import khoa_mang
+    if khoa_mang():
+        return "JOBBOT_OFFLINE — không gọi mạng lúc chạy thử"
     try:
-        box = imaplib.IMAP4_SSL(HOST, PORT)
+        box = imaplib.IMAP4_SSL(host, cong(), timeout=HET_GIO)
         try:
             box.login(address, password)
             box.select("INBOX", readonly=True)
@@ -85,13 +186,29 @@ def check(address: str, password: str) -> str:
     except imaplib.IMAP4.error as exc:
         why = _hide(str(exc), password)
         if "AUTHENTICATIONFAILED" in why or "Invalid credentials" in why:
-            return ("Gmail từ chối. Nhớ là app password 16 ký tự, KHÔNG phải "
-                    "mật khẩu tài khoản — Gmail đã ngắt IMAP bằng mật khẩu "
-                    "tài khoản từ 2022.")
+            if _la_google(host):
+                return ("Gmail từ chối. Nhớ là app password 16 ký tự, KHÔNG "
+                        "phải mật khẩu tài khoản — Gmail đã ngắt IMAP bằng "
+                        "mật khẩu tài khoản từ 2022.")
+            return (f"{host} từ chối. Phần lớn nhà cung cấp bắt dùng mật khẩu "
+                    "riêng cho ứng dụng, không phải mật khẩu tài khoản — và "
+                    "phải bật IMAP trong phần cài đặt hộp thư.")
         return why[:160]
     except OSError as exc:
-        return f"không nối được tới {HOST}: {_hide(str(exc), password)[:100]}"
+        doan = not str(_section_host()).strip()
+        them = ("\n" + _chi_cach(mien)) if doan and mien not in NHA_CUNG_CAP else ""
+        return (f"không nối được tới {host}: "
+                f"{_hide(str(exc), password)[:100]}{them}")
     return ""
+
+
+def _la_google(host: str) -> bool:
+    return host.endswith("gmail.com") or host.endswith("googlemail.com")
+
+
+def _section_host() -> str:
+    from ..core.config import section
+    return str(section("mail").get("host") or "")
 
 
 def _hide(text: str, secret: str) -> str:
@@ -107,6 +224,16 @@ def _made_id(msg) -> str:
 
     seed = "|".join(str(msg.get(h) or "") for h in ("From", "Subject", "Date"))
     return "no-id-" + hashlib.sha1(seed.encode("utf-8", "replace")).hexdigest()[:20]
+
+
+def _utc(when) -> str:
+    """Mốc thời gian dạng chuỗi ISO, LUÔN ở UTC. Nhờ vậy so chuỗi = so giờ."""
+    if not when:
+        return ""
+    from datetime import timezone
+    if when.tzinfo is None:                 # thư không ghi múi giờ -> coi là UTC
+        when = when.replace(tzinfo=timezone.utc)
+    return when.astimezone(timezone.utc).isoformat(timespec="seconds")
 
 
 def _text(raw) -> str:
@@ -129,8 +256,26 @@ def _body(msg) -> str:
         except Exception:                # noqa: BLE001
             continue
         text = body.decode(part.get_content_charset() or "utf-8", "replace")
-        return re.sub(r"\s+", " ", text).strip()[:SNIPPET]
-    return ""
+        got = re.sub(r"\s+", " ", text).strip()
+        if got:
+            return got[:SNIPPET]
+    # KHÔNG CÓ CHỮ TRƠN THÌ BÓC TỪ HTML.
+    #
+    # Rất nhiều hệ ATS chỉ gửi thân HTML. Đo trên hộp thư thật: 307/1047 lá
+    # (29%) có snippet RỖNG, và 296 trong số đó bị xếp là "other" — nghĩa là
+    # `sort.kind()` chỉ nhìn được TIÊU ĐỀ. Một thư từ chối có tiêu đề trung
+    # tính ("Update on your application") mà thân ghi "unfortunately" thì
+    # không có cách nào đọc ra, và lần nộp đó nằm mãi ở "đang chờ".
+    return _tu_html(msg)
+
+
+def _tu_html(msg) -> str:
+    """Chữ bóc ra từ thân HTML. Rỗng nếu thư không có phần HTML nào."""
+    tho = _html_body(msg)
+    if not tho:
+        return ""
+    from ..ingest.base import strip_html
+    return re.sub(r"\s+", " ", strip_html(tho)).strip()[:SNIPPET]
 
 
 def _html_body(msg) -> str:
@@ -161,8 +306,17 @@ def fetch(address: str, password: str, since_days: int = SINCE_DAYS,
     if not address or not password:
         raise MailError("chưa điền [mail] address/password trong config.toml")
 
+    from ..core.tele import khoa_mang
+    if khoa_mang():
+        raise MailError("JOBBOT_OFFLINE — không mở hộp thư lúc chạy thử")
+
+    host = may_chu(address)
+    if not host:
+        raise MailError(f"{ten_mien(address)} cần Proton Mail Bridge — "
+                        "điền host/port của Bridge vào [mail] trong config.toml")
+
     since = (datetime.now(timezone.utc) - timedelta(days=since_days)).strftime("%d-%b-%Y")
-    box = imaplib.IMAP4_SSL(HOST, PORT)
+    box = imaplib.IMAP4_SSL(host, cong(), timeout=HET_GIO)
     try:
         box.login(address, password)
         # readonly=True: máy chủ KHÔNG đánh dấu thư đã đọc.
@@ -218,7 +372,20 @@ def fetch(address: str, password: str, since_days: int = SINCE_DAYS,
                 "msg_id": msg.get("Message-ID") or _made_id(msg),
                 "from_addr": addr[1], "from_name": _text(addr[0]),
                 "subject": _text(msg.get("Subject")),
-                "received_at": when.isoformat(timespec="seconds") if when else "",
+                # CHUẨN HOÁ VỀ UTC NGAY LÚC GHI, không để nguyên múi giờ
+                # người gửi.
+                #
+                # Ba chỗ khác so mốc thời gian bằng SO CHUỖI: scan.settle
+                # (thư cũ có đè trạng thái mới không), board.all (max() tìm
+                # lần chạm cuối), và ORDER BY received_at. So chuỗi trên ISO
+                # khác múi giờ là sai: '...01:30-04:00' (05:30 UTC) đứng
+                # TRƯỚC '...02:00+00:00' theo bảng chữ cái, nên một lá mới
+                # hơn 3,5 tiếng bị coi là cũ rồi bị bỏ.
+                #
+                # Đo trên hộp thư thật: 200/1.046 lá mang múi giờ khác UTC.
+                # Sửa ở ĐÂY thì cả ba chỗ kia đúng cùng lúc — vá từng chỗ so
+                # là phải nhớ mãi, và sẽ có chỗ quên.
+                "received_at": _utc(when),
                 "snippet": _body(msg),
                 **({"html": _html_body(msg)} if want_html else {}),
             })

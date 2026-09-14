@@ -137,25 +137,58 @@ def _names_in(text: str, names: set[str]) -> bool:
     return any(f" {name} " in padded for name in names)
 
 
-def location_ok(posting: Posting, markets: list[str], nha: str = "uk") -> bool:
-    """Việc này có ở CHỖ MÌNH không.
+# Ô "thị trường" trong hồ sơ nói NGƯỜI DÙNG NHẬN VIỆC Ở ĐÂU. Mỗi lựa chọn
+# mở thêm một vùng; hai lựa chọn cuối bỏ hẳn chốt địa điểm.
+#
+# MỘT CHỖ DỊCH, dùng chung với `NOI`. Bên LinkedIn có bảng MARKET_PLACE dịch
+# đúng mấy khoá này sang nơi để đi tìm ("us_remote" -> "United States") —
+# hai bảng thì có ngày app đi tìm ở Mỹ rồi tự vứt sạch kết quả, mà đó CHÍNH
+# LÀ chuyện đã xảy ra.
+THI_TRUONG = {"uk_onsite": {"uk"}, "uk_remote": {"uk"},
+              "eu_remote": {"eu"}, "us_remote": {"us"},
+              "global_remote": set(NOI), "relocate": set(NOI)}
 
-    `nha` là vùng người dùng đang ở, suy từ ô "Where you're based". Trước đây
-    chỗ này đóng cứng UK — tức là app mặc định ai dùng nó cũng sống ở Anh,
-    còn ô hồ sơ nói mình ở đâu thì nằm im.
+
+def vung_nhan(markets: list[str], nha: str = "uk") -> set:
+    """Những vùng người dùng chịu nhận việc: chỗ đang ở + mọi thị trường đã chọn."""
+    ra = {nha}
+    for m in markets or ():
+        ra |= THI_TRUONG.get(str(m).strip().lower(), set())
+    return ra
+
+
+def location_ok(posting: Posting, markets: list[str], nha: str = "uk") -> bool:
+    """Việc này có ở CHỖ MÌNH KHÔNG — "chỗ mình" gồm cả thị trường đã chọn.
+
+    `nha` là vùng người dùng đang ở, suy từ ô "Where you're based".
+
+    `markets` LÀ THAM SỐ CÓ THẬT, không phải trang trí. Bản trước nhận nó rồi
+    không đọc một lần nào: hồ sơ chọn "US — remote" mà tin New York vẫn bị
+    vứt với lý do "outside your area (UK)". Tệ hơn, LinkedIn dịch đúng mấy
+    khoá đó thành nơi đi tìm — nên app đi tìm ở Mỹ rồi tự ném sạch kết quả
+    về, và người dùng chỉ thấy "không có việc nào".
     """
+    nhan = vung_nhan(markets, nha)
     text = norm(f"{posting.location} {posting.company}")
     # Mã bang Mỹ thì chặn phần khớp theo TÊN THÀNH PHỐ: "Birmingham, AL" là
     # Alabama. Dấu hiệu MẠNH vẫn được tin — "London, New York" có chữ
     # "london" là tên thành phố, nhưng nếu đâu đó ghi "United Kingdom" thì
     # đó là chắc chắn.
-    if BANG_MY.search(posting.location or ""):
+    # Mã bang Mỹ chỉ là dấu hiệu nhiễu KHI người dùng không nhận việc ở Mỹ:
+    # "Birmingham, AL" là Alabama, không phải Birmingham của Anh. Ai đã chọn
+    # us_remote thì đó lại chính là thứ họ muốn.
+    if "us" not in nhan and BANG_MY.search(posting.location or ""):
         vung = NOI.get(nha) or {}
         if not _names_in(text, vung.get("manh", set())):
             return False
-    if o_vung(text, nha):
-        return True
+    for v in nhan:
+        if o_vung(text, v):
+            return True
+    # Tin ghi "Remote" trống trơn: giữ nếu người dùng có nhận việc từ xa ở
+    # BẤT KỲ vùng nào ngoài chỗ đang ở — không thì nó chỉ là tin remote nội địa.
     if posting.remote and _names_in(text, EU_REMOTE_WORDS):
+        return True
+    if len(nhan) > 1 and (posting.remote or _names_in(text, EU_REMOTE_WORDS)):
         return True
     return False
 

@@ -504,6 +504,15 @@ class Handler(BaseHTTPRequestHandler):
             return self._events()
         if path == "/api/state":
             return self._json(_state_payload())
+        if path == "/api/alive":
+            # DẤU NHẬN DẠNG cho người NGOÀI tiến trình (start.command, vỏ
+            # .app). Cổng không còn cố định, và một cổng có ai đó trả lời
+            # 200 KHÔNG có nghĩa jobbot đang chạy — sau khi jobbot chết,
+            # cổng đó có thể đã thuộc về app khác. Dòng này nói rõ ai
+            # đang trả lời, kèm PID để đối chiếu với data/dang-chay.txt.
+            import os as _os
+            return self._send(f"jobbot {_os.getpid()}\n".encode("utf-8"),
+                              ctype="text/plain; charset=utf-8", no_cache=True)
 
         # --- ĐÃ NỐI DỮ LIỆU THẬT (bước 1) ---
         if path == "/" or path.startswith("/jobs/"):
@@ -740,8 +749,48 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+    def cung_nha(self) -> bool:
+        """Yêu cầu này có ĐẾN TỪ CHÍNH APP không, hay từ một trang web khác.
+
+        NGHE Ở 127.0.0.1 KHÔNG PHẢI LÀ BẢO VỆ. Bất kỳ trang web nào người
+        dùng mở cũng gọi được vào đây bằng fetch() — trình duyệt chặn họ ĐỌC
+        kết quả, nhưng VIỆC VẪN XẢY RA. Đo thật trên chính app này: một trang
+        lạ đổi được màu, bật được trạm trực, và gọi được cả /api/reset lẫn
+        /api/apply/send. Cái thứ hai là phá thẳng luật nền số 4 — máy không
+        bao giờ được bấm Gửi hộ.
+
+        Luật, theo đúng thứ tự trình duyệt nói thật:
+          · `Sec-Fetch-Site` có thì tin nó — trình duyệt tự điền, trang web
+            không sửa được.
+          · Không có thì xét `Origin`, phải trùng đúng nhà mình.
+          · Không có cả hai thì KHÔNG phải trình duyệt (curl, script trên
+            chính máy này) — cho qua. Trình duyệt LUÔN gửi `Origin` cho POST
+            khác nguồn, nên vắng cả hai không thể là tấn công từ trang web.
+        """
+        site = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
+        if site:
+            return site in ("same-origin", "none")
+        goc = (self.headers.get("Origin") or "").strip()
+        if not goc:
+            return True
+        try:
+            o = urlparse(goc)
+        except ValueError:
+            return False
+        return (o.hostname in ("127.0.0.1", "localhost")
+                and str(o.port or "") == str(self.server.server_address[1]))
+
     def do_POST(self):
         path = urlparse(self.path).path
+        # CHỐT ĐẶT Ở ĐÂY, TRƯỚC MỌI ĐƯỜNG. Đặt ở từng route thì thêm một
+        # route mới là phải nhớ thêm chốt, và sẽ có lần quên — mà lần quên đó
+        # có thể là đường xoá sạch dữ liệu.
+        if not self.cung_nha():
+            journal.log.warn(journal.SYSTEM,
+                             f"CHẶN yêu cầu từ ngoài app tới {path} — "
+                             f"origin lạ")
+            return self._json({"ok": False, "note": "chỉ nhận yêu cầu từ "
+                                                    "chính app"}, status=403)
         length = int(self.headers.get("Content-Length") or 0)
         ctype = self.headers.get("Content-Type", "")
         raw = self.rfile.read(length)
@@ -1405,7 +1454,11 @@ class Handler(BaseHTTPRequestHandler):
             # KIỂM TRƯỚC, GHI SAU. Bản cũ ghi rồi mới kiểm, nên một mật khẩu
             # tài khoản dán nhầm đã kịp nằm trong config.toml dù bị từ chối —
             # mật khẩu thật của Vin nằm trên đĩa mà chẳng dùng được việc gì.
-            if secret and not tmail.APP_PASSWORD.fullmatch(secret):
+            # Bộ lọc "16 chữ cái thường" LÀ CỦA GOOGLE. Áp cho mọi nhà cung
+            # cấp thì người dùng Outlook/iCloud/hộp thư công ty bị chặn ngay
+            # cửa, bằng một câu chẳng liên quan gì tới lý do thật.
+            if (secret and tmail._la_google(tmail.may_chu(address))
+                    and not tmail.APP_PASSWORD.fullmatch(secret)):
                 return self._json({"ok": False, "reload": False, "note":
                                    "đây không phải app password (16 chữ cái thường)"})
             cfg.write_value("mail", "address", address)

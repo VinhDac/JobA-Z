@@ -189,6 +189,9 @@ def render(*, versions: list[dict], jobs: int, gaps: list[str],
             f"cho nó.")
     return runtime.render(
         title="CV", active="/cv", stream="cv", journal="corner",
+        # Dựng CV xong thì danh sách bản đổi -> vẽ lại. Màn SOẠN (cvsoan)
+        # KHÔNG khai `reload`: ở đó người ta đang gõ chữ, vẽ lại là cướp.
+        reload="cv",
         bar=deck("cv", "CV", info.get("state", "chưa dựng bản nào"),
                  [(f"{words}", "câu kho", "stock"),
                   (f"{len(versions)}", "bản", "act"),

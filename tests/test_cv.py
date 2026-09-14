@@ -606,5 +606,36 @@ check("còn danh sách thật thì nhận ra",
 from jobbot.core import prefs as _pfX
 check("ba mức may đo đều có tên", set(_pfX.RIENG) == {"chung", "vua", "rieng"})
 
+print("\n[TÊN MỤC CV — app phải hiểu CV của NGƯỜI KHÁC, không chỉ của tác giả]")
+from jobbot.cv import blocks as _bl
+_mau = ("Jane Doe\nlondon\n\n{}\n"
+        "Built a pipeline in Python processing 2M rows.\n\nEDUCATION\nBSc\n")
+# Đo thật trước khi sửa: cùng một CV, chỉ đổi dòng tiêu đề, điểm tụt 92 -> 22
+# và khối kinh nghiệm biến mất — không một lời báo.
+for _ten, _mong in (("EXPERIENCE", "experience"),
+                    ("WORK EXPERIENCE", "experience"),
+                    ("Experience", "experience"),
+                    ("EMPLOYMENT HISTORY", "experience"),
+                    ("EXPERIENCE:", "experience"),
+                    ("Professional Experience", "experience"),
+                    ("Career History", "experience"),
+                    ("Projects", "project"),
+                    ("SELECTED PROJECTS", "project"),
+                    ("TECHNICAL SKILLS", "skill"),
+                    ("Core Competencies", "skill"),
+                    ("CERTIFICATIONS", "cert"),
+                    ("Academic Background", "education")):
+    _ks = [b.kind for b in _bl.parse(_mau.format(_ten))]
+    check(f"«{_ten}» -> {_mong} (ra {_ks})", _mong in _ks)
+# CHỐT HỆ THỐNG, và nó mới là cái quan trọng: bảng tên mục chỉ biết những
+# cách viết ĐÃ NGHĨ RA. Mai có người viết "BERUFSERFAHRUNG" thì nó lại câm.
+# Chốt này không cần biết tên mục là gì.
+check("CV dài mà không dựng nổi khối nào -> KÊU",
+      _bl.khong_hieu("x" * 600, []))
+check("CV ngắn (gõ thử) thì không kêu", not _bl.khong_hieu("abc", []))
+check("CV hiểu được thì không kêu",
+      not _bl.khong_hieu(_mau.format("EXPERIENCE"),
+                         _bl.parse(_mau.format("EXPERIENCE"))))
+
 print(f"\n{ok} ok, {fail} fail")
 sys.exit(1 if fail else 0)

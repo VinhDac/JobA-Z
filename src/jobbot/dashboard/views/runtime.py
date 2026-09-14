@@ -90,7 +90,7 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
            run_extra: str = "", journal: str = "column",
            columns: str = "", journal_h: str = "118px",
            rows_tpl: str = "", journal_at: tuple[int, int] = (1, 2),
-           bar: str = "", setup: str = "") -> str:
+           bar: str = "", setup: str = "", reload: str = "") -> str:
     """Khuôn chung cho mọi tab CÓ THỜI GIAN CHẠY.
 
     journal="column"  nhật ký chiếm trọn cột cuối, cạnh nội dung
@@ -119,7 +119,8 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
             span=1, cls="flat corner", at=journal_at))
         return page(title, head + grid(*boxes, cols=cols, columns=columns,
                                        rows=rows_tpl),
-                    active=active, flow=False, bar=bar, setup=setup)
+                    active=active, flow=False, bar=bar, setup=setup,
+                    reload=reload)
 
     if journal == "bottom":
         rows = _rows_needed(panels, cols, 0)
@@ -146,7 +147,8 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
             span=cols, cls="flat", at=(1, rows + 1)))
         return page(title, head + grid(*boxes, cols=cols, columns=columns,
                                        rows=row_tpl),
-                    active=active, flow=False, bar=bar, setup=setup)
+                    active=active, flow=False, bar=bar, setup=setup,
+                    reload=reload)
 
     boxes = [widget("Đang chạy", progress_box(stream) + run_extra,
                     span=run_span if run_span else cols - 1),
@@ -155,4 +157,5 @@ def render(*, title: str, active: str, stream: str, panels: list[tuple],
                     cls="tall", at=(cols, 1))]
     boxes += [widget(t, body, span=sp, rows=rw)
               for t, body, sp, rw, *_r in panels]
-    return page(title, head + grid(*boxes, cols=cols), active=active, flow=False, bar=bar, setup=setup)
+    return page(title, head + grid(*boxes, cols=cols), active=active, flow=False, bar=bar, setup=setup,
+                    reload=reload)

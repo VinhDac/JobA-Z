@@ -1,33 +1,52 @@
 #!/bin/bash
 # Bấm đúp để mở jobbot.  (macOS)
-# Đang chạy   -> chỉ mở dashboard
+# Đang chạy   -> chỉ mở dashboard, KHÔNG khởi động lượt thứ hai
 # Chưa chạy   -> khởi động ngầm (icon ◆ trên thanh menu) rồi mở dashboard
+#
+# Không hỏi cổng 8765 nữa. Cổng do hệ điều hành cấp (xem server.serve), nên
+# nó đổi theo từng lượt chạy; app đang sống ở 8766 mà kịch bản này gõ 8765
+# thì nó kết luận "chưa chạy" và bật lượt thứ hai đè lên cùng một tệp SQLite.
+# Địa chỉ thật nằm ở data/dang-chay.txt — xem src/jobbot/core/dia_chi.py.
 
 cd "$(dirname "$0")" || exit 1
-PORT=8765
-URL="http://127.0.0.1:$PORT/"
 
-if curl -sf -o /dev/null --max-time 1 "$URL"; then
+keu() {          # hỏng thì PHẢI kêu. Bấm đúp mà im lặng là kiểu hỏng tệ nhất.
+  osascript -e "display alert \"jobbot\" message \"$1\"" >/dev/null 2>&1
+  echo "$1" >&2
+  exit 1
+}
+
+# Có đúng jobbot đang trả lời ở địa chỉ này không. "Có ai đó trả lời 200"
+# không đủ: cổng cũ có thể đã thuộc về app khác.
+con_song() {
+  [ -n "$1" ] || return 1
+  curl -sf --max-time 2 "${1}api/alive" 2>/dev/null | grep -q '^jobbot '
+}
+
+URL=""
+[ -f data/dang-chay.txt ] && URL="$(head -n 1 data/dang-chay.txt)"
+
+if con_song "$URL"; then
   open "$URL"; exit 0
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-  osascript -e 'display alert "jobbot" message "Không tìm thấy python3.
+# Lượt cũ để lại tệp mà không còn sống (kill -9, mất điện). Bỏ qua, chạy mới.
+. scripts/tim-python.sh
+[ -n "$PY" ] || keu "$THIEU_PYTHON"
 
-Cài bằng: xcode-select --install"'
-  exit 1
-fi
+mkdir -p data
+nohup "$PY" run.py > data/app.log 2>&1 &
 
-# Chạy tách hẳn khỏi Terminal — không để lại cửa sổ lơ lửng.
-nohup python3 run.py > data/app.log 2>&1 &
-
-for _ in $(seq 1 20); do
-  curl -sf -o /dev/null --max-time 1 "$URL" && break
+for _ in $(seq 1 40); do
+  [ -f data/dang-chay.txt ] && URL="$(head -n 1 data/dang-chay.txt)"
+  con_song "$URL" && break
   sleep 0.4
 done
 
-if curl -sf -o /dev/null --max-time 1 "$URL"; then
+if con_song "$URL"; then
   open "$URL"
 else
-  osascript -e 'display alert "jobbot" message "Khởi động không thành công. Xem data/app.log"'
+  keu "Khởi động không thành công.
+
+Xem: $(pwd)/data/app.log"
 fi

@@ -395,6 +395,7 @@ def render(*, jobs: list[dict], flt, counts: dict, sieve: dict,
     info = stage or {}
     return runtime.render(
         title="Search", active="/search", stream="search",
+        reload="search",
         # Thanh của KHÚC này: số liệu + nút chạy/dừng của chính nó. Hai nút
         # "Chạy ngay"/"Bật tự quét" trước đây nằm trên thanh toàn app nhưng
         # chỉ điều khiển đúng khúc này.

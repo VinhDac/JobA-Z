@@ -809,7 +809,8 @@ def search_stage(conn: sqlite3.Connection) -> dict:
     # 0 trừ đúng lúc vừa quét xong, "50 đang hiện" là cỡ trang.
     hang_doi = one("SELECT COUNT(*) FROM posting WHERE kept = 1"
                    " AND realism IN ('likely','possible') AND score >= 80"
-                   " AND id NOT IN (SELECT posting_id FROM application)")
+                   " AND id NOT IN (SELECT posting_id FROM application"
+                   "                 WHERE posting_id IS NOT NULL)")
     da_nop = one("SELECT COUNT(*) FROM application")
     # CẢ KHO, không phải phần qua lưới lọc. Nút Dọn kho xoá cả kho, nên nhãn
     # của nó phải đếm cả kho — nói "bỏ 363 tin" rồi bỏ 5.166 tin là nói dối

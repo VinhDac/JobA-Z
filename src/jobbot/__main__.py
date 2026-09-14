@@ -16,7 +16,7 @@ import webbrowser
 
 from . import shell
 from .core import db, journal
-from .core import scheduler
+from .core import dia_chi, scheduler
 from .core.paths import db_path
 from .dashboard.server import serve
 
@@ -30,8 +30,21 @@ def run_window(app_window: bool = False) -> int:
     ran = db.migrate(db.connect())
     journal.log.open()                      # trước dòng này nhật ký chỉ ở bộ nhớ
     httpd, url = serve()
+    # Nói cho NGOÀI biết đang chạy ở đâu. Cổng do hệ cấp nên nó đổi theo
+    # từng lượt; không ghi ra thì `start.command` bấm đúp sẽ gõ nhầm cửa.
+    dia_chi.ghi(url)
     runner = scheduler.current()
     runner.start()
+
+    # LUỒNG NGHE LỆNH TELEGRAM — bật ở ĐÂY, không chỉ ở đường macOS/PyObjC.
+    #
+    # Trước đây nó chỉ nằm trong app.py (vỏ PyObjC). Chạy bằng
+    # `run.py --window`, chạy trên Windows/Linux, hay chạy khi máy thiếu
+    # PyObjC thì điều khiển từ xa chết CÂM: màn hình vẫn nói mức điều khiển
+    # đang bật, mà nhắn cho bot thì không ai trả lời.
+    from . import bao as _bao
+    threading.Thread(target=_bao.nghe, args=(runner.stop_flag,),
+                     daemon=True, name="telegram").start()
 
     print(f"  jobbot  ->  {url}", flush=True)
     print(f"  DB      ->  {db_path()}", flush=True)
@@ -60,6 +73,7 @@ def run_window(app_window: bool = False) -> int:
             window.terminate()
         from .browser import chrome
         chrome.shutdown_all()               # đừng bỏ lại cửa sổ cào mồ côi
+        dia_chi.xoa()
     return 0
 
 

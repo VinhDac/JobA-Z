@@ -326,10 +326,9 @@ def adjust(bat: dict | None = None) -> str:
 def render(state: dict, so: dict | None = None, stage: dict | None = None) -> str:
     """Tab Home — bảng tổng quan, VỪA MỘT KHUNG, tự cập nhật theo luồng.
 
-    LUỒNG RỖNG (`stream=""`) là cố ý: live.js coi ô nhật ký không ghi luồng
-    là "mọi luồng", nên bất kỳ khúc nào chạy xong cũng vẽ lại trang này. Đó
-    là chỗ chữ "live" thành thật — Home không hỏi lại theo đồng hồ, nó đợi có
-    chuyện thật rồi mới vẽ lại.
+    LUỒNG RỖNG (`stream=""`) là cố ý: ô nhật ký không ghi luồng thì nhận MỌI
+    luồng. Còn việc VẼ LẠI trang là tham số RIÊNG (`reload="*"`) — hai câu
+    hỏi khác nhau, gộp làm một thì cả hai đều sai (xem layout.page).
 
     BỐN Ô, hai hàng, không cuộn. Trái sang phải là đi từ KẾT LUẬN (tỉ lệ, chẩn
     đoán) sang DỮ KIỆN ĐỠ NÓ (năng suất, phễu) — người ta mở trang tổng quan
@@ -359,6 +358,10 @@ def render(state: dict, so: dict | None = None, stage: dict | None = None) -> st
           (f"{hn.get('truot', 0)}", "báo trượt", "view")]
     return runtime.render(
         title="Tổng quan", active="/", stream="", journal="bottom", cols=2,
+        # "*" = KHÚC NÀO chạy xong cũng vẽ lại. Đây là chỗ chữ "live" thành
+        # thật; trước đây live.js đọc `stream=""` là "sai" nên nhánh vẽ lại
+        # không bao giờ chạy và Home chỉ đổi số khi người dùng tự bấm F5.
+        reload="*",
         setup="" if state.get("gate_open") else "/onboarding",
         # `stage="search"` vẫn là tên khúc gửi kèm nút Dừng — cờ dừng đặt
         # theo khúc, và Search là khúc duy nhất chạy lâu đủ để cần cắt ngang.

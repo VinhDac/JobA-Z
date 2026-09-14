@@ -3,15 +3,20 @@
 Trước đây màu xanh lá đóng cứng trong app.css. Đó không phải lựa chọn thiết
 kế, chỉ là chưa ai cần đổi; mà màu nhấn là thứ người dùng nhìn cả ngày.
 
-MỘT MÀU GỐC SINH RA CẢ BỘ NĂM. Bốn giá trị kia (đậm hơn, chữ trên nền nhấn,
-hai mức nền mờ) đều là hàm của màu gốc, nên gõ tay ba chục con số là mời lỗi:
-một bộ lệch tông thì cả app lệch theo mà không ai chỉ ra được chỗ sai.
+MỘT MÀU GỐC SINH RA CẢ BỘ SÁU. Năm giá trị kia đều là hàm của màu gốc, nên
+gõ tay ba chục con số là mời lỗi: một bộ lệch tông thì cả app lệch theo mà
+không ai chỉ ra được chỗ sai.
 
+    --acc-rgb   ba thành phần RGB, cho mọi độ trong khác
     --acc       màu nhấn
     --acc-2     đậm hơn — dùng cho gradient và trạng thái bấm
     --acc-ink   chữ ĐẶT TRÊN nền nhấn
     --acc-bg    nền mờ (11%) — ô đang chọn
     --acc-bg-2  nền mờ đậm hơn (20%)
+
+`--acc-rgb` LÀ CÁI QUAN TRỌNG NHẤT, và nó thêm vào sau. Không có nó thì mọi
+chỗ cần màu nhấn ở một độ trong khác phải gõ cứng `rgba(85,201,141,.35)` —
+đo thật, 12 chỗ viền và nền đã gõ như vậy, nên chọn Tím ra CHỮ TÍM VIỀN XANH.
 
 XANH LÁ GIỮ NGUYÊN GIÁ TRỊ CŨ, không tính lại. Nó là mặc định, và một lần
 "dọn dẹp" làm đổi tông xanh của cả app là đổi thứ không ai yêu cầu đổi.
@@ -62,7 +67,8 @@ def _bo(goc: str) -> dict:
     """Màu gốc -> cả bộ năm. Hai hệ số lấy từ chính bộ xanh lá đang chạy:
     `--acc-2` là 0,89 lần màu gốc, `--acc-ink` là 0,19 lần."""
     r, g, b = _rgb(goc)
-    return {"--acc": goc,
+    return {"--acc-rgb": f"{r},{g},{b}",
+            "--acc": goc,
             "--acc-2": _nhan(goc, .89),
             "--acc-ink": _nhan(goc, .19),
             "--acc-bg": f"rgba({r},{g},{b},.11)",
@@ -74,7 +80,8 @@ def _bo(goc: str) -> dict:
 # nhấn bằng độ sáng thay vì bằng sắc.
 BANG = {
     # XANH LÁ giữ NGUYÊN VĂN giá trị đang chạy trong app.css.
-    "la": ("Xanh lá", {"--acc": "#55C98D", "--acc-2": "#48B37C",
+    "la": ("Xanh lá", {"--acc-rgb": "85,201,141",
+                       "--acc": "#55C98D", "--acc-2": "#48B37C",
                        "--acc-ink": "#10261B",
                        "--acc-bg": "rgba(85,201,141,.11)",
                        "--acc-bg-2": "rgba(85,201,141,.20)"}),

@@ -85,6 +85,17 @@ def chay(conn: sqlite3.Connection | None = None) -> dict:
                               "bật lại ở nút ⚟ trên thanh Tổng quan")
             return {"xong": [], "hong": [], "tat": True}
         ten = {khuc: nhan for _k, (khuc, nhan, _y) in prefs.PHIEN.items()}
+        # GỠ CỜ DỪNG Ở ĐẦU MỖI PHIÊN.
+        #
+        # "Dừng" nghĩa là dừng VÒNG ĐANG CHẠY, không phải đầu độc mọi vòng
+        # sau. Bản trước chỉ có /api/session/start gỡ cờ, nên bật lại bằng
+        # vòng nền hay bằng /batphien trên Telegram thì cờ còn dính: mọi
+        # phiên sau chạy 0/3 khúc rồi báo "xong" — đúng kiểu hỏng câm.
+        #
+        # Gỡ ở ĐÂY vì đây là chỗ DUY NHẤT một phiên bắt đầu, bất kể ai gọi.
+        # Đặt ở từng lối vào thì thêm một lối là phải nhớ, và sẽ quên.
+        for s in khuc:
+            halt.clear(s)
         jlog.ok(SYSTEM, "phiên bắt đầu — " + " → ".join(ten[s] for s in khuc))
         for s in khuc:
             if halt.wanted(s):
@@ -100,7 +111,12 @@ def chay(conn: sqlite3.Connection | None = None) -> dict:
                 hong.append(s)
                 jlog.error(SYSTEM, f"phiên · {ten[s]} hỏng — "
                                    f"{type(exc).__name__}: {str(exc)[:70]}")
-        jlog.ok(SYSTEM, f"phiên xong — {len(xong)}/{len(khuc)} khúc chạy được")
+        # NÓI ĐÚNG CHUYỆN GÌ XẢY RA. "xong — 0/3" đọc ra như một vòng bình
+        # thường không tìm được gì; bị người dùng cắt ngang là chuyện khác hẳn.
+        if not xong and not hong:
+            jlog.warn(SYSTEM, "phiên KHÔNG chạy khúc nào — bị bấm Dừng")
+        else:
+            jlog.ok(SYSTEM, f"phiên xong — {len(xong)}/{len(khuc)} khúc chạy được")
         # BÁO VỀ ĐIỆN THOẠI — một chỗ gọi, ngay sau khi vòng xong. Rải lời
         # gọi vào từng khúc thì thêm một loại báo là phải nhớ sửa ba chỗ.
         from .bao import sau_phien

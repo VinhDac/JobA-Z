@@ -203,6 +203,37 @@ if sys.platform == "darwin":
 else:
     check("bỏ qua — không phải macOS", True)
 
+print("\n[CÚ PHÁP CHẠY ĐƯỢC TRÊN BẢN PYTHON APP TỰ KHAI]")
+# LỖI ĐÃ XẢY RA THẬT, và nó là loại CHỈ HIỆN RA Ở MÁY NGƯỜI KHÁC:
+# views/settings.py viết f"...{" on" if x else ""}..." — nháy kép lồng nháy
+# kép, tức PEP 701, chỉ hợp lệ TỪ Python 3.12. Máy đang phát triển chạy 3.13
+# nên 2.300 phép kiểm đều xanh, trong khi trên macOS sạch (Python 3.9.6) cả
+# file không biên dịch nổi: mở tab Cài đặt là app nổ.
+#
+# Bài này biên dịch MỌI file bằng một trình thông dịch CŨ HƠN. /usr/bin/python3
+# luôn có sẵn trên macOS, nên chốt này không đòi cài thêm gì.
+import subprocess as _sp
+_cu_py = Path("/usr/bin/python3")
+if _cu_py.exists():
+    _ban = _sp.run([str(_cu_py), "-c",
+                    "import sys;print('%d.%d' % sys.version_info[:2])"],
+                   capture_output=True, text=True).stdout.strip() or "?"
+    _ma = (
+        "import io,pathlib\n"
+        "h=[]\n"
+        "for f in sorted(pathlib.Path('src').rglob('*.py'))+"
+        "sorted(pathlib.Path('tests').rglob('*.py'))+[pathlib.Path('run.py')]:\n"
+        "    try: compile(io.open(f,encoding='utf-8').read(),str(f),'exec')\n"
+        "    except SyntaxError as e: h.append('%s:%s'%(f,e.lineno))\n"
+        "print('|'.join(h))\n")
+    _ra = _sp.run([str(_cu_py), "-c", _ma], capture_output=True, text=True,
+                  cwd=str(Path(__file__).resolve().parent.parent))
+    _xau = [x for x in _ra.stdout.strip().split("|") if x]
+    check(f"mọi file biên dịch được bằng Python {_ban}"
+          + (f" — hỏng: {', '.join(_xau[:3])}" if _xau else ""), not _xau)
+else:
+    check("bỏ qua — máy này không có /usr/bin/python3", True)
+
 print("\n[ICON APP — vẽ bằng HÌNH, đen trắng, cùng dấu với logo trong app]")
 import importlib.util as _il
 from pathlib import Path as _P
@@ -243,6 +274,91 @@ check("bộ đủ cỡ tới 16px cho Finder", "16, 32, 128, 256, 512" in _src)
 _icns = _goc / "jobbot.app/Contents/Resources/jobbot.icns"
 if _icns.exists():
     check("bản .icns đã đóng gói không rỗng", _icns.stat().st_size > 10_000)
+
+print("\n[MỞ APP — cổng KHÔNG cố định nữa]")
+import re as _re2
+import subprocess as _sp2
+_goc2 = _P(__file__).resolve().parent.parent
+
+# --- tệp địa chỉ: ghi -> đọc -> xoá -------------------------------------
+_cu_data = os.environ.get("JOBBOT_DATA_DIR")
+_tmp2 = tempfile.mkdtemp()
+os.environ["JOBBOT_DATA_DIR"] = _tmp2
+try:
+    import importlib as _ilib
+    from jobbot.core import dia_chi as _dc
+    _ilib.reload(_dc)
+    _dc.ghi("http://127.0.0.1:8799/")
+    check("ghi rồi đọc lại ra đúng địa chỉ", _dc.doc() == ("http://127.0.0.1:8799/", os.getpid()))
+    check("dòng 1 đọc được bằng `head -1` của shell",
+          _sp2.run(["head", "-n", "1", str(_dc.tep())], capture_output=True,
+                   text=True).stdout.strip() == "http://127.0.0.1:8799/")
+    # Tệp rác thì trả None, KHÔNG nổ: nó là tệp trên đĩa, ai cũng sửa được.
+    _dc.tep().write_text("rác\n", encoding="utf-8")
+    check("tệp hỏng -> None, không nổ", _dc.doc() is None)
+    _dc.tep().write_text("http://127.0.0.1:8799/\nkhong-phai-so\n", encoding="utf-8")
+    check("PID hỏng vẫn lấy được địa chỉ", _dc.doc() == ("http://127.0.0.1:8799/", 0))
+    _dc.xoa()
+    check("xoá rồi thì đọc ra None", _dc.doc() is None)
+    check("xoá lần hai không nổ", _dc.xoa() is None)
+finally:
+    if _cu_data is None: os.environ.pop("JOBBOT_DATA_DIR", None)
+    else: os.environ["JOBBOT_DATA_DIR"] = _cu_data
+
+# --- start.command không được hỏi một cổng cắm cứng ---------------------
+_start = (_goc2 / "start.command").read_text(encoding="utf-8")
+_start_code = "\n".join(l for l in _start.splitlines() if not l.lstrip().startswith("#"))
+check("start.command KHÔNG còn cắm cứng cổng 8765", "8765" not in _start_code)
+check("start.command đọc data/dang-chay.txt", "dang-chay.txt" in _start_code)
+check("start.command xác minh đúng jobbot đang trả lời, không chỉ 200",
+      "api/alive" in _start_code)
+check("start.command hỏng thì KÊU LÊN", "display alert" in _start_code)
+check("cú pháp start.command chạy được",
+      _sp2.run(["bash", "-n", str(_goc2 / "start.command")]).returncode == 0)
+
+# --- MỌI đường vào đều phải nói mình chạy ở đâu -------------------------
+# Bẫy: thêm một đường vào thứ ba (ví dụ một kịch bản dịch vụ) mà quên ghi
+# địa chỉ thì bấm đúp lại bật lượt thứ hai — đúng lỗi vừa sửa, lặp lại.
+_duong_vao = []
+for _f in sorted((_goc2 / "src").rglob("*.py")):
+    _t = _f.read_text(encoding="utf-8")
+    # `= serve()` chứ không phải "serve()": chữ đó còn nằm trong chú thích
+    # và docstring của các module khác, và bắt nhầm docstring thì bài test
+    # đòi dia_chi.py phải tự ghi địa chỉ cho chính nó.
+    if _re2.search(r"=\s*serve\(\)", _t):
+        _duong_vao.append((_f, "dia_chi.ghi" in _t))
+check("tìm được đúng hai đường vào (__main__ và app)", len(_duong_vao) == 2,
+      str([str(f.name) for f, _ in _duong_vao]))
+for _f, _co in _duong_vao:
+    check(f"{_f.name} gọi serve() thì cũng ghi địa chỉ", _co)
+
+# --- vỏ .app: không nướng cứng Python, hỏng thì nói ---------------------
+_ma_app = _il.module_from_spec(_spec); _spec.loader.exec_module(_ma_app)
+_vo = _ma_app.VO
+check("vỏ .app KHÔNG nướng cứng đường Python", "/opt/anaconda3" not in _vo
+      and "sys.executable" not in _vo)
+check("vỏ .app đi tìm Python lúc chạy, dùng chung bản với start.command",
+      "scripts/tim-python.sh" in _vo)
+check("vỏ .app kiểm dự án còn đó không trước khi cd", "run.py" in _vo.split("cd ")[0])
+check("vỏ .app hỏng thì KÊU LÊN, không thoát lặng lẽ",
+      "display alert" in _vo and _vo.count("keu ") >= 2)
+_vo_thu = _goc2 / "jobbot.app/Contents/MacOS/jobbot"
+if _vo_thu.exists():
+    # Bản ĐANG cài trên máy, không phải bản trong mã nguồn: dựng lại mới ăn.
+    check("bản .app đang cài đã là vỏ mới", "tim-python.sh" in
+          _vo_thu.read_text(encoding="utf-8"))
+
+# --- bộ tìm Python: chọn theo SỐ HIỆU, không theo cái tên ---------------
+_tim = (_goc2 / "scripts/tim-python.sh").read_text(encoding="utf-8")
+check("bộ tìm Python hỏi version chứ không tin cái tên", "version_info >= (3, 11)" in _tim)
+check("chỉ tay được bằng JOBBOT_PYTHON khi máy lạ", "JOBBOT_PYTHON" in _tim)
+_cu_py2 = Path("/usr/bin/python3")
+if _cu_py2.exists():
+    # Máy này /usr/bin/python3 là 3.9 — bộ lọc PHẢI loại nó, nếu không thì
+    # bấm đúp sẽ chạy bằng bản thiếu tomllib rồi chết ở dòng đầu run.py.
+    _thu = _sp2.run([str(_cu_py2), "-c",
+                     "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)"])
+    check("chính câu lọc đó loại được /usr/bin/python3 cũ", _thu.returncode == 1)
 
 print(f"\n{ok} ok, {fail} fail")
 sys.exit(1 if fail else 0)

@@ -18,6 +18,21 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+# CHẠY LẺ CŨNG PHẢI ĐÚNG.
+#
+# run_all.py dựng một gốc dự án giả + khoá mạng cho mọi bài. Nhưng chạy lẻ
+# một file (python3 tests/test_web.py) thì không có chốt đó, và mấy bài
+# khẳng định "chưa nối bot" sẽ đỏ — đỏ vì máy này có cấu hình, không vì code
+# sai. Tệ hơn: chạy lẻ có thể gửi tin thật về điện thoại người dùng.
+#
+# Đặt NGAY ĐÂY, trước mọi import jobbot, để không có lối vòng.
+import os as _os, tempfile as _tf, pathlib as _pl
+_os.environ.setdefault("JOBBOT_OFFLINE", "1")
+if "JOBBOT_ROOT" not in _os.environ:
+    _gia = _tf.mkdtemp(prefix="jobbot-test-")
+    _pl.Path(_gia, "config").mkdir(parents=True, exist_ok=True)
+    _os.environ["JOBBOT_ROOT"] = _gia
+
 from jobbot.core import db, postings
 from jobbot.ingest.base import Posting
 from jobbot.profile import store
@@ -90,7 +105,7 @@ def seeded(path: Path):
 
 ROUTES = ["/", "/search", "/cv", "/cv/soan", "/profile",
           "/profile/muc_tieu", "/profile/import", "/profile/health",
-          "/settings", "/api/profile", "/api/state"]
+          "/settings", "/api/profile", "/api/state", "/api/alive"]
 
 print("\n[mọi route phải trả 200 và KHÔNG có traceback]")
 with tempfile.TemporaryDirectory() as tmp:
@@ -125,6 +140,17 @@ with tempfile.TemporaryDirectory() as tmp:
         if status == 200 and path != "/api/profile":
             check(f"{path:24} không lộ traceback",
                   "Traceback" not in body and "<class '" not in body)
+
+    print("\n[/api/alive — dấu nhận dạng cho người NGOÀI tiến trình]")
+    # start.command hỏi đúng route này để phân biệt "jobbot đang chạy" với
+    # "cổng cũ giờ là app khác". Nó phải nói TÊN và PID, không chỉ trả 200.
+    _st, _than = get("/api/alive")
+    check("/api/alive trả 200", _st == 200, _than[:80])
+    check("nói rõ jobbot đang trả lời", _than.startswith("jobbot "), _than[:80])
+    check("kèm PID của chính tiến trình này",
+          _than.split()[1].strip() == str(os.getpid()), _than[:80])
+    check("`grep -q '^jobbot '` của start.command khớp được",
+          bool(__import__("re").match(r"^jobbot \d+", _than)), _than[:80])
 
     print("\n[404 đúng cách, không sập]")
     for path in ["/nope", "/jobs/999999", "/profile/khong-co", "/projects/khong-co",
@@ -366,6 +392,48 @@ with tempfile.TemporaryDirectory() as tmp:
     _js = (Path(__file__).resolve().parent.parent
            / "src/jobbot/dashboard/web/live.js").read_text(encoding="utf-8")
     check("và trình duyệt có trình nghe mở khoá", "wireDangerWord" in _js)
+
+    print("\n[TỰ VẼ LẠI — đúng lúc, và KHÔNG cướp việc đang làm dở]")
+    import re as _re
+    # Hai câu hỏi khác nhau từng bị gộp làm một biến, và cả hai đều sai:
+    #
+    #   Home khai stream="" (ô nhật ký nhận MỌI luồng). live.js đọc chuỗi
+    #   rỗng là "sai" -> nhánh vẽ lại KHÔNG BAO GIỜ chạy. Trang tự nhận là
+    #   "live 24/7" mà số chỉ đổi khi người dùng bấm F5.
+    #
+    #   Quản lí khai stream="search" để xem nhật ký vòng quét -> quét xong
+    #   là trang NHẢY, đóng sập cả 37 dòng chi tiết đang mở.
+    _mong = {"/": "*", "/search": "search", "/track": "track",
+             "/track/queue": "track", "/cv": "cv"}
+    for _p, _v in _mong.items():
+        _st, _b = get(_p)
+        _the = _re.search(r"<body[^>]*>", _b).group(0)
+        _co = (_re.search(r"data-reload='([^']*)'", _the) or [None, ""])[1]
+        check(f"{_p:14} tự vẽ lại theo «{_v}»", _co == _v, f"thấy «{_co}»")
+    # Màn SOẠN CV thì KHÔNG: ở đó người ta đang gõ chữ.
+    _jid = conn2 = None
+    _st, _b = get("/cv/soan")
+    if _st == 200:
+        check("/cv/soan KHÔNG tự vẽ lại — đang gõ chữ ở đó",
+              "data-reload" not in _re.search(r"<body[^>]*>", _b).group(0))
+    # live.js phải đọc CỜ CỦA TRANG, không hỏi lại ô nhật ký.
+    check("live.js đọc data-reload của <body>", "dataset.reload" in _js)
+    check("và KHÔNG còn suy ra từ ô nhật ký nữa",
+          "box.dataset.journal" not in _js.split("data-reload")[1][:900]
+          if "data-reload" in _js else False)
+    check("«*» nghĩa là mọi khúc", "=== '*'" in _js)
+    # Dòng chi tiết đang mở = đang làm dở. Đây là cái vừa thiếu.
+    check("dòng chi tiết đang MỞ thì hoãn vẽ lại",
+          "details[open]" in _js)
+    check("ô đang gõ vẫn được bảo vệ như cũ",
+          "input, textarea, select" in _js)
+    check("tấm phủ đang mở vẫn được bảo vệ như cũ", "data-sheet" in _js)
+    # HOÃN THÌ PHẢI NHỚ. Nuốt luôn thì trang đứng im vĩnh viễn — hỏng câm.
+    check("hoãn rồi thì NHỚ, không nuốt", "choLamMoi" in _js)
+    check("và trả nốt khi người dùng đóng dòng",
+          "'toggle'" in _js and "choLamMoi" in _js.split("'toggle'")[1][:200])
+    check("hoặc khi rời ô gõ",
+          "'focusout'" in _js and "choLamMoi" in _js.split("'focusout'")[1][:220])
 
     print("\n[VÒNG GIỮ — chưa đủ thì không cho đi tiếp]")
     # Lưu một phần mà cổng vẫn đóng -> phải quay LẠI đúng chỗ còn thiếu, không
@@ -1211,8 +1279,13 @@ with tempfile.TemporaryDirectory() as tmp:
     # mỗi lần chuyển tab thanh bên bung ra rồi mới co lại — nháy một cái.
     head = home_html.split("</head>")[0]
     check("đọc lựa chọn ngay trong <head>, không nháy", "navmin" in head)
-    check("và trước cả <body>", "navmin" not in home_html.split("<body>")[1][:200]
-          or home_html.index("navmin") < home_html.index("<body>"))
+    # Cắt theo THẺ, không theo chuỗi "<body>": thẻ body có thuộc tính
+    # (data-setup, data-reload) nên chuỗi cứng không còn tìm thấy, và bài
+    # test đổ IndexError chứ không nói ra điều gì về trang.
+    _body_o = __import__("re").search(r"<body[^>]*>", home_html)
+    check("trang có thẻ <body>", _body_o is not None)
+    check("và script đọc localStorage nằm TRƯỚC nó",
+          bool(_body_o) and home_html.index("navmin") < _body_o.start())
     import re as _re2
     _navlinks = _re2.findall(r"<a class='navlink[^>]*>", home_html)
     check("mọi mục nav có title để lúc gập còn biết là gì",
@@ -1732,13 +1805,30 @@ with tempfile.TemporaryDirectory() as tmp:
              / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
     check("viên thuốc căn giữa", "align-items:center" in _cssP)
     check("viên thuốc bo tròn", ".deckpill{" in _cssP)
-    # NẰM NGANG, không bao giờ xếp cao: cho xuống dòng thì màn hẹp nó phình
-    # thành khối 211px, hết còn là viên thuốc.
+    # HẸP THÌ XUỐNG DÒNG, KHÔNG CUỘN NGANG RỒI GIẤU THANH CUỘN.
+    #
+    # Bài test cũ đòi đúng hai thứ `flex-wrap:nowrap` + `overflow-x:auto` và
+    # tự nhủ "cuộn ngang, KHÔNG giấu nút" — trong khi ngay dòng dưới, CSS có
+    # `scrollbar-width:none` và `::-webkit-scrollbar{display:none}`. Tức là
+    # nó canh CÁCH LÀM chứ không canh KẾT QUẢ, và cách làm đó giấu nút thật.
+    #
+    # Đo trên /track/queue (viên rộng nhất, 900px): cửa sổ 1180 vừa khít 7px
+    # · 1100 mất nút «← Bảng» · 980 mất «Quét thư», «Dừng», «← Bảng». Cửa sổ
+    # app mặc định đúng 1180 — kéo nhỏ một chút là mất nút, không báo gì.
     _pl = _cssP[_cssP.index(".deckpill{"):_cssP.index(".deckpill{") + 320]
-    check("viên thuốc KHÔNG xuống dòng", "flex-wrap:nowrap" in _pl)
-    # Màn quá hẹp thì cuộn ngang, KHÔNG giấu nút: một nút bấm không tới được
-    # thì cũng như không có.
-    check("quá hẹp thì cuộn ngang", "overflow-x:auto" in _pl)
+    check("viên thuốc XUỐNG DÒNG khi hết chỗ", "flex-wrap:wrap" in _pl)
+    check("và KHÔNG cuộn ngang nữa", "overflow-x:auto" not in _pl)
+    check("KHÔNG giấu thanh cuộn ở đâu trong viên thuốc",
+          "scrollbar-width:none" not in _pl
+          and ".deckpill::-webkit-scrollbar" not in _cssP)
+    check("hàng số liệu cũng xuống dòng được",
+          "flex-wrap:wrap" in _cssP[_cssP.index(".metrics{"):
+                                    _cssP.index(".metrics{") + 160])
+    # Bo góc vẫn phải kẹp thành viên thuốc ở hàng đơn: hàng đơn cao 45px nên
+    # bán kính phải >= 23. Dưới ngưỡng đó là đổi hình dáng cả thanh.
+    _bo = int(_re.search(r"\.deckpill\{[^}]*border-radius:(\d+)px", _cssP,
+                         _re.S).group(1))
+    check(f"bo góc {_bo}px vẫn đủ để hàng đơn là viên thuốc", _bo >= 23)
     # Tất cả trong MỘT viên: tên khúc, số liệu, nút. Đẩy số liệu ra ngoài thì
     # thanh vỡ thành ba tầng rời rạc.
     _pillhtml = _srch[_srch.index("class=deckpill"):]
@@ -2124,6 +2214,77 @@ with tempfile.TemporaryDirectory() as tmp:
     check("logo ăn màu từ CSS, không đóng cứng trong hình",
           "currentColor" in _lg and ".logo{" in _css7)
 
+    _srv = (Path(__file__).resolve().parent.parent
+            / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
+    print("\n[BẪY «NOT IN» GẶP NULL — cả lớp lỗi, không phải một chỗ]")
+    # SQL ba trạng thái: `x NOT IN (…, NULL)` ra NULL chứ không phải TRUE, nên
+    # mệnh đề không bao giờ đúng và câu lệnh im lặng không làm gì.
+    #
+    # Đo trên kho thật: 32/37 đơn có posting_id = NULL, nên "Dọn kho tin" xoá
+    # ĐÚNG 0 tin — trong khi source_run (204 lượt quét) và cv_build vẫn bị
+    # xoá sạch. Người dùng thấy kho y nguyên và mất lịch sử quét.
+    # Bảng tạm: bài này kiểm NGỮ NGHĨA SQL, không kiểm schema. Chỗ thật đã
+    # có bộ dò cả mã nguồn ở ngay dưới.
+    import sqlite3 as _sq
+    _cnull = _sq.connect(":memory:")
+    _cnull.executescript(
+        "CREATE TABLE tin (id INTEGER PRIMARY KEY);"
+        "CREATE TABLE don (tin_id INTEGER);"
+        "INSERT INTO tin (id) VALUES (1);"
+        "INSERT INTO don (tin_id) VALUES (NULL);")
+    _sai = _cnull.execute(
+        "SELECT COUNT(*) FROM tin WHERE id NOT IN (SELECT tin_id FROM don)"
+    ).fetchone()[0]
+    _dung = _cnull.execute(
+        "SELECT COUNT(*) FROM tin WHERE id NOT IN"
+        " (SELECT tin_id FROM don WHERE tin_id IS NOT NULL)").fetchone()[0]
+    check("bẫy có thật: quên lọc NULL -> đếm ra 0", _sai == 0)
+    check("lọc NULL rồi thì đếm đúng", _dung == 1)
+    _cnull.close()
+    # CHỐT CẢ LỚP: mọi `NOT IN (SELECT <cột>` trong mã nguồn phải có
+    # `IS NOT NULL`. Vá một chỗ thì lần sau ai viết thêm một câu nữa lại dính.
+    import re as _reN
+    _xau = []
+    for _f in sorted((Path(__file__).resolve().parent.parent / "src").rglob("*.py")):
+        _t = _f.read_text(encoding="utf-8")
+        for _m in _reN.finditer(r"NOT IN \(\s*(?:\\n|[^)])*?SELECT\s+(\w+)", _t):
+            _doan = _t[_m.start():_m.start() + 400]
+            _het = _doan.find(")")
+            if "IS NOT NULL" not in _doan[:max(_het, 300)]:
+                _xau.append(f"{_f.name}:{_t[:_m.start()].count(chr(10)) + 1}")
+    check(f"không câu «NOT IN» nào quên lọc NULL"
+          + (f" — {', '.join(_xau[:4])}" if _xau else ""), not _xau)
+
+    print("\n[CHỐT CÙNG NHÀ — trang web lạ không được điều khiển app]")
+    # NGHE Ở 127.0.0.1 KHÔNG PHẢI LÀ BẢO VỆ. Đo thật trước khi vá: một trang
+    # web bất kỳ người dùng mở đều gọi được /api/chung (đổi màu),
+    # /api/session/start (bật trạm trực), /api/reset (xoá sạch) và
+    # /api/apply/send (bấm Gửi hộ — phá thẳng luật nền số 4). Trình duyệt
+    # chặn họ ĐỌC kết quả, nhưng việc vẫn xảy ra.
+    def _post(path, body="arg=x", **hdr):
+        req = urllib.request.Request(
+            base.rstrip("/") + path, data=body.encode(), method="POST",
+            headers={"Content-Type": "application/x-www-form-urlencoded", **hdr})
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return r.status
+        except urllib.error.HTTPError as e:
+            return e.code
+    for _p in ("/api/reset", "/api/apply/send", "/api/chung", "/api/track/xoa"):
+        check(f"CHẶN {_p} khi Sec-Fetch-Site: cross-site",
+              _post(_p, **{"Sec-Fetch-Site": "cross-site"}) == 403)
+        check(f"CHẶN {_p} khi Origin lạ",
+              _post(_p, **{"Origin": "https://ke-xau.example"}) == 403)
+    check("app tự gọi thì QUA", _post("/api/state",
+          **{"Sec-Fetch-Site": "same-origin"}) != 403)
+    check("script trên chính máy (không header) vẫn QUA",
+          _post("/api/state") != 403)
+    # Chốt phải đặt ở MỘT chỗ, trước mọi đường — đặt ở từng route thì thêm
+    # route mới là phải nhớ, và lần quên có thể là đường xoá sạch dữ liệu.
+    check("chốt đặt một chỗ, ngay đầu do_POST",
+          "if not self.cung_nha():" in _srv
+          and _srv.index("def do_POST") < _srv.index("length = int(self.headers"))
+
     print("\n[TELEGRAM — báo về điện thoại, và ba chốt an toàn]")
     from jobbot.core import tele as _tl, db as _db, prefs as _prefs
     from jobbot.dashboard.views import settings as _setm
@@ -2208,6 +2369,72 @@ with tempfile.TemporaryDirectory() as tmp:
     check("và bộ test xin cổng 0 để hệ tự cấp",
           "serve(port=0)" in Path(__file__).resolve().read_text(encoding="utf-8"))
 
+    print("\n[NỐI BOT — phải NÓI RA nó ghim vào chat nào]")
+    # Bản trước lấy `ai[-1]` rồi báo "đã tìm ra chat của bạn". Bot Telegram
+    # thì ai nhắn cũng được, và bot hay bị kéo vào nhóm — nên "chat của bạn"
+    # có thể là chat của người khác, và mọi thông báo việc làm đi thẳng sang
+    # đó. Không ai phát hiện được, vì màn hình không nói nó chọn cái nào.
+    _ra = {"result": [
+        {"message": {"chat": {"id": 111, "first_name": "Vin", "last_name": "Dac"}}},
+        {"message": {"chat": {"id": 222, "title": "Nhóm tuyển dụng"}}},
+        {"message": {"chat": {"id": 111, "first_name": "Vin", "last_name": "Dac"}}},
+    ]}
+    _ds = _bao._cac_chat(_ra)
+    check("gộp trùng, giữ thứ tự tin đến", [c for c, _ in _ds] == ["222", "111"])
+    check("lấy được tên người", ("111", "Vin Dac") in _ds)
+    check("lấy được tên nhóm", ("222", "Nhóm tuyển dụng") in _ds)
+    check("chỉ có username thì dùng username",
+          _bao._cac_chat({"result": [{"message": {"chat": {"id": 5, "username": "ai"}}}]})
+          == [("5", "@ai")])
+    check("tin không phải message thì bỏ, không nổ",
+          _bao._cac_chat({"result": [{"edited_message": {}}, {}]}) == [])
+    check("trả về rỗng thì rỗng", _bao._cac_chat({}) == [])
+    # Mã chat sai dạng (Telegram đổi kiểu, hoặc dữ liệu rác) không được ghim.
+    check("mã chat sai dạng bị loại",
+          _bao._cac_chat({"result": [{"message": {"chat": {"id": "abc"}}}]}) == [])
+
+    # Câu báo cho người dùng: một chat thì gọi tên, nhiều chat thì NÓI LÀ NHIỀU.
+    _that_goi, _that_ghi = _tl.goi, None
+    from jobbot.core import config as _cfgm
+    _that_ghi = _cfgm.write_value
+    _da_ghi = []
+    _cfgm.write_value = lambda muc, k, v: _da_ghi.append((k, v))
+    _bao_cfg = _tl.cau_hinh
+    _tl.cau_hinh = lambda: {"token": "x", "chat_id": ""}
+    def _gia(ham, _t=None, **_k):
+        if ham == "getMe":
+            return {"result": {"username": "jobbot_test_bot"}}, ""
+        return _ra, ""
+    _tl.goi = _gia
+    try:
+        _ok, _cau = _bao.luu("7123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+        check("nối được", _ok, _cau)
+        check("ghim ĐÚNG chat nhắn gần nhất", ("chat_id", "111") in _da_ghi, str(_da_ghi))
+        check("và câu báo GỌI TÊN chat đó", "Vin Dac" in _cau, _cau)
+        check("nói thẳng là có nhiều chat", "2" in _cau and "chat" in _cau, _cau)
+        check("kể cả tên chat kia, để người dùng biết mình chọn nhầm chưa",
+              "Nhóm tuyển dụng" in _cau, _cau)
+        check("và chỉ cách sửa", "Lưu" in _cau, _cau)
+        # Một chat thôi thì câu phải NGẮN, không doạ người dùng.
+        _ra2 = {"result": [{"message": {"chat": {"id": 111, "first_name": "Vin"}}}]}
+        _tl.goi = lambda ham, _t=None, **_k: (
+            ({"result": {"username": "jobbot_test_bot"}}, "") if ham == "getMe"
+            else (_ra2, ""))
+        _ok2, _cau2 = _bao.luu("")
+        check("một chat -> vẫn gọi tên", _ok2 and "Vin" in _cau2, _cau2)
+        check("một chat -> không doạ về nhiều chat", "chat đã nhắn" not in _cau2, _cau2)
+        # Tên có ký tự HTML thì phải thoát — câu này đi thẳng vào trang.
+        _ra3 = {"result": [{"message": {"chat": {"id": 111,
+                                                 "first_name": "<script>x"}}}]}
+        _tl.goi = lambda ham, _t=None, **_k: (
+            ({"result": {"username": "b"}}, "") if ham == "getMe" else (_ra3, ""))
+        _ok3, _cau3 = _bao.luu("")
+        check("tên chat được thoát trước khi vào HTML",
+              "<script>" not in _cau3 and "&lt;script&gt;" in _cau3, _cau3)
+    finally:
+        _tl.goi, _tl.cau_hinh = _that_goi, _bao_cfg
+        _cfgm.write_value = _that_ghi
+
     print("\n[NÚT TEST — gửi THẬT, và hỏng thì nói HỎNG Ở ĐÂU]")
     _ct = _db.connect(":memory:")
     # Tin thử chính LÀ bản hướng dẫn: nói chế độ đang dùng, lệnh dùng được,
@@ -2245,6 +2472,18 @@ with tempfile.TemporaryDirectory() as tmp:
               _tl.goi("getMe", {})[0] is None)
     finally:
         _tl.cau_hinh = _cu
+    # KHOÁ CỨNG LÚC CHẠY TEST. Bộ test đọc config THẬT (chỉ phần GHI được
+    # canh, phần ĐỌC thì không), nên từ lúc người dùng nối bot, mỗi lượt chạy
+    # test gửi tin thật về điện thoại họ — gồm cả báo động giả "Phiên hỏng"
+    # do chính bài test dựng ra. Một bộ test làm phiền người dùng thật là một
+    # bộ test hỏng.
+    check("đang chạy test thì tầng mạng bị khoá", _tl.khoa_mang())
+    check("và coi như CHƯA NỐI dù trên đĩa có gì", _tl.cau_hinh() == {})
+    check("nên không loại báo nào tự gửi được",
+          not _bao.bat(_db.connect(":memory:"), _prefs.BAO_HONG))
+    _rn = (Path(__file__).resolve().parent / "run_all.py").read_text(encoding="utf-8")
+    check("và bộ chạy chung dựng GỐC DỰ ÁN GIẢ cho mọi bài",
+          'JOBBOT_ROOT' in _rn and 'JOBBOT_OFFLINE' in _rn and "env=moi_truong" in _rn)
     _okt, _lyd = _bao.thu(_ct)
     check("chưa nối thì Test trả về THẤT BẠI", not _okt)
     check("và câu báo chỉ đúng việc phải làm",
@@ -2330,7 +2569,7 @@ with tempfile.TemporaryDirectory() as tmp:
         check(f"màu «{_ten}» đọc được trên thẻ ({_tp}:1)", _tp >= _mau.TOI_THIEU)
         _ti = _mau.tuong_phan(_bo["--acc-ink"], _bo["--acc"])
         check(f"chữ trên nền «{_ten}» đọc được ({_ti}:1)", _ti >= _mau.TOI_THIEU)
-        check(f"«{_ten}» khai đủ cả bộ năm", len(_bo) == 5)
+        check(f"«{_ten}» khai đủ cả bộ", set(_bo) == set(_mau.BANG["la"][1]))
     check("có ít nhất bốn màu để chọn", len(_mau.BANG) >= 4)
     # MẶC ĐỊNH KHÔNG ĐÈ GÌ CẢ: app.css vẫn là nguồn sự thật cho bộ xanh lá,
     # nên chọn mặc định thì không thể lệch tông so với hôm nay.
@@ -2338,8 +2577,19 @@ with tempfile.TemporaryDirectory() as tmp:
     check("màu lạ cũng không đè", _mau.css("lung-tung") == "")
     check("màu lạ rơi về mặc định", _mau.hop_le("lung-tung") == _mau.MAC_DINH)
     _tim = _mau.css("tim")
-    for _k in ("--acc:", "--acc-2:", "--acc-ink:", "--acc-bg:", "--acc-bg-2:"):
+    for _k in ("--acc-rgb:", "--acc:", "--acc-2:", "--acc-ink:", "--acc-bg:",
+               "--acc-bg-2:"):
         check(f"đổi màu thì đổi cả «{_k}»", _k in _tim)
+    # KHÔNG CHỖ NÀO ĐƯỢC GÕ CỨNG XANH LÁ. Gõ cứng thì đổi màu chỉ đổi được
+    # chữ — đo thật, 12 chỗ viền/nền vẫn xanh nên chọn Tím ra chữ tím viền
+    # xanh. Mọi độ trong khác phải viết rgba(var(--acc-rgb), X).
+    import re as _reM
+    _than = _css7.split(":root{", 1)[1]
+    _than = _than[_than.index("}") + 1:]        # bỏ khối khai báo biến
+    _cung = _reM.findall(r"rgba\(\s*85\s*,\s*201\s*,\s*141", _than)
+    check(f"không chỗ nào gõ cứng màu xanh lá ({len(_cung)} chỗ)", not _cung)
+    check("và có biến RGB dùng chung", "--acc-rgb:" in _css7
+          and "rgba(var(--acc-rgb)" in _than)
     # MÀU MANG NGHĨA KHÔNG ĐƯỢC ĐỔI — đỏ vẫn phải là trượt. Đây là lời hứa in
     # ngay trên tấm Cài đặt, nên phải có bài đỡ lưng.
     for _giu in ("--bad", "--warn", "--info", "--ink", "--bg"):

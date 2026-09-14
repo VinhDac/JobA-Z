@@ -11,6 +11,7 @@ hình gì, chỉ là mấy tính năng cần cấu hình thì tự tắt.
 from __future__ import annotations
 
 import re
+import os
 import tomllib
 
 from pathlib import Path
@@ -51,12 +52,42 @@ PATH = _Duong("config.toml")
 
 
 def load() -> dict:
+    """Đọc config.toml. Hỏng thì trả rỗng — NHƯNG PHẢI KÊU.
+
+    Trả rỗng lặng lẽ là hỏng câm ở chỗ tệ nhất: sai một dấu nháy trong tệp là
+    Gmail VÀ Telegram cùng tắt, và Telegram chính là kênh duy nhất báo được
+    chuyện đó ra ngoài. Máy treo ở nhà thì người dùng không biết gì cả — chỉ
+    thấy mãi không có tin mới.
+
+    Tệp KHÔNG CÓ thì im lặng: đó là trạng thái hợp lệ của người dùng mới.
+    """
     if not PATH.exists():
         return {}
     try:
         return tomllib.loads(PATH.read_text())
-    except (tomllib.TOMLDecodeError, OSError):
+    except tomllib.TOMLDecodeError as e:
+        _keu(f"config.toml SAI CÚ PHÁP — {str(e)[:90]}. Gmail và Telegram "
+             f"đều tắt cho tới khi sửa.")
         return {}
+    except OSError as e:
+        _keu(f"không đọc được config.toml — {type(e).__name__}: {str(e)[:70]}")
+        return {}
+
+
+_da_keu: set = set()
+
+
+def _keu(cau: str) -> None:
+    """Ghi nhật ký MỘT LẦN cho mỗi câu. `load()` bị gọi hàng chục lần mỗi
+    lượt vẽ trang; kêu mỗi lần thì nhật ký thành rác và dòng đáng đọc trôi."""
+    if cau in _da_keu:
+        return
+    _da_keu.add(cau)
+    try:
+        from .journal import SYSTEM, log as jlog
+        jlog.error(SYSTEM, cau)
+    except Exception:                       # noqa: BLE001
+        pass
 
 
 def section(name: str) -> dict:
@@ -112,8 +143,23 @@ def write_value(name: str, key: str, value: str) -> None:
     else:
         lines += ["", f"[{name}]", new]
 
-    PATH.write_text("\n".join(lines).rstrip() + "\n")
+    # GHI NGUYÊN TỬ: ghi ra tệp tạm CÙNG THƯ MỤC rồi đổi tên đè lên.
+    #
+    # `write_text` cắt cụt tệp rồi mới ghi. Đứt giữa hai bước đó — mất điện,
+    # đĩa đầy, app bị kill — là còn lại một config.toml rỗng hoặc cụt, tức
+    # là MẤT app password Gmail và token Telegram vĩnh viễn. Không có bản
+    # sao nào cả: chúng chỉ nằm đúng ở tệp này.
+    #
+    # `os.replace` trên cùng một hệ tệp là thao tác nguyên tử: hoặc tệp cũ
+    # nguyên vẹn, hoặc tệp mới nguyên vẹn, không có trạng thái giữa.
+    #
+    # chmod TRÊN TỆP TẠM, trước khi đổi tên — làm sau thì có một khe thời
+    # gian tệp bí mật nằm đó với quyền mặc định.
+    goc = Path(str(PATH))
+    tam = goc.with_name(goc.name + ".moi")
+    tam.write_text("\n".join(lines).rstrip() + "\n")
     try:
-        PATH.chmod(SECRET)
+        tam.chmod(SECRET)
     except OSError:
         pass
+    os.replace(tam, goc)

@@ -103,7 +103,21 @@ def run(conn: sqlite3.Connection, days: int | None = None) -> dict:
         # DỊCH VỤ CÔNG KHÔNG PHẢI VIỆC LÀM. "Your application for a National
         # Insurance number" khớp luật `applied` và đẻ ra một dòng trên bảng
         # theo dõi việc làm — đo trên hộp thư thật.
-        if sort.KHONG_PHAI_VIEC.search(msg.get("from_addr") or ""):
+        # BẰNG CHỨNG THẮNG SUY ĐOÁN.
+        #
+        # Bộ lọc tên miền là một SUY ĐOÁN ("thư từ chỗ này chắc không phải
+        # việc làm"). `sort.kind()` đọc ra "interview" là một BẰNG CHỨNG đọc
+        # được từ chính lá thư. Suy đoán không được đè lên bằng chứng.
+        #
+        # Bản trước đè, và cái giá đo được: thư mời phỏng vấn của Civil
+        # Service (`...service.gov.uk`) và NHS (`jobs.nhs.uk`) đọc đúng là
+        # "interview" rồi bị ép về "other", needs_you = 0, và biến mất khỏi
+        # mọi màn hình — trái đúng lời hứa "không lá nào bị bỏ rơi".
+        #
+        # Luật này còn đúng với tên miền CHƯA AI NGHĨ RA: thêm bao nhiêu vào
+        # danh sách chặn cũng không bao giờ ăn mất một lá thư có kết cục thật.
+        if (kind not in sort.MANH
+                and sort.KHONG_PHAI_VIEC.search(msg.get("from_addr") or "")):
             kind, company = "other", ""
         if app_id is None and company and kind in board.STAGES:
             # VỊ TRÍ và TIN GỐC đọc ngay lúc dựng dòng. Không nối thì bảng

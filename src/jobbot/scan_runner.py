@@ -48,25 +48,58 @@ def load_boards(conn) -> dict[str, list[str]]:
     return out
 
 
+def _nguon_hong(conn, name: str, khuc: str, exc: Exception, log: Log) -> None:
+    """Ghi lại một nguồn hỏng — và ĐƯỜNG GHI NÀY KHÔNG ĐƯỢC TỰ HỎNG.
+
+    `record_run()` viết vào đúng cái DB vừa làm `save_batch()` nổ. Nó nổ
+    theo thì ngoại lệ thoát ra TỪ TRONG khối except và giết cả lượt quét —
+    đúng thứ mà hàm gọi nó sinh ra để chặn. Nên cả hai lần ghi đều bọc.
+    """
+    cau = f"{type(exc).__name__}: {exc}"
+    try:
+        postings.record_run(conn, name, ok=False, error=f"{khuc}: {cau}"[:500])
+    except Exception:                                 # noqa: BLE001,S110
+        pass
+    try:
+        jlog.error(SEARCH, f"{name}: {khuc} hỏng — {cau[:60]}")
+    except Exception:                                 # noqa: BLE001,S110
+        pass
+    log(f"  {name:26} FAILED  {khuc}: {cau[:50]}")
+
+
 def _run_source(conn, name: str, fn, *args, log: Log) -> tuple[int, int]:
-    """Một nguồn hỏng KHÔNG được làm hỏng cả lần quét."""
+    """Một nguồn hỏng KHÔNG được làm hỏng cả lần quét.
+
+    CẢ HAI KHÚC nằm trong try, và đó là điểm của hàm này. Bản cũ chỉ bọc
+    khúc lấy tin: nguồn trả về đàng hoàng nhưng `save_batch()` nổ (DB bị
+    khoá, một tin thiếu trường, ràng buộc UNIQUE) thì ngoại lệ bay thẳng ra
+    vòng gọi và 40 nguồn sau KHÔNG chạy nữa — lại còn không có dòng
+    `source_run` nào ghi rằng nguồn này đã hỏng. Một nguồn rác giết cả lượt,
+    im lặng.
+
+    `khuc` là để câu báo lỗi nói ĐÚNG chỗ hỏng. "greenhouse hỏng" thì người
+    đọc đi kiểm mạng; "greenhouse: ghi vào DB hỏng" thì đi kiểm đĩa.
+    """
+    seen = new = 0
+    khuc = "lấy tin"
     try:
         items = fn(*args)
+        khuc = "ghi vào DB"
+        seen, new = postings.save_batch(conn, name, items)
+        postings.record_run(conn, name, ok=True, fetched=seen, new_rows=new)
+        khuc = "ghi nhật ký"
+        # GHI CẢ dòng "không có gì mới". Luật cũ là chỉ ghi khi có tin mới,
+        # vì sợ 62 board mỗi giờ biến nhật ký thành rác — nhưng hậu quả đo
+        # được ở lượt quét 19:22: 21 board chạy, nhật ký để lại đúng 3 dòng.
+        # Người dùng không có cách nào biết 18 board kia đã chạy xong hay đã
+        # chết giữa chừng. Im lặng không phải là gọn. Im lặng là mù.
+        jlog.emit(SEARCH, f"{name}: {seen} tin về, {new} mới",
+                  level=OK if new else INFO)
+        log(f"  {name:26} {seen:5} tin, {new:5} mới")
     except Exception as exc:                          # noqa: BLE001
-        postings.record_run(conn, name, ok=False, error=f"{type(exc).__name__}: {exc}")
-        jlog.error(SEARCH, f"{name}: {type(exc).__name__} — {str(exc)[:60]}")
-        log(f"  {name:26} FAILED  {type(exc).__name__}: {str(exc)[:50]}")
-        return 0, 0
-    seen, new = postings.save_batch(conn, name, items)
-    postings.record_run(conn, name, ok=True, fetched=seen, new_rows=new)
-    # GHI CẢ dòng "không có gì mới". Luật cũ là chỉ ghi khi có tin mới, vì sợ
-    # 62 board mỗi giờ biến nhật ký thành rác — nhưng hậu quả đo được ở lượt
-    # quét 19:22: 21 board chạy, nhật ký để lại đúng 3 dòng. Người dùng không
-    # có cách nào biết 18 board kia đã chạy xong hay đã chết giữa chừng.
-    # Im lặng không phải là gọn. Im lặng là mù.
-    jlog.emit(SEARCH, f"{name}: {seen} tin về, {new} mới",
-              level=OK if new else INFO)
-    log(f"  {name:26} {seen:5} tin, {new:5} mới")
+        _nguon_hong(conn, name, khuc, exc, log)
+    # Trả về thứ THẬT SỰ làm được. Hỏng ở khúc nhật ký thì tin đã nằm trong
+    # DB rồi, báo 0 là báo sai.
     return seen, new
 
 

@@ -18,6 +18,21 @@ from pathlib import Path
 GOC = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(GOC / "src"))
 
+# CHẠY LẺ CŨNG PHẢI ĐÚNG.
+#
+# run_all.py dựng một gốc dự án giả + khoá mạng cho mọi bài. Nhưng chạy lẻ
+# một file (python3 tests/test_web.py) thì không có chốt đó, và mấy bài
+# khẳng định "chưa nối bot" sẽ đỏ — đỏ vì máy này có cấu hình, không vì code
+# sai. Tệ hơn: chạy lẻ có thể gửi tin thật về điện thoại người dùng.
+#
+# Đặt NGAY ĐÂY, trước mọi import jobbot, để không có lối vòng.
+import os as _os, tempfile as _tf, pathlib as _pl
+_os.environ.setdefault("JOBBOT_OFFLINE", "1")
+if "JOBBOT_ROOT" not in _os.environ:
+    _gia = _tf.mkdtemp(prefix="jobbot-test-")
+    _pl.Path(_gia, "config").mkdir(parents=True, exist_ok=True)
+    _os.environ["JOBBOT_ROOT"] = _gia
+
 from jobbot.core import db
 from jobbot.dashboard import tongquan as T
 from jobbot.dashboard.views import bieudo as bd
@@ -162,12 +177,19 @@ check("có thanh khúc như mọi tab", "class=deckpill" in _h)
 check("có nhật ký", "data-journal" in _h)
 for _o in ("Kết quả", "Năng suất", "Chẩn đoán", "Phễu"):
     check(f"có ô «{_o}»", _o in _h)
-# LUỒNG RỖNG: live.js coi ô nhật ký không ghi luồng là "mọi luồng", nên bất kỳ
-# khúc nào chạy xong cũng vẽ lại Home. Đó là chỗ chữ "live" thành thật.
-check("nhật ký nghe MỌI luồng nên trang tự vẽ lại", "data-journal=''" in _h)
+# HAI CÂU HỎI KHÁC NHAU, và bài test cũ gộp chúng làm một y như code:
+#   data-journal  = ô nhật ký HIỆN dòng của luồng nào ("" = mọi luồng)
+#   data-reload   = khúc nào chạy xong thì VẼ LẠI trang ("*" = mọi khúc)
+# Bài cũ khẳng định `"mine && m.stream === mine" in _js` rồi gọi đó là "hiểu
+# luồng rỗng là mọi luồng" — trong khi JavaScript đọc chuỗi rỗng là SAI, nên
+# nhánh đó không bao giờ chạy và Home KHÔNG BAO GIỜ tự vẽ lại. Bài test canh
+# đúng dòng chữ gây ra lỗi, và gật đầu với nó.
+check("nhật ký nghe MỌI luồng", "data-journal=''" in _h)
+check("và trang tự vẽ lại khi BẤT KỲ khúc nào xong", "data-reload='*'" in _h)
 _js = (GOC / "src/jobbot/dashboard/web/live.js").read_text(encoding="utf-8")
-check("và live.js thật sự hiểu luồng rỗng là mọi luồng",
-      "mine && m.stream === mine" in _js)
+check("live.js đọc cờ của trang, không suy từ ô nhật ký",
+      "dataset.reload" in _js and "mine && m.stream === mine" not in _js)
+check("và «*» thật sự nghĩa là mọi khúc", "=== '*'" in _js)
 # Ô Home KHÔNG được là khung cuộn: `.wbody{overflow:auto}` làm min-content của
 # ô bằng 0, nên lưới nén ô xuống bao nhiêu cũng được và ruột đành cuộn.
 check("bốn ô khai là ô VỪA RUỘT, không phải khung cuộn", _h.count("wid vua") == 4)

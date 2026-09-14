@@ -68,9 +68,26 @@ ATS_HOST = re.compile(
     r"efinancialcareers|otta|welcometothejungle|jobtoday)",
     re.I)
 
-# Không phải thư tuyển dụng chút nào — dịch vụ công, ngân hàng, nhà mạng.
-# "Your application for a National Insurance number" khớp luật `applied` và
-# đẻ ra một dòng mang tên "Apply for a National Insurance num" trên bảng.
+# KẾT CỤC MẠNH — ba loại này không thể khớp nhầm từ một lá thư hành chính.
+# Không sở thuế nào viết "we would like to invite you to interview".
+#
+# `applied` thì YẾU: "Your application for a National Insurance number" khớp
+# nó bằng đúng một chữ "application".
+MANH = (INTERVIEW, OFFER, REJECTED)
+
+# TÊN MIỀN HAY GỬI THƯ HÀNH CHÍNH. Danh sách RỘNG là cố ý, và nó chỉ an toàn
+# nhờ luật MANH ở trên.
+#
+# Nó đè được lên bằng chứng YẾU — đo trên hộp thư thật, "Your application for
+# a National Insurance number" từng đẻ ra một dòng việc làm tên "Apply for a
+# National Insurance num".
+#
+# Nhưng nó KHÔNG đè được lên kết cục MẠNH. Ở UK, Civil Service và NHS là hai
+# nhà tuyển dụng lớn nhất nước; bản trước ép thư mời phỏng vấn của họ về
+# "other", needs_you = 0, và lá thư biến mất khỏi mọi màn hình.
+#
+# Đổi lại: thư "đã nhận đơn" từ Civil Service không tự đẻ dòng. Chấp nhận
+# được — mất một dòng xác nhận nhẹ hơn nhiều so với mất một lời mời.
 KHONG_PHAI_VIEC = re.compile(
     r"(service\.gov\.uk|gov\.uk|hmrc|dvla|nhs\.uk|\.edu$|companieshouse)", re.I)
 

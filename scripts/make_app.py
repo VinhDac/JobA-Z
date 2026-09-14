@@ -128,6 +128,47 @@ def draw_icon(out_dir: Path) -> Path | None:
     return icns if done.returncode == 0 else None
 
 
+# Vỏ của .app: một kịch bản bash mỏng, code thật nằm trong dự án nên sửa code
+# là chạy ngay, không phải dựng lại bundle.
+#
+# HAI THỨ BIẾN MẤT ĐƯỢC sau khi dựng, và cũ thì cả hai đều chết CÂM:
+#
+#   1. Thư mục dự án — đổi tên hay chuyển chỗ là xong. Bản cũ `cd ... || exit 1`
+#      rồi thoát lặng lẽ: bấm icon, icon nảy một cái, hết. Không thông báo,
+#      không log, không cách nào đoán.
+#   2. Python đã dựng bằng — bản cũ nướng cứng `sys.executable`, ở máy này là
+#      /opt/anaconda3/bin/python3. Gỡ Anaconda hay nâng cấp nó là app chết,
+#      trong khi máy vẫn còn Python 3.13 chỗ khác dùng được.
+#
+# Nên: đường dự án vẫn nướng vào (kéo .app sang /Applications thì không tự suy
+# ra được), nhưng KIỂM TRA rồi mới dùng; còn Python thì đi TÌM lúc chạy, dùng
+# chung đúng một bản chọn với start.command.
+VO = """#!/bin/bash
+# Vỏ mỏng — code thật nằm trong dự án, sửa là chạy ngay.
+
+keu() {
+  osascript -e "display alert \\"jobbot\\" message \\"$1\\"" >/dev/null 2>&1
+  echo "$1" >&2
+  exit 1
+}
+
+DU_AN="<DU_AN>"
+[ -f "$DU_AN/run.py" ] || keu "Không thấy dự án ở:
+
+$DU_AN
+
+Thư mục đã bị đổi tên hoặc chuyển chỗ. Mở thư mục dự án rồi chạy lại:
+  python3 scripts/make_app.py"
+
+cd "$DU_AN" || keu "Không vào được $DU_AN"
+
+. scripts/tim-python.sh
+[ -n "$PY" ] || keu "$THIEU_PYTHON"
+
+exec "$PY" run.py "$@"
+"""
+
+
 def build() -> int:
     contents = APP / "Contents"
     macos, resources = contents / "MacOS", contents / "Resources"
@@ -154,11 +195,7 @@ def build() -> int:
     (contents / "Info.plist").write_bytes(plistlib.dumps(info))
 
     launcher = macos / "jobbot"
-    launcher.write_text(
-        "#!/bin/bash\n"
-        "# Vỏ mỏng — code thật nằm trong dự án, sửa là chạy ngay.\n"
-        f'cd "{ROOT}" || exit 1\n'
-        f'exec "{sys.executable}" run.py "$@"\n')
+    launcher.write_text(VO.replace("<DU_AN>", str(ROOT)))
     launcher.chmod(0o755)
 
     subprocess.run(["touch", str(APP)], check=False)     # để Finder nhận icon mới

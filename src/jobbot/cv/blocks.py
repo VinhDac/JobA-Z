@@ -15,9 +15,28 @@ from dataclasses import dataclass, field
 from ..ingest.base import norm
 from ..scoring.vocab import ALIASES
 
+# TÊN MỤC TRÊN CV — nhận nhiều cách viết, KHÔNG phân biệt hoa thường.
+#
+# Bản trước chỉ khớp đúng chữ VIẾT HOA và đúng mấy từ tác giả tự dùng. Đo
+# thật trên cùng một CV, chỉ đổi dòng tiêu đề:
+#     EXPERIENCE          -> có khối experience, chấm 92 điểm
+#     WORK EXPERIENCE     -> MẤT khối experience, chấm 22 điểm
+#     Experience          -> MẤT
+#     EMPLOYMENT HISTORY  -> MẤT
+#     EXPERIENCE:         -> MẤT
+# Mất khối kinh nghiệm thì chỉ số bằng chứng rỗng, mọi dòng yêu cầu bị chấm
+# KHÔNG ĐẠT — và không một lời báo. App chỉ chạy đúng cho CV viết y hệt cách
+# tác giả viết; đó là đặc cách, không phải hệ thống.
 SECTION = re.compile(
-    r"^(EXPERIENCE|SELECTED PROJECTS|PROJECTS|EDUCATION|TECHNICAL SKILLS|SKILLS|"
-    r"CERTIFICATIONS?|PUBLICATIONS?|AWARDS?)\s*$")
+    r"^\s*("
+    r"(?:work|professional|relevant|employment|career)?\s*"
+    r"(?:experience|history)"
+    r"|(?:selected|key|personal|side)?\s*projects?"
+    r"|education(?:\s+and\s+training)?|academic(?:\s+background)?"
+    r"|(?:technical|core|key)?\s*(?:skills?|competenc(?:y|ies))"
+    r"|certifications?|licen[cs]es?|publications?|awards?|honou?rs?"
+    r"|volunteering|languages?|interests?"
+    r")\s*:?\s*$", re.I)
 
 # Ngày tháng bị dính vào cuối dòng chức danh khi trích từ PDF
 DATE_TAIL = re.compile(
@@ -145,11 +164,27 @@ def parse(cv_text: str) -> list[Block]:
         found = SECTION.match(line)
         if found:
             flush()
-            name = found.group(1).lower()
-            section = ("experience" if name == "experience"
-                       else "project" if "project" in name
-                       else "education" if name == "education"
-                       else "cert" if name.startswith("certification")
+            # SO BẰNG TỪ CÓ TRONG TÊN, không so bằng cả chuỗi.
+            #
+            # Bản trước dùng `name == "experience"`, nên nới bảng tên mục ra
+            # là hỏng ngay: "work experience" không bằng "experience" nên nó
+            # rơi xuống nhánh cuối và thành "skill" — mục kinh nghiệm bị xếp
+            # vào mục kỹ năng, tệ hơn cả lúc nó biến mất.
+            #
+            # Thứ tự CÓ NGHĨA: xét từ riêng tới chung. "technical skills" phải
+            # bị bắt bởi nhánh skill trước khi chạm nhánh nào khác.
+            name = " ".join(found.group(1).lower().split())
+            section = ("project" if "project" in name
+                       else "cert" if ("certification" in name
+                                       or "licen" in name)
+                       else "education" if ("education" in name
+                                            or "academic" in name)
+                       else "skill" if ("skill" in name
+                                        or "competenc" in name
+                                        or "language" in name)
+                       else "experience" if ("experience" in name
+                                             or "history" in name
+                                             or "career" in name)
                        else "skill")
             continue
 
@@ -233,7 +268,40 @@ def parse(cv_text: str) -> list[Block]:
     for block in blocks:
         if not block.tags:
             block.tags = _tags(block.text())
+    _keu_neu_khong_hieu(cv_text, blocks)
     return blocks
+
+
+# Bao nhiêu ký tự thì coi là "một CV thật", không phải vài dòng gõ thử.
+DU_DAI = 500
+
+
+def khong_hieu(cv_text: str, blocks: list) -> bool:
+    """CV có chữ mà máy không dựng nổi khối kinh nghiệm lẫn project nào.
+
+    ĐÂY MỚI LÀ CHỐT HỆ THỐNG, không phải cái bảng tên mục ở trên.
+    Bảng tên mục chỉ biết những cách viết ĐÃ NGHĨ RA; ngày mai có người viết
+    "BERUFSERFAHRUNG" hay "工作经历" thì nó lại câm. Chốt này không cần biết
+    tên mục là gì — nó chỉ hỏi một câu không thể sai: CV dài thế này mà
+    không ra khối nào thì chắc chắn có chuyện.
+    """
+    if len((cv_text or "").strip()) < DU_DAI:
+        return False
+    return not any(b.kind in ("experience", "project") for b in blocks)
+
+
+def _keu_neu_khong_hieu(cv_text: str, blocks: list) -> None:
+    """Không hiểu thì KÊU. Hỏng câm là kiểu hỏng tệ nhất: điểm tụt từ 92
+    xuống 22 mà màn hình vẫn xanh, và người dùng đi sửa nhầm chỗ."""
+    if not khong_hieu(cv_text, blocks):
+        return
+    try:
+        from ..core.journal import CV, log as jlog
+        jlog.warn(CV, "KHÔNG nhận ra mục nào trong CV — tên mục cần là "
+                      "EXPERIENCE / PROJECTS / EDUCATION… Mọi tin sẽ bị chấm "
+                      "thiếu bằng chứng cho tới khi sửa.")
+    except Exception:                       # noqa: BLE001
+        pass
 
 
 def sentences(block: Block) -> list[str]:

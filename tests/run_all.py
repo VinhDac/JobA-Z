@@ -15,9 +15,12 @@ Nên ở đây kiểm CẢ HAI phía, và bên nào cũng phải khớp:
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -55,8 +58,24 @@ def main() -> int:
     total_ok = total_fail = broken = 0
     truoc = _dau_van_tay()
 
+    # BÀI TEST CHẠY TRONG MỘT THẾ GIỚI KHÔNG CÓ BÍ MẬT CỦA AI CẢ.
+    #
+    # Trước đây không truyền env nào, mà dấu vân tay ở trên chỉ canh việc GHI
+    # đè tệp người dùng — không canh việc ĐỌC. Hậu quả đo được: từ lúc nối
+    # Telegram, mỗi lượt chạy test gửi tin THẬT về điện thoại người dùng,
+    # trong đó có báo động giả "⚠️ Phiên hỏng" do chính bài test dựng ra. Và
+    # năm bài khẳng định "chưa nối bot" thì đỏ — đỏ vì máy này có cấu hình,
+    # không phải vì code sai.
+    #
+    # JOBBOT_ROOT chuyển hướng config/ VÀ đường xoá của reset.run();
+    # JOBBOT_OFFLINE là khoá cứng ở tầng mạng (core/tele.py). Hai lớp, vì
+    # lớp nào cũng có thể bị một bài test tương lai đi vòng.
+    gia = tempfile.mkdtemp(prefix="jobbot-test-")
+    (Path(gia) / "config").mkdir(parents=True, exist_ok=True)
+    moi_truong = {**os.environ, "JOBBOT_ROOT": gia, "JOBBOT_OFFLINE": "1"}
+
     for path in files:
-        done = subprocess.run([sys.executable, str(path)],
+        done = subprocess.run([sys.executable, str(path)], env=moi_truong,
                               capture_output=True, text=True, cwd=HERE.parent)
         out = done.stdout + done.stderr
         found = SUMMARY.search(out)

@@ -42,11 +42,17 @@
   --ink:#D4D4D4;          /* 10.3:1 trên panel — dịu hơn trắng, đỡ loá */
   --dim:#C0C0C0;          /*  8.4:1 */
   --mute:#ACACAC;         /*  6.5:1 — trước là 3.5:1 */
+  /* BA THÀNH PHẦN RGB của màu nhấn, khai riêng.
+     Mọi chỗ cần màu nhấn với ĐỘ TRONG khác nhau đều viết
+     rgba(var(--acc-rgb), .35) thay vì gõ cứng rgba(var(--acc-rgb),.35).
+     Không có nó thì đổi màu hệ thống chỉ đổi được CHỮ: đo thật, 12 chỗ
+     viền và nền vẫn xanh lá, nên chọn Tím ra chữ tím viền xanh. */
+  --acc-rgb:85,201,141;
   --acc:#55C98D;          /* xanh lá dịu — không neon, cũng không nhờ */
   --acc-2:#48B37C;
   --acc-ink:#10261B;      /* chữ trên nền xanh */
-  --acc-bg:rgba(85,201,141,.11);
-  --acc-bg-2:rgba(85,201,141,.20);
+  --acc-bg:rgba(var(--acc-rgb),.11);
+  --acc-bg-2:rgba(var(--acc-rgb),.20);
   --info:#6CB6FF;         /* 7.5:1 trên pill — tin nền, đọc để biết */
   --warn:#D8A15E;
   --warn-bg:rgba(216,161,94,.11);
@@ -222,7 +228,7 @@ a:hover{text-decoration:underline}
 /* ---------------- huy hiệu, điểm ---------------- */
 .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;
   border:1px solid var(--line-2);color:var(--mute);white-space:nowrap}
-.badge.ok,.badge.safe{color:var(--acc);border-color:rgba(85,201,141,.35);background:var(--acc-bg)}
+.badge.ok,.badge.safe{color:var(--acc);border-color:rgba(var(--acc-rgb),.35);background:var(--acc-bg)}
 .badge.hi{color:var(--acc-ink);background:var(--acc);border-color:var(--acc);font-weight:650}
 .badge.warn,.badge.risky{color:var(--warn);border-color:rgba(255,180,84,.35);background:var(--warn-bg)}
 .badge.muted{opacity:.55}
@@ -245,7 +251,7 @@ ul.mini .warn{color:var(--warn)}
 
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:8px;margin:12px 0}
 .stat{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px 15px}
-.stat.key{border-color:rgba(85,201,141,.3);background:linear-gradient(180deg,var(--acc-bg),transparent)}
+.stat.key{border-color:rgba(var(--acc-rgb),.3);background:linear-gradient(180deg,var(--acc-bg),transparent)}
 .stat b{display:block;font-size:23px;letter-spacing:-.03em;font-variant-numeric:tabular-nums;
   font-weight:640}
 .stat.key b{color:var(--acc)}
@@ -344,7 +350,7 @@ button.primary:hover{background:var(--acc-2)}
 .q h3{font-size:14px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--ink);margin:0 0 5px}
 .why{color:var(--mute);font-size:12px;margin:0 0 11px;line-height:1.5}
 .req{font-weight:500;font-size:10px;color:var(--acc);margin-left:8px;text-transform:uppercase;
-  letter-spacing:.07em;border:1px solid rgba(85,201,141,.35);background:var(--acc-bg);
+  letter-spacing:.07em;border:1px solid rgba(var(--acc-rgb),.35);background:var(--acc-bg);
   border-radius:4px;padding:2px 6px;vertical-align:2px}
 .opt-tag{font-weight:500;font-size:10px;color:var(--mute);margin-left:8px;text-transform:uppercase;
   letter-spacing:.07em;border:1px solid var(--line-2);border-radius:4px;padding:2px 6px;vertical-align:2px}
@@ -364,7 +370,7 @@ button.primary:hover{background:var(--acc-2)}
 .count{margin-left:auto;font-size:11.5px;font-weight:400;color:var(--mute);text-transform:none;
   letter-spacing:0}
 .gate{padding:11px 15px;border-radius:9px;font-size:13px;margin:0 0 10px}
-.gate.ok{background:var(--acc-bg);color:var(--acc);border:1px solid rgba(85,201,141,.25)}
+.gate.ok{background:var(--acc-bg);color:var(--acc);border:1px solid rgba(var(--acc-rgb),.25)}
 .gate.block{background:var(--warn-bg);color:var(--warn);border:1px solid rgba(255,180,84,.25)}
 .gate a{color:inherit;text-decoration:underline}
 /* table-layout:fixed — `width` trên ô bảng chỉ là GỢI Ý khi bảng tự dàn cột:
@@ -842,7 +848,7 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 /* Thư báo việc — màu hổ phách, khác hẳn hai nguồn kia. Nó là nguồn NHANH
    NHẤT (LinkedIn gửi trong vài giờ), nên đáng có màu riêng để liếc là thấy. */
 .src.alert{color:#D8A15E;border-color:rgba(216,161,94,.3)}
-.src.board{color:var(--acc);border-color:rgba(85,201,141,.3)}
+.src.board{color:var(--acc);border-color:rgba(var(--acc-rgb),.3)}
 .src.agency{color:var(--warn);border-color:rgba(216,161,94,.3)}
 
 /* Đường sang TIN GỐC ở trang chi tiết. Mỗi nơi đăng một nút; nút nói rõ tên
@@ -870,7 +876,7 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
   padding:6px 7px;cursor:text}
 .tagbox:focus-within{border-color:var(--acc-2)}
 .tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;
-  color:var(--acc);background:var(--acc-bg);border:1px solid rgba(85,201,141,.28);
+  color:var(--acc);background:var(--acc-bg);border:1px solid rgba(var(--acc-rgb),.28);
   border-radius:5px;padding:3px 4px 3px 8px;white-space:nowrap}
 .untag{font:inherit;font-size:13px;line-height:1;color:var(--acc);cursor:pointer;
   background:none;border:0;padding:0 3px;opacity:.55}
@@ -927,7 +933,7 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 .srcrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 .srcbtn{width:auto;padding:6px 13px;font-family:ui-monospace,Menlo,monospace;
   font-size:11.5px}
-.srcbtn.board{color:var(--acc);border-color:rgba(85,201,141,.35)}
+.srcbtn.board{color:var(--acc);border-color:rgba(var(--acc-rgb),.35)}
 .srcbtn.linkedin{color:#8FA9C9;border-color:rgba(143,169,201,.35)}
 .srcbtn.alert{color:#D8A15E;border-color:rgba(216,161,94,.35)}
 /* TẮT thì phải nhìn ra ngay là đang tắt: mờ đi VÀ mất màu, vì chỉ mờ thôi
@@ -1333,7 +1339,6 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
    nút. Đẩy số liệu ra ngoài thì thanh vỡ thành ba tầng rời rạc. */
 .deckwrap{display:flex;justify-content:center;width:100%;min-width:0}
 
-.deckpill::-webkit-scrollbar{display:none}
 /* Nền viên thuốc dùng ĐÚNG luật của mọi mặt khác trong vùng làm việc: nền
    --panel phẳng + viền --line, y như cái thẻ nằm ngay dưới nó. Bản cũ chồng
    SÁU lớp (gradient, viền xanh rgba, vệt sáng mép trên, quầng xanh 4px, quầng
@@ -1343,9 +1348,23 @@ main:not(.flow) .inner{flex:1;min-height:0;max-width:none;
 
    Không dùng vạch ngăn bên trong — khoảng trắng đủ để tách nhóm, mà vạch thì
    chia viên thuốc thành ba ô nhìn như cái bảng. */
-.deckpill{display:inline-flex;align-items:center;flex-wrap:nowrap;gap:4px;
-  max-width:100%;overflow-x:auto;scrollbar-width:none;
-  padding:0 7px 0 5px;border-radius:999px;
+/* XUỐNG DÒNG khi hết chỗ, KHÔNG cuộn ngang. Bản cũ để `overflow-x:auto` rồi
+   giấu luôn thanh cuộn (`scrollbar-width:none`), nên thứ tràn ra ngoài biến
+   mất SẠCH — không mép mờ, không thanh cuộn, không gì cả. Đo thật trên
+   /track/queue: cửa sổ 1180 vừa khít 7px, xuống 1100 mất nút «← Bảng»,
+   xuống 980 mất ba nút «Quét thư», «Dừng», «← Bảng». Người dùng không bấm
+   được cái nút họ không nhìn thấy, và cũng không có cách nào đoán ra là có.
+
+   "Được phép RỘNG, không được CAO" vẫn đúng — nhưng nó là luật cho lúc VỪA
+   chỗ. Lúc không vừa thì hai hàng vẫn đọc được; một hàng cụt thì không.
+
+   border-radius 24px: hàng đơn cao 45px nên 24 > 45/2, trình duyệt kẹp lại
+   thành đúng viên thuốc như cũ. Hai hàng thì nó thành thanh bo góc — đúng
+   như vậy, vì nó KHÔNG còn là một viên thuốc nữa. */
+.deckpill{display:inline-flex;align-items:center;flex-wrap:wrap;
+  justify-content:center;gap:0 4px;
+  max-width:100%;
+  padding:0 7px 0 5px;border-radius:24px;
   background:var(--panel);border:1px solid var(--line);
   transition:border-color .2s,box-shadow .2s}
 /* CHỈ lúc đang chạy thì viền thanh mới bắt sáng. Không có luật cho `paused`:
@@ -1358,8 +1377,8 @@ body[data-run=running] .deckpill{border-color:var(--acc-2);
   padding:8px 16px 8px 13px}
 .deckname{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
   color:var(--ink)}
-.metrics{display:flex;align-items:baseline;flex-wrap:nowrap;gap:17px;flex:none;
-  padding:8px 18px 8px 10px}
+.metrics{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 17px;flex:none;
+  justify-content:center;padding:8px 18px 8px 10px}
 .metric{font-size:11.5px;color:var(--mute);display:flex;align-items:baseline;gap:5px;
   white-space:nowrap;flex:none}
 .metric b{font-size:15px;font-weight:650;color:var(--ink);
@@ -1619,7 +1638,7 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 /* TỪ KHOÁ tin này ĐÒI. Đây là thứ trả lời câu hỏi đầu tiên của người đọc:
    tờ giấy có nói ra được thứ họ hỏi không — nhìn phát thấy, không phải đọc
    phân số. */
-.kw{background:rgba(85,201,141,.17);color:var(--acc);
+.kw{background:rgba(var(--acc-rgb),.17);color:var(--acc);
   border-radius:3px;padding:0 2px;font-weight:600}
 
 .ccard{margin:7px 0 10px;padding:10px 13px;border-radius:9px;
@@ -1670,7 +1689,7 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .glegend{display:flex;flex-wrap:wrap;gap:13px;margin:8px 0 2px;font-size:11.5px}
 .gleg{color:var(--dim);padding-bottom:1px}
 .gleg b{color:var(--ink);margin-left:4px;font-variant-numeric:tabular-nums}
-.gleg.kw{background:rgba(85,201,141,.17);color:var(--acc);
+.gleg.kw{background:rgba(var(--acc-rgb),.17);color:var(--acc);
   border-radius:3px;padding:0 5px;font-weight:600}
 .gstat.act b{color:var(--acc)}
 
@@ -1682,7 +1701,7 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
 .hrow:last-of-type{border-bottom:0}
 .hlab{grid-area:lab;font-size:9.5px;font-weight:700;letter-spacing:.05em;
   text-align:center;padding:2px 0;border-radius:4px}
-.hlab.viet{color:var(--acc);background:rgba(85,201,141,.14)}
+.hlab.viet{color:var(--acc);background:rgba(var(--acc-rgb),.14)}
 .hlab.hoc{color:var(--warn);background:rgba(216,161,94,.14)}
 .hname{grid-area:name;color:var(--ink);font-weight:600;font-size:12.5px}
 /* Vạch dài theo SỐ TIN MỞ KHOÁ, không theo số dòng — đó là thứ quyết định
@@ -1797,7 +1816,7 @@ a.gnum:hover{color:var(--acc);border-color:var(--acc)}
   font-size:11px;color:var(--mute)}
 .sv{font-size:10px;font-weight:600;letter-spacing:.04em;border-radius:20px;
   padding:1px 8px;flex:none;border:1px solid var(--line-2)}
-.sv.ok{color:var(--acc);background:var(--acc-bg);border-color:rgba(85,201,141,.3)}
+.sv.ok{color:var(--acc);background:var(--acc-bg);border-color:rgba(var(--acc-rgb),.3)}
 .sv.warn{color:var(--warn);background:var(--warn-bg);border-color:rgba(216,161,94,.35)}
 .sv.bad{color:var(--bad);background:rgba(221,125,118,.11);
   border-color:rgba(221,125,118,.35)}
@@ -1970,24 +1989,25 @@ a.mbtn.apply{color:var(--acc)}
 
 /* LẦN CHẠM CUỐI — con số quan trọng nhất của mỗi dòng: nó trả lời "còn sống
    không", thứ mà cột trạng thái không trả lời được. */
-.tcham{white-space:nowrap}
-.tcham b{color:var(--dim);font-weight:600}
-.tcham i{display:block;font-style:normal;font-size:10px;color:var(--mute)}
-tr.snong .tcham b{color:var(--acc)}
-/* QUÁ CỬA SỔ thì đỏ, kể cả dòng đang phỏng vấn — đặt SAU .snong để thắng. */
-tr.qua .tcham b{color:var(--warn)}
+/* MÀU «LẦN CHẠM CUỐI» — nhắm ĐÚNG bảng đang chạy.
+   Bản trước viết cho `<table><tr class=snong><td class=tcham>`; bảng giờ là
+   `<details class='trow snong'>` với `<span class=c6>`. Luật cũ không khớp
+   nổi phần tử nào, nên số ngày im lặng mất màu cảnh báo — chết câm, vì CSS
+   không khớp thì trình duyệt không kêu gì cả. */
+.trow.snong .c6 b{color:var(--acc)}
+.trow.qua .c6 b{color:var(--warn)}
 tr.sxong{opacity:.55}
 .tthu{text-align:right;color:var(--mute);font-size:11.5px}
 
 /* Thư MÁY KHÔNG ĐỌC ĐƯỢC — khác hẳn ô đề xuất: ô kia máy đã hiểu và chỉ xin
    xác nhận, ô này máy nói thẳng là nó bó tay. Viền xám, không cam. */
-.askbox.mu{border-color:var(--line-2);background:transparent}
-.askbox.mu .askhead{color:var(--mute)}
-.askbox.mu .askhead b{color:var(--dim)}
-.askbox.mu .askto{color:var(--mute);margin-left:9px}
-.askbox.mu .askmain b{margin-right:2px}
+.asklist.mu{border-color:var(--line-2);background:transparent}
+.asklist.mu .askhead{color:var(--mute)}
+.asklist.mu .askhead b{color:var(--dim)}
+.asklist.mu .askto{color:var(--mute);margin-left:9px}
+.asklist.mu .askmain b{margin-right:2px}
 .asksnip{font-size:11px;color:var(--mute);line-height:1.5;margin-top:3px}
-.askbox.mu .askact{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;
+.asklist.mu .askact{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;
   max-width:330px}
 
 /* ---------------- Quản lí: DATASHEET ----------------
@@ -2060,7 +2080,7 @@ tr.sxong{opacity:.55}
 .ttag .src{font-style:normal;font-size:9.5px;border:1px solid var(--line-2);
   border-radius:20px;padding:1px 7px;color:var(--mute)}
 .ttag .src.linkedin{color:#8FA9C9;border-color:rgba(143,169,201,.35)}
-.ttag .src.board{color:var(--acc);border-color:rgba(85,201,141,.3)}
+.ttag .src.board{color:var(--acc);border-color:rgba(var(--acc-rgb),.3)}
 .ttag .src.alert{color:var(--warn);border-color:rgba(216,161,94,.35)}
 .ttag .who{font-style:normal;font-size:9.5px;color:var(--line-2)}
 .trow .twhen{font-size:11px;color:var(--mute);white-space:nowrap}

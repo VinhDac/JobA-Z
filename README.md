@@ -22,19 +22,28 @@ crash thì tự bật lại.
 - **Đóng cửa sổ thì ẩn, app vẫn chạy nền** — giống Discord. Chỉ Quit mới thoát hẳn
 - Tự quét mỗi 60 phút, có việc mới thì báo qua thông báo macOS
 
-Không cần cài gì thêm, không venv. Python 3.11+ và PyObjC (macOS có sẵn);
-WebKit nạp động lúc chạy.
+Không cần cài gì thêm, không venv — **Python 3.11 trở lên** là đủ.
+
+PyObjC **không** có sẵn trên macOS: `/usr/bin/python3` (3.9.6) không có nó,
+và bản đó cũng quá cũ so với 3.11. Có PyObjC (Anaconda, hoặc `pip install
+pyobjc`) thì được cửa sổ macOS thật; không có thì app tự lùi về cửa sổ Chrome
+`--app` — vẫn là cửa sổ riêng, không thanh địa chỉ. WebKit nạp động lúc chạy.
+
+App tự đi tìm Python lúc khởi động (`scripts/tim-python.sh`) nên không phụ
+thuộc bản đã dựng bằng. Máy có Python ở chỗ lạ thì chỉ tay:
+`export JOBBOT_PYTHON=/duong/dan/toi/python3`.
 
 | Lệnh | Làm gì |
 |---|---|
 | `open jobbot.app` | Mở app |
+| `./start.command` | Bấm đúp cũng được — đang chạy thì chỉ mở dashboard |
 | `python3 run.py` | Chạy trực tiếp, không qua bundle |
 | `python3 run.py --window` | Chạy trong Terminal, thấy log, Ctrl+C dừng |
 | `python3 run.py --scan` | Quét một lần rồi thoát |
 | `python3 scripts/install_agent.py --status` | Xem dịch vụ đang chạy không |
 | `python3 scripts/install_agent.py --uninstall` | Gỡ dịch vụ |
 
-Test: `python3 tests/test_profile.py && python3 tests/test_ingest.py`
+Test: `python3 tests/run_all.py` (chạy hết mọi bài)
 
 ---
 

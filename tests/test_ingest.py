@@ -55,11 +55,32 @@ check("và nói rõ lấy đâu làm nhà", "(UK)" in why, )
 # Ô "Where you're based" GIỜ CÓ TÁC DỤNG THẬT. Trước đây không một dòng nào
 # trong tìm/lọc đọc nó — trong khi chính câu `why` của nó hứa
 # "Used to filter on-site and hybrid roles by commute".
-o_my = dict(PROFILE, location="New York, NY")
+# Ở Mỹ, và KHÔNG chọn thị trường UK -> việc London là ngoài khu vực.
+o_my = dict(PROFILE, location="New York, NY", markets=["us_remote"])
 keep, _ = jf.judge(P("Data Scientist", location="New York"), o_my)
 check("ở Mỹ thì việc New York được giữ", keep)
 keep, why = jf.judge(P("Data Scientist", location="London"), o_my)
 check("và việc London thành ngoài khu vực", not keep and "(US)" in why)
+
+# Ô "thị trường" LÀ MỘT LỜI KHAI, không phải trang trí. Ở Mỹ mà tick
+# "UK — onsite" nghĩa là sẵn sàng nhận việc ở UK, nên London phải được GIỮ.
+#
+# Bản trước location_ok nhận `markets` rồi không đọc một lần nào: hồ sơ chọn
+# "US — remote" mà tin New York vẫn bị vứt vì "outside your area (UK)". Tệ
+# hơn, LinkedIn dịch đúng mấy khoá đó thành nơi ĐI TÌM — app đi tìm ở Mỹ rồi
+# tự ném sạch kết quả về.
+o_my_uk = dict(PROFILE, location="New York, NY",
+               markets=["uk_onsite", "uk_remote"])
+keep, _ = jf.judge(P("Data Scientist", location="London"), o_my_uk)
+check("ở Mỹ nhưng chọn thị trường UK -> việc London được giữ", keep)
+o_uk_us = dict(PROFILE, location="London, UK", markets=["us_remote"])
+keep, _ = jf.judge(P("Data Scientist", location="New York, NY"), o_uk_us)
+check("ở UK nhưng chọn US remote -> việc New York được giữ", keep)
+keep, _ = jf.judge(P("Data Scientist", location="Berlin, Germany"), o_uk_us)
+check("nhưng Berlin thì không — không chọn EU", not keep)
+o_all = dict(PROFILE, location="London, UK", markets=["global_remote"])
+keep, _ = jf.judge(P("Data Scientist", location="Berlin, Germany"), o_all)
+check("chọn global remote -> bỏ hẳn chốt địa điểm", keep)
 # Ô để trống thì giữ NẾP CŨ, không tự ý đổi thứ đang giữ.
 keep, _ = jf.judge(P("Data Scientist", location="London"),
                    dict(PROFILE, location=""))

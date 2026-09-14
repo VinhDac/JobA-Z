@@ -40,6 +40,24 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+# KHOÁ CỨNG CHO LÚC CHẠY TEST.
+#
+# Đây không phải lo xa. Bộ test đọc config/config.toml THẬT (nó chỉ được canh
+# phần GHI, không canh phần ĐỌC), nên từ lúc Vin nối bot, MỌI lượt chạy test
+# đều gửi tin thật về điện thoại anh — kể cả một báo động giả "⚠️ Phiên hỏng"
+# do bài test dựng ra. Một bộ test làm phiền người dùng thật là bộ test hỏng.
+#
+# Chốt đặt ở ĐÂY, tầng thấp nhất và duy nhất chạm mạng: mọi đường gửi/nhận
+# đều đi qua goi(), nên không có lối vòng.
+import os
+
+OFFLINE = "JOBBOT_OFFLINE"
+
+
+def khoa_mang() -> bool:
+    return os.environ.get(OFFLINE, "") == "1"
+
+
 API = "https://api.telegram.org"
 MUC = "telegram"                 # tên mục trong config.toml
 
@@ -52,7 +70,13 @@ HET_GIO = CHO + 10
 # --- CẤU HÌNH ------------------------------------------------------------
 
 def cau_hinh() -> dict:
-    """{token, chat_id} từ config.toml. Đọc hỏng thì rỗng, KHÔNG nổ."""
+    """{token, chat_id} từ config.toml. Đọc hỏng thì rỗng, KHÔNG nổ.
+
+    Lúc chạy thử thì coi như CHƯA NỐI, dù trên đĩa có gì: bài test phải chạy
+    trong một thế giới không có bí mật của ai cả.
+    """
+    if khoa_mang():
+        return {}
     try:
         from . import config
         return config.section(MUC) or {}
@@ -89,10 +113,15 @@ def goi(duong: str, tham: dict, giay: int = 12) -> tuple:
     Telegram nghĩa là gì: 401 là token sai, 400 + "chat not found" là số chat
     sai. Để người gọi tự đoán từ mã số là bắt họ học API.
     """
+    # KIỂM CỤC BỘ TRƯỚC, KHOÁ MẠNG SAU. Cả hai cùng đúng thì lý do cụ thể
+    # hơn phải thắng: "chưa dán token" chỉ đúng việc phải làm, còn "đang chạy
+    # thử" thì không giúp được ai đang cấu hình.
     c = cau_hinh()
     token = str(c.get("token", "")).strip()
     if not token:
         return None, "chưa dán token — lấy ở @BotFather trên Telegram"
+    if khoa_mang():
+        return None, "đang chạy thử — mọi lượt gọi ra ngoài đều bị chặn"
     url = f"{API}/bot{token}/{duong}"
     data = urllib.parse.urlencode(
         {k: v for k, v in tham.items() if v is not None}).encode()
@@ -228,12 +257,16 @@ def nhan(offset: int) -> tuple:
     Hỏng mạng thì trả ([], offset cũ) — vòng ngoài ngủ rồi thử lại, không ai
     phải xử lý ngoại lệ.
     """
-    ra = _goi("getUpdates",
-              {"offset": offset, "timeout": CHO,
-               "allowed_updates": json.dumps(["message"])}, giay=HET_GIO)
-    if not ra or not ra.get("ok"):
-        return [], offset
+    ra, loi = goi("getUpdates",
+                  {"offset": offset, "timeout": CHO,
+                   "allowed_updates": json.dumps(["message"])}, giay=HET_GIO)
+    if loi or not ra or not ra.get("ok"):
+        # TRẢ CẢ LÝ DO. Không có nó thì vòng nghe không phân biệt được "chờ
+        # 25 giây không ai nhắn" (bình thường) với "token 401" (hỏng) — và
+        # 401 thì trả lời tức thì, nên vòng quay tít gọi Telegram không nghỉ,
+        # không một dòng nhật ký.
+        return [], offset, (loi or "Telegram trả về không ok")
     ds = ra.get("result") or []
     if not ds:
-        return [], offset
-    return ds, max(int(u.get("update_id", 0)) for u in ds) + 1
+        return [], offset, ""
+    return ds, max(int(u.get("update_id", 0)) for u in ds) + 1, ""

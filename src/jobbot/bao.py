@@ -250,6 +250,27 @@ def dang_chat(x: str) -> bool:
     return str(x or "").strip().lstrip("-").isdigit()
 
 
+def _cac_chat(ra: dict) -> list:
+    """[(mã chat, tên)] theo thứ tự tin đến — mới nhất ở CUỐI, không trùng.
+
+    Tên lấy để NÓI CHO NGƯỜI DÙNG BIẾT đang nối vào đâu. Nhóm thì Telegram
+    trả `title`, người thì trả `first_name`/`last_name`, có người chỉ có
+    `username`. Không có gì cả thì trả rỗng và chỗ gọi dùng mã thay.
+    """
+    thay = []
+    for u in (ra or {}).get("result") or []:
+        ch = ((u.get("message") or {}).get("chat")) or {}
+        cid = str(ch.get("id", ""))
+        if not cid or not dang_chat(cid):
+            continue
+        ten = (ch.get("title")
+               or " ".join(str(x) for x in (ch.get("first_name"),
+                                            ch.get("last_name")) if x)
+               or (f"@{ch['username']}" if ch.get("username") else ""))
+        thay = [(c, t) for c, t in thay if c != cid] + [(cid, ten.strip())]
+    return thay
+
+
 def luu(tok: str = "") -> tuple:
     """Lưu token, kiểm token, VÀ TỰ TÌM MÃ CHAT — một nút, một lần bấm.
 
@@ -283,15 +304,28 @@ def luu(tok: str = "") -> tuple:
     ra, loi = tele.goi("getUpdates", {"offset": 0, "timeout": 0})
     if loi:
         return False, f"Token sống ({nhan_bot}) nhưng không hỏi được tin: {loi}"
-    ai = [str((((u.get("message") or {}).get("chat")) or {}).get("id", ""))
-          for u in (ra or {}).get("result") or []]
-    ai = [x for x in ai if x and dang_chat(x)]
+    ai = _cac_chat(ra)
 
     if ai:
-        cfg.write_value(tele.MUC, "chat_id", ai[-1])
-        jlog.ok(SYSTEM, f"Telegram đã nối — {nhan_bot}")
-        return True, (f"Xong. Token sống, bot là {nhan_bot}, và đã tìm ra "
-                      f"chat của bạn. Bấm <b>Test</b> để nhận tin thử.")
+        # CHỌN CÁI MỚI NHẤT, VÀ NÓI RA ĐÃ CHỌN AI. Bản trước lấy `ai[-1]`
+        # rồi báo "đã tìm ra chat của bạn" — mà nếu bot từng được người khác
+        # (hoặc một nhóm) nhắn vào thì "chat của bạn" là chat của người
+        # khác, và mọi thông báo việc làm đi thẳng sang đó. Không ai thấy
+        # sai vì màn hình không nói nó chọn cái nào.
+        cid, ten = ai[-1]
+        cfg.write_value(tele.MUC, "chat_id", cid)
+        jlog.ok(SYSTEM, f"Telegram đã nối — {nhan_bot} -> {ten or cid}")
+        goi_la = f"<b>{tele.thoat(ten)}</b>" if ten else f"mã <b>{cid}</b>"
+        if len(ai) == 1:
+            return True, (f"Xong. Token sống, bot là {nhan_bot}, và đã tìm ra "
+                          f"chat của bạn: {goi_la}. Bấm <b>Test</b> để nhận "
+                          f"tin thử.")
+        khac = ", ".join(tele.thoat(t or c) for c, t in ai[:-1])
+        return True, (f"Token sống, bot là {nhan_bot}. Có <b>{len(ai)}</b> chat "
+                      f"đã nhắn cho nó ({khac}, {tele.thoat(ten or cid)}) — đã "
+                      f"chọn cái <b>nhắn gần đây nhất</b>: {goi_la}. Không đúng "
+                      f"thì nhắn cho bot từ đúng máy của bạn rồi bấm "
+                      f"<b>Lưu</b> lại. Bấm <b>Test</b> để xem tin về đâu.")
 
     # Không thấy tin nào. Nếu đã có mã chat từ lần trước thì vẫn coi là xong —
     # Telegram xoá tin cũ sau khi giao, nên "không còn tin" là chuyện bình
@@ -398,13 +432,24 @@ def nghe(dung) -> None:
     """
     from .core import db
     offset = 0
+    keu_lan_truoc = ""
     while not dung.is_set():
         try:
             c = cau_hinh_nghe()
             if not c:
                 dung.wait(20)               # chưa nối, hoặc đang TẮT
                 continue
-            ds, offset = tele.nhan(offset)
+            ds, offset, loi = tele.nhan(offset)
+            if loi:
+                # HỎNG THÌ LÙI LẠI, và chỉ kêu MỘT LẦN cho mỗi lý do: mất
+                # mạng nửa tiếng mà mỗi 30 giây một dòng thì nhật ký thành
+                # rác, và dòng đáng đọc trôi mất.
+                if loi != keu_lan_truoc:
+                    jlog.warn(SYSTEM, f"vòng nghe Telegram tạm ngưng — {loi}")
+                    keu_lan_truoc = loi
+                dung.wait(60)
+                continue
+            keu_lan_truoc = ""
             if not ds:
                 continue
             conn = db.connect()

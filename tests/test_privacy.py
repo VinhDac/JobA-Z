@@ -11,6 +11,7 @@ giá trị nào ra — chỉ nói tệp nào dính, vì bản thân dòng log c�
     python3 tests/test_privacy.py
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -50,7 +51,16 @@ def tracked() -> list[Path]:
 
 def secrets() -> dict[str, str]:
     """Những chuỗi KHÔNG được có trong mã. Lấy từ hồ sơ đang sống, không viết
-    cứng ở đây — viết cứng là chính bài test làm rò."""
+    cứng ở đây — viết cứng là chính bài test làm rò.
+
+    ĐỌC HỒ SƠ THẬT, CỐ Ý BỎ QUA SANDBOX. Bộ chạy chung (run_all.py) trỏ
+    JOBBOT_ROOT vào thư mục giả để không bài nào chạm được bí mật — đúng cho
+    mọi bài, TRỪ bài này: việc của nó chính là "bí mật thật của tôi có lọt
+    vào tệp git theo dõi không". Chạy trong sandbox thì nó dò 0 chuỗi và
+    vẫn báo xanh — một máy dò rò rỉ tự rỗng ruột.
+    """
+    giu = {k: os.environ.pop(k, None)
+           for k in ("JOBBOT_ROOT", "JOBBOT_DATA_DIR")}
     out = {}
     try:
         from jobbot.core import db
@@ -62,7 +72,26 @@ def secrets() -> dict[str, str]:
         out["app password"] = mail.account()[1]
     except Exception:                                # noqa: BLE001
         pass
+    finally:
+        for k, v in giu.items():
+            if v is not None:
+                os.environ[k] = v
     return {k: v for k, v in out.items() if v and len(v) >= 8}
+
+
+def co_bi_mat_that() -> bool:
+    """Trên máy này CÓ bí mật thật để mà dò không? Đọc thẳng tệp cấu hình.
+
+    Dùng để phân biệt hai chuyện trông giống hệt nhau: "máy sạch, không có gì
+    để dò" (hợp lệ) và "máy dò hỏng nên không thấy gì" (phải ĐỎ).
+    """
+    tep = ROOT / "config" / "config.toml"
+    if not tep.is_file():
+        return False
+    import re as _re
+    return bool(_re.search(r"^\s*(app_password|password|token)\s*=\s*[\"']?\S",
+                           tep.read_text(encoding="utf-8", errors="replace"),
+                           _re.I | _re.M))
 
 
 print("\n[dữ liệu cá nhân không được lên GitHub]")
@@ -87,8 +116,14 @@ def _dinh(needle: str) -> list[str]:
     return got
 
 check("máy dò chạy được (tìm ra chuỗi mồi)", bool(_dinh("jobbot")))
-check("đếm được dữ liệu cần dò", True, f"{len(marks)} mục" +
-      (" — hồ sơ đang trống, chưa có gì để rò" if not marks else ""))
+# MÁY SẠCH khác MÁY DÒ HỎNG. Hai chuyện này trông giống hệt nhau từ ngoài —
+# cả hai đều "không tìm thấy gì" — nên phải tách bằng một câu hỏi khác:
+# trên đĩa CÓ bí mật thật không. Có mà dò ra 0 mục thì chính máy dò hỏng.
+_co = co_bi_mat_that()
+check(f"có {len(marks)} mục để dò" + ("" if marks else " — máy này chưa cấu hình"),
+      bool(marks) or not _co)
+if _co and not marks:
+    check("MÁY DÒ HỎNG: config.toml có bí mật mà không đọc ra mục nào", False)
 
 for what, needle in marks.items():
     hits = _dinh(needle)

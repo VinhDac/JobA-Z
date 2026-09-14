@@ -63,8 +63,16 @@ def xoa_kho(conn: sqlite3.Connection) -> dict:
 
     KHÔNG đụng tới: hồ sơ, đơn đã nộp, thư, cài đặt, lưới lọc.
     """
-    giu = ("SELECT posting_id FROM application"
-           " UNION SELECT posting_id FROM cv_pick")
+    # LỌC NULL TRONG SUBQUERY. `NOT IN` gặp một NULL thì cả mệnh đề ra NULL
+    # chứ không phải TRUE — SQL ba trạng thái, và đây là cái bẫy kinh điển
+    # nhất của nó.
+    #
+    # Đo trên kho thật: 32/37 đơn có posting_id = NULL (mấy đơn dựng lại từ
+    # thư, không có tin gốc). Vậy nên câu này xoá ĐÚNG 0 tin — trong khi
+    # source_run (204 lượt quét) và cv_build vẫn bị xoá sạch ngay bên dưới.
+    # Người dùng bấm "Dọn kho", thấy kho y nguyên, và mất lịch sử quét.
+    giu = ("SELECT posting_id FROM application WHERE posting_id IS NOT NULL"
+           " UNION SELECT posting_id FROM cv_pick WHERE posting_id IS NOT NULL")
     n = conn.execute(f"SELECT COUNT(*) FROM posting WHERE id NOT IN ({giu})"
                      ).fetchone()[0]
     # raw_posting xoá theo `raw_id` của chính mấy tin sắp bỏ — xoá sạch bảng
