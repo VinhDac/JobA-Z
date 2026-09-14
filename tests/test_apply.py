@@ -1,8 +1,8 @@
-"""Phần nộp — sổ trả lời, phân giỏ, so khớp, và RANH GIỚI.
+"""The applying layer — the answer book, bucketing, matching, and THE BOUNDARY.
 
-Mọi con số trong tệp này đến từ form THẬT (Point72/Greenhouse, cohere/Ashby,
-zopa/Lever), không phải từ tưởng tượng. Mỗi lỗi từng xảy ra một lần đều để
-lại đúng một ca ở đây.
+Every number in this file comes from a REAL form (Point72/Greenhouse,
+cohere/Ashby, zopa/Lever), not from imagination. Every bug that happened once
+left exactly one case here.
 
     python3 tests/test_apply.py
 """
@@ -29,9 +29,10 @@ def check(name, cond, extra=""):
         print(f"  FAIL {name}{' — ' + extra if extra else ''}")
 
 
-# NGƯỜI GIẢ. Repo này công khai trên GitHub: số điện thoại và email thật nằm
-# trong test là thứ bot quét về để spam. Mẫu thử không cần người thật — nó chỉ
-# cần một cái tên ba tiếng để kiểm luật "tiếng cuối là họ".
+# A FICTIONAL PERSON. This repo is public on GitHub: a real phone number and
+# email in a test are what bots harvest for spam. A fixture needs no real
+# person — it only needs a three-word name to test the "the last word is the
+# surname" rule.
 VIN = {
     "full_name": "Ada Grace Lovelace",
     "email": "you@example.com",
@@ -43,33 +44,33 @@ VIN = {
                   "Finance — National Economics University, Vietnam"),
 }
 
-print("\n== sổ trả lời ==")
+print("\n== the answer book ==")
 edu = education(VIN["education"])
-check("học vị", edu.degree == "MSc" and edu.level == "master", edu.degree)
-check("ngành", edu.discipline == "Computational Finance", edu.discipline)
-check("trường", edu.school == "Royal Holloway, University of London", edu.school)
-check("năm", (edu.start_year, edu.end_year) == (2025, 2026), str(edu.start_year))
-check("thiếu tháng thì NÓI ra", any("month" in m for m in edu.missing), str(edu.missing))
-check("lấy bằng MỚI NHẤT, không phải bằng đầu", "Royal Holloway" in edu.school)
+check("the degree", edu.degree == "MSc" and edu.level == "master", edu.degree)
+check("the discipline", edu.discipline == "Computational Finance", edu.discipline)
+check("the school", edu.school == "Royal Holloway, University of London", edu.school)
+check("the years", (edu.start_year, edu.end_year) == (2025, 2026), str(edu.start_year))
+check("a missing month is SAID", any("month" in m for m in edu.missing), str(edu.missing))
+check("it takes the MOST RECENT degree, not the first", "Royal Holloway" in edu.school)
 
 edu2 = education("MSc Data Science — Imperial College, Sep 2025 – Sep 2026")
-check("đọc được tháng khi hồ sơ có ghi",
+check("the month is read when the profile states one",
       (edu2.start_month, edu2.end_month) == (9, 9) and not edu2.missing,
       str(edu2.missing))
 
 b = book(VIN)
-# Lỗi thật: cắt theo tiếng ĐẦU thì họ thành "Vinh Nguyen".
-check("họ là tiếng cuối cùng", b["last_name"].value == "Lovelace", b["last_name"].value)
-check("tên gọi là phần còn lại", b["first_name"].value == "Ada Grace", b["first_name"].value)
-check("nước suy ra từ nơi ở", b["country"].value == "United Kingdom", b["country"].value)
-# Hồ sơ ghi trần chữ "LinkedIn" — đó là nhãn, không phải địa chỉ.
-check("không nhận chữ 'LinkedIn' làm URL", not b["linkedin"].value, b["linkedin"].value)
-check("website là URL thật", b["website"].value.startswith("https://"), b["website"].value)
-check("thiếu thì để RỖNG, không bịa", not b["edu_end_month"].value)
+# The real bug: splitting on the FIRST word made the surname "Vinh Nguyen".
+check("the surname is the last word", b["last_name"].value == "Lovelace", b["last_name"].value)
+check("the given name is the rest", b["first_name"].value == "Ada Grace", b["first_name"].value)
+check("the country is derived from where they live", b["country"].value == "United Kingdom", b["country"].value)
+# The profile carries the bare word "LinkedIn" — that is a label, not an address.
+check("the word 'LinkedIn' is not taken as a URL", not b["linkedin"].value, b["linkedin"].value)
+check("the website is a real URL", b["website"].value.startswith("https://"), b["website"].value)
+check("missing means EMPTY, never invented", not b["edu_end_month"].value)
 
-print("\n== phân giỏ ==")
+print("\n== bucketing ==")
 CASES = [
-    # (nhãn, tên ô, kiểu, giỏ mong đợi, khoá mong đợi)
+    # (label, field name, kind, expected bucket, expected key)
     ("First Name *", "first_name", "text", F.FILL, "first_name"),
     ("Last Name", "last_name", "text", F.FILL, "last_name"),
     ("Email", "email", "email", F.FILL, "email"),
@@ -80,7 +81,7 @@ CASES = [
     ("End date month*", "end-month--0", "combo", F.FILL, "edu_end_month"),
     ("LinkedIn URL", "urls[LinkedIn]", "text", F.FILL, "linkedin"),
     ("GitHub URL", "urls[GitHub]", "text", F.FILL, "github"),
-    # Ba câu KHÔNG được đoán — sai là hỏng đơn.
+    # The three questions that must NOT be guessed — wrong ruins the application.
     ("Will you now or in the future require sponsorship?", "q1", "combo", F.ASK, None),
     ("What is your current cumulative GPA?", "question_68932242", "text", F.ASK, None),
     ("Will you graduate from January 2028-Summer 2028?", "q3", "combo", F.ASK, None),
@@ -88,7 +89,7 @@ CASES = [
     ("I agree to the privacy policy", "consent", "checkbox", F.ASK, None),
     ("Cover Letter", "cover_letter", "file", F.ASK, None),
     ("", "opportunityLocationId", "text", F.ASK, None),
-    # Đặc điểm được bảo vệ — không chạm, dù form bắt buộc.
+    # Protected characteristics — never touched, even when the form requires them.
     ("Gender", "gender", "combo", F.SKIP, None),
     ("Are you Hispanic/Latino?", "hispanic", "combo", F.SKIP, None),
     ("Race", "race", "combo", F.SKIP, None),
@@ -103,16 +104,16 @@ for label, name, kind, want_bucket, want_key in CASES:
     fine = got_bucket == want_bucket and (want_key is None or got_key == want_key)
     check(f"{want_bucket:<4} {(label or name)[:44]}", fine, f"ra {got_bucket}/{got_key}")
 
-check("mọi luật HỎI đều kèm lý do",
+check("every ASK rule carries a reason",
       all(reason.strip() for _, reason in F.ASK_RULES))
-check("không luật nào vừa ĐIỀN vừa HỎI",
+check("no rule both FILLS and ASKS",
       not {k for _, k in F.FILL_RULES} & {"gpa", "sponsor", "salary"})
 
-print("\n== gộp nhóm và ô bóng ==")
+print("\n== grouping and shadow fields ==")
 raw = [
     {"k": 0, "name": "", "dom_id": "first_name", "kind": "text", "label": "First Name",
      "option": "", "group": "", "required": True, "options": [], "value": ""},
-    # 4 ô đánh dấu CÙNG name = MỘT câu hỏi, không phải bốn.
+    # 4 tick boxes sharing a name = ONE question, not four.
     *[{"k": i, "name": "question_271[]", "dom_id": "", "kind": "checkbox",
        "label": "Preferred office", "option": city, "group": "question_271[]",
        "required": True, "options": [], "value": ""}
@@ -130,80 +131,82 @@ class FakeTab:
 
 
 folded = F.read(FakeTab(raw))
-check("4 ô đánh dấu gộp thành 1 câu", len(folded) == 2, f"ra {len(folded)}")
-check("giữ đủ 4 lựa chọn",
+check("4 tick boxes fold into 1 question", len(folded) == 2, f"got {len(folded)}")
+check("all 4 options are kept",
       folded[1]["options"] == ["London", "Paris", "Hong Kong", "Tokyo"],
       str(folded[1]["options"]))
 
-print("\n== so khớp danh sách ==")
+print("\n== matching a dropdown ==")
 DEG = ["Bachelor's Degree", "Master of Business Administration (M.B.A.)",
        "Master's Degree", "Doctorate"]
-check("MSc -> Master's Degree, KHÔNG phải MBA",
+check("MSc -> Master's Degree, NOT the MBA",
       run.match(Ans("MSc", LEVEL_WORDS["master"]), DEG) == "Master's Degree",
       run.match(Ans("MSc", LEVEL_WORDS["master"]), DEG))
-check("MBA vẫn ra MBA",
+check("an MBA still yields the MBA",
       run.match(Ans("MBA", LEVEL_WORDS["mba"]), DEG).startswith("Master of Business"))
-check("UK không thành Ukraine",
+check("UK does not become Ukraine",
       run.match(Ans("United Kingdom", ("GB", "UK")),
                 ["Ukraine", "United Kingdom", "United Arab Emirates"]) == "United Kingdom")
 LON = ["London, Ontario, Canada", "London, England, United Kingdom"]
-check("London là London bên UK",
+check("London is the UK London",
       run.match(Ans("London", ("London, UK",), ("United Kingdom", "England")), LON)
       == "London, England, United Kingdom")
-check("không có gì khớp thì trả RỖNG, không lấy bừa",
+check("nothing matching returns EMPTY, it does not grab one",
       run.match(Ans("Royal Holloway"), ["Oxford", "Cambridge"]) == "")
-check("gõ thử theo thứ tự: giá trị trước, cách gọi sau",
+check("it types in order: the value first, the alternatives after",
       run.queries(Ans("MSc", LEVEL_WORDS["master"]))[0] == "MSc")
-check("cắt ở dấu phẩy",
+check("it cuts at the comma",
       run.queries(Ans("Royal Holloway, University of London")) == ["Royal Holloway"])
 
-print("\n== 12 lỗi audit tìm ra ==")
-# (2) Greenhouse/Lever viết ĐẢO: "authorized to work in this country". Bản cũ
-#     chỉ bắt "work authoriz…" nên câu đảo rơi vào luật `country` và máy trả
-#     lời một câu Có/Không bằng chữ "United Kingdom".
+print("\n== the 12 bugs the audit found ==")
+# (2) Greenhouse/Lever write it THE OTHER WAY ROUND: "authorized to work in
+#     this country". The old version only caught "work authoriz…", so the
+#     reversed sentence fell into the `country` rule and the machine answered
+#     a yes/no question with the words "United Kingdom".
 for _lab in ("Are you legally authorized to work in this country?",
              "Are you authorised to work in the UK?",
              "Do you require a work permit?"):
-    check(f"quyền làm việc -> HỎI: {_lab[:38]}",
+    check(f"right to work -> ASK: {_lab[:38]}",
           F.classify({"label": _lab, "name": "", "dom_id": "", "kind": "text"})[0] == F.ASK)
-# (9) Quốc tịch / nơi sinh KHÔNG phải nơi đang ở.
+# (9) Nationality / place of birth is NOT where you currently live.
 for _lab in ("What is your nationality?", "Country of birth", "Passport country"):
-    check(f"quốc tịch -> HỎI: {_lab[:30]}",
+    check(f"nationality -> ASK: {_lab[:30]}",
           F.classify({"label": _lab, "name": "", "dom_id": "", "kind": "text"})[0] == F.ASK)
-# (4) Luật ĐIỀN so khớp chuỗi con, nên một CÂU HỎI tình cờ nhắc "city" cũng bị
-#     trả lời bằng dữ kiện hồ sơ.
-check("câu hỏi kể chuyện -> HỎI",
+# (4) The FILL rules matched by substring, so a QUESTION that happened to
+#     mention "city" was answered with a fact from the profile.
+check("a narrative question -> ASK",
       F.classify({"label": "Do you have a driving licence valid in your city?",
                   "name": "", "dom_id": "", "kind": "text"})[0] == F.ASK)
-check("nhãn ô dữ kiện ngắn vẫn ĐIỀN",
+check("a short factual label still FILLS",
       F.classify({"label": "City", "name": "", "dom_id": "", "kind": "text"})
       == (F.FILL, "city"))
-# (1) `value` của ô đánh dấu là MÃ form gửi đi, không phải chữ hiện ra. Gán vào
-#     là viết lại mã đó mà không tick gì, và `el.value === v` vẫn đúng nên máy
-#     báo thành công. Đo trong Chrome thật: form gửi "London" thay vì
+# (1) A tick box's `value` is the CODE the form submits, not the text shown.
+#     Assigning to it rewrites that code without ticking anything, and
+#     `el.value === v` is still true so the machine reports success. Measured
+#     in a real Chrome: the form submitted "London" instead of
 #     "london_office".
 for _kind in ("checkbox", "radio"):
-    check(f"ô {_kind} không bao giờ vào giỏ ĐIỀN",
+    check(f"a {_kind} field never reaches the FILL bucket",
           F.classify({"label": "Which office? *", "name": "q[]", "dom_id": "",
                       "kind": _kind})[0] != F.FILL)
 _fillsrc = (Path(__file__).resolve().parent.parent
             / "src/jobbot/apply/run.py").read_text(encoding="utf-8")
-check("fill() tách riêng ô đánh dấu trước khi gọi _set",
+check("fill() separates tick boxes out before calling _set",
       _fillsrc.index('item["kind"] in ("checkbox", "radio")')
       < _fillsrc.index('bad = _set(tab, item["k"], want.value)')
       if 'bad = _set(tab, item["k"], want.value)' in _fillsrc else
       'item["kind"] in ("checkbox", "radio")' in _fillsrc)
-# (10) "UK".startswith-khớp "Ukraine" y như "UK" nằm trong "Ukraine".
-check("tên ngắn không khớp kiểu prefix",
+# (10) "UK".startswith-matches "Ukraine" exactly as "UK" is inside "Ukraine".
+check("a short name does not match by prefix",
       run.match(Ans("United Kingdom", ("GB", "UK")), ["Ukraine"]) == "")
-check("nhưng tên đủ dài vẫn khớp",
+check("but a long enough name still matches",
       run.match(Ans("United Kingdom", ("GB", "UK")),
                 ["Ukraine", "United Kingdom"]) == "United Kingdom")
-# (3) "Có chữ trong ô" chưa phải bằng chứng đã chọn ĐÚNG dòng vừa bấm.
-check("pick() so chip với dòng vừa bấm", "and the field shows" in _fillsrc)
-# (5)(6)(8) — xem phần "nút Gửi" ở trên.
+# (3) "There is text in the field" is not yet proof the ROW CLICKED was chosen.
+check("pick() compares the chip against the row clicked", "and the field shows" in _fillsrc)
+# (5)(6)(8) — see the "Submit button" section above.
 
-print("\n== ranh giới: máy KHÔNG bấm Gửi ==")
+print("\n== the boundary: the machine NEVER presses Submit ==")
 source = Path(__file__).resolve().parent.parent / "src/jobbot/apply/run.py"
 tree = ast.parse(source.read_text(encoding="utf-8"))
 calls = []
@@ -211,12 +214,12 @@ for node in ast.walk(tree):
     if isinstance(node, ast.Call):
         fn = node.func
         calls.append(fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", ""))
-check("không gọi .click() ở đâu cả", "click" not in calls)
-check("không gọi .submit() ở đâu cả", "submit" not in calls)
-# AST PYTHON MÙ VỚI JAVASCRIPT, mà JS mới là chỗ app THẬT SỰ điều khiển
-# trang: mấy đoạn script gửi qua CDP nằm trong chuỗi Python, nên
-# `ast.walk` không thấy `el.click()` ở đó. Luật nền số 4 — máy KHÔNG bấm Gửi
-# — phải được canh ở cả hai tầng.
+check("it calls .click() nowhere", "click" not in calls)
+check("it calls .submit() nowhere", "submit" not in calls)
+# THE PYTHON AST IS BLIND TO JAVASCRIPT, and JS is where the app REALLY drives
+# the page: the scripts sent over CDP live inside Python strings, so
+# `ast.walk` cannot see an `el.click()` in there. Founding law 4 — the machine
+# NEVER presses Submit — has to be guarded at both layers.
 import re as _reJ
 _apply_dir = source.parent
 _js_xau = []
@@ -224,43 +227,47 @@ for _f in sorted(_apply_dir.glob("*.py")):
     _t = _f.read_text(encoding="utf-8")
     for _m in _reJ.finditer(r"\.(click|submit)\s*\(", _t):
         _js_xau.append(f"{_f.name}:{_t[:_m.start()].count(chr(10)) + 1}")
-check("KHÔNG chỗ nào — kể cả trong JS — gọi .click()/.submit()"
+check("NOWHERE — not even in JS — is .click()/.submit() called"
       + (f" — {', '.join(_js_xau[:3])}" if _js_xau else ""), not _js_xau)
-# HAI CHỖ BẤM, VÀ SỰ TÁCH ĐÔI ĐÓ CHÍNH LÀ LUẬT NỀN SỐ 4:
-#   run.py  — điền form hộ, chỉ bấm để mở dropdown và chọn dòng. Máy tự chạy.
-#   send.py — CÚ BẤM GỬI. Chỉ tới được từ /api/apply/send, tức là từ đúng
-#             một cú bấm của người dùng trên màn hình.
-# Đếm gộp thì mất phân biệt đó; một cú bấm Gửi lọt vào run.py sẽ không ai
-# thấy, mà đó đúng là điều luật này tồn tại để cấm.
+# TWO CLICK SITES, AND THAT SPLIT IS FOUNDING LAW 4 ITSELF:
+#   run.py  — fills the form, clicking only to open a dropdown and pick a row.
+#             The machine runs this itself.
+#   send.py — THE SUBMIT CLICK. Reachable only from /api/apply/send, i.e. from
+#             exactly one press by the user on screen.
+# Counted together that distinction is lost; a Submit click slipping into
+# run.py would go unseen, which is precisely what this law exists to forbid.
 _dem = {_f.name: _f.read_text(encoding="utf-8").count("Input.dispatchMouseEvent")
         for _f in sorted(_apply_dir.glob("*.py"))}
-check("máy tự điền (run.py) chỉ có ĐÚNG MỘT chỗ bấm, đã được soi",
+check("the self-driving fill (run.py) has EXACTLY ONE click site, already examined",
       _dem.get("run.py") == 1, str(_dem))
-check("cú bấm GỬI nằm riêng ở send.py, cũng đúng một chỗ",
+check("THE SUBMIT click lives apart in send.py, also exactly one",
       _dem.get("send.py") == 1, str(_dem))
-check("KHÔNG file nào khác trong apply/ bấm chuột",
+check("NO other file in apply/ clicks a mouse",
       all(v == 0 for k, v in _dem.items() if k not in ("run.py", "send.py")),
       str(_dem))
 
 body = source.read_text(encoding="utf-8")
-check("không gõ phím Enter", '"Enter"' not in body and "'Enter'" not in body)
-# Hai chốt phải còn nguyên: bấm mở danh sách và bấm chọn dòng.
-check("chốt 1 — thẻ phải bọc chính ô đó", 'box.get("wraps")' in body)
-check("chốt 1 — điểm bấm phải nằm trên thẻ đó", 'box.get("hits")' in body)
-check("chốt 2 — chỉ bấm thẻ role=option", 'spot.get("role") != "option"' in body)
-check("chốt 2 — điểm bấm phải nằm trên dòng đó", 'spot.get("hits")' in body)
-check("mọi cú bấm đi qua đúng một hàm", body.count("Input.dispatchMouseEvent") == 1)
+check("it never types Enter", '"Enter"' not in body and "'Enter'" not in body)
+# Both latches have to be intact: the click that opens a dropdown and the
+# click that picks a row.
+check("latch 1 — the element has to wrap that very field", 'box.get("wraps")' in body)
+check("latch 1 — the click point has to sit on that element", 'box.get("hits")' in body)
+check("latch 2 — only an element with role=option is clicked", 'spot.get("role") != "option"' in body)
+check("latch 2 — the click point has to sit on that row", 'spot.get("hits")' in body)
+check("every click goes through exactly one function", body.count("Input.dispatchMouseEvent") == 1)
 
-print("\n== ô bị bỏ sót khiến đơn đi thiếu ==")
+print("\n== fields missed, leaving the application incomplete ==")
 _fsrc = (Path(__file__).resolve().parent.parent
          / "src/jobbot/apply/fields.py").read_text(encoding="utf-8")
-# Rất nhiều ATS để <input type=file> ẩn, không name không id, điều khiển bằng
-# JS. Bỏ nó ra khỏi danh sách là gửi đơn KHÔNG có CV mà không ai báo.
-check("ô tệp không name/id vẫn được giữ", "type !== 'file') return" in _fsrc)
-# Widget chọn ngày khoá ô chữ để bắt bấm vào lịch, và ô đó thường BẮT BUỘC.
-check("ô khoá vẫn vào danh sách", "el.disabled) return" in _fsrc
+# Many ATS leave <input type=file> hidden, with no name and no id, driven by
+# JS. Leave it out of the list and the application goes WITHOUT the CV, with
+# nothing to say so.
+check("a file field with no name/id is still kept", "type !== 'file') return" in _fsrc)
+# A date-picker widget locks the text field to force a click on the calendar,
+# and that field is usually REQUIRED.
+check("a locked field still reaches the list", "el.disabled) return" in _fsrc
       and "el.readOnly) return" not in _fsrc)
-check("nhưng không để fill() gõ vào", 'f.get("locked")' in _fsrc)
+check("but fill() is not allowed to type into it", 'f.get("locked")' in _fsrc)
 _lab = {"label": "Expected graduation date *", "name": "g", "dom_id": "",
         "kind": "text", "locked": True, "required": True, "options": [],
         "option": "", "group": "", "k": 0, "value": ""}
@@ -273,22 +280,22 @@ class _One:
 
 
 _got = F.read(_One())
-check("ô khoá xếp vào giỏ HỎI", _got[0]["bucket"] == F.ASK, _got[0]["bucket"])
-check("và vẫn giữ cờ bắt buộc", _got[0]["required"] is True)
+check("a locked field goes into the ASK bucket", _got[0]["bucket"] == F.ASK, _got[0]["bucket"])
+check("and it keeps the required flag", _got[0]["required"] is True)
 
-print("\n== ô Education: nhiều kiểu dấu ngăn ==")
+print("\n== the Education field: several separator styles ==")
 from jobbot.apply.answer import education as _edu
 for _sep in ("—", "-", "|"):
     _e = _edu(f"MSc Computational Finance {_sep} Royal Holloway, 2025-2026")
-    check(f"dấu {_sep!r}: tách đúng trường",
+    check(f"separator {_sep!r}: the fields parse correctly",
           _e.school.startswith("Royal Holloway") and _e.discipline == "Computational Finance")
 
-print("\n== nút Gửi: kiểm trước, bấm sau ==")
+print("\n== the Submit button: check first, click after ==")
 from jobbot.apply import send
 
 
 class FormTab:
-    """Tab giả: trả về đúng cái READ_JS sẽ trả về."""
+    """A fake tab: it returns exactly what READ_JS would return."""
 
     def __init__(self, items):
         self.items = items
@@ -314,126 +321,131 @@ full = FormTab([_f("First Name*", True, "Dac Vinh"), _f("Privacy *", True, "x")]
 gap = FormTab([_f("First Name*", True, "Dac Vinh"), _f("Privacy *", True, ""),
                _f("Have you served in the military?*", True, "")])
 
-check("form đủ -> không còn ô trống", send.missing(full) == [])
-check("form thiếu -> chỉ ra đúng ô nào", send.missing(gap) ==
+check("a complete form -> no empty field left", send.missing(full) == [])
+check("an incomplete form -> it names exactly which", send.missing(gap) ==
       ["Privacy *", "Have you served in the military?*"], str(send.missing(gap)))
 
 refused = send.submit(gap)
-check("thiếu thì TỪ CHỐI gửi", refused.ok is False)
-check("và nói vì sao", "required" in refused.why, refused.why)
-check("KHÔNG bấm chuột lần nào", gap.clicks == 0, str(gap.clicks))
-# Ô nhân khẩu học máy không bao giờ điền — nên nó phải nằm trong danh sách
-# chặn, không phải bị bỏ qua cho trôi.
-check("ô nhân khẩu học bắt buộc cũng chặn được",
+check("incomplete -> it REFUSES to send", refused.ok is False)
+check("and it says why", "required" in refused.why, refused.why)
+check("it clicks the mouse NOT ONCE", gap.clicks == 0, str(gap.clicks))
+# A demographic field the machine never fills — so it has to be in the
+# blocking list rather than waved through.
+check("a required demographic field blocks too",
       "Have you served in the military?*" in refused.missing)
 
 body = (Path(__file__).resolve().parent.parent
         / "src/jobbot/apply/send.py").read_text(encoding="utf-8")
-check("mọi cú bấm đi qua đúng một chỗ", body.count("Input.dispatchMouseEvent") == 1)
-check("nút phải thuộc form đã điền", 'aim.get("inform")' in body)
-# Hai bản sao của cùng một luật chọn nút thì có ngày lệch nhau — và lệch ở đây
-# là duyệt nút này rồi bấm nút kia, trên một hành động không rút lại được.
-# Đo đúng bất biến: chỉ MỘT chỗ trong cả tệp biết cách chọn nút gửi. Đếm
-# querySelectorAll là sai — khối đó còn phải đếm ô đã điền để chọn form.
-check("chỉ MỘT chỗ chọn nút gửi", body.count('button[type="submit"]') == 1)
-# Kiểm bằng CẤU TRÚC, đừng dò chuỗi: dòng chú thích giải thích lỗi cũ cũng
-# chứa đúng chuỗi đó, và test vấp vào chính lời giải thích của mình.
+check("every click goes through one place", body.count("Input.dispatchMouseEvent") == 1)
+check("the button has to belong to the form that was filled", 'aim.get("inform")' in body)
+# Two copies of one button-picking rule will drift apart one day — and
+# drifting here means approving one button and clicking another, on an action
+# that cannot be undone.
+# Measure the real invariant: only ONE place in the whole file knows how to
+# pick the submit button. Counting querySelectorAll is wrong — that block also
+# has to count filled fields to pick the form.
+check("only ONE place picks the submit button", body.count('button[type="submit"]') == 1)
+# Check by STRUCTURE, never by string search: the comment explaining the old
+# bug contains that very string, and the test trips over its own explanation.
 _code = "\n".join(l for l in body.splitlines() if not l.strip().startswith(("#", "//")))
-check("chọn form theo số Ô ĐÃ ĐIỀN", "querySelectorAll('[data-jb]')" in _code)
-check("và đếm theo từng form", "tally.set" in _code and "n > best" in _code)
-# Không có nút mang chữ gửi thì DỪNG. Lùi về "nút duy nhất còn lại" là bấm bừa
-# vào "Save draft" / "Add another".
-check("không lùi về nút bất kỳ", "named.length ? named" not in body)
-check("gửi xong phải có BẰNG CHỨNG, không chỉ bắn được chuột",
+check("the form is picked by NUMBER OF FILLED FIELDS", "querySelectorAll('[data-jb]')" in _code)
+check("and counted per form", "tally.set" in _code and "n > best" in _code)
+# With no button carrying a submit word, STOP. Falling back to "the only
+# button left" is clicking blindly on "Save draft" / "Add another".
+check("it does not fall back to any button", "named.length ? named" not in body)
+check("a send needs PROOF, not merely that a click was dispatched",
       "said or moved or gone" in body)
-check("và có mốc so sánh đo TRƯỚC khi bấm", "before = json.loads" in body)
-check("nút phải nằm trong form chứa ô ĐÃ ĐIỀN", "[data-jb]" in body)
-check("điểm bấm phải nằm trên nút", 'aim.get("hits")' in body)
-# Phần ĐIỀN không được biết cách gửi — đó là lý do gửi nằm ở tệp riêng.
+check("and a baseline measured BEFORE the click", "before = json.loads" in body)
+check("the button has to be inside the form holding FILLED fields", "[data-jb]" in body)
+check("the click point has to sit on the button", 'aim.get("hits")' in body)
+# THE FILLING code must not know how to send — that is why sending lives in a
+# file of its own.
 fill_body = (Path(__file__).resolve().parent.parent
              / "src/jobbot/apply/run.py").read_text(encoding="utf-8")
-check("run.py không gọi submit()", "send.submit" not in fill_body
+check("run.py does not call submit()", "send.submit" not in fill_body
       and "submit(" not in fill_body)
 
 routes = (Path(__file__).resolve().parent.parent
           / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
-check("đúng MỘT đường tới phần gửi", routes.count("apply_send.submit") == 1)
-check("gửi hụt thì KHÔNG đổi trạng thái",
+check("exactly ONE route into the sending code", routes.count("apply_send.submit") == 1)
+check("a failed send does NOT change the state",
       routes.index("if not done.ok") < routes.index("board.set_stage(conn, int(row[\"id\"])"))
-# Bấm Gửi hai lần = hai la don giong nhau toi cung mot nha tuyen dung. Chan o
+# Pressing Send twice = two identical applications to one employer. Blocked at
 # HAI tang: route tu choi dong khong con la nhap, va submit() tu choi khi trang
 # khong con o nao (thuong la vua gui xong, trang da nhay sang loi cam on —
 # luc do missing() tra rong vi khong o nao thi khong o nao trong).
-# Chốt phải NGUYÊN TỬ: so chặng rồi mới gửi là đọc-rồi-ghi, và việc đổi chặng
-# xảy ra ở luồng nền vài giây sau — hai cú bấm cách nhau 2 giây đều đọc thấy
-# 'draft'. Một câu UPDATE ... WHERE stage='draft' thì chỉ một cú giành được.
-check("route giành quyền gửi bằng một câu UPDATE", "board.claim(conn" in routes)
-check("gửi hụt thì trả lại về nháp", routes.count("board.unclaim(") >= 3)
+# The latch has to be ATOMIC: comparing the stage and then sending is
+# read-then-write, and the stage change happens on a background thread seconds
+# later — two presses 2 seconds apart both read 'draft'. A single
+# UPDATE ... WHERE stage='draft' lets only one win.
+check("the route claims the send with a single UPDATE", "board.claim(conn" in routes)
+check("a failed send hands it back to draft", routes.count("board.unclaim(") >= 3)
 _bd = (Path(__file__).resolve().parent.parent
        / "src/jobbot/track/board.py").read_text(encoding="utf-8")
-check("claim() đổi chặng có điều kiện", "WHERE id = ? AND stage = ?" in _bd)
-check("submit() từ chối khi form đã biến mất",
+check("claim() changes the stage conditionally", "WHERE id = ? AND stage = ?" in _bd)
+check("submit() refuses once the form is gone",
       "the page has no form left" in body)
-check("và chặn TRƯỚC khi tính ô thiếu",
+check("and it blocks BEFORE counting the empty fields",
       body.index("the page has no form left") < body.index("gaps = missing(tab)"))
 
-print("\n== chưa đăng nhập thì NÓI, không im ==")
-check("nhận ra trang login của LinkedIn",
+print("\n== not logged in means SAY SO, never stay silent ==")
+check("it recognises LinkedIn's login page",
       bool(run.LOGIN_WALL.search("https://www.linkedin.com/login/?session_redirect=x")))
-check("nhận ra authwall",
+check("it recognises the authwall",
       bool(run.LOGIN_WALL.search("https://www.linkedin.com/authwall?trk=y")))
-check("KHÔNG nhầm trang nộp của Lever (đuôi /apply)",
+check("it does NOT mistake Lever's apply page (ending /apply)",
       not run.LOGIN_WALL.search("https://jobs.lever.co/zopa/abc/apply"))
-check("KHÔNG nhầm trang Greenhouse",
+check("it does NOT mistake a Greenhouse page",
       not run.LOGIN_WALL.search("https://job-boards.greenhouse.io/point72/jobs/729"))
 _wall = run.Report(needs_login="https://www.linkedin.com/login/")
-check("báo cáo nói rõ lý do, không nói 'không thấy form'",
+check("the report states the reason rather than 'no form found'",
       "login" in _wall.line(), _wall.line())
 _routes = (Path(__file__).resolve().parent.parent
            / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
-check("máy chủ ghi LỖI ra nhật ký", "NOT LOGGED IN" in _routes)
-check("và dừng, không ghi tiếp như thể đã điền",
+check("the server writes the ERROR to the journal", "NOT LOGGED IN" in _routes)
+check("and it stops rather than logging on as if it had filled things",
       _routes.index("NOT LOGGED IN") < _routes.index('journal.log.ok(journal.SEARCH, f"{who} — {report.line()}")'))
 
-print("\n== LinkedIn: moi đường nộp thật ==")
+print("\n== LinkedIn: digging out the real application link ==")
 from jobbot.apply import linkedin as lk
 _wrapped = ("https://www.linkedin.com/safety/go/?url=https%3A%2F%2Ftargetjobs%2Eco%2Euk"
             "%2Fjobs%2Fstructured-credit&urlhash=abcd")
-check("giải mã được URL công ty",
+check("a company URL is decoded",
       lk.unwrap(_wrapped) == "https://targetjobs.co.uk/jobs/structured-credit",
       lk.unwrap(_wrapped))
-# LinkedIn mã hoá cả dấu chấm thành %2E — cắt chuỗi bằng tay là ra 'targetjobs%2Eco%2Euk'
-check("dấu chấm mã hoá %2E cũng ra đúng", ".co.uk" in lk.unwrap(_wrapped))
-check("link nội bộ LinkedIn thì bỏ",
+# LinkedIn encodes even the dots as %2E — splitting by hand yields 'targetjobs%2Eco%2Euk'
+check("a %2E-encoded dot comes out right too", ".co.uk" in lk.unwrap(_wrapped))
+check("an internal LinkedIn link is dropped",
       lk.unwrap("https://www.linkedin.com/jobs/view/123") == "")
-check("link ra ngoài sẵn thì lấy luôn",
+check("an already-external link is taken as it is",
       lk.unwrap("https://jobs.lever.co/prima/x/apply") == "https://jobs.lever.co/prima/x/apply")
-check("nhận ra trang tin LinkedIn",
+check("it recognises a LinkedIn posting page",
       bool(lk.JOBS.search("https://www.linkedin.com/jobs/view/4449348217/")))
-check("không nhầm trang khác",
+check("it does not mistake another page",
       not lk.JOBS.search("https://job-boards.greenhouse.io/point72/jobs/729"))
 _fill = (Path(__file__).resolve().parent.parent
          / "src/jobbot/apply/run.py").read_text(encoding="utf-8")
-check("chưa đăng nhập thì dừng, không đi mò tiếp",
+check("not logged in it stops rather than groping on",
       _fill.index("if lk.JOBS.search(url)") < _fill.index("real = lk.apply_url(tab)"))
 
-print("\n== tên tệp CV gửi đi ==")
+print("\n== the filename of the CV that goes out ==")
 import tempfile as _tf
 from pathlib import Path as _P
 with _tf.TemporaryDirectory() as _d:
     _kho = _P(_d) / "qube-research-technologies-digital-assets-quantitative-trader-4137.pdf"
     _kho.write_bytes(b"%PDF-1.4 fake")
     _out = run.sendable(_kho, b, 5294)
-    # Tên trong kho là tên NHÓM (đặt theo tin điểm cao nhất dùng chung bản CV
-    # đó). Đính thẳng thì nhà tuyển dụng Prima đọc được tên Qube trên tệp.
-    check("đặt tên theo chủ hồ sơ", _out.name.endswith("-CV.pdf"), _out.name)
-    check("không mang tên công ty khác", "qube" not in _out.name.lower())
-    check("nội dung y nguyên", _out.read_bytes() == _kho.read_bytes())
+    # The name in the store is THE GROUP's (after the highest-scoring posting
+    # sharing that CV). Attached directly, the recruiter at Prima reads the
+    # name Qube on the file.
+    check("named after the profile's owner", _out.name.endswith("-CV.pdf"), _out.name)
+    check("it does not carry another company's name", "qube" not in _out.name.lower())
+    check("the contents are identical", _out.read_bytes() == _kho.read_bytes())
     _other = run.sendable(_kho, b, 1288)
-    check("mỗi tin một thư mục riêng, không ghi đè nhau",
+    check("one directory per posting, so they never overwrite each other",
           _out.parent != _other.parent, f"{_out.parent} vs {_other.parent}")
 
-# Một thư mục cho một lần nộp, không ai xoá thì phình mãi (~200 KB mỗi bản).
+# One directory per application; with nobody deleting them it grows forever (~200 KB each).
 import os as _os, time as _time
 with _tf.TemporaryDirectory() as _d2:
     _root = _P(_d2) / "send"
@@ -443,9 +455,9 @@ with _tf.TemporaryDirectory() as _d2:
     _past = _time.time() - (run.KEEP_DAYS + 1) * 86400
     _os.utime(_root / "old", (_past, _past))
     _gone = run._prune(_root)
-    check("dọn bản dàn cũ", _gone == 1)
-    check("giữ bản mới", (_root / "new").exists())
-    check("bản cũ đã xoá", not (_root / "old").exists())
+    check("the old copy is cleaned up", _gone == 1)
+    check("the new one is kept", (_root / "new").exists())
+    check("the old one is deleted", not (_root / "old").exists())
 
 print(f"\n{ok} ok, {fail} fail")
 sys.exit(1 if fail else 0)
