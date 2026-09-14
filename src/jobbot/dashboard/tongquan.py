@@ -382,7 +382,7 @@ def chan_doan(conn: sqlite3.Connection) -> list[dict]:
               f"genuinely applicable. This is the largest piece of work "
               f"waiting.",
             tren=f"a direct count over {p['dang']} worthwhile postings",
-            di="/search", nut="Xem kho"))
+            di="/search", nut="Open the store"))
 
     # 2. ARE THE APPLICATIONS GOING TO THE RIGHT PLACES — only scoreable for
     #    applications linked to an original posting.
@@ -421,7 +421,7 @@ def chan_doan(conn: sqlite3.Connection) -> list[dict]:
                f"word back. Silence from the start usually means being cut by "
                f"the CV-reading machine."),
             tren=f"{k['tong']} applications",
-            di="/cv", nut="Xem CV"))
+            di="/cv", nut="Open the CV"))
 
     # 4. HOW MUCH OF THE STORE THE CV ANSWERS — the CV layer's own number.
     luu = batch.saved(conn) or {}

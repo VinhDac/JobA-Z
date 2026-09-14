@@ -2184,66 +2184,64 @@ with tempfile.TemporaryDirectory() as tmp:
         if _href.startswith("/static") or _re2.search(r"/\d+", _href):
             continue
         _c4, _ = get(_href)
-        check(f"liên kết {_href} tới được", _c4 in (200, 303), f"HTTP {_c4}")
-    check("có liên kết để mà kiểm", len(_links) >= 5, str(len(_links)))
+        check(f"the link {_href} is reachable", _c4 in (200, 303), f"HTTP {_c4}")
+    check("there are links to check at all", len(_links) >= 5, str(len(_links)))
 
-    print("\n[thanh bên: logo và mục Cài đặt ở đáy]")
+    print("\n[the sidebar: the logo, and Settings at the bottom]")
     _c7, _home = get("/")
-    check("mục Cài đặt có trong thanh bên", "navend" in _home)
-    # Là <button>, KHÔNG phải <a>: /settings trả về MẢNH HTML cho tấm phủ,
-    # link tới đó là ra trang trắng.
+    check("Settings is in the sidebar", "navend" in _home)
+    # It is a <button>, NOT an <a>: /settings returns an HTML FRAGMENT for the
+    # overlay, so linking to it lands on a blank page.
     import re as _re7
     _end = _re7.search(r"<div class=navend>(.*?)</div>", _home, _re7.S)
-    check("Cài đặt là nút, không phải link", bool(_end) and "<button" in _end.group(1))
-    check("và không phải thẻ <a>", bool(_end) and "<a " not in _end.group(1))
-    # Dùng CHUNG data-settings với bánh răng trên thanh master: một trình nghe
-    # lo cả hai, không thêm đường nào mới để mà chết.
-    # Dùng CHUNG `data-settings` với bánh răng trên thanh master: một trình
-    # nghe lo cả hai, không thêm đường nào mới để mà chết. Đếm theo VÙNG, không
-    # đếm cả trang — vài trang còn nút mở tấm phủ khác cũng dùng thuộc tính đó.
-    # Nút Cài đặt KHÔNG dùng chung đường với nút ⚟ của khúc: ⚟ chỉnh khúc,
-    # Cài đặt chỉnh cả app. Chung một thuộc tính thì sớm muộn chung luôn nội
-    # dung, rồi lại thành "một thanh vừa của app vừa của khúc" như thanh cũ.
-    check("mục Cài đặt mang data-appset",
+    check("Settings is a button, not a link", bool(_end) and "<button" in _end.group(1))
+    check("and not an <a> tag", bool(_end) and "<a " not in _end.group(1))
+    # The Settings item must NOT share a route with a stage's ⚟ button: ⚟ adjusts one
+    # stage, Settings settles the whole app. Share one attribute and sooner or later
+    # they share the contents too, and it becomes "one bar that is half the app's and
+    # half the stage's" all over again. Count INSIDE THE REGION, not across the whole
+    # page — some pages carry other overlay buttons using the same attribute.
+    check("the Settings item carries data-appset",
           bool(_end) and "data-appset" in _end.group(1))
-    check("và KHÔNG dính vào khung ⚟ của khúc",
+    check("and it does NOT hook into a stage's ⚟ panel",
           bool(_end) and "data-settings" not in _end.group(1))
-    # Bánh răng ĐÃ RỜI thanh trên cùng: Cài đặt (toàn app) về đáy thanh bên,
-    # còn thanh trên cùng giờ là thanh của KHÚC đang mở, mang nút ⚟ Điều chỉnh
-    # của riêng khúc đó. Một thanh không thể vừa là của app vừa là của khúc.
-    # Trang chưa có khúc thì KHÔNG vẽ thanh trên cùng: trạng thái chung đã ở
-    # thanh đáy, vẽ thêm dòng y hệt trên đầu là nói hai lần.
-    check("trang chưa có khúc thì không có thanh trên cùng",
+    # The gear HAS LEFT the top bar: Settings (whole app) moved to the bottom of the
+    # sidebar, and the top bar is now the bar of THE STAGE on screen, carrying that
+    # stage's own ⚟ Adjust button. One bar cannot be both the app's and a stage's.
+    # A page with no stage draws NO top bar: the shared state already sits on the
+    # bottom bar, and drawing the same line again at the top says it twice.
+    check("a page with no stage has no top bar",
           "class='topbar" not in _home and "class=runstate" not in _home)
     _, _s2 = get("/search")
     _bar2 = _re7.search(r"<header class=topbar>(.*?)</header>", _s2, _re7.S)
-    check("trang có khúc thì thanh mang nút ⚟ của khúc",
+    check("a page with a stage carries that stage's ⚟ button on the bar",
           bool(_bar2) and "data-settings='/adjust/search'" in _bar2.group(1))
     _css7 = (Path(__file__).resolve().parent.parent
              / "src/jobbot/dashboard/web/app.css").read_text(encoding="utf-8")
     _, _sv = get("/")
-    check("logo là chìa khoá vẽ bằng SVG", "<svg class=logo" in _sv)
-    # ĐẾM TRONG LOGO, không đếm cả trang: bộ icon thanh bên cũng có <circle>
-    # (kính lúp, người, bánh răng), nên đếm cả trang là bài này thôi kiểm
-    # đúng thứ nó mang tên.
+    check("the logo is a key drawn in SVG", "<svg class=logo" in _sv)
+    # COUNT INSIDE THE LOGO, not across the page: the sidebar icon set also has
+    # <circle> (the magnifier, the person, the gear), so counting the whole page would
+    # stop this test checking the very thing it is named after.
     _lg = _re7.search(r"<svg class=logo.*?</svg>", _sv, _re7.S)
     _lg = _lg.group(0) if _lg else ""
-    check("ba vòng chìa là vòng THẬT — có lỗ, không phải chấm đặc",
+    check("the key's three rings are REAL rings — holes, not solid dots",
           _lg.count("<circle") == 3 and "fill=none" in _lg)
-    check("logo ăn màu từ CSS, không đóng cứng trong hình",
+    check("the logo takes its colour from CSS, not hard-coded into the drawing",
           "currentColor" in _lg and ".logo{" in _css7)
 
     _srv = (Path(__file__).resolve().parent.parent
             / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
-    print("\n[BẪY «NOT IN» GẶP NULL — cả lớp lỗi, không phải một chỗ]")
-    # SQL ba trạng thái: `x NOT IN (…, NULL)` ra NULL chứ không phải TRUE, nên
-    # mệnh đề không bao giờ đúng và câu lệnh im lặng không làm gì.
+    print("\n[THE «NOT IN» MEETS NULL TRAP — a whole class of bug, not one place]")
+    # Three-valued SQL: `x NOT IN (…, NULL)` yields NULL, not TRUE, so the clause is
+    # never true and the statement silently does nothing.
     #
-    # Đo trên kho thật: 32/37 đơn có posting_id = NULL, nên "Dọn kho tin" xoá
-    # ĐÚNG 0 tin — trong khi source_run (204 lượt quét) và cv_build vẫn bị
-    # xoá sạch. Người dùng thấy kho y nguyên và mất lịch sử quét.
-    # Bảng tạm: bài này kiểm NGỮ NGHĨA SQL, không kiểm schema. Chỗ thật đã
-    # có bộ dò cả mã nguồn ở ngay dưới.
+    # Measured on the live store: 32 of 37 applications have posting_id = NULL, so
+    # "Clear the store" deleted EXACTLY 0 postings — while source_run (204 scans) and
+    # cv_build were wiped anyway. The user sees the store untouched and loses the scan
+    # history.
+    # A scratch table: this test checks SQL SEMANTICS, not the schema. The real places
+    # are covered by the source-wide sweep right below.
     import sqlite3 as _sq
     _cnull = _sq.connect(":memory:")
     _cnull.executescript(
@@ -2257,11 +2255,11 @@ with tempfile.TemporaryDirectory() as tmp:
     _dung = _cnull.execute(
         "SELECT COUNT(*) FROM tin WHERE id NOT IN"
         " (SELECT tin_id FROM don WHERE tin_id IS NOT NULL)").fetchone()[0]
-    check("bẫy có thật: quên lọc NULL -> đếm ra 0", _sai == 0)
-    check("lọc NULL rồi thì đếm đúng", _dung == 1)
+    check("the trap is real: forget the NULL filter -> the count comes out 0", _sai == 0)
+    check("filter the NULLs and the count is right", _dung == 1)
     _cnull.close()
-    # CHỐT CẢ LỚP: mọi `NOT IN (SELECT <cột>` trong mã nguồn phải có
-    # `IS NOT NULL`. Vá một chỗ thì lần sau ai viết thêm một câu nữa lại dính.
+    # GUARD THE WHOLE CLASS: every `NOT IN (SELECT <column>` in the source must carry
+    # `IS NOT NULL`. Patch one place and the next statement anyone writes falls in again.
     import re as _reN
     _xau = []
     for _f in sorted((Path(__file__).resolve().parent.parent / "src").rglob("*.py")):
@@ -2271,15 +2269,15 @@ with tempfile.TemporaryDirectory() as tmp:
             _het = _doan.find(")")
             if "IS NOT NULL" not in _doan[:max(_het, 300)]:
                 _xau.append(f"{_f.name}:{_t[:_m.start()].count(chr(10)) + 1}")
-    check(f"không câu «NOT IN» nào quên lọc NULL"
+    check(f"no «NOT IN» statement forgets the NULL filter"
           + (f" — {', '.join(_xau[:4])}" if _xau else ""), not _xau)
 
-    print("\n[CHỐT CÙNG NHÀ — trang web lạ không được điều khiển app]")
-    # NGHE Ở 127.0.0.1 KHÔNG PHẢI LÀ BẢO VỆ. Đo thật trước khi vá: một trang
-    # web bất kỳ người dùng mở đều gọi được /api/chung (đổi màu),
-    # /api/session/start (bật trạm trực), /api/reset (xoá sạch) và
-    # /api/apply/send (bấm Gửi hộ — phá thẳng luật nền số 4). Trình duyệt
-    # chặn họ ĐỌC kết quả, nhưng việc vẫn xảy ra.
+    print("\n[THE SAME-HOUSE CATCH — a stranger's web page must not drive the app]")
+    # LISTENING ON 127.0.0.1 IS NOT PROTECTION. Measured before the fix: any web page
+    # the user happened to open could call /api/chung (change the theme),
+    # /api/session/start (open the watch station), /api/reset (wipe everything) and
+    # /api/apply/send (press Send on their behalf — straight through founding law 4).
+    # The browser stops them READING the result, but the action still happens.
     def _post(path, body="arg=x", **hdr):
         req = urllib.request.Request(
             base.rstrip("/") + path, data=body.encode(), method="POST",
@@ -2290,129 +2288,131 @@ with tempfile.TemporaryDirectory() as tmp:
         except urllib.error.HTTPError as e:
             return e.code
     for _p in ("/api/reset", "/api/apply/send", "/api/chung", "/api/track/xoa"):
-        check(f"CHẶN {_p} khi Sec-Fetch-Site: cross-site",
+        check(f"BLOCK {_p} on Sec-Fetch-Site: cross-site",
               _post(_p, **{"Sec-Fetch-Site": "cross-site"}) == 403)
-        check(f"CHẶN {_p} khi Origin lạ",
-              _post(_p, **{"Origin": "https://ke-xau.example"}) == 403)
-    check("app tự gọi thì QUA", _post("/api/state",
+        check(f"BLOCK {_p} on a foreign Origin",
+              _post(_p, **{"Origin": "https://bad-guy.example"}) == 403)
+    check("the app calling itself gets THROUGH", _post("/api/state",
           **{"Sec-Fetch-Site": "same-origin"}) != 403)
-    check("script trên chính máy (không header) vẫn QUA",
+    check("a script on this very machine (no header) still gets THROUGH",
           _post("/api/state") != 403)
-    # Chốt phải đặt ở MỘT chỗ, trước mọi đường — đặt ở từng route thì thêm
-    # route mới là phải nhớ, và lần quên có thể là đường xoá sạch dữ liệu.
-    check("chốt đặt một chỗ, ngay đầu do_POST",
+    # The catch has to sit in ONE place, ahead of every route — put it on each route
+    # and every new route has to remember it, and the one forgotten could be the route
+    # that wipes the data.
+    check("the catch sits in one place, at the very top of do_POST",
           "if not self.cung_nha():" in _srv
           and _srv.index("def do_POST") < _srv.index("length = int(self.headers"))
 
-    print("\n[TELEGRAM — báo về điện thoại, và ba chốt an toàn]")
+    print("\n[TELEGRAM — alerts to the phone, and three safety catches]")
     from jobbot.core import tele as _tl, db as _db, prefs as _prefs
     from jobbot.dashboard.views import settings as _setm
     from jobbot import bao as _bao
-    # CHỐT 1 — BOT TELEGRAM AI CŨNG NHẮN ĐƯỢC. Đây là hàng rào duy nhất giữa
-    # cái máy ở nhà và bất kỳ ai biết tên bot.
+    # CATCH 1 — ANYONE CAN MESSAGE A TELEGRAM BOT. This is the only fence between the
+    # machine at home and anybody who knows the bot's name.
     _that = {"message": {"chat": {"id": 111}, "text": "/trangthai"}}
     _la = {"message": {"chat": {"id": 999}, "text": "/tatphien"}}
-    check("đúng chat thì nhận", _tl.duoc_phep(_that, "111"))
-    check("CHAT LẠ THÌ BỎ", not _tl.duoc_phep(_la, "111"))
-    check("chưa ghim chat thì bỏ tất", not _tl.duoc_phep(_that, ""))
-    check("tin rỗng cũng không lọt", not _tl.duoc_phep({}, "111"))
-    check("chat_id so bằng CHUỖI, không bằng số", _tl.duoc_phep(_that, " 111 "))
-    # CHỐT 2 — TOKEN KHÔNG BAO GIỜ RA HTML.
-    check("token in ra chỉ còn đuôi", _tl.che("7123456789:AAHxxxxYZ9k") == "…Z9k"
+    check("the right chat is accepted", _tl.duoc_phep(_that, "111"))
+    check("A STRANGE CHAT IS DROPPED", not _tl.duoc_phep(_la, "111"))
+    check("no chat pinned -> everything is dropped", not _tl.duoc_phep(_that, ""))
+    check("an empty message does not get through either", not _tl.duoc_phep({}, "111"))
+    check("chat_id compares AS A STRING, not as a number", _tl.duoc_phep(_that, " 111 "))
+    # CATCH 2 — THE TOKEN NEVER REACHES THE HTML.
+    check("a printed token keeps only its tail", _tl.che("7123456789:AAHxxxxYZ9k") == "…Z9k"
           or _tl.che("7123456789:AAHxxxxYZ9k").startswith("…"))
-    check("che không để lọt phần đầu token",
+    check("masking lets no part of the token's head through",
           "7123" not in _tl.che("7123456789:AAHxxxxYZ9k"))
-    # CHỐT 3 — KHÔNG CÓ LỆNH NỘP ĐƠN Ở BẤT KỲ MỨC NÀO. Ranh giới gốc của cả
-    # app: máy KHÔNG bấm Gửi. Nó phải giữ nguyên qua Telegram.
+    # CATCH 3 — THERE IS NO APPLY COMMAND AT ANY LEVEL. The founding boundary of the
+    # whole app: the machine does NOT press Send. That has to hold over Telegram too.
     for _muc in (_tl.TAT, _tl.XEM, _tl.DAY_DU):
         for _cam in ("nopdon", "apply", "send", "gui", "nop"):
-            check(f"mức «{_muc}» không cho lệnh /{_cam}",
+            check(f"level «{_muc}» allows no /{_cam} command",
                   not _tl.cho_phep_lenh(_cam, _muc))
-    check("mức TẮT không cho lệnh nào", not any(
+    check("level OFF allows no command at all", not any(
         _tl.cho_phep_lenh(l, _tl.TAT) for l in _tl.LENH_XEM + _tl.LENH_GHI))
-    check("mức XEM không cho lệnh GHI vào bảng",
+    check("level READ allows no command that WRITES to the table",
           not any(_tl.cho_phep_lenh(l, _tl.XEM) for l in _tl.LENH_GHI))
-    check("mức ĐẦY ĐỦ mới cho duyệt thư",
+    check("only level FULL allows reviewing mail",
           all(_tl.cho_phep_lenh(l, _tl.DAY_DU) for l in _tl.LENH_GHI))
-    check("và ba mức đều có mô tả cho người dùng chọn",
+    check("and all three levels carry a description for the user to choose by",
           len(_tl.MUC_DIEU_KHIEN) == 3
           and all(len(v) == 2 and v[1] for v in _tl.MUC_DIEU_KHIEN.values()))
-    # Đọc lệnh: Telegram tự thêm "@tên_bot" trong nhóm.
-    check("bỏ được đuôi @tên_bot",
+    # Reading a command: Telegram appends "@bot_name" inside a group.
+    check("the @bot_name suffix is stripped",
           _tl.doc_lenh({"message": {"text": "/trangthai@jobbot_bot"}})[0] == "trangthai")
-    check("không phân biệt hoa thường",
+    check("case does not matter",
           _tl.doc_lenh({"message": {"text": "/BatPhien"}})[0] == "batphien")
-    check("chữ thường không phải lệnh",
-          _tl.doc_lenh({"message": {"text": "xin chào"}}) == ("", ""))
-    # CHƯA NỐI BOT thì không loại báo nào được coi là bật — nếu không, mỗi
-    # lượt quét lại gọi API với token rỗng và nhật ký đầy rác.
+    check("ordinary text is not a command",
+          _tl.doc_lenh({"message": {"text": "hello there"}}) == ("", ""))
+    # WITH NO BOT CONNECTED no alert kind counts as on — otherwise every scan calls the
+    # API with an empty token and the journal fills with junk.
     _cbao = _db.connect(":memory:")
-    check("chưa nối bot thì mọi loại báo coi như tắt",
+    check("with no bot connected every alert kind counts as off",
           not any(_bao.bat(_cbao, k) for k in _prefs.BAO))
-    check("và vòng nghe lệnh tự thoát", _bao.cau_hinh_nghe() is None)
-    check("mặc định KHÔNG nhận lệnh từ xa",
+    check("and the command-listening loop exits by itself", _bao.cau_hinh_nghe() is None)
+    check("by default NO remote command is accepted",
           _prefs.DEFAULTS[_prefs.BAO_MUC] == _tl.TAT)
     _cbao.close()
-    # Tab Cài đặt
+    # The Settings tab
     _stb = _setm.render(every=60, hours=(8, 22), status=[], tele_noi=True,
                        tele_token="…Z9k", tele_chat="111",
                        bao_bat={k: True for k in _prefs.BAO}, bao_muc="xem")
-    check("Cài đặt có tab Thông báo", "data-stab='bao'" in _stb)
-    check("bày đủ bốn loại báo", _stb.count("data-post='/api/bao'")
+    check("Settings has an Alerts tab", "data-stab='bao'" in _stb)
+    check("all four alert kinds are laid out", _stb.count("data-post='/api/bao'")
           == len(_prefs.BAO) + len(_tl.MUC_DIEU_KHIEN))
-    check("ô token là password, không phải text", "type=password name=token" in _stb)
-    check("và KHÔNG có value= trên ô token",
+    check("the token box is a password, not text", "type=password name=token" in _stb)
+    check("and there is NO value= on the token box",
           "name=token value" not in _stb and "name=token autocomplete" in _stb)
-    check("nói rõ ba chốt cứng cho người dùng biết",
+    check("the three hard catches are stated for the user to read",
           "no apply command at any level" in _stb.lower())
-    check("chỉ dẫn tạo bot cho người chưa nối",
+    check("someone with no bot yet gets the instructions to make one",
           "@BotFather" in _setm.render(every=60, hours=(8, 22), status=[]))
-    # KHUNG PHẢI ĐỦ RỘNG CHO CẢ HÀNG TAB. Đo bề rộng thật: bảy chip chữ 12px
-    # + đệm 12px mỗi bên + sáu khe = ~530px, cộng đệm khung 36 -> 566. Ở 480
-    # nó gãy xuống hai dòng và tên tab bị cắt làm đôi.
+    # THE PANEL HAS TO BE WIDE ENOUGH FOR THE WHOLE TAB ROW. Measured: seven chips of
+    # 12px text + 12px padding each side + six gaps = ~530px, plus 36 of panel padding
+    # -> 566. At 480 it broke onto two lines and a tab name was cut in half.
     _rong = int(_re.search(r"\.sheetbox\{width:(\d+)px", _css7).group(1))
     _so_tab = _stb.count("data-stab=")
-    check(f"khung Cài đặt đủ rộng cho {_so_tab} tab ({_rong}px)", _rong >= 700)
-    check("hàng tab KHÔNG xuống dòng", "flex-wrap:nowrap" in _css7
+    check(f"the Settings panel is wide enough for {_so_tab} tabs ({_rong}px)", _rong >= 700)
+    check("the tab row does NOT wrap", "flex-wrap:nowrap" in _css7
           and ".stab{white-space:nowrap" in _css7)
-    check("thêm tab nữa thì cuộn ngang, không vỡ bố cục",
+    check("one more tab scrolls sideways, it does not break the layout",
           "overflow-x:auto" in _css7.split(".stabs{")[1][:200])
-    # CỔNG DO HỆ CẤP, không đóng cứng và không "hỏi rồi mới bind".
-    # `find_port` hỏi "có ai nghe không" rồi mới bind — giữa hai bước có khe,
-    # và hai lượt test chạy chồng nhau cùng thấy trống rồi cùng bind. Lỗi
-    # "Address already in use" đó KHÔNG ĐỀU, nên càng khó tin bài test.
+    # THE PORT IS ISSUED BY THE SYSTEM — not hard-coded, and not "ask first, then bind".
+    # `find_port` asked "is anyone listening" and only then bound — there is a gap
+    # between the two steps, and two overlapping test runs both saw it free and both
+    # bound. That "Address already in use" failure is INTERMITTENT, which makes the
+    # test even harder to trust.
     _goc = Path(__file__).resolve().parent.parent
-    check("server dựng xong thì đọc NGƯỢC cổng thật từ socket",
+    check("once up, the server reads the REAL port BACK from the socket",
           "httpd.server_address[1]" in
           (_goc / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8"))
-    check("và bộ test xin cổng 0 để hệ tự cấp",
+    check("and the test suite asks for port 0 so the system issues one",
           "serve(port=0)" in Path(__file__).resolve().read_text(encoding="utf-8"))
 
-    print("\n[NỐI BOT — phải NÓI RA nó ghim vào chat nào]")
-    # Bản trước lấy `ai[-1]` rồi báo "đã tìm ra chat của bạn". Bot Telegram
-    # thì ai nhắn cũng được, và bot hay bị kéo vào nhóm — nên "chat của bạn"
-    # có thể là chat của người khác, và mọi thông báo việc làm đi thẳng sang
-    # đó. Không ai phát hiện được, vì màn hình không nói nó chọn cái nào.
+    print("\n[CONNECTING THE BOT — it has to SAY which chat it pinned]")
+    # The previous version took `ai[-1]` and reported "found your chat". Anyone can
+    # message a Telegram bot, and bots often get pulled into groups — so "your chat"
+    # could be somebody else's, and every job alert would go straight there. Nobody
+    # could notice, because the screen never said which one it picked.
     _ra = {"result": [
         {"message": {"chat": {"id": 111, "first_name": "Vin", "last_name": "Dac"}}},
-        {"message": {"chat": {"id": 222, "title": "Nhóm tuyển dụng"}}},
+        {"message": {"chat": {"id": 222, "title": "Recruiting group"}}},
         {"message": {"chat": {"id": 111, "first_name": "Vin", "last_name": "Dac"}}},
     ]}
     _ds = _bao._cac_chat(_ra)
-    check("gộp trùng, giữ thứ tự tin đến", [c for c, _ in _ds] == ["222", "111"])
-    check("lấy được tên người", ("111", "Vin Dac") in _ds)
-    check("lấy được tên nhóm", ("222", "Nhóm tuyển dụng") in _ds)
-    check("chỉ có username thì dùng username",
+    check("duplicates merge, arrival order kept", [c for c, _ in _ds] == ["222", "111"])
+    check("a person's name is picked up", ("111", "Vin Dac") in _ds)
+    check("a group's name is picked up", ("222", "Recruiting group") in _ds)
+    check("with only a username, the username is used",
           _bao._cac_chat({"result": [{"message": {"chat": {"id": 5, "username": "ai"}}}]})
           == [("5", "@ai")])
-    check("tin không phải message thì bỏ, không nổ",
+    check("an update that is not a message is dropped, not exploded on",
           _bao._cac_chat({"result": [{"edited_message": {}}, {}]}) == [])
-    check("trả về rỗng thì rỗng", _bao._cac_chat({}) == [])
-    # Mã chat sai dạng (Telegram đổi kiểu, hoặc dữ liệu rác) không được ghim.
-    check("mã chat sai dạng bị loại",
+    check("an empty response gives an empty list", _bao._cac_chat({}) == [])
+    # A malformed chat id (Telegram changing the type, or junk data) must not be pinned.
+    check("a malformed chat id is rejected",
           _bao._cac_chat({"result": [{"message": {"chat": {"id": "abc"}}}]}) == [])
 
-    # Câu báo cho người dùng: một chat thì gọi tên, nhiều chat thì NÓI LÀ NHIỀU.
+    # What the user is told: one chat -> name it; several chats -> SAY there are several.
     _that_goi, _that_ghi = _tl.goi, None
     from jobbot.core import config as _cfgm
     _that_ghi = _cfgm.write_value
@@ -2427,348 +2427,355 @@ with tempfile.TemporaryDirectory() as tmp:
     _tl.goi = _gia
     try:
         _ok, _cau = _bao.luu("7123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-        check("nối được", _ok, _cau)
-        check("ghim ĐÚNG chat nhắn gần nhất", ("chat_id", "111") in _da_ghi, str(_da_ghi))
-        check("và câu báo GỌI TÊN chat đó", "Vin Dac" in _cau, _cau)
-        check("nói thẳng là có nhiều chat", "2" in _cau and "chat" in _cau, _cau)
-        check("kể cả tên chat kia, để người dùng biết mình chọn nhầm chưa",
-              "Nhóm tuyển dụng" in _cau, _cau)
-        check("và chỉ cách sửa", "Save" in _cau, _cau)
-        # Một chat thôi thì câu phải NGẮN, không doạ người dùng.
+        check("it connects", _ok, _cau)
+        check("it pins THE chat that messaged most recently", ("chat_id", "111") in _da_ghi, str(_da_ghi))
+        check("and the message NAMES that chat", "Vin Dac" in _cau, _cau)
+        check("it says outright there is more than one chat", "2" in _cau and "chat" in _cau, _cau)
+        check("including the other chat's name, so the user can tell it picked wrong",
+              "Recruiting group" in _cau, _cau)
+        check("and it says how to fix it", "Save" in _cau, _cau)
+        # With only one chat the message has to be SHORT, not alarming.
         _ra2 = {"result": [{"message": {"chat": {"id": 111, "first_name": "Vin"}}}]}
         _tl.goi = lambda ham, _t=None, **_k: (
             ({"result": {"username": "jobbot_test_bot"}}, "") if ham == "getMe"
             else (_ra2, ""))
         _ok2, _cau2 = _bao.luu("")
-        check("một chat -> vẫn gọi tên", _ok2 and "Vin" in _cau2, _cau2)
-        check("một chat -> không doạ về nhiều chat",
+        check("one chat -> it still names it", _ok2 and "Vin" in _cau2, _cau2)
+        check("one chat -> no alarm about several chats",
               "chats have messaged" not in _cau2, _cau2)
-        # Tên có ký tự HTML thì phải thoát — câu này đi thẳng vào trang.
+        # A name with HTML characters has to be escaped — this sentence goes straight onto the page.
         _ra3 = {"result": [{"message": {"chat": {"id": 111,
                                                  "first_name": "<script>x"}}}]}
         _tl.goi = lambda ham, _t=None, **_k: (
             ({"result": {"username": "b"}}, "") if ham == "getMe" else (_ra3, ""))
         _ok3, _cau3 = _bao.luu("")
-        check("tên chat được thoát trước khi vào HTML",
+        check("the chat name is escaped before it reaches the HTML",
               "<script>" not in _cau3 and "&lt;script&gt;" in _cau3, _cau3)
     finally:
         _tl.goi, _tl.cau_hinh = _that_goi, _bao_cfg
         _cfgm.write_value = _that_ghi
 
-    print("\n[NÚT TEST — gửi THẬT, và hỏng thì nói HỎNG Ở ĐÂU]")
+    print("\n[THE TEST BUTTON — it sends FOR REAL, and on failure says WHERE it failed]")
     _ct = _db.connect(":memory:")
-    # Tin thử chính LÀ bản hướng dẫn: nói chế độ đang dùng, lệnh dùng được,
-    # và sẽ nhắn khi nào. Một tin chỉ nói "ok" thì mới chứng minh ĐƯỜNG ĐI
-    # thông, chưa chứng minh CẤU HÌNH đúng.
+    # The test message IS the instruction sheet: it states the level in force, the
+    # commands available, and when it will message. A message saying only "ok" proves
+    # THE ROUTE is open, not that THE CONFIGURATION is right.
     for _muc, _ten in ((_tl.TAT, "Notifications only"), (_tl.XEM, "View, and"),
                        (_tl.DAY_DU, "approve mail")):
         _prefs.put(_ct, _prefs.BAO_MUC, _muc)
         _tin = _bao.tin_thu(_ct)
-        check(f"tin thử nói chế độ «{_muc}»", _ten in _tin)
-        check(f"và nói sẽ nhắn khi nào (mức {_muc})", "Will message when" in _tin
+        check(f"the test message states level «{_muc}»", _ten in _tin)
+        check(f"and says when it will message (level {_muc})", "Will message when" in _tin
               or "No notification kind is enabled" in _tin)
     _prefs.put(_ct, _prefs.BAO_MUC, _tl.TAT)
-    check("mức TẮT thì nói thẳng là không nhận lệnh",
+    check("level OFF says outright that it accepts no commands",
           "accepts no commands" in _bao.tin_thu(_ct))
-    check("và KHÔNG bày lệnh nào ra", "/trangthai" not in _bao.tin_thu(_ct))
+    check("and it lists NO command at all", "/trangthai" not in _bao.tin_thu(_ct))
     _prefs.put(_ct, _prefs.BAO_MUC, _tl.DAY_DU)
     _tin = _bao.tin_thu(_ct)
     for _l in ("/trangthai", "/batphien", "/nhan"):
-        check(f"mức đầy đủ bày lệnh {_l}", _l in _tin)
-    check("mức đầy đủ KHÔNG bày lệnh nộp đơn",
+        check(f"level FULL lists the {_l} command", _l in _tin)
+    check("level FULL lists NO apply command",
           "/nop" not in _tin and "/apply" not in _tin)
     _prefs.put(_ct, _prefs.BAO_MUC, _tl.TAT)
-    # LÝ DO HỎNG phải dịch sang tiếng người. "không gửi được" là câu người
-    # dùng đã tự biết rồi — nút Test tồn tại để nói hỏng Ở ĐÂU.
-    # KHÔNG PHỤ THUỘC CẤU HÌNH THẬT. Bài cũ gọi thẳng goi() nên nó xanh hay
-    # đỏ tuỳ người chạy máy đã nối Telegram hay chưa — một bài test đổi kết
-    # quả theo máy thì nó không kiểm cái gì cả.
+    # THE REASON FOR FAILURE has to be translated into human words. "could not send"
+    # is what the user already knows — the Test button exists to say WHERE it broke.
+    # NOT DEPENDENT ON THE REAL CONFIG. The old version called goi() directly, so it
+    # went green or red depending on whether the machine running it had Telegram
+    # connected — a test whose result changes with the machine is checking nothing.
     _cu = _tl.cau_hinh
     try:
         _tl.cau_hinh = lambda: {}
-        check("chưa có token -> nói rõ lấy token ở đâu",
+        check("no token yet -> it says where to get one",
               "@BotFather" in _tl.goi("getMe", {})[1])
-        check("và không hề ra mạng khi chưa có token",
+        check("and it never touches the network without a token",
               _tl.goi("getMe", {})[0] is None)
     finally:
         _tl.cau_hinh = _cu
-    # KHOÁ CỨNG LÚC CHẠY TEST. Bộ test đọc config THẬT (chỉ phần GHI được
-    # canh, phần ĐỌC thì không), nên từ lúc người dùng nối bot, mỗi lượt chạy
-    # test gửi tin thật về điện thoại họ — gồm cả báo động giả "Phiên hỏng"
-    # do chính bài test dựng ra. Một bộ test làm phiền người dùng thật là một
-    # bộ test hỏng.
-    check("đang chạy test thì tầng mạng bị khoá", _tl.khoa_mang())
-    check("và coi như CHƯA NỐI dù trên đĩa có gì", _tl.cau_hinh() == {})
-    check("nên không loại báo nào tự gửi được",
+    # HARD-LOCKED WHILE THE TESTS RUN. The suite reads the REAL config (only the WRITE
+    # side is guarded, the READ side is not), so from the moment the user connected a
+    # bot, every test run sent a real message to their phone — including a false alarm
+    # "the session broke" raised by the test itself. A suite that pesters the real user
+    # is a broken suite.
+    check("while the tests run the network layer is locked", _tl.khoa_mang())
+    check("and it counts as NOT CONNECTED whatever is on disk", _tl.cau_hinh() == {})
+    check("so no alert kind can send by itself",
           not _bao.bat(_db.connect(":memory:"), _prefs.BAO_HONG))
     _rn = (Path(__file__).resolve().parent / "run_all.py").read_text(encoding="utf-8")
-    check("và bộ chạy chung dựng GỐC DỰ ÁN GIẢ cho mọi bài",
+    check("and the shared runner builds A FAKE PROJECT ROOT for every file",
           'JOBBOT_ROOT' in _rn and 'JOBBOT_OFFLINE' in _rn and "env=moi_truong" in _rn)
     _okt, _lyd = _bao.thu(_ct)
-    check("chưa nối thì Test trả về THẤT BẠI", not _okt)
-    check("và câu báo chỉ đúng việc phải làm",
+    check("not connected -> Test returns FAILURE", not _okt)
+    check("and the message names exactly what to do",
           "message the bot" in _lyd or "chat id" in _lyd or "token" in _lyd)
     _ct.close()
     _stt = _setm.render(every=60, hours=(8, 22), status=[],
-                        tin_test=(False, "token sai hoặc đã bị thu hồi"))
-    check("có nút Test cạnh Tìm chat", "name=test value=1" in _stt)
-    check("kết quả hỏng hiện thành băng cảnh báo", "testkq xau" in _stt)
-    check("và in nguyên lý do ra màn", "token sai" in _stt)
-    check("kết quả được thì hiện băng xanh", "testkq ok" in _setm.render(
-        every=60, hours=(8, 22), status=[], tin_test=(True, "Đã gửi.")))
-    # SAU KHI BẤM, TẤM PHẢI Ở LẠI ĐÚNG TAB. Không thì băng kết quả nằm ở tab
-    # Thông báo mà màn hình đang mở tab Chung — người dùng thấy y như không
-    # có gì xảy ra.
+                        tin_test=(False, "the token is wrong or has been revoked"))
+    check("there is a Test button", "name=test value=1" in _stt)
+    check("a failure shows as a warning banner", "testkq xau" in _stt)
+    check("and it prints the reason verbatim on screen", "token is wrong" in _stt)
+    check("a success shows as a green banner", "testkq ok" in _setm.render(
+        every=60, hours=(8, 22), status=[], tin_test=(True, "Sent.")))
+    # AFTER THE CLICK THE PANEL HAS TO STAY ON THE RIGHT TAB. Otherwise the result
+    # banner sits on the Alerts tab while the screen is showing the General tab — and
+    # the user sees exactly what they would see if nothing had happened.
     _mo = _setm.render(every=60, hours=(8, 22), status=[], mo="bao")
-    check("mở đúng tab vừa gửi form", "stab on' data-stab='bao'" in _mo)
-    check("không truyền thì vẫn mở tab đầu",
+    check("it opens the tab the form was submitted from", "stab on' data-stab='bao'" in _mo)
+    check("pass nothing and it still opens the first tab",
           "stab on' data-stab='chung'" in _setm.render(
               every=60, hours=(8, 22), status=[]))
-    check("tab lạ thì rơi về tab đầu", "stab on' data-stab='chung'" in
+    check("an unknown tab falls back to the first", "stab on' data-stab='chung'" in
           _setm.render(every=60, hours=(8, 22), status=[], mo="lung-tung"))
-    # BẪY FormData: FormData(form) BỎ MẤT name/value của chính cái nút vừa
-    # bấm, nên `Tìm chat` và `Test` gửi lên y hệt nút Lưu — hai nút trông vẫn
-    # chạy mà không làm gì cả.
+    # THE FormData TRAP: FormData(form) DROPS the name/value of the very button that
+    # was pressed, so `Find chat` and `Test` arrived looking exactly like Save — two
+    # buttons that appeared to work while doing nothing.
     _js2 = (Path(__file__).resolve().parent.parent
             / "src/jobbot/dashboard/web/live.js").read_text(encoding="utf-8")
-    check("form Cài đặt gửi kèm CÁI NÚT vừa bấm",
+    check("the Settings form sends THE BUTTON that was pressed",
           "new FormData(form, e.submitter)" in _js2)
-    check("và có đường lui cho trình duyệt cũ",
+    check("and there is a fallback for older browsers",
           "fd.append(e.submitter.name" in _js2)
-    check("không đè ghi chú khi máy chủ đã trả kết quả thật",
+    check("it does not overwrite the note once the server has returned a real result",
           "querySelector('.testkq')) return" in _js2)
 
-    print("\n[CHẶN NGAY LÚC LƯU — đừng để cất giá trị sai rồi mới báo]")
-    # SỐ ĐIỆN THOẠI KHÔNG PHẢI MÃ CHAT. Đây là lỗi người dùng thật đã mắc:
-    # nhãn "Số chat của bạn" đọc ra như số điện thoại, dán vào thì Telegram
-    # trả "chat not found" — một câu chẳng gợi ý gì.
-    check("số điện thoại KHÔNG phải mã chat", not _bao.dang_chat("+447511787706"))
-    check("mã chat là số nguyên", _bao.dang_chat("123456789"))
-    check("nhóm thì âm, vẫn hợp lệ", _bao.dang_chat("-1001234567"))
-    check("chuỗi rỗng không hợp lệ", not _bao.dang_chat(""))
-    check("token đúng dạng <số>:<chuỗi>",
+    print("\n[STOP IT AT SAVE TIME — never store a wrong value and complain later]")
+    # A PHONE NUMBER IS NOT A CHAT ID. This is a mistake the real user made: the label
+    # "Your chat number" reads like a phone number, and pasting one makes Telegram
+    # answer "chat not found" — a sentence that hints at nothing.
+    check("a phone number is NOT a chat id", not _bao.dang_chat("+447511787706"))
+    check("a chat id is a whole number", _bao.dang_chat("123456789"))
+    check("a group's is negative, still valid", _bao.dang_chat("-1001234567"))
+    check("an empty string is not valid", not _bao.dang_chat(""))
+    check("a token has the shape <number>:<string>",
           _bao.dang_token("7123456789:AAH" + "x" * 32))
-    check("dán thiếu phần trước dấu hai chấm -> chặn",
+    check("pasting without the part before the colon -> refused",
           not _bao.dang_token("AAH" + "x" * 32))
-    check("dán cụt đuôi -> chặn", not _bao.dang_token("7123456789:AAH"))
-    # BỎ HẲN Ô MÃ CHAT. Mã chat là thứ máy đọc được từ chính Telegram — hỏi
-    # người dùng là hỏi một câu họ không có cách nào biết, và chính cái ô đó
-    # đã dẫn thẳng tới việc dán số điện thoại vào.
+    check("pasting a truncated tail -> refused", not _bao.dang_token("7123456789:AAH"))
+    # THE CHAT ID BOX IS GONE ENTIRELY. The chat id is something the machine can read
+    # from Telegram itself — asking the user asks a question they have no way to
+    # answer, and that very box led straight to a phone number being pasted in.
     _sn = _setm.render(every=60, hours=(8, 22), status=[])
-    check("không còn ô nhập mã chat", "name=chat_id" not in _sn)
-    check("và không còn nút Tìm chat riêng", "name=tim" not in _sn)
-    # ĐẾM TRONG TAB THÔNG BÁO, không đếm cả tấm: mấy tab khác cũng có nút Lưu.
+    check("there is no chat id box any more", "name=chat_id" not in _sn)
+    check("and no separate Find chat button", "name=tim" not in _sn)
+    # COUNT INSIDE THE ALERTS TAB, not across the panel: other tabs have a Save button too.
     _pane = _sn.split("data-pane='bao'>")[1].split("<div class='stpane")[0]
-    # Đếm đúng cái NÚT, không đếm chữ "Lưu" trong câu hướng dẫn — câu đó
-    # cũng có <b>Lưu</b>, và dò ">Lưu<" thì bắt luôn cả nó.
-    check("tab Thông báo chỉ còn MỘT nút Lưu cho phần Telegram",
+    # Count THE BUTTON, not the word "Save" inside the instructions — that sentence
+    # also carries <b>Save</b>, and searching for ">Save<" would catch it as well.
+    check("the Alerts tab has exactly ONE Save button for the Telegram section",
           _pane.count("name=test") == 1
           and _pane.count("type=submit>Save</button>") == 2)
-    check("hướng dẫn đủ bốn bước", all(f"{i}." in _sn for i in (1, 2, 3, 4)))
-    check("bước Lưu nói rõ máy tự lo phần còn lại",
+    check("the instructions have all four steps", all(f"{i}." in _sn for i in (1, 2, 3, 4)))
+    check("the Save step says outright the machine works out the rest",
           "the machine works out the rest" in _sn)
-    # "Đã lưu" KHÁC "đúng": token bị thu hồi thì config vẫn đủ hai chuỗi.
+    # "Saved" IS NOT "correct": a revoked token still leaves two strings in the config.
     _snoi = _setm.render(every=60, hours=(8, 22), status=[], tele_noi=True,
                          tele_token="…BASU", tele_chat="123")
-    check("đã lưu thì KHÔNG dám nói là chạy tốt",
+    check("saved does NOT dare claim it is working",
           "not necessarily" in _snoi)
-    check("mà mời bấm Test để biết chắc", "to know for certain" in _snoi)
-    # Băng kết quả báo CẢ BA việc (lưu · tìm · test) nên tiêu đề phải nói chung.
+    check("it invites a Test press to know for sure", "to know for certain" in _snoi)
+    # The result banner reports ALL THREE jobs (save · find · test), so its heading has
+    # to be general.
     _sbang = _setm.render(every=60, hours=(8, 22), status=[],
-                          tin_test=(True, "Đã lưu <b>mã chat</b>."))
-    check("tiêu đề băng nói chung, không nói «gửi»", "That worked" in _sbang)
-    check("và KHÔNG escape hai lần — thẻ <b> phải là thẻ, không phải chữ",
-          "Đã lưu <b>mã chat</b>." in _sbang and "&lt;b&gt;" not in _sbang)
+                          tin_test=(True, "Saved the <b>chat id</b>."))
+    check("the banner heading is general, it does not say «sent»", "That worked" in _sbang)
+    check("and it is NOT escaped twice — a <b> tag must be a tag, not text",
+          "Saved the <b>chat id</b>." in _sbang and "&lt;b&gt;" not in _sbang)
 
-    print("\n[MÀU HỆ THỐNG — đổi được, và không màu nào đọc không nổi]")
+    print("\n[THE SYSTEM THEME — changeable, and no theme unreadable]")
     from jobbot.dashboard import mau as _mau
-    # MỌI MÀU PHẢI ĐẠT TƯƠNG PHẢN. Màu nhấn hay nằm trên chữ 10px (nhãn tab
-    # đang mở, số trên thanh khúc) — một màu đẹp mà không đọc được thì nó
-    # không phải lựa chọn, nó là cái bẫy.
+    # EVERY COLOUR HAS TO MEET THE CONTRAST BAR. The accent colour often sits on
+    # 10px text (the open tab's label, the number on a segment bar) — a pretty
+    # colour you cannot read is not a choice, it is a trap.
     for _ma, (_ten, _bo) in _mau.BANG.items():
         _tp = _mau.tuong_phan(_bo["--acc"], _mau.NEN_PANEL)
-        check(f"màu «{_ten}» đọc được trên thẻ ({_tp}:1)", _tp >= _mau.TOI_THIEU)
+        check(f"«{_ten}» is readable on a card ({_tp}:1)", _tp >= _mau.TOI_THIEU)
         _ti = _mau.tuong_phan(_bo["--acc-ink"], _bo["--acc"])
-        check(f"chữ trên nền «{_ten}» đọc được ({_ti}:1)", _ti >= _mau.TOI_THIEU)
-        check(f"«{_ten}» khai đủ cả bộ", set(_bo) == set(_mau.BANG["la"][1]))
-    check("có ít nhất bốn màu để chọn", len(_mau.BANG) >= 4)
-    # MẶC ĐỊNH KHÔNG ĐÈ GÌ CẢ: app.css vẫn là nguồn sự thật cho bộ xanh lá,
-    # nên chọn mặc định thì không thể lệch tông so với hôm nay.
-    check("màu mặc định không đè lên app.css", _mau.css(_mau.MAC_DINH) == "")
-    check("màu lạ cũng không đè", _mau.css("lung-tung") == "")
-    check("màu lạ rơi về mặc định", _mau.hop_le("lung-tung") == _mau.MAC_DINH)
+        check(f"text on a «{_ten}» ground is readable ({_ti}:1)", _ti >= _mau.TOI_THIEU)
+        check(f"«{_ten}» declares the whole set", set(_bo) == set(_mau.BANG["la"][1]))
+    check("there are at least four themes to choose from", len(_mau.BANG) >= 4)
+    # THE DEFAULT OVERRIDES NOTHING: app.css stays the source of truth for the green
+    # set, so choosing the default cannot drift away from what today already looks like.
+    check("the default theme does not override app.css", _mau.css(_mau.MAC_DINH) == "")
+    check("an unknown theme overrides nothing either", _mau.css("lung-tung") == "")
+    check("an unknown theme falls back to the default", _mau.hop_le("lung-tung") == _mau.MAC_DINH)
     _tim = _mau.css("tim")
     for _k in ("--acc-rgb:", "--acc:", "--acc-2:", "--acc-ink:", "--acc-bg:",
                "--acc-bg-2:"):
-        check(f"đổi màu thì đổi cả «{_k}»", _k in _tim)
-    # KHÔNG CHỖ NÀO ĐƯỢC GÕ CỨNG XANH LÁ. Gõ cứng thì đổi màu chỉ đổi được
-    # chữ — đo thật, 12 chỗ viền/nền vẫn xanh nên chọn Tím ra chữ tím viền
-    # xanh. Mọi độ trong khác phải viết rgba(var(--acc-rgb), X).
+        check(f"changing the theme changes «{_k}» too", _k in _tim)
+    # NOWHERE MAY HARD-CODE THE GREEN. Hard-coded, changing the theme changes only the
+    # text — really measured, 12 borders and grounds stayed green, so picking Purple
+    # gave purple text inside green borders. Every other opacity must be written
+    # rgba(var(--acc-rgb), X).
     import re as _reM
     _than = _css7.split(":root{", 1)[1]
-    _than = _than[_than.index("}") + 1:]        # bỏ khối khai báo biến
+    _than = _than[_than.index("}") + 1:]        # drop the variable-declaration block
     _cung = _reM.findall(r"rgba\(\s*85\s*,\s*201\s*,\s*141", _than)
-    check(f"không chỗ nào gõ cứng màu xanh lá ({len(_cung)} chỗ)", not _cung)
-    check("và có biến RGB dùng chung", "--acc-rgb:" in _css7
+    check(f"the green is hard-coded nowhere ({len(_cung)} places)", not _cung)
+    check("and there is one shared RGB variable", "--acc-rgb:" in _css7
           and "rgba(var(--acc-rgb)" in _than)
-    # MÀU MANG NGHĨA KHÔNG ĐƯỢC ĐỔI — đỏ vẫn phải là trượt. Đây là lời hứa in
-    # ngay trên tấm Cài đặt, nên phải có bài đỡ lưng.
+    # COLOURS THAT CARRY MEANING MUST NOT MOVE — red still has to mean rejected. This
+    # is a promise printed on the Settings panel itself, so it needs a test behind it.
     for _giu in ("--bad", "--warn", "--info", "--ink", "--bg"):
-        check(f"đổi màu KHÔNG đụng tới «{_giu}»", _giu not in _tim)
-    # Tấm màu phải nạp SAU app.css, nếu không nó không đè được.
+        check(f"changing the theme does NOT touch «{_giu}»", _giu not in _tim)
+    # The theme sheet has to load AFTER app.css, or it can override nothing.
     _i1, _i2 = _sv.index("/static/app.css"), _sv.index("/static/mau.css")
-    check("tấm màu nạp sau app.css nên đè được", _i1 < _i2)
+    check("the theme sheet loads after app.css, so it can override", _i1 < _i2)
     _c5, _h5 = get("/static/mau.css")
-    check("đường /static/mau.css sống", _c5 == 200)
-    # KHÔNG CHO CACHE: cache nó thì đổi màu xong phải xoá cache mới thấy, và
-    # người dùng sẽ kết luận cái nút hỏng.
-    check("và không cho trình duyệt cache tấm màu",
+    check("the /static/mau.css route is alive", _c5 == 200)
+    # NO CACHING: cache it and changing the theme needs a cache clear before anything
+    # shows, and the user concludes the button is broken.
+    check("and the browser is told not to cache the theme sheet",
           "no-store" in str(_h5).lower() or "no-store" in open(
               "src/jobbot/dashboard/server.py", encoding="utf-8").read())
     from jobbot.dashboard.views import settings as _setm
     _sh = _setm.render(every=60, hours=(8, 22), status=[], mau_nay="tim",
                       tu_truc=False)
-    check("Cài đặt có tab Chung", "data-stab='chung'" in _sh)
-    check("và nó đứng ĐẦU — cài đặt cả app, không phải của một khúc",
+    check("Settings has a General tab", "data-stab='chung'" in _sh)
+    check("and it comes FIRST — it settles the whole app, not one stage",
           _sh.index("data-stab='chung'") < _sh.index("data-stab='chay'"))
-    check("bày đủ mọi màu để chọn", _sh.count("data-arg='mau:") == len(_mau.BANG))
-    check("đánh dấu màu ĐANG dùng", "swatch on" in _sh and "in use" in _sh)
-    check("ô màu tự nó mang màu đó, không phải chấm xám",
+    check("every theme is laid out to choose from", _sh.count("data-arg='mau:") == len(_mau.BANG))
+    check("the theme IN USE is marked", "swatch on" in _sh and "in use" in _sh)
+    check("each swatch carries its own colour, not a grey dot",
           "style='--o:#A78BFA'" in _sh)
-    check("hứa không đụng màu mang nghĩa",
+    check("it promises not to touch the meaning colours",
           "does NOT touch the colours" in _sh)
-    check("và có công tắc tự-trực-khi-mở-app", "data-arg='truc:" in _sh)
+    check("and there is an on-watch-when-the-app-opens switch", "data-arg='truc:" in _sh)
 
-    print("\n[BỘ ICON — một bộ, không phải nhặt ký tự Unicode mỗi chỗ một cái]")
+    print("\n[THE ICON SET — one set, not a Unicode character picked per place]")
     from jobbot.dashboard import layout as _lay
-    check("mọi tab đều có icon trong bộ",
+    check("every tab has an icon in the set",
           all(m in _lay.ICON for _, _, m in _lay.NAV))
-    check("không icon nào trong bộ bị bỏ quên",
+    check("no icon in the set is forgotten",
           set(_lay.ICON) == {m for _, _, m in _lay.NAV}
           | {"setting", "adjust", "to", "gap"})
-    # Ký tự Unicode làm icon là thứ đã hỏng: mỗi ký tự một cỡ quang học, một
-    # baseline, nên phóng to lúc gập thanh bên là so le hẳn.
-    # CANH ĐÚNG THẾ DÙNG LÀM ICON: ký tự chiếm TRỌN một thẻ (`<i>◈</i>`,
-    # `>⚟</button>`). Nhắc tên nút trong câu văn ("chỉnh ở ⚟") thì được —
-    # đó là cách gọi tên thứ người dùng đang nhìn thấy, và cấm nó là cấm
-    # nhầm: cái hỏng là ký tự THAY CHO hình, không phải ký tự trong câu.
+    # A Unicode character used as an icon is the thing that was broken: each one has
+    # its own optical size and baseline, so scaling them up for the collapsed sidebar
+    # left them visibly uneven.
+    # CATCH THE USE THAT IS WRONG: a character filling a WHOLE tag (`<i>◈</i>`,
+    # `>⚟</button>`). Naming a button inside prose ("adjust it at ⚟") is fine — that
+    # is calling a thing the user is looking at by its name, and banning it would ban
+    # the wrong thing: what is broken is a character STANDING IN FOR a drawing, not a
+    # character inside a sentence.
     for _xau in ("◈", "⌕", "▤", "▣", "◇", "⚙", "⚟", "⤢", "«"):
-        check(f"không còn ký tự «{_xau}» làm icon", f">{_xau}<" not in _sv)
+        check(f"«{_xau}» is no longer used as an icon", f">{_xau}<" not in _sv)
     for _ten, _than in _lay.ICON.items():
-        check(f"icon «{_ten}» vẽ bằng hình, không phải chữ",
+        check(f"the «{_ten}» icon is drawn, not typed",
               "<" in _than and "text" not in _than)
     _i1 = _lay.ico("home")
-    check("icon khai chung một khung 24×24", "viewBox='0 0 24 24'" in _i1)
-    check("và ăn màu từ CSS, không đóng cứng", "stroke:currentColor" in _css7)
-    check("một chỗ khai nét cho cả bộ", _css7.count("stroke-width:1.75") == 1)
-    check("trình đọc màn hình không đọc icon hai lần", "aria-hidden" in _i1)
-    # Lúc gập, icon là thứ DUY NHẤT để bấm — phóng bằng cỡ SVG chứ không phải
-    # font-size, nếu không cả năm cái to lên không bằng nhau.
-    check("gập thanh bên thì phóng bằng cỡ SVG, không phải font-size",
+    check("the icons share one 24×24 frame", "viewBox='0 0 24 24'" in _i1)
+    check("and they take their colour from CSS, not hard-coded", "stroke:currentColor" in _css7)
+    check("the stroke weight is declared once for the whole set", _css7.count("stroke-width:1.75") == 1)
+    check("a screen reader does not read an icon twice", "aria-hidden" in _i1)
+    # Collapsed, the icon is the ONLY thing left to click — scale it by SVG size, not
+    # by font-size, or the five of them grow by five different amounts.
+    check("collapsing the sidebar scales by SVG size, not font-size",
           ".navmin .navlink .ico{width:20px" in _css7
           and "font-size:22px" not in _css7)
-    check("navend bị đẩy xuống đáy", "margin-top:auto" in _css7)
+    check("navend is pushed to the bottom", "margin-top:auto" in _css7)
 
-    print("\n[đường PHÁ HOẠI không được là đường mặc định]")
-    # Một POST rỗng tới /api/sieve đã XOÁ SẠCH lưới lọc chức danh: mọi tin lọt
-    # lưới (đo được 197 -> 4660 tin), tab Search đầy rác, và không có cảnh báo
-    # nào. Cùng lớp lỗi với /api/mail/forget xoá app password.
+    print("\n[A DESTRUCTIVE ROUTE must never be the default route]")
+    # An empty POST to /api/sieve once WIPED the job-title sieve: every posting got
+    # through (measured, 197 -> 4,660 postings), the Search tab filled with junk, and
+    # nothing warned. The same class of bug as /api/mail/forget deleting the app password.
     for _bad in (b"", b"arg=abc", b"seniority=junior"):
         _c5 = post("/api/sieve", _bad)
-        check(f"POST rỗng tới /api/sieve bị từ chối ({_bad[:12]!r})", _c5 == 400,
+        check(f"an empty POST to /api/sieve is refused ({_bad[:12]!r})", _c5 == 400,
               f"HTTP {_c5}")
     _conn5 = db.connect(Path(tmp) / "jobbot.db")
     _titles5 = (store.load(_conn5).get("job_titles") or "")
     _conn5.close()
-    check("lưới lọc còn nguyên sau mấy cú POST đó", bool(_titles5.strip()))
+    check("the sieve survives those POSTs intact", bool(_titles5.strip()))
 
-    print("\n[BACK về TRANG VỪA RỜI, không về một đích gõ cứng]")
-    # Trang xem bản CV vào được từ tab CV và từ trang chi tiết tin. Gõ cứng
-    # một đích thì một trong hai lối đi vào ngõ cụt: bấm Back xong lạc sang
-    # chỗ chưa từng đứng.
+    print("\n[BACK goes to THE PAGE JUST LEFT, not to one hard-coded destination]")
+    # The CV view is reached from the CV tab and from a posting's detail page.
+    # Hard-code one destination and one of the two paths dead-ends: press Back and
+    # land somewhere you have never stood.
     from jobbot.dashboard.layout import duong_ve as _dv
-    check("từ tab CV -> back về tab CV", _dv("/cv")[0] == "/cv")
-    check("và nhãn nói đúng chỗ sắp về", _dv("/cv")[1] == "CVs")
-    check("từ trang tin -> back về trang tin", _dv("/jobs/7")[0] == "/jobs/7")
-    check("và nhãn phân biệt TRANG TIN với BẢN CV của tin đó",
+    check("from the CV tab -> back to the CV tab", _dv("/cv")[0] == "/cv")
+    check("and the label names where it goes", _dv("/cv")[1] == "CVs")
+    check("from a posting page -> back to that posting", _dv("/jobs/7")[0] == "/jobs/7")
+    check("and the label tells THE POSTING apart from THAT POSTING'S CV",
           _dv("/jobs/7")[1] == "this posting"
           and _dv("/jobs/7/cv?tu=/cv")[1] == "CVs")
-    check("giữ nguyên cả tham số tìm", _dv("/cv?q=man")[0] == "/cv?q=man")
-    check("không có đường đi kèm -> về đích mặc định", _dv("")[0] == "/cv")
-    # `tu` ĐI TỪ URL VÀO THẲNG href. Một giá trị như "//ke-xau" biến nút Back
-    # thành cửa ra ngoài — chặn ở đây, không tin đầu vào.
+    check("the search parameter is kept", _dv("/cv?q=man")[0] == "/cv?q=man")
+    check("no path supplied -> the default destination", _dv("")[0] == "/cv")
+    # `tu` GOES FROM THE URL STRAIGHT INTO an href. A value like "//bad-guy" turns the
+    # Back button into a door out of the app — stop it here, never trust the input.
     for _xau in ("//ke-xau.example", "https://ke-xau.example", "javascript:x",
                  "ke-xau", ""):
-        check(f"đường ngoài «{_xau[:18]}» bị vứt", _dv(_xau)[0] == "/cv")
+        check(f"the outside path «{_xau[:18]}» is thrown away", _dv(_xau)[0] == "/cv")
 
     _, _cvrow = get("/cv")
-    check("dòng ở tab CV mang theo đường về", "/cv'" in _cvrow or True)
+    check("a row on the CV tab carries the way back", "/cv'" in _cvrow or True)
     _, _pv = get(f"/jobs/{job_id}/cv?tu=/cv")
-    check("mở bản CV từ tab CV -> nút back trỏ về /cv",
+    check("opening a CV from the CV tab -> the back button points at /cv",
           "class=back href='/cv'" in _pv)
-    check("và có nút XEM TIN riêng, không chiếm chỗ nút back", "Xem tin" in _pv)
-    # Bấm Xem tin thì Back ở trang tin phải quay lại ĐÚNG bản CV này.
+    check("and there is a separate VIEW POSTING button, not taking the back button's place",
+          "View posting" in _pv)
+    # Press View posting, and Back on the posting page has to return to THIS CV.
     import re as _reV
     _m = _reV.search(r"href='(/jobs/\d+\?tu=[^']+)'", _pv)
-    check("nút Xem tin mang theo đường về bản CV", bool(_m))
+    check("the View posting button carries the way back to the CV", bool(_m))
     if _m:
         _, _jd = get(_m.group(1).replace("&amp;", "&"))
-        check("từ trang tin bấm back -> về lại bản CV vừa xem",
+        check("Back from the posting page -> back to the CV just viewed",
               f"/jobs/{job_id}/cv" in _jd.split("class=back")[1][:200])
     _, _pv2 = get(f"/jobs/{job_id}/cv")
-    check("mở thẳng địa chỉ, không có đường đi -> back vẫn về tab CV",
+    check("opening the address directly, with no path -> back still goes to the CV tab",
           "class=back href='/cv'" in _pv2)
 
-    print("\n[CV: nút XOÁ trên thanh — có chốt, và chỉ đụng thứ máy dựng ra]")
+    print("\n[CV: the DELETE button on the bar — it has a catch, and touches only what the machine built]")
     _, _cvX = get("/cv")
-    check("thanh CV có nút xoá bản", "/api/cv/xoa" in _cvX)
-    check("và nút đó có chốt hai nhịp", "data-arm=" in _cvX)
-    # CHỐT MÁY CHỦ, không bao giờ tin mỗi phía trình duyệt.
-    check("POST rỗng -> từ chối", post_form("/api/cv/xoa", "") == 400)
-    check("POST sai chữ -> từ chối", post_form("/api/cv/xoa", "arg=co") == 400)
+    check("the CV bar has a delete-the-build button", "/api/cv/xoa" in _cvX)
+    check("and that button has a two-beat catch", "data-arm=" in _cvX)
+    # THE CATCH IS ON THE SERVER, never trusting the browser side alone.
+    check("an empty POST -> refused", post_form("/api/cv/xoa", "") == 400)
+    check("the wrong word -> refused", post_form("/api/cv/xoa", "arg=co") == 400)
     from jobbot.cv import batch as _btX
     _cX = db.connect(Path(tmp) / "jobbot.db")
     _cvtext_X = store.load(_cX).get("cv_text") or ""
     _co_ban = bool(_btX.saved(_cX))
     _cX.close()
-    check("đang có bản đã dựng để mà xoá", _co_ban)
-    check("POST đúng chữ -> xoá", post_form("/api/cv/xoa", "arg=xoa") == 200)
+    check("there is a build to delete", _co_ban)
+    check("the right word -> deleted", post_form("/api/cv/xoa", "arg=xoa") == 200)
     _cX = db.connect(Path(tmp) / "jobbot.db")
-    check("bản đã dựng biến mất", _btX.saved(_cX) is None)
-    # CHỈ ĐỤNG THỨ MÁY DỰNG RA. Chữ người dùng viết không được suy suyển.
-    check("chữ trên CV gốc KHÔNG bị đụng",
+    check("the build is gone", _btX.saved(_cX) is None)
+    # ONLY WHAT THE MACHINE BUILT. What the user wrote must not shift an inch.
+    check("the master CV text is NOT touched",
           (store.load(_cX).get("cv_text") or "") == _cvtext_X)
-    # XOÁ XONG THÌ NẰM YÊN — không có đường nào tự dựng lại. Phải chạy Search,
-    # sang tab CV, bấm Chạy.
-    check("nút trên thanh về lại 'Chạy'", _btX.stage(_cX)["label"] == "Run")
+    # DELETED STAYS DELETED — no route rebuilds it by itself. You have to run Search,
+    # go to the CV tab, press Run.
+    check("the button on the bar goes back to 'Run'", _btX.stage(_cX)["label"] == "Run")
     _cX.close()
     _, _sau_xoa = get("/cv")
-    check("mở lại tab CV vẫn trống, máy KHÔNG tự dựng",
+    check("reopening the CV tab is still empty — the machine does NOT rebuild by itself",
           "No CV has been built yet" in _sau_xoa)
-    # XOÁ LÀ XOÁ HẾT. Thang HỤT và bản nháp đi CÙNG bản dựng (cv/batch.run),
-    # nên xoá bản là cả tab sạch — không còn ô nào đầy số trong khi ô bên
-    # cạnh nói "chưa dựng". Trước đây thang HỤT tính lại mỗi lần vẽ trang, và
-    # tab CV thành hai cái đồng hồ chỉ hai giờ khác nhau.
-    check("xoá bản -> thang HỤT cũng sạch", "The gap has not been measured" in _sau_xoa)
-    # Và nói ĐÚNG việc phải làm: bấm Chạy, chứ không đổ cho Search khi kho tin
-    # vẫn còn nguyên đó.
-    check("ô trống chỉ đúng nút phải bấm", "Press <b>Run</b>" in _sau_xoa)
-    check("và không còn bản nháp nào", "class=hnhap" not in _sau_xoa)
-    # KHO KHỐI KHÔNG CÒN Ở TAB CV. Nó có nhà riêng ở màn Sửa khối, nơi bấm
-    # vào một khối là soạn được luôn; ở tab CV nó chỉ để nhìn, mà tab này trả
-    # lời hai câu khác: tối nay viết gì, và gửi bản nào.
-    check("tab CV không còn ô kho khối", "Raw material blocks" not in _sau_xoa)
-    check("nhưng vẫn tới được từ thanh trên", "/cv/soan" in _sau_xoa)
-    check("và kho khối sống ở màn Sửa khối — chữ bạn viết, không phải máy dựng",
+    # DELETE MEANS DELETE EVERYTHING. The GAP ladder and the drafts travel WITH the
+    # build (cv/batch.run), so deleting the build clears the whole tab — never a box
+    # full of numbers next to a box saying "not built yet". The GAP ladder used to be
+    # recomputed on every page draw, and the CV tab became two clocks showing two
+    # different times.
+    check("deleting the build -> the GAP ladder clears too", "The gap has not been measured" in _sau_xoa)
+    # And it names THE RIGHT thing to do: press Run, not blame Search while the
+    # posting store sits there untouched.
+    check("the empty box names exactly the button to press", "Press <b>Run</b>" in _sau_xoa)
+    check("and no draft is left behind", "class=hnhap" not in _sau_xoa)
+    # THE BLOCK STORE NO LONGER LIVES ON THE CV TAB. It has its own home on the Edit
+    # blocks screen, where clicking a block puts you straight into writing; on the CV
+    # tab it was only there to look at, and that tab answers two other questions:
+    # what to write tonight, and which build to send.
+    check("the CV tab no longer has a block-store box", "Raw material blocks" not in _sau_xoa)
+    check("but it is still reachable from the bar above", "/cv/soan" in _sau_xoa)
+    check("and the block store lives on the Edit blocks screen — your words, not the machine's build",
           "Raw material blocks" in get("/cv/soan")[1])
     _cX = db.connect(Path(tmp) / "jobbot.db")
-    check("bản đã dựng không giữ lại thang HỤT nào", (_btX.saved(_cX) or {}) == {}
+    check("the build keeps no GAP ladder behind", (_btX.saved(_cX) or {}) == {}
           or not (_btX.saved(_cX) or {}).get("hut"))
     _cX.close()
     _cX = db.connect(Path(tmp) / "jobbot.db")
-    check("và vẫn trống sau khi mở trang", _btX.saved(_cX) is None)
+    check("and it is still empty after the page has been opened", _btX.saved(_cX) is None)
     _cX.close()
-    # Dựng lại để mấy khúc dưới có bản mà soi.
+    # Rebuild, so the sections below have a build to inspect.
     post_form("/api/stage/start", "arg=cv")
     import time as _tX
     for _ in range(60):
@@ -2778,30 +2785,32 @@ with tempfile.TemporaryDirectory() as tmp:
         if _lai:
             break
         _tX.sleep(0.5)
-    check("bấm Chạy thì dựng lại được", bool(_lai))
-    # DỰNG MỘT LƯỢT RA ĐỦ CẢ TAB: bản CV, thang HỤT, bản nháp — cùng một mốc.
-    check("và lượt dựng đó ra CẢ thang HỤT", bool((_lai or {}).get("hut")))
+    check("pressing Run rebuilds it", bool(_lai))
+    # ONE PASS FILLS THE WHOLE TAB: the CV, the GAP ladder, the drafts — one stamp.
+    check("and that pass produces the GAP ladder TOO", bool((_lai or {}).get("hut")))
     _, _cv_lai = get("/cv")
-    # HAI Ô, KHÔNG SO LE: bản CV và thang HỤT dựng trong CÙNG một lượt, nên ô
-    # nào cũng phải nói về CÙNG lượt đó — không có chuyện một ô đầy số còn ô
-    # bên cạnh ghi "chưa dựng".
+    # TWO BOXES, NEVER OUT OF STEP: the CV and the GAP ladder are built in THE SAME
+    # pass, so both boxes must speak about THAT pass — never one box full of numbers
+    # beside one saying "not built yet".
     #
-    # Bản cũ canh chuỗi "Bấm Chạy", mà cả hai ô trống đều viết "Bấm
-    # <b>Chạy</b>" — nên bài canh luôn xanh dù ô nào còn trống. Giờ canh đúng
-    # chữ của từng ô, và canh ô HỤT theo CHÍNH số đo vừa lưu: kho tin bé thì
-    # thang HỤT rỗng là đúng, không phải lệch nhịp.
+    # The old version watched for the string "Press Run", and BOTH empty boxes write
+    # "Press <b>Run</b>" — so the check stayed green no matter which box was empty. It
+    # now watches each box's own text, and judges the GAP box against THE VERY
+    # MEASUREMENT just saved: with a small store an empty GAP ladder is correct, not
+    # out of step.
     _co_hut = bool(((_lai or {}).get("hut") or {}).get("buoc"))
-    check("tab CV đầy lại cùng lúc, không so le",
+    check("the CV tab fills back up all at once, never out of step",
           "No CV has been built yet" not in _cv_lai
           and "close the gap" in _cv_lai
           and (("The gap has not been measured" in _cv_lai) is not _co_hut),
-          ("CV còn trống " if "No CV has been built yet" in _cv_lai else "")
+          ("the CV is still empty " if "No CV has been built yet" in _cv_lai else "")
           + f"hut={_co_hut}")
 
-    print("\n[CV: màn con SOẠN KHỐI — chỗ ngồi viết, không phải tấm phủ]")
-    # Tấm phủ /cv/block cũ rộng 380px và CÂM: gõ xong bấm Lưu, rồi chỉ biết
-    # câu vừa viết bị luật bỏ nếu tự đi dựng lại cả loạt bản mà đọc. Màn con
-    # phải thật sự khác nó, không phải cùng cái form dán sang trang khác.
+    print("\n[CV: the EDIT BLOCKS sub-screen — a place to sit and write, not an overlay]")
+    # The old /cv/block overlay was 380px wide and MUTE: you typed, pressed Save, and
+    # only learnt the rules had dropped your sentence if you went and rebuilt the whole
+    # batch yourself to read it. The sub-screen has to be genuinely different from
+    # that, not the same form pasted onto another page.
     from jobbot.dashboard import live as _lv7
     from jobbot.dashboard.views import cvlist as _cvl7
     _c7 = db.connect(Path(tmp) / "jobbot.db")
@@ -2809,43 +2818,44 @@ with tempfile.TemporaryDirectory() as tmp:
     _ten7 = _d7["khoi"][0]["title"] if _d7["khoi"] else ""
     _c7.close()
 
-    check("thanh điều khiển tab CV có CỬA VÀO màn soạn",
+    check("the CV tab's control bar has A DOOR INTO the compose screen",
           "/cv/soan" in get("/cv")[1])
     _s7, _soan = get("/cv/soan?khoi=" + urllib.parse.quote(_ten7, safe=""))
-    check("/cv/soan mở đúng khối được gọi tên", _s7 == 200 and _ten7[:30] in _soan)
-    check("và mọi câu của khối đó ra ô soạn",
+    check("/cv/soan opens exactly the block it was asked for", _s7 == 200 and _ten7[:30] in _soan)
+    check("and every sentence of that block reaches a compose box",
           _soan.count("class=cvdraft") >= len(_d7["khoi"][0]["lines"]))
-    # ĐÂY LÀ LÝ DO MÀN NÀY TỒN TẠI: mỗi câu kèm luật nói gì.
-    check("mỗi câu có dải chấm — luật nói gì về nó",
+    # THIS IS WHY THE SCREEN EXISTS: every sentence carries what the rules say about it.
+    check("every sentence has its verdict strip — what the rules say about it",
           _soan.count("class=sntfoot") == len(_d7["khoi"][0]["lines"]))
-    check("và chấm bằng CHỮ đọc được, không phải mã luật",
+    check("and the verdict is READABLE TEXT, not a rule code",
           any(x in _soan for x in ("goes on", "look again", "rules forbid")))
-    check("khối đang mở được đánh dấu trong danh sách bên trái",
+    check("the open block is marked in the list on the left",
           "blk on" in _soan or "blk dead on" in _soan)
-    check("nút quay lại danh sách bản", "href='/cv'" in _soan)
-    # Thanh bên phải sáng ở CV, không phải một tab thứ sáu: đây là màn CON.
-    check("màn con vẫn thuộc tab CV trên thanh bên",
+    check("there is a way back to the list of builds", "href='/cv'" in _soan)
+    # The sidebar has to light up CV, not a sixth tab: this is a SUB-screen.
+    check("the sub-screen still belongs to the CV tab on the sidebar",
           "navlink on' href='/cv'" in _soan.replace('"', "'"))
 
-    # KHÔNG được gọi cv_versions: đó là lượt dựng 5,3 giây, trả giá mỗi lần
-    # mở chỗ soạn. Bỏ chú thích trước khi soi — chính lời giải thích "không
-    # gọi cv_versions" cũng chứa cái tên đó.
+    # It must NOT call cv_versions: that is a 5.3-second build, paid every time the
+    # compose screen opens. Strip the comments before inspecting — the very
+    # explanation "does not call cv_versions" contains that name.
     _srv7 = (Path(__file__).resolve().parent.parent
              / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
     _route7 = _srv7.split('if path == "/cv/soan":')[1].split("if path ==")[0]
     _route7 = "\n".join(l.split("#")[0] for l in _route7.splitlines())
-    check("màn soạn KHÔNG gọi lượt dựng 5 giây", "cv_versions" not in _route7)
+    check("the compose screen does NOT call the 5-second build", "cv_versions" not in _route7)
 
-    # Lưu xong phải về ĐÚNG CHỖ vừa đứng, không bị hất sang danh sách bản.
-    # urlopen ĐI THEO chuyển hướng, nên phải chặn nó lại mới đọc được Location
-    # — theo xong thì mọi đường đều ra 200 và bài test không kiểm được gì.
+    # After saving it has to come back to EXACTLY where you stood, never be thrown to
+    # the list of builds. urlopen FOLLOWS redirects, so it has to be stopped to read
+    # Location — followed through, every route returns 200 and the test proves nothing.
     class _KhongTheo(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *a, **k):
             return None
 
     def _cho_dung(dbpath, xong, giay=40):
-        """Chờ lượt dựng NỀN xong. Máy tự lo dựng ở luồng khác, đọc ngay là
-        đọc bản cũ — và bài test hỏng vì nhịp, không vì lỗi."""
+        """Wait for the BACKGROUND build to finish. Machine-handles-it builds on
+        another thread, so reading straight away reads the old build — and the test
+        then fails on timing, not on a bug."""
         from jobbot.cv import batch as _b
         import time as _t
         for _ in range(giay * 2):
@@ -2860,7 +2870,7 @@ with tempfile.TemporaryDirectory() as tmp:
         return None
 
     def post_ve(path, body):
-        """POST rồi trả về (mã, chỗ nó bảo đi tiếp)."""
+        """POST, then return (status, where it says to go next)."""
         o = urllib.request.build_opener(_KhongTheo)
         req = urllib.request.Request(base.rstrip("/") + path, data=body.encode())
         try:
@@ -2871,101 +2881,104 @@ with tempfile.TemporaryDirectory() as tmp:
 
     _ma, _ve = post_ve("/cv/block", "kind=project&title=Thu+Nghiem&was="
                        "&line=Wrote+a+small+tool+in+Python+that+cut+the+run+to+9+minutes.")
-    check("lưu khối -> quay lại ĐÚNG khối vừa sửa, không hất sang danh sách bản",
+    check("saving a block -> back to THE SAME block, not thrown to the list of builds",
           _ma == 303 and _ve.startswith("/cv/soan?khoi="), f"{_ma} {_ve}")
     _c7 = db.connect(Path(tmp) / "jobbot.db")
     _txt7 = store.load(_c7).get("cv_text") or ""
-    check("và câu vừa gõ nằm trong CV GỐC, không phải bảng riêng",
+    check("and the sentence just typed sits in THE MASTER CV, not a side table",
           "cut the run to 9 minutes" in _txt7)
     _c7.close()
     _s7, _lai = get("/cv/soan?khoi=Thu+Nghiem")
-    check("mở lại khối vừa lưu thì thấy câu đó", "cut the run to 9 minutes" in _lai)
-    check("và nó được chấm ngay, không phải chờ dựng lại",
+    check("reopening the saved block shows that sentence", "cut the run to 9 minutes" in _lai)
+    check("and it is judged at once, without waiting for a rebuild",
           "class=sntfoot" in _lai)
-    # Xoá khối -> vẫn về màn soạn, không rơi vào khối vừa xoá.
+    # Delete a block -> still back to the compose screen, never into the block just deleted.
     _ma, _ve = post_ve("/cv/block",
                        "kind=project&title=Thu+Nghiem&was=Thu+Nghiem&kill=1&line=")
-    check("xoá khối -> về màn soạn, KHÔNG mở lại khối vừa xoá",
+    check("deleting a block -> back to the compose screen, NOT reopening the deleted block",
           _ma == 303 and _ve == "/cv/soan", f"{_ma} {_ve}")
     _c7 = db.connect(Path(tmp) / "jobbot.db")
-    check("và câu đó biến khỏi CV gốc",
+    check("and that sentence disappears from the master CV",
           "cut the run to 9 minutes" not in (store.load(_c7).get("cv_text") or ""))
     _c7.close()
 
-    # Tấm phủ cũ phải BIẾN MẤT, không nằm lại làm cửa thứ hai vào cùng một việc.
-    check("tấm phủ soạn khối cũ đã bỏ", not hasattr(_cvl7, "edit"))
-    check("và /cv/block không còn trả trang", get("/cv/block?title=")[0] == 404)
+    # The old overlay has to be GONE, not left behind as a second door into the same work.
+    check("the old edit-block overlay is gone", not hasattr(_cvl7, "edit"))
+    check("and /cv/block no longer returns a page", get("/cv/block?title=")[0] == 404)
 
-    print("\n[CV: VIẾT CÂU MỚI và SỬA KHỐI là MỘT việc, một màn]")
-    # Xưởng viết từng là tấm phủ riêng (/cv/viet + POST /api/cv/viet): đọc yêu
-    # cầu ở một màn, gõ ở màn khác, HAI đường ghi vào cùng một `cv_text` phải
-    # ngồi trông nhau. Nhưng viết một câu mới CHÍNH LÀ sửa một khối.
-    check("tấm phủ xưởng viết đã bỏ", not hasattr(_cvl7, "viet"))
-    check("và /cv/viet không còn trả trang", get("/cv/viet?ky=python")[0] == 404)
-    check("đường ghi thứ hai cũng bỏ — một phép ghi, một chỗ",
+    print("\n[CV: WRITING A NEW SENTENCE and EDITING A BLOCK are ONE job, one screen]")
+    # The writing room used to be its own overlay (/cv/viet + POST /api/cv/viet): read
+    # the requirement on one screen, type on another, TWO write routes into the same
+    # `cv_text` having to sit watching each other. But writing a new sentence IS
+    # editing a block.
+    check("the writing-room overlay is gone", not hasattr(_cvl7, "viet"))
+    check("and /cv/viet no longer returns a page", get("/cv/viet?ky=python")[0] == 404)
+    check("the second write route is gone too — one write, one place",
           post_form("/api/cv/viet", "cau=x&khoi=y&ky=z") == 404)
-    # Nút VIẾT ở thang HỤT phải dẫn vào màn soạn, không mở tấm phủ. Kho thử
-    # có thể không đẻ ra dòng VIẾT nào (thang hụt rỗng), nên soi thẳng bộ vẽ:
-    # bài test phải kiểm cái nút, không kiểm kho tin.
+    # The WRITE button on the GAP ladder has to lead into the compose screen, not open
+    # an overlay. The test store may produce no WRITE row at all (an empty gap ladder),
+    # so inspect the renderer directly: the test must check the button, not the store.
     _gia_hut = {"tin": 10, "nen": 4, "chi_viet": 7, "so_viet": 1,
                 "buoc": [{"ky_nang": "sql", "viec": "viet", "them": 3,
                           "cong_don": 3, "dong": 5, "rieng": 0}]}
     _hut7 = _cvl7.hut(_gia_hut)
-    check("nút Viết ở thang HỤT dẫn thẳng vào màn soạn",
+    check("the Write button on the GAP ladder leads straight into the compose screen",
           "/cv/soan?ky=sql" in _hut7 and "/cv/viet" not in _hut7)
-    check("và là LIÊN KẾT, không phải nút mở tấm phủ",
+    check("and it is A LINK, not a button that opens an overlay",
           "data-settings" not in _hut7)
-    check("/cv không còn đường nào trỏ vào tấm phủ cũ", "/cv/viet" not in get("/cv")[1])
+    check("/cv has no path left pointing at the old overlay", "/cv/viet" not in get("/cv")[1])
 
     _s7, _br = get("/cv/soan?ky=sql")
-    check("/cv/soan?ky= mở MÀN VIẾT ba bước",
+    check("/cv/soan?ky= opens the three-step WRITING SCREEN",
           _s7 == 200 and _br.count("class=buocso") == 3)
-    # Kho thử đòi `sql` toàn bằng dòng TẢ PHẨM CHẤT ("Comfortable with SQL"),
-    # nên KHÔNG có nền bản nháp nào — và đó là hành vi đúng: không có việc nào
-    # trong "Comfortable with SQL" để kể lại.
-    check("dòng tả phẩm chất KHÔNG được đưa ra làm nền",
+    # The test store asks for `sql` only in lines DESCRIBING A QUALITY ("Comfortable
+    # with SQL"), so there is NO draft base at all — and that is the right behaviour:
+    # there is no work inside "Comfortable with SQL" to retell.
+    check("a quality-describing line is NOT offered as a base",
           "&nen=" not in _br)
-    check("nhưng vẫn đọc được, trong thẻ gấp",
+    check("but it is still readable, inside the fold",
           "describe a quality rather than work" in _br)
-    check("brief in nguyên văn dòng yêu cầu thật của tin", "Comfortable with SQL" in _br)
-    check("và nói rõ tin đó của công ty nào", "Man Group" in _br)
-    check("chưa chọn khối thì bước 3 chỉ về bước 2",
+    check("the brief prints the posting's real requirement line verbatim", "Comfortable with SQL" in _br)
+    check("and names the company that posting belongs to", "Man Group" in _br)
+    check("with no block picked, step 3 only points back at step 2",
           "Pick a block in step 2" in _br)
-    check("luật gốc nói thẳng ra chỗ sắp gõ: máy KHÔNG viết hộ",
+    check("the founding rule is stated right where you are about to type: the machine does NOT write for you",
           "not what you did" in _br)
-    # Thanh trên phải nói ĐỘ PHỦ HÔM NAY — con số duy nhất cho biết màn này có
-    # ích không. Delta thuộc về nhật ký, nơi nó có dấu thời gian.
-    check("thanh điều khiển nói độ phủ hôm nay",
+    # The bar has to state TODAY'S COVERAGE — the one number that says whether this
+    # screen is doing any good. The delta belongs in the journal, where it is timestamped.
+    check("the control bar states today's coverage",
           "postings fully answered" in _br)
 
     _, _vua = get("/cv/soan?khoi=" + urllib.parse.quote(_ten7, safe="") + "&ky=sql")
-    check("chọn khối rồi thì bước 3 mở ra ô gõ",
+    check("with a block picked, step 3 opens the typing box",
           "class=cvdraft" in _vua and "name=them value=1" in _vua)
-    check("nút Lưu nói rõ câu này đi vào ĐÂU", "Add this sentence to" in _vua)
-    check("chip kỹ năng đang nhắm được đánh dấu", "hmini on" in _vua or "ky=sql" in _vua)
-    # MÀN VIẾT KHÁC MÀN SỬA KHỐI: vào để viết MỘT câu thì không đổ 16 câu cũ ra,
-    # ô cần gõ sẽ bị chôn xuống dưới hai màn hình.
-    check("màn viết KHÔNG đổ cả khối ra", "class=sntfoot" not in _vua)
+    check("the Save button says WHERE this sentence is going", "Add this sentence to" in _vua)
+    check("the skill chip being aimed at is marked", "hmini on" in _vua or "ky=sql" in _vua)
+    # THE WRITING SCREEN IS NOT THE EDIT-BLOCK SCREEN: arriving to write ONE sentence
+    # must not dump 16 old ones out, burying the box you came to type in two screens down.
+    check("the writing screen does NOT dump the whole block out", "class=sntfoot" not in _vua)
     _, _sua = get("/cv/soan?khoi=" + urllib.parse.quote(_ten7, safe=""))
-    check("còn màn SỬA KHỐI thì có, và có dải chấm từng câu",
+    check("while the EDIT-BLOCK screen does, with a verdict strip per sentence",
           "class=sntfoot" in _sua and "class=buocso" not in _sua)
 
-    print("\n[CV: nhãn VIẾT phải giữ lời — có nền bản nháp, và có chốt chặn]")
-    # Thang hụt dán nhãn VIẾT khi phần lớn dòng must KHÔNG gọi đích danh tên
-    # sản phẩm — tức diễn đạt lại bằng chữ mình được. Nói vậy rồi mà chỉ đưa ra
-    # một ô trống thì cái nhãn là lời hứa suông.
-    # Dòng THẬT trong kho của Vin. Phải đủ dài để cắt được phần thừa mà vẫn
-    # giữ tên kỹ năng — dòng ngắn quá thì `goi_y` im lặng, và đó là hành vi
-    # đúng: cắt không đủ xa thì gợi ý chỉ là dòng của họ chia ở thì quá khứ.
+    print("\n[CV: the WRITE label has to keep its word — a draft base, and a stop]")
+    # The gap ladder labels a row WRITE when most of its must-lines do NOT name a
+    # product by name — meaning it can be restated in your own words. Saying that and
+    # then handing over an empty box makes the label an empty promise.
+    # A REAL line from the live store. It has to be long enough that the surplus can be
+    # cut while the skill name survives — too short and `goi_y` stays silent, which is
+    # the right behaviour: cut too little and the suggestion is just their line put in
+    # the past tense.
     _nen7 = "Improve research frameworks, data pipelines, and model performance"
-    # GHÉP THÊM một dòng must, KHÔNG ghi đè cả score_json: bản chấm còn mấy
-    # khoá khác mà trang chi tiết tin đọc tới, xoá sạch là route đó sập.
+    # APPEND one must-line, do NOT overwrite the whole score_json: the scored record
+    # holds other keys the posting detail page reads, and wiping them crashes that route.
     _cn7 = db.connect(Path(tmp) / "jobbot.db")
     for _r7 in _cn7.execute("SELECT id, score_json FROM posting"
                             " WHERE company = 'Man Group'").fetchall():
         _j7 = json.loads(_r7["score_json"]) if _r7["score_json"] else {}
-        # Hàng THẬT do bộ chấm đẻ ra luôn có `met`; thiếu nó là trang chi tiết
-        # tin sập — fixture phải giống hàng thật, không phải giống cái vừa đủ.
+        # A REAL row from the scorer always has `met`; without it the posting
+        # detail page crashes — a fixture must look like a real row, not like
+        # the bare minimum.
         _j7.setdefault("requirements", []).append(
             {"text": _nen7, "must": True, "met": False, "evidence": ""})
         _cn7.execute("UPDATE posting SET score_json = ? WHERE id = ?",
@@ -2974,72 +2987,73 @@ with tempfile.TemporaryDirectory() as tmp:
     from jobbot.dashboard import live as _lv9
     _lv9.quen()
     _, _nb = get("/cv/soan?ky=data%20pipeline")
-    check("dòng TẢ VIỆC được đưa ra làm nền bản nháp", _nen7 in _nb)
-    check("và bấm được — nó rơi thẳng vào ô soạn",
+    check("the JOB-DESCRIPTION line is offered as the draft's base", _nen7 in _nb)
+    check("and it is clickable — it drops straight into the compose box",
           "&nen=Improve%20research%20frameworks" in _nb)
 
     _mo = ("/cv/soan?khoi=" + urllib.parse.quote(_ten7, safe="")
            + "&ky=data%20pipeline&nen=" + urllib.parse.quote(_nen7, safe=""))
     _, _co_nen = get(_mo)
-    check("bước 1 đã xong thì gập lại, đổi được", "Change line" in _co_nen)
-    check("dòng đã chọn hiện nguyên văn ở bước 1", _nen7 in _co_nen)
-    # Dòng nào KHÔNG rút gọn được thì ô mở ra là nguyên văn, và phải nói rõ
-    # đó là chữ của ai — người dùng quay lại sau mười phút vẫn phải nhận ra.
+    check("step 1 done -> it folds up and stays changeable", "Change line" in _co_nen)
+    check("the chosen line shows verbatim at step 1", _nen7 in _co_nen)
+    # A line that CANNOT be shortened opens verbatim in the box, and it has to
+    # say whose words those are — coming back ten minutes later, the user must
+    # still be able to tell.
     _, _tho7 = get(_mo + "&tho=1")
-    check("dùng nguyên văn thì ghi rõ đó là chữ của NHÀ TUYỂN DỤNG",
+    check("using it verbatim says outright these are THE EMPLOYER's words",
           "the employer's words" in _tho7)
-    # Cột trái là "viết vào ĐÂU"; bấm một khối không được vứt mất "viết CÁI GÌ".
-    check("bấm khối khác vẫn giữ nguyên đích và nền",
+    # The left column is "write WHERE"; clicking a block must not throw away "write WHAT".
+    check("clicking another block keeps the target and the base line",
           "ky=data%20pipeline&nen=Improve" in _co_nen.replace("&amp;", "&"))
 
-    # GỢI Ý: ô mở ra đã có hình câu CV, người dùng chỉ điền chỗ trống.
+    # THE SUGGESTION: the box opens already shaped like a CV sentence, the user only fills the blank.
     from jobbot.scoring.gap import goi_y as _gy9, CHO_TRONG as _CT9
     _gs = _gy9(_nen7, "data pipeline")
-    check("dòng nền này rút gọn được thành hình câu CV", bool(_gs), _nen7)
+    check("this base line can be shortened into a CV sentence", bool(_gs), _nen7)
     _, _co_gy = get(_mo)
-    check("ô soạn mở ra đã là GỢI Ý, không phải nguyên văn dòng của họ",
+    check("the compose box opens as A SUGGESTION, not their line verbatim",
           _gs in _co_gy)
-    check("và chừa chỗ trống cho bằng chứng", _CT9 in _co_gy)
-    check("có đường lật về nguyên văn dòng của họ", "tho=1" in _co_gy)
+    check("and it leaves a blank for the evidence", _CT9 in _co_gy)
+    check("there is a way to flip back to their line verbatim", "tho=1" in _co_gy)
     _, _co_tho = get(_mo + "&tho=1")
-    check("lật về thì ô là nguyên văn, và có đường quay lại gợi ý",
+    check("flipped back the box is verbatim, with a way back to the suggestion",
           _nen7 in _co_tho and "Suggest a CV sentence" in _co_tho)
 
-    # Chỗ trống còn nguyên = chưa viết xong. Lưu nguyên gợi ý là lưu một câu
-    # RỖNG BẰNG CHỨNG — tệ hơn cả chép dòng của họ.
+    # A blank still blank = not written yet. Saving the suggestion as it stands
+    # saves a sentence EMPTY OF EVIDENCE — worse than copying their line.
     _ma, _ve = post_ve("/cv/block",
                        "them=1&title=" + urllib.parse.quote(_ten7, safe="")
                        + "&ky=data+pipeline&nen="
                        + urllib.parse.quote(_nen7, safe="")
                        + "&line=" + urllib.parse.quote(_gs, safe=""))
-    check("lưu nguyên gợi ý, chưa điền chỗ trống -> KHÔNG cho qua",
+    check("saving the bare suggestion, blank unfilled -> REFUSED",
           _ma == 303 and "loi=" in _ve, f"{_ma} {_ve}")
     _, _sau_ct = get(_ve)
-    check("và nói rõ chỗ trống là chỗ của BẰNG CHỨNG",
+    check("and it says outright the blank is the place for THE EVIDENCE",
           "the place for THE EVIDENCE" in _sau_ct)
-    # MỐC SO SÁNH không được trôi theo bản sửa: trôi thì lần sau chép nguyên
-    # văn cũng lọt.
-    check("mốc so sánh vẫn là dòng GỐC của họ, không phải bản vừa gõ",
+    # THE YARDSTICK must not drift with each edit: if it drifts, copying
+    # verbatim gets through on the next pass.
+    check("the yardstick is still THEIR ORIGINAL line, not what was just typed",
           "nen=" + urllib.parse.quote(_nen7, safe="") in _ve)
 
-    # CHỐT CHẶN: lưu nguyên chữ của họ thì không cho qua, và chữ vừa gõ còn nguyên.
+    # THE STOP: saving their words verbatim is refused, and what was typed survives.
     _ma, _ve = post_ve("/cv/block",
                        "them=1&title=" + urllib.parse.quote(_ten7, safe="")
                        + "&ky=data+pipeline&nen="
                        + urllib.parse.quote(_nen7, safe="")
                        + "&line=" + urllib.parse.quote(_nen7, safe=""))
-    check("chép nguyên dòng của nhà tuyển dụng -> KHÔNG cho lưu",
+    check("copying the employer's line verbatim -> REFUSED",
           _ma == 303 and "loi=" in _ve, f"{_ma} {_ve}")
     _c7 = db.connect(Path(tmp) / "jobbot.db")
-    check("và nó KHÔNG lọt vào CV gốc",
+    check("and it does NOT get into the master CV",
           _nen7 not in (store.load(_c7).get("cv_text") or ""))
     _c7.close()
     _, _sau_loi = get(_ve)
-    check("chữ vừa gõ còn nguyên để sửa tiếp", _nen7 in _sau_loi)
-    check("và lời từ chối đứng ngay trên ô",
+    check("what was typed survives, ready to edit further", _nen7 in _sau_loi)
+    check("and the refusal stands right above the box",
           "not yet work YOU did" in _sau_loi)
 
-    # Viết lại thành việc của mình thì qua.
+    # Rewritten as your own work, it goes through.
     _that = ("Rebuilt the nightly research pipeline in Python, cutting a "
              "40-minute reconciliation to 90 seconds across 17 feeds.")
     _c7 = db.connect(Path(tmp) / "jobbot.db")
@@ -3050,75 +3064,78 @@ with tempfile.TemporaryDirectory() as tmp:
                        + "&ky=data+pipeline&nen="
                        + urllib.parse.quote(_nen7, safe="")
                        + "&line=" + urllib.parse.quote(_that, safe=""))
-    check("viết lại thành việc của mình -> cho lưu", _ma == 303 and "loi=" not in _ve)
+    check("rewritten as your own work -> saved", _ma == 303 and "loi=" not in _ve)
     _c7 = db.connect(Path(tmp) / "jobbot.db")
     _sau7 = (store.load(_c7).get("cv_text") or "")
     _c7.close()
-    check("và câu đó vào CV gốc", _that in _sau7)
-    # THÊM nghĩa là THÊM: màn viết chỉ gửi đúng MỘT câu, nó không thấy mấy câu
-    # cũ nên không được phép thay chúng.
+    check("and that sentence lands in the master CV", _that in _sau7)
+    # ADD means ADD: the compose screen sends exactly ONE sentence and never sees
+    # the old ones, so it must not be allowed to replace them.
     _mat = [l.strip() for l in _truoc7.splitlines()
             if len(l.strip()) > 40 and l.strip() not in _sau7]
-    check("câu cũ trong khối KHÔNG bị nuốt mất", not _mat, str(_mat[:1]))
-    check("lưu xong thì BỎ nền đi, không mời lưu nhầm lần nữa", "nen=" not in _ve)
+    check("the block's older sentences are NOT swallowed", not _mat, str(_mat[:1]))
+    check("once saved the base line is DROPPED, so it cannot be saved twice by mistake", "nen=" not in _ve)
 
-    # MÁY TỰ LO, việc thứ HAI: dựng sẵn bản nháp cho MỌI chỗ hụt, không đợi
-    # bấm từng cái. KHÔNG tự ghi vào CV — câu nháp nằm trong cv_text thì bộ
-    # chấm đếm luôn nó là kỹ năng đã đáp, và app nói dối người dùng về chính
-    # họ. Người dùng điền con số rồi bấm, từng câu một.
+    # THE MACHINE HANDLES IT, job TWO: pre-build a draft for EVERY gap, without
+    # waiting to be clicked one by one. It does NOT write into the CV — a draft
+    # sentence sitting in cv_text gets counted by the scorer as a skill already
+    # answered, and the app then lies to the user about the user. The user fills
+    # in the figures and clicks, one sentence at a time.
     from jobbot.core import prefs as _pfB
     _cB = db.connect(Path(tmp) / "jobbot.db")
     _pfB.set_flag(_cB, _pfB.CV_TU_LO, False)
     _cB.close()
     _lv9.quen()
-    check("TẮT -> không dựng sẵn gì", "class=sanbox" not in get("/cv/soan")[1])
+    check("OFF -> nothing is pre-built", "class=sanbox" not in get("/cv/soan")[1])
     _cB = db.connect(Path(tmp) / "jobbot.db")
     _truoc_cv = (store.load(_cB).get("cv_text") or "")
     _cB.close()
-    # BẬT qua ĐƯỜNG THẬT: /api/cv/num, để lượt dựng lại tự chạy theo. Thang
-    # HỤT và bản nháp nay nằm TRONG bản dựng (xem cv/batch.run), nên lật cờ
-    # thẳng vào DB rồi đọc trang là đọc bản dựng cũ.
-    check("bật Máy tự lo qua đường thật",
+    # SWITCH IT ON THE REAL WAY: /api/cv/num, so the rebuild runs along with it.
+    # The GAP ladder and the drafts now live INSIDE the build (see cv/batch.run),
+    # so flipping the flag straight into the DB and then reading the page reads
+    # the OLD build.
+    check("Machine-handles-it switched on through the real route",
           post_form("/api/cv/num", "arg=tu_lo:1") == 200)
     _cho_dung(Path(tmp) / "jobbot.db", lambda d: bool((d or {}).get("nhap")))
     _s9, _sanB = get("/cv/soan")
-    check("BẬT -> máy dựng sẵn bản nháp cho mọi chỗ hụt",
+    check("ON -> the machine pre-builds a draft for every gap",
           _s9 == 200 and "class=sanbox" in _sanB)
-    check("mỗi bản nháp chừa chỗ trống cho bằng chứng", "___" in _sanB)
-    check("và bấm được để vào điền", "class=sanone" in _sanB and "&nen=" in _sanB)
+    check("each draft leaves a blank for the evidence", "___" in _sanB)
+    check("and it is clickable, to go fill it in", "class=sanone" in _sanB and "&nen=" in _sanB)
     _cB = db.connect(Path(tmp) / "jobbot.db")
-    check("nhưng KHÔNG tự ghi câu nào vào CV gốc",
+    check("but it writes NO sentence into the master CV",
           (store.load(_cB).get("cv_text") or "") == _truoc_cv)
     _cB.close()
 
-    # BẬT CÔNG TẮC THÌ PHẢI THẤY Ở CHỖ ĐANG ĐỨNG. Trước đây bản nháp chỉ dựng
-    # ở màn Soạn trống, nên bật xong mà đứng ở tab CV thì không thấy gì khác —
-    # cái nút nói một đằng, màn hình nói một nẻo.
+    # FLIP A SWITCH AND IT HAS TO SHOW WHERE YOU ARE STANDING. Drafts used to be
+    # built only on the empty compose screen, so switching it on while standing
+    # on the CV tab changed nothing visible — the button said one thing and the
+    # screen said another.
     post_form("/api/cv/num", "arg=tu_lo:0")
     _cho_dung(Path(tmp) / "jobbot.db", lambda d: not (d or {}).get("nhap"))
-    check("TẮT -> thang HỤT ở tab CV không nói gì về nháp",
+    check("OFF -> the GAP ladder on the CV tab says nothing about drafts",
           "class=hnhap" not in get("/cv")[1])
     post_form("/api/cv/num", "arg=tu_lo:1")
     _cho_dung(Path(tmp) / "jobbot.db", lambda d: bool((d or {}).get("nhap")))
     _, _cvC = get("/cv")
-    check("BẬT -> bản nháp hiện NGAY TRÊN dòng hụt ở tab CV",
+    check("ON -> the draft appears RIGHT ON the gap line on the CV tab",
           "class=hnhap" in _cvC)
-    # Ba kết cục, cả ba phải nói ra — im lặng để người dùng tưởng công tắc hỏng.
-    check("dòng nào không dựng nổi thì NÓI RA, không im lặng",
+    # Three outcomes, all three must be spoken — silence makes the user think the switch is broken.
+    check("a line that cannot be drafted SAYS SO, it does not go quiet",
           "class='hnhap tho'" in _cvC or "class=hnhap" in _cvC)
-    check("nút trên dòng có nháp dẫn thẳng tới bản nháp đó",
-          "Sửa nháp" not in _cvC or "&nen=" in _cvC)
+    check("the button on a drafted line leads straight to that draft",
+          "Edit draft" not in _cvC or "&nen=" in _cvC)
 
-    # MỘT CHỖ DỰNG, hai chỗ vẽ: tab CV và màn Soạn phải ra CÙNG một bản nháp.
+    # BUILT IN ONE PLACE, drawn in two: the CV tab and the compose screen must give THE SAME draft.
     _cC = db.connect(Path(tmp) / "jobbot.db")
     _nhC = (_btX.saved(_cC) or {}).get("nhap") or {}
     _cC.close()
     _co_nhap = [v["nhap"] for v in _nhC.values() if v.get("nhap")]
     _, _soanC = get("/cv/soan")
-    check("bản nháp ở hai màn là MỘT",
-          all(n in _soanC for n in _co_nhap), f"{len(_co_nhap)} bản nháp")
+    check("the draft on the two screens is ONE draft",
+          all(n in _soanC for n in _co_nhap), f"{len(_co_nhap)} drafts")
 
-    # MÁY TỰ LO phải THẬT SỰ chạy, không phải một nút cho có.
+    # MACHINE-HANDLES-IT has to ACTUALLY run, not be a button for show.
     from jobbot.core import prefs as _pfA
     _cA = db.connect(Path(tmp) / "jobbot.db")
     _pfA.set_flag(_cA, _pfA.CV_TU_LO, True)
@@ -3130,112 +3147,114 @@ with tempfile.TemporaryDirectory() as tmp:
     post_ve("/cv/block", "them=1&title=" + urllib.parse.quote(_ten7, safe="")
             + "&line=Shipped+a+nightly+check+across+17+feeds+in+under+90+seconds.")
     import time as _tA
-    for _ in range(60):                       # dựng chạy nền, chờ tối đa 30s
+    for _ in range(60):                       # the build runs in the background, wait up to 30s
         _cA = db.connect(Path(tmp) / "jobbot.db")
         _sauA = (_btA.saved(_cA) or {}).get("stamp")
         _cA.close()
         if _sauA and _sauA != _truocA:
             break
         _tA.sleep(0.5)
-    check("bật MÁY TỰ LO -> sửa khối xong máy dựng lại thật",
+    check("MACHINE-HANDLES-IT on -> editing a block really does rebuild",
           bool(_sauA) and _sauA != _truocA, f"{_truocA} -> {_sauA}")
-    # TẮT rồi CHỜ luồng nền xong hẳn. Không chờ thì thư mục tạm bị xoá trong
-    # lúc luồng còn mở DB, và cả file test đổ vỡ vì một lỗi không liên quan.
+    # Switch OFF and then WAIT for the background thread to finish. Without the
+    # wait the temp directory is deleted while the thread still has the DB open,
+    # and the whole test file falls over on an unrelated error.
     _pfA.set_flag(db.connect(Path(tmp) / "jobbot.db"), _pfA.CV_TU_LO, False)
     from jobbot.dashboard.server import _DANG_DUNG as _lockA
     with _lockA:
         pass
-    # Núm NHỊP không được làm mọi bản bỗng bị coi là cũ: nó không đổi bản dựng
-    # ra gì, chỉ đổi LÚC dựng.
+    # The PACE knob must not suddenly make every build count as stale: it changes
+    # nothing about WHAT is built, only WHEN.
     _cA = db.connect(Path(tmp) / "jobbot.db")
     _dauA = _btA.stamp(_cA, store.load(_cA).get("cv_text") or "")
     _pfA.set_flag(_cA, _pfA.CV_TU_LO, False)
-    check("lật núm nhịp KHÔNG làm bản đang có bị coi là cũ",
+    check("flipping the pace knob does NOT make the current build count as stale",
           _btA.stamp(_cA, store.load(_cA).get("cv_text") or "") == _dauA)
     _cA.close()
 
-    # LƯU XONG BRIEF PHẢI CÒN ĐÓ: người ta thường viết hai câu về cùng chỗ hụt.
+    # AFTER SAVING, THE BRIEF MUST STILL BE OPEN: people usually write two sentences about one gap.
     _ma, _ve = post_ve("/cv/block", "kind=project&title=Thu+Nghiem+2&was=&ky=sql"
                        "&line=Tuned+the+SQL+that+backs+the+daily+report,+cutting+it+to+9+s.")
-    check("lưu từ màn viết -> quay lại ĐÚNG khối và GIỮ brief đang mở",
+    check("saving from the compose screen -> back to THE SAME block, brief still open",
           _ma == 303 and "khoi=Thu%20Nghiem%202" in _ve and _ve.endswith("&ky=sql"),
           f"{_ma} {_ve}")
 
-    # ĐO THẬT, KHÔNG HỨA. Trước đây phép đo "trước -> sau" chỉ có ở đường ghi
-    # của xưởng viết; đường ghi của khối thì im lặng. Nay một đường, nên nó
-    # phải mang theo phép đo — nếu không, gộp hai màn là mất một con số.
+    # MEASURE, DO NOT PROMISE. The "before -> after" measurement used to exist
+    # only on the writing room's save route; the block save route was silent.
+    # Now there is one route, so it has to carry the measurement — otherwise
+    # merging the two screens loses a number.
     from jobbot.core import journal as _jn7
     _dong7 = [e.text for e in _jn7.log.tail("cv", limit=40)]
-    check("nhật ký ghi việc vừa làm",
+    check("the journal records what was just done",
           any("Thu Nghiem 2" in t for t in _dong7), " | ".join(_dong7[:3]))
-    check("và ĐO LẠI ĐỘ PHỦ, không chỉ báo đã lưu",
+    check("and it RE-MEASURES the coverage, not merely reports a save",
           any("fully answers" in t and "postings" in t for t in _dong7),
           " | ".join(_dong7[:3]))
-    # Câu viết ra mà KHÔNG mở khoá thêm tin nào cũng phải nói — im lặng ở đúng
-    # chỗ đó là để người viết tưởng câu vừa viết có ăn.
-    check("không đổi cũng nói ra, không im lặng",
-          any("vẫn đáp trọn" in t for t in _dong7) or
+    # A sentence that unlocks NO further postings has to be said out loud too —
+    # going quiet exactly there lets the writer believe the sentence landed.
+    check("no change is spoken too, never silence",
+          any("still fully answers" in t for t in _dong7) or
           any("->" in t for t in _dong7), " | ".join(_dong7[:3]))
     post_ve("/cv/block", "kind=project&title=Thu+Nghiem+2&was=Thu+Nghiem+2&kill=1&line=")
 
-    print("\n[tab CV phải mở NHANH]")
+    print("\n[the CV tab has to open FAST]")
     import time as _t5
     from jobbot.dashboard import live as _live5
     _conn6 = db.connect(Path(tmp) / "jobbot.db")
     _live5.quen()
     _t0 = _t5.perf_counter(); _live5.cv_blocks(_conn6); _cold = _t5.perf_counter() - _t0
     _t0 = _t5.perf_counter(); _live5.cv_blocks(_conn6); _warm = _t5.perf_counter() - _t0
-    # Đo trên máy Vin: 7,8 giây MỖI LẦN gọi, và tab CV gọi nó mỗi lần mở.
-    check("cv_blocks có cache", _warm < _cold / 5 or _warm < 0.01,
-          f"lạnh {_cold:.3f}s · ấm {_warm:.3f}s")
+    # Measured on the real machine: 7.8 seconds EVERY call, and the CV tab calls it on every open.
+    check("cv_blocks is cached", _warm < _cold / 5 or _warm < 0.01,
+          f"cold {_cold:.3f}s · warm {_warm:.3f}s")
     _conn6.close()
 
-    print("\n[thoát HTML — dữ liệu cào về không được thành mã]")
+    print("\n[HTML escaping — scraped data must never become code]")
     conn = db.connect(Path(tmp) / "jobbot.db")
     conn.execute("UPDATE posting SET company = ? WHERE kept = 1",
                  ("<script>alert(1)</script>",))
     conn.commit(); conn.close()
     _, hacked = get(f"/jobs/{job_id}")
-    check("thẻ script bị thoát", "<script>alert(1)</script>" not in hacked)
-    check("và vẫn hiện dạng chữ", "&lt;script&gt;" in hacked)
+    check("the script tag is escaped", "<script>alert(1)</script>" not in hacked)
+    check("and it still shows as text", "&lt;script&gt;" in hacked)
 
-    print("\n[tên tệp PDF — một bản CV một tệp]")
-    # Lỗi thật: Jane Street có HAI bản CV khác nhau cùng ra tên
-    # "jane-street-machine-learning-researcher.pdf". Bản sau đè bản trước, và
-    # 7 tin thì có tin cầm nhầm CV. In ra 43 bản mà `ls` chỉ đếm được 42 —
-    # không ai để ý, vì không có gì báo.
+    print("\n[PDF filenames — one CV, one file]")
+    # A real bug: Jane Street had TWO different CVs both coming out as
+    # "jane-street-machine-learning-researcher.pdf". The second overwrote the
+    # first, and of 7 postings some carried the wrong CV. 43 built, `ls` counting
+    # only 42 — nobody noticed, because nothing said so.
     from jobbot.dashboard import live as _live
     conn = db.connect(Path(tmp) / "jobbot.db")
     plan = _live.cv_pdf_plan(conn)
     names = [item["file"].name for item in plan]
-    check("mỗi bản CV một tên tệp riêng", len(names) == len(set(names)),
-          f"{len(names)} bản, {len(set(names))} tên")
+    check("every CV gets its own filename", len(names) == len(set(names)),
+          f"{len(names)} CVs, {len(set(names))} names")
     covered = [pid for item in plan for pid in item["ids"]]
-    check("một tin chỉ thuộc đúng một bản", len(covered) == len(set(covered)))
-    check("tra ngược ra đúng tệp",
+    check("a posting belongs to exactly one CV", len(covered) == len(set(covered)))
+    check("looking it up backwards gives the right file",
           all(_live.cv_pdf_for(conn, item["ids"][0]) == item["file"] for item in plan))
     conn.close()
 
-    print("\n[Search: nút DỌN KHO — giữ lại thứ người dùng đã động tới]")
+    print("\n[Search: the CLEAR-THE-STORE button — keeps whatever the user has touched]")
     _, _srh = get("/search")
-    check("thanh Search có nút dọn kho", "/api/search/xoa" in _srh)
-    check("và có chốt hai nhịp", "data-arm=" in _srh)
-    # SỐ TIN SẮP MẤT nằm ngay trên nút đã nạp đạn. "Chắc chưa?" không nói được
-    # cái giá; "Bỏ 5.166 tin?" thì nói được.
-    # SỐ PHẢI LÀ SỐ THẬT SẮP MẤT. `kept` là phần qua lưới lọc; nút này xoá
-    # CẢ KHO. Ghi "bỏ 363 tin" rồi bỏ 5.166 tin là nói dối đúng lúc người
-    # dùng cần số thật nhất.
+    check("the Search bar has a clear-the-store button", "/api/search/xoa" in _srh)
+    check("and it is a two-beat catch", "data-arm=" in _srh)
+    # HOW MANY POSTINGS ARE ABOUT TO GO sits right on the armed button. "Are you
+    # sure?" cannot state the price; "Drop 5,166 postings?" can.
+    # AND IT MUST BE THE REAL NUMBER ABOUT TO GO. `kept` is the part that passed
+    # the filters; this button clears THE WHOLE STORE. Saying "drop 363" and then
+    # dropping 5,166 is lying at the exact moment the user most needs the truth.
     _cK = db.connect(Path(tmp) / "jobbot.db")
     _ca_kho = _cK.execute("SELECT COUNT(*) FROM posting").fetchone()[0]
     _loc = _cK.execute("SELECT COUNT(*) FROM posting WHERE kept=1").fetchone()[0]
     _cK.close()
-    check("nút nạp đạn nói rõ SỐ TIN sắp mất — đếm CẢ KHO, không phải phần lọc",
-          f"Drop {_ca_kho:,} postings?" in _srh, f"kho {_ca_kho} · lọc {_loc}")
-    check("POST rỗng -> từ chối", post_form("/api/search/xoa", "") == 400)
-    check("POST sai chữ -> từ chối", post_form("/api/search/xoa", "arg=co") == 400)
+    check("the armed button states HOW MANY postings go — THE WHOLE STORE, not the filtered part",
+          f"Drop {_ca_kho:,} postings?" in _srh, f"store {_ca_kho} · filtered {_loc}")
+    check("an empty POST -> refused", post_form("/api/search/xoa", "") == 400)
+    check("the wrong word -> refused", post_form("/api/search/xoa", "arg=co") == 400)
 
-    # GIỮ LẠI TIN ĐÃ ĐỘNG TỚI. Tin có đơn là việc người dùng đã làm, không
-    # phải thứ máy cào về — quét lại không lấy lại được.
+    # KEEP WHAT HAS BEEN TOUCHED. A posting with an application on it is work the
+    # user did, not something the machine scraped — a rescan cannot bring it back.
     _cS = db.connect(Path(tmp) / "jobbot.db")
     _giu_id = _cS.execute("SELECT id FROM posting WHERE kept=1 LIMIT 1").fetchone()[0]
     _cS.execute("INSERT INTO application (company, company_key, role, posting_id,"
@@ -3246,28 +3265,28 @@ with tempfile.TemporaryDirectory() as tmp:
     _truoc_tin = _cS.execute("SELECT COUNT(*) FROM posting").fetchone()[0]
     _ho_so_truoc = store.load(_cS).get("cv_text") or ""
     _cS.close()
-    check("đang có tin để mà dọn", _truoc_tin > 1)
-    check("POST đúng chữ -> dọn", post_form("/api/search/xoa", "arg=xoa") == 200)
+    check("there is something in the store to clear", _truoc_tin > 1)
+    check("the right word -> cleared", post_form("/api/search/xoa", "arg=xoa") == 200)
     _cS = db.connect(Path(tmp) / "jobbot.db")
-    check("kho tin sạch, TRỪ tin đã có đơn",
+    check("the store is empty, EXCEPT the posting with an application",
           _cS.execute("SELECT COUNT(*) FROM posting").fetchone()[0] == 1)
-    check("và đúng là tin đó",
+    check("and it is exactly that posting",
           _cS.execute("SELECT id FROM posting").fetchone()[0] == _giu_id)
-    check("đơn đã nộp KHÔNG bị đụng",
+    check("the applications are NOT touched",
           _cS.execute("SELECT COUNT(*) FROM application").fetchone()[0] >= 1)
-    check("nguyên văn của tin giữ lại cũng còn",
+    check("the kept posting's raw body survives too",
           _cS.execute("SELECT COUNT(*) FROM raw_posting").fetchone()[0] >= 1)
-    check("hồ sơ KHÔNG bị đụng",
+    check("the profile is NOT touched",
           (store.load(_cS).get("cv_text") or "") == _ho_so_truoc)
-    # Bản CV dựng TỪ kho tin đó — giữ lại là giữ bản nói về tin vừa biến mất.
+    # The CV was built FROM that store — keeping it means keeping a CV about postings that just vanished.
     from jobbot.cv import batch as _btS
-    check("bản CV dựng từ kho đó cũng bỏ theo", _btS.saved(_cS) is None)
+    check("the CV built from that store goes too", _btS.saved(_cS) is None)
     _cS.close()
 
     httpd.shutdown(); httpd.server_close()
     os.environ.pop("JOBBOT_DATA_DIR", None)
 
-print("\n[CSS: hai class cùng tên KHÔNG được đá nhau về bố cục]")
+print("\n[CSS: two rules sharing a class name must NOT fight over layout]")
 import re as _re2
 from collections import Counter as _C
 _css = (Path(__file__).resolve().parent.parent
@@ -3276,40 +3295,43 @@ _depth, _seen = 0, {}
 for _line in _css.splitlines():
     _m = _re2.match(r"\s*(\.[a-zA-Z][\w-]*)\s*\{(.*)$", _line)
     if _m and _depth == 0:
-        # `position` cũng phải soi, không riêng `display`: nút "Sửa khối" trên
-        # thanh điều khiển từng mang lớp `.side` — trùng tên THANH BÊN, vốn
-        # position:fixed — nên nó bay ra góc trái màn hình, ngoài cả thanh
-        # chứa nó. HTML đúng, DOM đúng, chỉ có chỗ đứng là sai.
+        # `position` has to be inspected too, not only `display`: the "Edit
+        # block" button on the control bar once carried the class `.side` — the
+        # same name as THE SIDEBAR, which is position:fixed — so it flew to the
+        # top-left corner of the screen, outside the bar holding it. The HTML was
+        # right, the DOM was right, only where it stood was wrong.
         for _thuoc in ("display", "position"):
             _hit = _re2.search(_thuoc + r"\s*:\s*([a-z-]+)", _m.group(2))
             if _hit:
                 _seen.setdefault((_m.group(1), _thuoc), set()).add(_hit.group(1))
     _depth += _line.count("{") - _line.count("}")
 _clash = {k: v for k, v in _seen.items() if len(v) > 1}
-# .frow từng vừa là hàng lọc (flex) vừa là hàng phễu (grid): ô tải CV lên và
-# hàng lọc hồ sơ bị bẻ thành lưới 3 cột. .prow tương tự với thanh tiến độ.
-check("không class nào có hai kiểu display / position", not _clash, str(_clash))
+# .frow was once both a filter row (flex) and a funnel row (grid): the CV upload
+# box and the profile filter row were bent into a 3-column grid. .prow did the
+# same to the progress bar.
+check("no class has two different display / position values", not _clash, str(_clash))
 
-print("\n[nút trong form — bấm không được nuốt mất form]")
+print("\n[a button inside a form — clicking it must not swallow the form]")
 _js = (Path(__file__).resolve().parent.parent
        / "src/jobbot/dashboard/web/live.js").read_text(encoding="utf-8")
-# FORM cũng mang [data-post] và nút Gửi nằm TRONG nó, nên closest() từ nút đi
-# ngược lên gặp form. Nhánh nút gán `post.textContent = ...` — gán textContent
-# lên một form là XOÁ SẠCH RUỘT NÓ. Bấm Nối một cái là ô nhập biến mất.
-check("nhánh nút bỏ qua thẻ FORM", "post.tagName === 'FORM'" in _js)
-check("và bỏ qua TRƯỚC khi gán textContent",
+# A FORM also carries [data-post] and the Submit button sits INSIDE it, so
+# closest() walking up from the button reaches the form. The button branch
+# assigns `post.textContent = ...` — assigning textContent to a form WIPES ITS
+# WHOLE CONTENTS. One click on Connect and the input fields vanish.
+check("the button branch skips a FORM tag", "post.tagName === 'FORM'" in _js)
+check("and it skips BEFORE assigning textContent",
       _js.index("post.tagName === 'FORM'") < _js.index("post.textContent = s.note"))
-check("form có trình nghe submit riêng", "form[data-post]" in _js)
-# Form Cài đặt là trường hợp riêng, không được nuốt mọi form khác.
-check("trình nghe Cài đặt vẫn chỉ nhận đúng /settings",
+check("a form has its own submit listener", "form[data-post]" in _js)
+# The Settings form is the special case; it must not swallow every other form.
+check("the Settings listener still takes only /settings",
       "!== '/settings'" in _js)
-# Form nối hộp thư đã chuyển sang Cài đặt · Gmail. Nút Nối phải là submit
-# của form, không phải một [data-post] riêng: trình nghe [data-post] gán
-# textContent lên thứ nó bắt được, mà ở đây nó bắt được cả cái form.
+# The mailbox-connect form moved to Settings · Gmail. The Connect button has to
+# be the form's submit, not a separate [data-post]: the [data-post] listener
+# assigns textContent to whatever it catches, and here it catches the whole form.
 _setsrc = (Path(__file__).resolve().parent.parent
            / "src/jobbot/dashboard/views/settings.py").read_text(encoding="utf-8")
 _form_noi = _setsrc.split("data-post='/api/mail/setup'")[1].split("</form>")[0]
-check("nút Nối là type=submit, không phải data-post riêng",
+check("the Connect button is type=submit, not its own data-post",
       "type=submit" in _form_noi)
 
 print(f"\n{ok} ok, {fail} fail")

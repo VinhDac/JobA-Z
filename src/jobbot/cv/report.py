@@ -162,7 +162,7 @@ def head(cv: TailoredCV, xem_tin: str = "") -> str:
     # Back's place. Back means "return to the page you left"; viewing the
     # posting is a different journey. Merge them and one of the two is
     # always wrong.
-    di = (f"<a class='mbtn tiny' href='{esc(xem_tin)}'>Xem tin →</a>"
+    di = (f"<a class='mbtn tiny' href='{esc(xem_tin)}'>View posting →</a>"
           if xem_tin else "")
     nut = ("<input type=checkbox id=cvtruoc class=gswitch hidden>"
            "<div class=gtoggle>"
