@@ -468,55 +468,55 @@ with tempfile.TemporaryDirectory() as tmp:
           _di.endswith("/profile/muc_tieu"), f"{_ma} -> {_di}")
     # Trang đó phải NÓI vì sao giữ lại.
     _, _sec = get("/profile/muc_tieu")
-    check("và nói rõ còn mấy câu", "and the app can run" in _sec)
-    check("nhãn nút không hứa đi tiếp",
+    check("and it says how many answers are left", "and the app can run" in _sec)
+    check("the button's label promises no way forward",
           "Save —" in _sec and "answers still needed</button>" in _sec)
-    # Điền đủ -> thả ra, đi tiếp bình thường.
+    # Fill them all in -> it lets go, and the way forward is normal again.
     _ma2, _di2 = _post_lay_dich(
         "/profile/muc_tieu",
         b"job_titles=Quant&markets=uk_onsite&work_auth=visa_no_sponsor")
-    check("đủ rồi thì được đi tiếp", _di2.endswith("/profile/rang_buoc"),
+    check("enough answered -> the way forward opens", _di2.endswith("/profile/rang_buoc"),
           f"{_ma2} -> {_di2}")
 
-    # Điền đủ cổng -> Home phải ĐỔI GIỌNG, không còn chặn.
+    # Gate answered -> Home has to CHANGE ITS TONE and stop blocking.
     post("/profile/muc_tieu",
          b"job_titles=Quantitative+Analyst&markets=uk_onsite&work_auth=visa_no_sponsor")
     _, _hm2 = get("/onboarding")
     _ob2 = _live.onboarding(_db.connect())
-    check("điền đủ 3 câu thì cổng mở", _ob2["gate_open"])
-    check("và đổi sang mời chạy", "The profile is enough to run" in _hm2)
-    check("phần vừa xong được đánh dấu", "ostep done" in _hm2)
-    # ĐỦ CÂU BẮT BUỘC THÌ THÔI BẮT. Tấm phủ không tự bật nữa, tab Home trống
-    # trơn để dành cho bảng điều khiển pipeline.
+    check("all 3 answers filled in -> the gate opens", _ob2["gate_open"])
+    check("and it turns into an invitation to run", "The profile is enough to run" in _hm2)
+    check("the part just finished is marked done", "ostep done" in _hm2)
+    # ONCE THE REQUIRED ANSWERS ARE IN, STOP INSISTING. The overlay no longer opens by
+    # itself, and the Home tab is left clear for the pipeline dashboard.
     _, _trang2 = get("/")
-    check("đủ rồi thì Home KHÔNG bật tấm phủ nữa", "data-setup=" not in _trang2)
-    check("và tab Home trả lại chỗ cho việc của nó",
+    check("enough answered -> Home stops opening the overlay", "data-setup=" not in _trang2)
+    check("and the Home tab gives the space back to its own work",
           "blk ostep" not in _trang2)
     _c.close()
-    check("POST /profile/import rỗng -> không sập",
+    check("an empty POST /profile/import -> no crash",
           post("/profile/import", b"") in (200, 303))
 
-    print("\n[nút gọi việc nền phải THẬT SỰ tới được trình nghe]")
-    # Trình nghe [data-post] nằm ở `document`. Một nút gắn stopPropagation là
-    # nút chết: bấm không làm gì, không báo lỗi, không có dấu vết. Đã xảy ra
-    # với nút Nộp ở tab Search.
+    print("\n[a button that calls background work has to REALLY reach the listener]")
+    # The [data-post] listener lives on `document`. A button carrying stopPropagation is
+    # a dead button: pressing it does nothing, reports nothing, leaves no trace. It
+    # really happened with the Apply button on the Search tab.
     for page in ("/search", "/cv", "/track"):
         _s, body = get(page)
         if _s != 200:
             continue
         for chunk in body.split("data-post=")[1:]:
             head = chunk[:220]
-            check(f"{page:<10} nút data-post không chặn lan truyền",
+            check(f"{page:<10} a data-post button stops no propagation",
                   "stopPropagation" not in head)
 
-    # Nút trỏ vào route KHÔNG TỒN TẠI cũng là nút chết, và im lặng y hệt:
-    # fetch trả 404, .json() nổ, .catch() nuốt. Đối chiếu mọi đích data-post
-    # trên trang với danh sách route máy chủ thật sự xử lý.
+    # A button pointing at A ROUTE THAT DOES NOT EXIST is a dead button too, and just as
+    # silent: fetch returns 404, .json() explodes, .catch() swallows it. Match every
+    # data-post target on the page against the routes the server really handles.
     import re as _re
     _server = (Path(__file__).resolve().parent.parent
                / "src/jobbot/dashboard/server.py").read_text(encoding="utf-8")
-    # Route có thể khai bằng `path == "x"` HOẶC `path in ("x", "y")` —
-    # bộ dò chỉ nhận dạng thứ nhất thì báo nhầm route thật là không tồn tại.
+    # A route can be declared as `path == "x"` OR `path in ("x", "y")` — a detector that
+    # recognises only the first reports a real route as missing.
     _known = set(_re.findall(r'path == "([^"]+)"', _server))
     for _grp in _re.findall(r'path in \(([^)]*)\)', _server):
         _known |= set(_re.findall(r'"([^"]+)"', _grp))
@@ -528,9 +528,10 @@ with tempfile.TemporaryDirectory() as tmp:
             continue
         _wired |= set(_re.findall(r"data-post='([^']+)'", body))
         _wired |= set(_re.findall(r'data-post="([^"]+)"', body))
-    # Vẽ thẳng tab Quản lí với ĐỦ MỌI loại dòng: DB thử không có dòng nộp nào
-    # nên nút "Gửi đơn", "bỏ", "đổi chặng", "quét thư" không hiện, và những nút
-    # đó chính là những nút mới nhất — tức là những nút dễ sai đích nhất.
+    # Render the Manage tab directly with EVERY kind of row: the test DB has no
+    # application rows, so the "Send", "drop", "change stage" and "scan mail" buttons
+    # never appear — and those are the newest buttons, which makes them the ones most
+    # likely to point at the wrong target.
     from jobbot.dashboard.views import track as _track
     from jobbot.track import board as _board
     _row = dict(id=1, stage=_board.DRAFT, company="X", role="R", days=1,
@@ -546,8 +547,8 @@ with tempfile.TemporaryDirectory() as tmp:
                                   mail_address="a@b.c")
             _wired |= set(_re.findall(r"data-post='([^']+)'", _html))
             _wired |= set(_re.findall(r'data-post="([^"]+)"', _html))
-    # Nút của THƯ đã dọn sang màn hàng chờ (/track/queue). Không vẽ nó ở đây
-    # thì bài này thôi kiểm /api/track/mail/* — đúng mấy đường mới nhất.
+    # THE MAIL buttons moved to the queue screen (/track/queue). Not rendering it here
+    # would stop this test checking /api/track/mail/* — the very newest routes.
     from jobbot.dashboard.views import trackcho as _cho
     _hq = _cho.render(
         rows=[_row], mu=[dict(id=3, company="M", company_guess="",
@@ -557,119 +558,122 @@ with tempfile.TemporaryDirectory() as tmp:
     _wired |= set(_re.findall(r"data-post='([^']+)'", _hq))
     _wired |= set(_re.findall(r'data-post="([^"]+)"', _hq))
 
-    check("có nút data-post để mà kiểm", len(_wired) >= 7, str(sorted(_wired)))
+    check("there are data-post buttons to check at all", len(_wired) >= 7, str(sorted(_wired)))
     for _target in sorted(_wired):
-        check(f"route {_target} có thật", _target in _known)
+        check(f"the route {_target} really exists", _target in _known)
 
-    print("\n[PDF: bản in KHÔNG phải bản màn hình thu nhỏ]")
+    print("\n[PDF: the printed sheet is NOT the screen shrunk down]")
     css = (Path("src/jobbot/dashboard/web/app.css")).read_text()
     rule = css[css.index("@media print"):] if "@media print" in css else ""
-    check("có khối @media print", bool(rule))
-    # Ẩn `nav` thôi thì chưa đủ: thanh bên là <aside class=side>, nên dấu ◆ và
-    # chữ "jobbot" vẫn in ra. Và `.lead` là ghi chú CHO VIN ("Built for … the
-    # system selects and orders"), không phải cho nhà tuyển dụng.
+    check("there is an @media print block", bool(rule))
+    # Hiding `nav` is not enough: the sidebar is <aside class=side>, so the ◆ mark and
+    # the word "jobbot" still printed. And `.lead` is a note FOR THE USER ("Built for …
+    # the system selects and orders"), not for an employer.
     for gone in (".side", ".lead", ".topbar", "button"):
-        check(f"bản in giấu {gone}", gone in rule.split("}")[1] or gone in rule)
-    check("nền giấy trắng, không nền tối của app", "#fff !important" in rule)
-    check("khổ A4", "size: A4" in rule)
-    check("không cắt đôi một mục qua hai trang", "break-inside:avoid" in rule)
+        check(f"the printed sheet hides {gone}", gone in rule.split("}")[1] or gone in rule)
+    check("white paper, not the app's dark ground", "#fff !important" in rule)
+    check("A4", "size: A4" in rule)
+    check("no section is cut in half across two pages", "break-inside:avoid" in rule)
 
-    check("POST /cv/pdf thiếu id -> 400", post_form("/cv/pdf", "arg=") == 400)
+    check("POST /cv/pdf with no id -> 400", post_form("/cv/pdf", "arg=") == 400)
 
-    # BẤM THÌ MỚI CHẠY. Tab CV không còn dựng lúc vẽ trang, nên muốn kiểm ô
-    # "Bản sẽ gửi" thì phải dựng trước — y như người dùng bấm Chạy.
-    check("chưa bấm Chạy -> tab CV nói rõ là chưa dựng, không vẽ ô rỗng",
+    # IT RUNS ONLY WHEN PRESSED. The CV tab no longer builds while drawing the page, so
+    # checking the "what will be sent" box means building first — exactly as the user
+    # pressing Run would.
+    check("Run not pressed -> the CV tab says outright nothing is built, it draws no empty box",
           "No CV has been built yet" in get("/cv")[1])
     from jobbot.cv import batch as _bt
     _cvc = db.connect(Path(tmp) / "jobbot.db")
     _bt.run(_cvc)
     _cvc.close()
     _s, body = get("/cv")
-    check("dựng xong thì ô hiện bản", "class=cvrow" in body)
-    # KHỐI HỤT — khối trả lời câu hỏi duy nhất của tab: tối nay viết gì.
-    check("tab CV có khối HỤT", "WHAT TO WRITE TO CLOSE THE GAP" in body.upper()
+    check("once built, the box shows the builds", "class=cvrow" in body)
+    # THE GAP BLOCK — the block answering the tab's only question: what to write tonight.
+    check("the CV tab has the GAP block", "WHAT TO WRITE TO CLOSE THE GAP" in body.upper()
           or "close the gap" in body)
-    # HAI ĐÍCH, không một: "làm hết bảng" gộp cả mấy dòng phải đi HỌC, mà học
-    # tính bằng tháng còn viết tính bằng buổi tối.
-    check("nói rõ đích VIẾT ĐƯỢC TỐI NAY tách khỏi đích phải đi học",
+    # TWO TARGETS, not one: "do the whole table" folds in the rows that have to be
+    # LEARNT, and learning is measured in months while writing is measured in evenings.
+    check("the WRITABLE TONIGHT target is stated apart from the target that has to be learnt",
           "doable tonight" in body and "learnt" in body)
-    check("và bỏ hàng chip 'nhắm vào chỗ hồ sơ đang câm' cũ",
-          "nhắm vào chỗ hồ sơ đang câm" not in body)
-    # IN HÀNG LOẠT ĐÃ BỎ. Câu hỏi thật ở ô này không phải "in cho tôi 28 tệp",
-    # mà là "gửi cho công ty này thì dùng bản nào" — nên chỗ đó là ô TÌM.
-    # Mỗi bản vẫn in riêng được bằng nút PDF trên từng dòng.
-    check("không còn nút in hàng loạt", "/cv/pdf/all" not in body)
-    check("POST /cv/pdf/all đã bỏ hẳn, không để lại đường cụt",
+    # BULK PRINTING IS GONE. The real question in this box is not "print me 28 files"
+    # but "which build do I send this company" — so what belongs there is A SEARCH BOX.
+    # Each build can still be printed on its own, from the PDF button on its row.
+    check("there is no bulk print button", "/cv/pdf/all" not in body)
+    check("POST /cv/pdf/all is gone entirely, leaving no dead end",
           post_form("/cv/pdf/all", "") == 404)
-    check("có ô tìm trong bản đã dựng", "name=q" in body and "class=jfind" in body)
-    check("in từng bản vẫn còn", "data-post='/cv/pdf'" in body)
+    check("there is a search box over the builds", "name=q" in body and "class=jfind" in body)
+    check("printing one build is still there", "data-post='/cv/pdf'" in body)
 
-    # TỜ GIẤY GỬI ĐI CHỈ ĐƯỢC CÓ TỜ CV. Kiểm bằng cách in thật rồi mở ảnh ra
-    # nhìn: thanh trạng thái in ĐÈ lên dòng cuối mục Technical Skills, và nó
-    # mang đường dẫn tệp trên máy ("PDF: /Users/davi/…") ra một tài liệu gửi
-    # cho nhà tuyển dụng.
+    # THE SHEET THAT GOES OUT MAY CONTAIN ONLY THE CV. Checked by really printing and
+    # looking at the image: the status bar printed OVER the last line of Technical
+    # Skills, and it carried a local file path ("PDF: /Users/…") into a document sent to
+    # an employer.
     _cssp = get("/static/app.css")[1]
     _in = _cssp[_cssp.index("@media print"):]
     _an = _in[:_in.index("}", _in.index("display:none"))]
     for _lop in (".statusbar", ".cvaudit", ".side", ".mbtn", ".titlebar"):
-        check(f"khi in, ẩn {_lop}", _lop in _an)
-    # PHÔNG NHÚNG ĐƯỢC. Phông hệ thống macOS (.SF NS) không nhúng vào PDF được
-    # nên Chrome vẽ từng chữ thành GLYPH TAY: đo trên bản in thật 34 phông
-    # Type3 + CharProcs, 0 phông TrueType. Trình bóc chữ xoàng cho ra
-    # "D a c  V in h  N g u y e n" — đúng nguyên nhân hỏng parse mà Greenhouse
-    # liệt kê. Đổi sang Georgia/Times: Type3 34 -> 0, và PDF nhẹ 217 -> 132 KB.
-    # THẺ CHỮA BÀI và VỆT TÔ không được in ra giấy — bút đỏ là chuyện giữa
-    # app và Vin, tờ giấy gửi đi chỉ có tờ CV.
-    # `_an` chỉ là luật display:none ĐẦU TIÊN; thẻ chữa bài ẩn ở luật khác,
-    # nên tìm trong cả khối @media print.
-    check("khi in, đóng thẻ chữa bài",
+        check(f"printing hides {_lop}", _lop in _an)
+    # AN EMBEDDABLE FONT. The macOS system font (.SF NS) cannot be embedded in a PDF, so
+    # Chrome draws every character as a HAND-DRAWN GLYPH: measured on a real print, 34
+    # Type3 fonts + CharProcs, 0 TrueType fonts. A plain text extractor produced
+    # "D a c  V in h  N g u y e n" — exactly the parse failure Greenhouse lists.
+    # Switching to Georgia/Times: Type3 34 -> 0, and the PDF fell from 217 to 132 KB.
+    # THE MARKING CARDS and THE HIGHLIGHTS must not reach the paper — the red pen is
+    # between the app and its user; the sheet that goes out holds only the CV.
+    # `_an` is only the FIRST display:none rule; the marking cards are hidden by another
+    # rule, so search the whole @media print block.
+    check("printing closes the marking cards",
           ".ccard { display:none" in _in or ".ccard { display:none" in
           _in.replace(", .ccard", " .ccard") or ".ccard" in _in)
-    check("khi in, bỏ vệt tô từ khoá",
+    check("printing drops the keyword highlights",
           ".kw { background:none !important" in _in)
-    # GẠCH CHÂN CHỮA BÀI cũng không được in — tờ giấy gửi đi không mang bút đỏ.
-    check("khi in, bỏ mọi gạch chân chữa bài",
+    # THE MARKING UNDERLINES must not print either — the sheet that goes out carries no red pen.
+    check("printing drops every marking underline",
           ".vthieu_so, .vqua_dai, .vlac_de, .vda_sua {" in _in)
-    check("tờ CV in bằng phông NHÚNG ĐƯỢC, không phải phông hệ thống",
+    check("the CV prints in an EMBEDDABLE font, not the system font",
           'font-family:Georgia,"Times New Roman",serif' in _in)
-    # `main` là position:fixed left:226px (chừa chỗ thanh bên). Khi in, Chrome
-    # đặt phần tử fixed theo HỘP TRANG và `left` không ghi đè được — ép cả
-    # bằng CSS lẫn style inline đều không nhúc nhích. Phải trả về dòng chảy.
-    check("khi in, main trả về position:static — không thì tờ CV lệch 226px",
+    # `main` is position:fixed left:226px (leaving room for the sidebar). When printing,
+    # Chrome positions a fixed element against THE PAGE BOX and `left` cannot override
+    # it — forced through CSS and through an inline style, neither moved it. It has to go
+    # back into the flow.
+    check("printing returns main to position:static — otherwise the CV sits 226px off",
           "position:static !important" in _in)
-    # MÀU IN đặt mặc định ĐEN rồi mới làm nhạt vài chỗ. Luật cũ liệt kê từng
-    # lớp cần tô đen, nên lớp nào quên thì giữ màu giao diện TỐI: đo được
-    # .cvskill ở 192/255, cả mục TECHNICAL SKILLS gần như vô hình.
-    check("màu in mặc định là ĐEN cho mọi thứ trong tờ CV",
+    # THE PRINT COLOUR defaults to BLACK and only then lightens a few places. The old
+    # rule listed each class to blacken, so any class forgotten kept its DARK interface
+    # colour: .cvskill measured 192/255, leaving the whole TECHNICAL SKILLS section
+    # almost invisible.
+    check("the print colour defaults to BLACK for everything on the CV sheet",
           ".cvpaper, .cvpaper * { color:#111 !important }" in _in)
 
-    # CỔNG KIỂM lúc in. Nó soi chính trang sắp in, nên bắt được thứ test HTML
-    # không bắt được: rác app lọt ra giấy, chữ nhợt, tờ CV lệch lề.
+    # THE INSPECTION GATE at print time. It inspects the very page about to print, so it
+    # catches what an HTML test cannot: app junk reaching the paper, pale text, a CV
+    # sitting off the margin.
     from jobbot.cv import pdf as _pdfm
     for _dau in ("app junk on the sheet", "text too pale", "is inset"):
-        check(f"cổng kiểm có soi «{_dau}»", _dau in _pdfm._SOI)
-    check("ngưỡng nhợt được đặt tên, không gõ số trong JS",
+        check(f"the gate inspects «{_dau}»", _dau in _pdfm._SOI)
+    check("the paleness threshold is named, not typed as a number in the JS",
           "SANG_NHAT" in _pdfm._SOI and isinstance(_pdfm.SANG_NHAT, int))
-    # CHÍNH CỔNG HỎNG THÌ PHẢI KÊU. Bản đầu nuốt ValueError rồi báo "sạch" ở
-    # mọi lượt in — một cổng im lặng báo sạch khi nó gãy thì tệ hơn không có.
+    # IF THE GATE ITSELF BREAKS IT HAS TO SHOUT. The first version swallowed a ValueError
+    # and reported "clean" on every print — a gate that silently reports clean while
+    # broken is worse than no gate.
     class _TabHong:
         def call(self, *a, **k): pass
-        def eval(self, *a, **k): raise RuntimeError("gãy")
+        def eval(self, *a, **k): raise RuntimeError("broken")
     _ra = _pdfm.kiem(_TabHong())
-    check("cổng kiểm gãy -> KÊU LÊN, không báo sạch",
+    check("the gate breaks -> IT SHOUTS, it does not report clean",
           _ra and "COULD NOT INSPECT" in _ra[0], str(_ra))
-    # Bản chấm điểm phải nằm TRONG .cvaudit. Luật ẩn đã có sẵn từ lâu nhưng
-    # không chỗ nào GẮN lớp đó, nên nó là một luật không canh gì cả.
+    # The scoring report has to sit INSIDE .cvaudit. The hiding rule had existed for a
+    # long time but nothing ATTACHED that class, so it was a rule guarding nothing.
     from jobbot.cv.build import TailoredCV as _TC2
     from jobbot.cv import report as _rp2
-    check("phần chi tiết nằm trong .cvaudit nên không lọt vào PDF",
+    check("the detail section sits inside .cvaudit, so it never reaches the PDF",
           _rp2.chi_tiet(_TC2(header=[], summary="", sections=[], dropped=[],
                              wanted=[], covered=[], missing=[]))
           .startswith("<div class=cvaudit>"))
 
-    # NÚT PDF PHẢI GIAO TỆP TẬN TAY. Vỏ app là WKWebView, mà WKWebView KHÔNG
-    # tự tải tệp — không có delegate thì Content-Disposition im lặng không làm
-    # gì. Nên chép sang Downloads rồi mở Finder.
+    # THE PDF BUTTON HAS TO PUT THE FILE IN THE USER'S HANDS. The app shell is a
+    # WKWebView, and WKWebView does NOT download a file by itself — with no delegate,
+    # Content-Disposition silently does nothing. So it copies to Downloads and opens Finder.
     from jobbot.cv.pdf import tai_ve as _tv
     import tempfile as _tf9, pathlib as _pl9, os as _os9
     _that_home = _os9.environ.get("HOME")
@@ -680,12 +684,13 @@ with tempfile.TemporaryDirectory() as tmp:
             _src = _pl9.Path(_h9) / "a.pdf"
             _src.write_bytes(b"%PDF-1.4 x")
             _d1 = _tv(_src)
-            check("chép được sang Downloads", _d1 and _d1.exists()
+            check("it copies to Downloads", _d1 and _d1.exists()
                   and _d1.parent.name == "Downloads")
             _d2 = _tv(_src)
-            # Trùng tên thì thêm số: bản cũ có thể đã gửi đi và còn cần đối chiếu.
-            check("in lần hai KHÔNG đè lên bản cũ", _d2 != _d1 and _d1.exists())
-            check("tệp không có thật -> trả None, không nổ",
+            # A name clash gets a number: the older file may already have been sent and
+            # still be needed for comparison.
+            check("printing a second time does NOT overwrite the older file", _d2 != _d1 and _d1.exists())
+            check("a file that does not exist -> returns None, does not explode",
                   _tv(_pl9.Path(_h9) / "khong-co.pdf") is None)
         finally:
             if _that_home is None:
@@ -693,7 +698,7 @@ with tempfile.TemporaryDirectory() as tmp:
             else:
                 _os9.environ["HOME"] = _that_home
 
-    # Ô TÌM phải THẬT SỰ LỌC, không chỉ vẽ ra cho đẹp.
+    # THE SEARCH BOX has to REALLY FILTER, not merely be drawn for looks.
     from jobbot.dashboard.views import cvlist as _cvl
     _gia_ver = [
         {"jobs": [{"id": 1, "company": "Man Group", "title": "Quant", "score": 90}],
