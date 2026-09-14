@@ -966,7 +966,7 @@ with tempfile.TemporaryDirectory() as tmp:
                 if _rl.sentence_ok(l.goc or l.text, l.hits)[0] == "drop"]
         check("KHÔNG còn câu bị luật cấm lọt ra bản CV", not _lot, str(_lot[:1]))
         _cvr.close()
-        check("bản chấm điểm có mục trước/sau", "ĐÃ SỬA" in _bcv_html.upper()
+        check("bản chấm điểm có mục trước/sau", "REWORD" in _bcv_html.upper()
               or "gsua" in _bcv_html)
         check("nói ra máy chỉ cắt chữ, không viết thêm",
               "cuts and reorders" in _bcv_html)

@@ -1,21 +1,26 @@
-"""Sửa câu CV — CHỈ BẰNG CHÍNH CHỮ CỦA VIN.
+"""Rewording CV sentences — USING ONLY VIN'S OWN WORDS.
 
-Luật gốc của cả tầng CV (xem build.py): *mọi câu trên CV đều là câu Vin đã
-viết*. Module này không phá luật đó, nó làm rõ luật đó ra thành hai việc khác
+The founding rule of the whole CV layer (see build.py): *every sentence on
+the CV is one Vin wrote*. This module does not break that rule; it makes it
+explicit as two different
 hẳn nhau:
 
-    BIẾN ĐỔI   cắt và xếp lại chữ đã có     -> máy tự làm, thêm 0 sự thật
-    ĐIỂM YẾU   chỉ ra chỗ câu còn hổng      -> máy chỉ NÓI, Vin tự viết
+    TRANSFORM  cut and reorder existing words -> the machine does it,
+                                                  adding 0 facts
+    WEAKNESS   point at what the sentence lacks -> the machine only SAYS it,
+                                                  Vin writes it
 
-Ranh giới nằm ở đúng một câu hỏi: *câu sau khi sửa có khẳng định thêm điều gì
-Vin chưa từng viết không?* Bỏ chữ "I" ở đầu thì không. Thêm "resulting in a
-30% improvement" thì có — và đó là câu Vin phải đỡ trước mặt người phỏng vấn
-mà không phải Vin viết. Nên chỗ đó máy dừng lại.
+The boundary is exactly one question: *does the reworded sentence assert
+anything Vin never wrote?* Dropping a leading "I" does not. Adding "resulting
+in a 30% improvement" does — and that is a sentence Vin has to defend in front
+of an interviewer without having written it. So that is where the machine
+stops.
 
-VÌ SAO KHÔNG PHẪU THUẬT DẤU HAI CHẤM. Đo trên CV thật: 5/16 câu sống sót có
-dấu hai chấm trong 60 ký tự đầu, và nhìn vào thì phần TRƯỚC dấu hai chấm mới
-là ý chính ("The fix was not a better parameter but better normalisation: …").
-Cắt tự động là giết nghĩa. Nên câu dài bị ĐÁNH DẤU, không bị cắt.
+WHY NO COLON SURGERY. Measured on the real CV: 5 of 16 surviving sentences
+have a colon inside their first 60 characters, and looking at them, it is the
+part BEFORE the colon that carries the point ("The fix was not a better
+parameter but better normalisation: …"). Cutting automatically kills the
+meaning. So a long sentence is MARKED, not cut.
 """
 
 from __future__ import annotations
@@ -27,83 +32,86 @@ from . import rules
 
 # --- BIẾN ĐỔI -----------------------------------------------------------
 
-# Quá khứ BẤT QUY TẮC hay gặp trong CV. Cần bảng này vì luật "đuôi -ed" không
-# bắt được "built", "wrote", "chose". Đây là hình thái học, không phải bảng
-# khớp theo CV của Vin — thêm câu mới vẫn đúng.
+# Common IRREGULAR past tenses in a CV. This table is needed because the
+# "-ed suffix" rule does not catch "built", "wrote", "chose". This is
+# morphology, not a lookup built around Vin's CV — new sentences still work.
 QUA_KHU = (
     "built", "rebuilt", "wrote", "rewrote", "chose", "ran", "led", "made",
     "took", "set", "kept", "found", "put", "sent", "sold", "won", "cut",
     "held", "grew", "drew", "spent", "taught", "brought", "began",
 )
 
-# "I <động từ quá khứ>" ở ĐẦU câu. Chỉ ở đầu câu: sửa giữa câu ("…, so I chose
-# on average risk/return") là đổi cấu trúc câu, không còn là cắt chữ nữa.
+# "I <past-tense verb>" at the START of a sentence. Only at the start: fixing
+# mid-sentence ("…, so I chose on average risk/return") changes the sentence's
+# structure and is no longer just cutting words.
 #
-# KHÔNG bắt trợ động từ. "I was optimising" -> "Was optimising" là sai ngữ
-# pháp, mà luật -ed/bất-quy-tắc tự loại chúng: "was", "had", "could" không có
-# đuôi -ed và không nằm trong bảng trên.
+# It does NOT catch auxiliaries. "I was optimising" -> "Was optimising" is
+# ungrammatical, and the -ed/irregular rule excludes them by itself: "was",
+# "had" and "could" have no -ed suffix and are not in the table above.
 NGOI_MOT = re.compile(
     r"^\s*I\s+(?=(\w+ed|" + "|".join(QUA_KHU) + r")\b)", re.I)
 
 
 @dataclass
 class Sua:
-    """Một phép biến đổi đã áp, đủ để Vin kiểm lại bằng mắt."""
-    phep: str           # mã phép, để test và để nhóm
+    """One transform that was applied, enough for Vin to check by eye."""
+    phep: str           # the transform code, for tests and grouping
     truoc: str
     sau: str
-    vi_sao: str         # nói cho NGƯỜI đọc, không phải cho máy
+    vi_sao: str         # written for a PERSON, not for the machine
 
 
 def _chu_ngu(text: str) -> tuple[str, str]:
-    """Lược chủ ngữ ngôi thứ nhất — quy ước của CV.
+    """Drop the first-person subject — the CV convention.
 
-    CV không viết "I built X", nó viết "Built X": người đọc đã biết cả tờ giấy
-    nói về ai. Hai chữ đầu là chỗ đắt nhất của một dòng CV, và "I " không mang
-    bằng chứng nào.
+    A CV does not write "I built X", it writes "Built X": the reader already
+    knows who the whole sheet is about. The first two words are the most
+    expensive place on a CV line, and "I " carries no evidence.
     """
     moi = NGOI_MOT.sub("", text)
     if moi == text:
         return text, ""
     moi = moi[0].upper() + moi[1:]
-    return moi, ("CV lược chủ ngữ — cả tờ giấy đã nói về bạn rồi, nên hai chữ "
-                 "đầu dành cho việc bạn làm, không dành cho đại từ")
+    return moi, ("CVs drop the subject — the whole sheet is already about "
+                 "you, so the first two words go to what you did, not to a "
+                 "pronoun")
 
 
 def _hoa_dau(text: str) -> tuple[str, str]:
-    """Hoa chữ đầu câu.
+    """Capitalise the first letter.
 
-    Câu chữ thường ở đầu là mảnh vụn lúc bóc từ PDF, không phải chủ ý — đo
-    được một câu như vậy trong hồ sơ thật ("the whole pipeline turned into…").
-    Trên CV nó đọc như lỗi chính tả, và người đọc 200 CV một buổi chiều thì
-    một lỗi chính tả là đủ.
+    A lowercase opening is a fragment from PDF extraction, not intent — one
+    such sentence was measured in the real profile ("the whole pipeline
+    turned into…"). On a CV it reads as a typo, and for someone reading 200
+    CVs in an afternoon one typo is enough.
     """
     if not text or not text[0].islower():
         return text, ""
-    return text[0].upper() + text[1:], ("chữ đầu câu bị thường — mảnh vụn lúc "
-                                        "bóc từ PDF, trên CV nó đọc như lỗi")
+    return text[0].upper() + text[1:], ("the first letter was lowercase — a "
+                                        "fragment from PDF extraction; on a "
+                                        "CV it reads as a mistake")
 
 
-# Thứ tự CÓ Ý: lược chủ ngữ trước, hoa đầu sau — bỏ "I" xong thì chữ mới đứng
-# đầu và có thể đang là chữ thường.
+# The order MATTERS: drop the subject first, capitalise second — once "I" is
+# gone a new word leads, and it may be lowercase.
 PHEP = (("chu_ngu", _chu_ngu), ("hoa_dau", _hoa_dau))
 
 
 def sua(text: str, giong: str = "cv") -> tuple[str, list[Sua]]:
-    """Câu sau khi sửa, kèm danh sách phép đã áp.
+    """The reworded sentence, with the list of transforms applied.
 
-    Không phép nào áp được thì trả về đúng câu cũ và danh sách rỗng — người
-    gọi phân biệt "đã sửa" với "không cần sửa" bằng chỗ đó.
+    If no transform applies it returns the original sentence and an empty
+    list — that is how the caller tells "reworded" from "needed no rewording".
 
-    `giong` = "nguyen" thì KHÔNG lược chủ ngữ — Vin muốn giữ đúng giọng mình
-    viết. Rác PDF và chữ đầu câu bị thường vẫn sửa: đó là lỗi bóc tệp, không
-    phải giọng văn, và không ai chọn giữ một lỗi chính tả.
+    `giong` = "nguyen" means DO NOT drop the subject — Vin wants his own
+    voice kept. PDF junk and a lowercase opening are still fixed: those are
+    extraction errors, not voice, and nobody chooses to keep a typo.
     """
-    ra = rules.clean(text)          # rác PDF ở đầu/cuối — luật đã có sẵn
+    ra = rules.clean(text)          # PDF junk at either end — the rule exists
     da: list[Sua] = []
     if ra != text:
         da.append(Sua("rac_pdf", text, ra,
-                      "chữ nút bấm dính vào câu lúc bóc từ PDF"))
+                      "button text glued to the sentence by PDF extraction"))
     for ma, phep in PHEP:
         if ma == "chu_ngu" and giong == "nguyen":
             continue
@@ -114,119 +122,124 @@ def sua(text: str, giong: str = "cv") -> tuple[str, list[Sua]]:
     return ra, da
 
 
-# --- ĐIỂM YẾU: máy CHỈ RA, Vin tự viết ----------------------------------
+# --- WEAKNESSES: the machine POINTS, Vin writes -------------------------
 
-DAI_NHAT = 200          # quá ngần này thì mắt người đọc trượt qua cả dòng
+DAI_NHAT = 200          # past this the reader's eye slides over the whole line
 
 
 @dataclass
 class Yeu:
     ma: str
-    noi: str            # điểm yếu là gì
-    lam_gi: str         # sửa thế nào — phải là việc làm được, không phải lời khuyên
+    noi: str            # what the weakness is
+    lam_gi: str         # how to fix it — has to be an action, not advice
 
 
 def diem_yeu(text: str, tags: list[str], wanted: set[str]) -> list[Yeu]:
-    """Câu này còn hổng chỗ nào. KHÔNG sửa gì — chỉ nói.
+    """What this sentence still lacks. It changes NOTHING — it only says.
 
-    Đây là nửa mà máy không được làm thay. Một câu thiếu số đo thì thứ nó
-    thiếu là MỘT CON SỐ THẬT, và con số đó chỉ Vin biết. Máy bịa vào là đẻ ra
-    câu Vin không đỡ được lúc phỏng vấn — nên máy chỉ trỏ vào chỗ trống.
+    This is the half the machine must not do on Vin's behalf. A sentence
+    missing a measurement is missing A REAL NUMBER, and only Vin knows that
+    number. Inventing one produces a sentence he cannot defend in an
+    interview — so the machine only points at the gap.
     """
     ra: list[Yeu] = []
-    # MỘT CÂU CV LÀ MỘT TRONG HAI THỨ, và chúng đòi hai chuẩn khác nhau:
+    # A CV SENTENCE IS ONE OF TWO THINGS, and they demand different standards:
     #
-    #   KHOE VIỆC  "Built two systems…"  -> phải kèm con số, không thì lời
-    #              khoe không kiểm chứng được
-    #   KIẾN THỨC  "A random train/test split leaks, because…"  -> không có
-    #              số nào để mà thêm, và rules.py nói đây là thứ MẠNH NHẤT
+    #   A CLAIM     "Built two systems…"  -> needs a number, or the claim
+    #               cannot be checked
+    #   KNOWLEDGE   "A random train/test split leaks, because…"  -> there is
+    #               no number to add, and rules.py calls this the STRONGEST
     #
-    # Đo trên hồ sơ thật: 12/16 câu là kiến thức. Đòi số đo ở cả 16 câu thì
-    # 12 dấu là báo động giả — và một dấu mà dòng nào cũng có thì nó không
-    # còn là dấu, nó là nền. Người dùng học được rằng đừng nhìn dấu nữa.
+    # Measured on the real profile: 12 of 16 sentences are knowledge.
+    # Demanding a measurement on all 16 makes 12 of the marks false alarms —
+    # and a mark that appears on every line stops being a mark and becomes
+    # the background. The user learns to stop looking at marks.
     khoe_viec = bool(rules.mo_bang_hanh_dong(text))
     if khoe_viec and not rules.HAS_NUMBER.search(text):
         ra.append(Yeu("khong_so",
-                      "khoe việc nhưng không có số đo",
-                      "thêm một con số thật: bao nhiêu, trên bao nhiêu dữ "
-                      "liệu, đổi được mấy phần trăm"))
-    # "không mở đầu bằng động từ" ĐÃ BỎ khỏi danh sách điểm yếu: câu kiến thức
-    # vốn không mở đầu bằng động từ hành động, nên nó bắt đúng 12/16 câu mạnh
-    # nhất của hồ sơ và gọi chúng là lỗi.
+                      "a claim with no measurement",
+                      "add a real number: how many, over how much data, how "
+                      "many per cent it moved"))
+    # "does not open with a verb" WAS REMOVED from the weakness list: a
+    # knowledge sentence does not open with an action verb, so it flagged
+    # exactly the profile's 12 strongest sentences out of 16 and called them
+    # mistakes.
     if len(text) > DAI_NHAT:
         ra.append(Yeu("qua_dai",
-                      f"dài {len(text)} ký tự",
-                      "tách thành hai câu, hoặc cắt phần bối cảnh và giữ "
-                      "phần bạn làm"))
+                      f"{len(text)} characters long",
+                      "split it in two, or cut the context and keep what you "
+                      "did"))
     if tags and wanted and not (set(tags) & wanted):
         ra.append(Yeu("khong_tra_loi",
-                      "không chạm yêu cầu nào của tin này",
-                      "để dành cho tin khác — hoặc nối nó vào một kỹ năng "
-                      "tin này có đòi"))
+                      "touches none of this posting's requirements",
+                      "save it for another posting — or connect it to a skill "
+                      "this posting does ask for"))
     return ra
 
 
-# --- VẾT: CHỖ NÀO trong câu, không phải CÂU NÀO -------------------------
+# --- SPANS: WHERE in the sentence, not WHICH sentence -------------------
 #
-# Đây là khác biệt giữa "chấm bài" và "liệt kê lỗi". Gạch chân cả dòng thì
-# người đọc vẫn phải tự dò xem chỗ nào hỏng; gạch đúng cụm chữ thì mắt tới
-# thẳng chỗ phải sửa. Grammarly có giá trị chính ở chỗ đó.
+# This is the difference between "marking work" and "listing errors".
+# Underlining the whole line still leaves the reader hunting for the broken
+# part; underlining the exact phrase sends the eye straight to what needs
+# fixing. That is where most of Grammarly's value lives.
 #
-# Không phải điểm yếu nào cũng có đoạn chữ. Thiếu số đo là một chỗ TRỐNG —
-# không gạch được cái không có. Nhưng gạch được chỗ CON SỐ ĐÁNG RA PHẢI NẰM:
-# cụm động từ khoe việc. "Built two systems" gạch chân, chú thích "bao nhiêu
-# cái, trên bao nhiêu dữ liệu" — người đọc biết ngay phải chèn vào đâu.
+# Not every weakness has a span. A missing measurement is an ABSENCE — you
+# cannot underline what is not there. But you can underline WHERE THE NUMBER
+# SHOULD BE: the claim's verb phrase. "Built two systems" underlined, with
+# the note "how many, over how much data" — and the reader knows exactly
+# where to insert it.
 
-# Cụm KHOE VIỆC: từ động từ hành động tới hết mệnh đề đầu. Đây là chỗ con số
-# thuộc về.
+# The CLAIM phrase: from the action verb to the end of the first clause.
+# This is where the number belongs.
 _MENH_DE = re.compile(r"^(.{0,90}?)(?=[,:;]|\s+(?:then|and then|which)\b|$)",
                       re.I | re.S)
 
 
 @dataclass
 class Vet:
-    """Một ĐOẠN CHỮ đáng đánh dấu: [dau, cuoi) trong câu."""
+    """A SPAN worth marking: [start, end) inside the sentence."""
     dau: int
     cuoi: int
     loai: str           # 'thieu_so' | 'qua_dai' | 'lac_de' | 'da_sua'
-    noi: str            # chỗ này sao
-    lam_gi: str         # sửa thế nào
+    noi: str            # what is wrong here
+    lam_gi: str         # how to fix it
 
 
 def vet(text: str, tags: list, wanted: set, da_sua=()) -> list:
-    """Mọi đoạn chữ đáng đánh dấu trong MỘT câu.
+    """Every span worth marking inside ONE sentence.
 
-    Trả về theo thứ tự xuất hiện. Đoạn chồng nhau là chuyện thường (một câu
-    vừa dài vừa thiếu số), người vẽ tự gộp.
+    Returned in order of appearance. Overlapping spans are normal (a sentence
+    can be both too long and missing a number); the renderer merges them.
     """
     ra: list = []
 
-    # 1. MÁY ĐÃ SỬA — đánh dấu chữ đầu, vì đó là chỗ chữ "I" vừa bị cắt.
+    # 1. REWORDED — mark the first word, because that is where "I" was cut.
     if da_sua:
         het = text.find(" ")
         ra.append(Vet(0, het if het > 0 else len(text), "da_sua",
-                      "máy đã sửa chữ ở đây",
+                      "the machine reworded this",
                       " · ".join(x.vi_sao for x in da_sua)))
 
-    # 2. KHOE VIỆC MÀ THIẾU SỐ — gạch đúng cụm động từ, chỗ con số thuộc về.
+    # 2. A CLAIM WITH NO NUMBER — underline the verb phrase, where the number belongs.
     if rules.mo_bang_hanh_dong(text) and not rules.HAS_NUMBER.search(text):
         m = _MENH_DE.match(text)
         if m and m.end() > 3:
             ra.append(Vet(0, m.end(), "thieu_so",
-                          "khoe việc mà không có số đo",
-                          "chèn một con số thật vào đúng đây: bao nhiêu cái, "
-                          "trên bao nhiêu dữ liệu, đổi được mấy phần trăm"))
+                          "a claim with no measurement",
+                          "insert a real number right here: how many, over "
+                          "how much data, how many per cent it moved"))
 
-    # 3. QUÁ DÀI — gạch ĐÚNG PHẦN THỪA, từ chỗ mắt người đọc bắt đầu trượt.
+    # 3. TOO LONG — underline THE EXCESS, from where the eye starts sliding.
     if len(text) > DAI_NHAT:
         ra.append(Vet(DAI_NHAT, len(text), "qua_dai",
-                      f"từ đây là phần thứ {len(text) - DAI_NHAT} ký tự vượt trần",
-                      "cắt phần bối cảnh, giữ phần bạn LÀM — hoặc tách hai câu"))
+                      f"from here is the {len(text) - DAI_NHAT} characters over the limit",
+                      "cut the context and keep what you DID — or split it in two"))
 
-    # 4. KHÔNG CHẠM TIN NÀY — cả câu, vì vấn đề là của cả câu.
+    # 4. TOUCHES NOTHING HERE — the whole sentence, because that is the problem.
     if tags and wanted and not (set(tags) & set(wanted)):
         ra.append(Vet(0, len(text), "lac_de",
-                      "không chạm yêu cầu nào của tin này",
-                      "để dành cho tin khác, hoặc đổi sang câu có trúng"))
+                      "touches none of this posting's requirements",
+                      "save it for another posting, or swap in one that hits"))
     return sorted(ra, key=lambda v: (v.dau, -v.cuoi))
 

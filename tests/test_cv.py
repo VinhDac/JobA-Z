@@ -139,7 +139,7 @@ for _t, _mong in (
     _ra, _da = _rw.sua(_t)
     check(f"lược 'I' -> {_mong[:34]}", _ra == _mong)
 check("và nói rõ vì sao, bằng tiếng người",
-      "lược chủ ngữ" in _rw.sua("I built it and shipped it.")[1][0].vi_sao)
+      "drop the subject" in _rw.sua("I built it and shipped it.")[1][0].vi_sao)
 
 # CHỖ NGUY: trợ động từ. "I was optimising" -> "Was optimising" là sai ngữ pháp.
 # Luật đuôi -ed / bất-quy-tắc tự loại chúng — test để nó không bị nới ra sau này.
@@ -496,7 +496,7 @@ _ts = [x for x in _v if x.loai == "thieu_so"]
 check("khoe việc mà thiếu số -> có vệt", len(_ts) == 1)
 check("vệt dừng ở hết mệnh đề đầu, không nuốt cả câu",
       _ts and _t[_ts[0].dau:_ts[0].cuoi] == "Built two systems in MQL5 and Python")
-check("và nói rõ chèn số vào ĐÂU", _ts and "vào đúng đây" in _ts[0].lam_gi)
+check("và nói rõ chèn số vào ĐÂU", _ts and "right here" in _ts[0].lam_gi)
 check("có số rồi thì KHÔNG gạch",
       not [x for x in _vt3("Built 17 systems in Python.", ["python"], {"python"})
            if x.loai == "thieu_so"])
