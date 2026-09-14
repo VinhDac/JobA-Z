@@ -1,218 +1,248 @@
-# Thiết kế hệ thống
+# System design
 
-> Đọc `strategy.md` trước. File này chỉ nói *làm thế nào*, không nói *vì sao*.
+> Read `strategy.md` first. This file says only *how*, never *why*.
 
 ---
 
-## 1. Nguyên tắc trung tâm — một vòng lặp duy nhất
+## 1. The central principle — one loop and only one
 
-Mọi module đều làm cùng một hình dạng việc:
+Every module does the same shape of work:
 
 ```
-module  ->  đề xuất  ->  hàng đợi  ->  người bấm Yes/No  ->  thực thi  ->  ghi kết quả
+module  ->  proposal  ->  queue  ->  a person clicks Yes/No  ->  execute  ->  record
 ```
 
-Module tìm việc đẻ ra đề xuất. Module CV đẻ ra đề xuất. Module gửi mail đẻ ra đề xuất.
-**Tất cả cùng một kiểu object: `Proposal`.**
+The job-finding module produces proposals. The CV module produces proposals. The
+mail module produces proposals. **All of them the same type of object:
+`Proposal`.**
 
-Hệ quả:
+The consequences:
 
-- Dashboard chỉ cần biết vẽ **một** thứ.
-- Cổng Yes/No chỉ viết **một** lần.
-- Thống kê chỉ đếm **một** kiểu.
-- **Thêm module mới thì phần lõi không phải sửa gì.**
+- The dashboard only has to know how to draw **one** thing.
+- The Yes/No gate is written **once**.
+- The statistics count **one** kind.
+- **Adding a new module changes nothing in the core.**
 
-Đây là lý do kiến trúc này sạch. Nó rút về một vòng lặp.
+This is why the architecture stays clean. It reduces to one loop.
 
-> **Luật:** module không được tự ý gây tác động ra ngoài. Module chỉ được *đề xuất*.
-> Thực thi là việc của lõi, sau khi có Yes.
+> **The law:** a module may not cause an outside effect on its own. A module may
+> only *propose*. Executing is the core's job, after a Yes.
 
-## 2. Trục an toàn — auto vs. Yes/No
+## 2. The safety axis — automatic vs. Yes/No
 
-Không phải module nào cũng bình đẳng. Ranh giới đi theo **tính đảo ngược được**:
+Not every module is equal. The line follows **reversibility**:
 
-| Loại | Module | Vì sao |
+| Kind | Modules | Why |
 |---|---|---|
-| **Chạy tự do 24/7** | store, ingest, dedup, scoring, stats, dashboard | Chỉ đọc và tính. Sai thì xóa, chạy lại. |
-| **Bắt buộc Yes/No** | cv (xuất bản), mail (gửi), outreach (đăng bài, kết nối) | Gửi ra ngoài. Không rút lại được. |
+| **Free to run 24/7** | store, ingest, dedup, scoring, stats, dashboard | They only read and compute. Wrong output can be deleted and recomputed. |
+| **Yes/No required** | cv (publishing), mail (sending), outreach (posting, connecting) | It goes outside. It cannot be taken back. |
 
-Đây không phải tính năng phụ — **nó là trục an toàn của cả hệ thống.**
-Mọi hành động không đảo ngược được đều phải đi qua một lần bấm của người.
+This is not a side feature — **it is the safety axis of the whole system.**
+Every irreversible action passes through one human click.
 
-## 3. Nhịp chạy — 24/7 đặt ở đâu
+## 3. The rhythm — where 24/7 belongs
 
-Chạy chậm nhưng liên tục thì vẫn xong việc. Nhưng đặt sai chỗ thì hỏng:
+Running slowly but continuously still gets the work done. Put it in the wrong
+place, though, and it breaks:
 
-- **24/7 thoải mái:** API job board public, đọc mail, chấm điểm, thống kê, sinh nội dung.
-- **Không 24/7:** site không có API công khai (LinkedIn là ví dụ). Không người thật nào online 3 giờ sáng mỗi đêm, 7 ngày một tuần — *chính nhịp đó là dấu hiệu bị phát hiện*, chậm hay nhanh không cứu được.
+- **Happily 24/7:** public job-board APIs, reading mail, scoring, statistics,
+  producing content.
+- **Not 24/7:** sites with no public API (LinkedIn is the example). No real
+  person is online at 3am every night, seven days a week — *that rhythm is
+  itself the detection signal*, and going slower does not save it.
 
-Cách xử lý: chạy trong vài cửa sổ ngắn giống người, có nghỉ, có ngày trống. Phần nặng vốn không nằm ở đó.
+The handling: run in a few short, human-shaped windows, with breaks and with
+empty days. The heavy work was never there anyway.
 
-### Nguồn dữ liệu — thị trường UK + global
+### The sources — the UK market plus global
 
-Người dùng ở **UK**, nhắm **UK + global**. Đã kiểm chứng thật:
+The user is in the **UK**, aiming at **UK + global**. Verified in practice:
 
-| Nguồn | Cần key | Ghi chú |
+| Source | Key needed | Note |
 |---|---|---|
-| `boards-api.greenhouse.io` | Không | Theo từng công ty. Đã thử: `monzo`, `wise` OK. |
-| `api.lever.co` | Không | Theo từng công ty. |
-| `api.ashbyhq.com` | Không | Theo từng công ty. |
+| `boards-api.greenhouse.io` | No | Per company. Tried: `monzo`, `wise` both fine. |
+| `api.lever.co` | No | Per company. |
+| `api.ashbyhq.com` | No | Per company. |
+| `reed.co.uk/api` | **Yes** (free) | A large UK board. Returns 401 without a key. |
+| `jobs.service.gov.uk` | — | The UK government's board (findAJob moved here). |
 
-**Đã bỏ** (07/09/2026, sau khi đo trên dữ liệu thật):
+**Dropped** (2026-09-07, after measuring on real data):
 
-| Nguồn | Tải về | Dùng được | Vì sao bỏ |
+| Source | Fetched | Usable | Why it was dropped |
 |---|---|---|---|
-| `arbeitnow.com` | 2.506 | **2** | Job board châu Âu — sai thị trường. |
-| `remotive.com` | 18 | **0** | Remote toàn cầu — sai thị trường. |
-| `efinancialcareers` | 66 | 28 | 67% tin là môi giới (LinkedIn 24%). |
+| `arbeitnow.com` | 2,506 | **2** | A European board — the wrong market. |
+| `remotive.com` | 18 | **0** | Global remote — the wrong market. |
+| `efinancialcareers` | 66 | 28 | 67% of its postings are agencies (LinkedIn: 24%). |
 
-Tỉ lệ thấp KHÔNG tự nó là lý do bỏ: greenhouse cũng chỉ 2% vì phải tải trọn
-board rồi mới lọc, nhưng đó là chủ việc TRỰC TIẾP và chỉ tốn HTTP. Bỏ hai
-nguồn trên là vì chúng phục vụ một thị trường khác hẳn.
-| `reed.co.uk/api` | **Có** (miễn phí) | Board lớn ở UK. Trả 401 nếu thiếu key. |
-| `jobs.service.gov.uk` | — | Board của chính phủ UK (findAJob đã chuyển sang đây). |
+A low ratio is NOT on its own a reason to drop a source: greenhouse also yields
+about 2%, because the whole board is fetched before filtering — but those are
+DIRECT employers and it costs nothing but HTTP. The two above were dropped
+because they serve an entirely different market.
 
-Nguồn không có API công khai (LinkedIn, Otta, Indeed): qua extension Chrome, chạy
-trong cửa sổ giống người — không 24/7.
+Sources with no public API (LinkedIn, Otta, Indeed) go through Chrome, running
+in human-shaped windows — never 24/7.
 
-## 4. Kiến trúc dữ liệu
+## 4. The data architecture
 
 ```
-raw_posting   nguyên văn + body gốc     KHÔNG BAO GIỜ sửa
-      ↓  derive()  — một giao dịch, chỉ tính lại cái đã cũ
-posting       chuẩn hoá + phán quyết    tính lại được hoàn toàn từ raw
+raw_posting   verbatim + the original body    NEVER edited
+      ↓  derive()  — one transaction, recomputing only what went stale
+posting       normalised + judged             fully recomputable from raw
 ```
 
-Ba tính chất bắt buộc:
+Three required properties:
 
-**Tính lại được.** `scripts/rebuild.py` dựng lại toàn bộ tầng suy diễn từ raw.
-Không có nó thì một lỗi trong `strip_html` là hỏng vĩnh viễn — mà nó đã sai
-hai lần, và tin LinkedIn hết hạn thì không fetch lại được.
+**Recomputable.** `scripts/rebuild.py` rebuilds the whole derived layer from
+raw. Without it, one bug in `strip_html` is permanent damage — and it has been
+wrong twice, while an expired LinkedIn posting cannot be fetched again.
 
-**Gắn phiên bản.** Mỗi phán quyết ghi rõ sinh ra từ hồ sơ phiên bản nào
-(`judged_profile`) và luật phiên bản nào (`judged_rules`, `scored_rules`).
-Đổi hồ sơ hay sửa `core/versions.py` -> tin cũ tự thành "cần tính lại".
+**Versioned.** Every judgement records which profile version produced it
+(`judged_profile`) and which rule version (`judged_rules`, `scored_rules`).
+Change the profile or edit `core/versions.py` and the old postings mark
+themselves "needs recomputing".
 
-**Một giao dịch.** Lọc + gộp + chấm nằm trong một `derive()`. Web đọc giữa
-chừng thấy trạng thái CŨ trọn vẹn, không thấy trạng thái dở dang.
+**One transaction.** Filtering, grouping and scoring sit inside one `derive()`.
+The web layer reading midway sees the OLD state whole, never a half-finished one.
 
-**Một định nghĩa.** `core/postings.FIELD_MAP` là nơi duy nhất nối kiểu `Posting`
-với cột trong bảng. Có test gãy nếu hai bên lệch nhau.
+**One definition.** `core/postings.FIELD_MAP` is the only place linking the
+`Posting` type to the table's columns. A test breaks if the two drift apart.
 
-**Nguồn hỏng phải trông khác nguồn tốt.** Mỗi lần đọc trả về `Health(attempted,
-failed)`; hỏng quá 30% thì đánh dấu nguồn hỏng kể cả khi vẫn lấy được ít tin.
+**A broken source must look different from a good one.** Every read returns
+`Health(attempted, failed)`; more than 30% failures marks the source broken even
+if a few postings did come back.
 
-## 5. Dữ liệu & cache
+## 5. Data and cache
 
-Bốn tầng, tách bạch, **không trộn**:
+Four layers, kept apart, **never mixed**:
 
-| Tầng | Chứa gì | Xóa được không |
+| Layer | What it holds | Deletable |
 |---|---|---|
-| `raw` | Nguyên văn đã fetch + nguồn + thời điểm | Được — fetch lại |
-| `derived` | Kết quả dedup, điểm số, phân tích | Được — tính lại từ `raw` |
-| `state` | Vòng đời ứng tuyển, quyết định Yes/No | **Không.** Đây là dữ liệu thật. |
-| `audit` | Đã làm gì, lúc nào, kết quả ra sao | **Không.** Đây là nguồn của mọi thống kê. |
+| `raw` | What was fetched, verbatim, plus source and timestamp | Yes — refetch it |
+| `derived` | Dedup results, scores, analysis | Yes — recompute from `raw` |
+| `state` | The application lifecycle, the Yes/No decisions | **No.** This is real data. |
+| `audit` | What was done, when, and how it turned out | **No.** Every statistic comes from here. |
 
-Vì sao cache là bắt buộc, không phải tối ưu:
+Why the cache is required rather than an optimisation:
 
-1. Không fetch lại cùng một tin — nguồn có rate limit.
-2. Không chấm điểm lại cùng một JD — tốn tiền và thời gian.
-3. Dedup cần lịch sử để so.
-4. Tiến trình 24/7 **phải khởi động lại được mà không mất gì**.
+1. Never fetch the same posting twice — the sources rate-limit.
+2. Never score the same JD twice — it costs money and time.
+3. Dedup needs history to compare against.
+4. A 24/7 process **has to be restartable with nothing lost**.
 
-## 6. Ngôn ngữ
+## 6. Language
 
-| Chỗ nào | Ngôn ngữ | Vì sao |
+The whole project is in **English**: the interface, the comments, the docstrings
+and these documents.
+
+The interface was always English — the market is UK/global, and both CVs and JDs
+are written in English. The comments and documents were Vietnamese until v1, and
+were translated in full for the same reason the question was left open here for
+so long: if this repo is ever read as a portfolio, a reader in the UK cannot read
+a Vietnamese comment, and an unreadable explanation is the same as no
+explanation.
+
+## 7. The shape of the app
+
+**A real macOS app, not a browser tab.** The same way Discord, Slack and VS Code
+do it: the content is HTML, but it sits inside a native `NSWindow` +
+`WKWebView`.
+
+One process, three parts:
+
+| Thread | Job | Note |
 |---|---|---|
-| Giao diện app (câu hỏi, nhãn, nút) | **Tiếng Anh** | Thị trường UK/global; CV và JD đều tiếng Anh |
-| Chú thích và docstring trong code | Tiếng Việt | Phần giải thích thiết kế, không phải giao diện |
-| Tài liệu trong `docs/` | Tiếng Việt | Bàn thiết kế |
+| main | The Cocoa event loop and the window | It has to be the main thread |
+| background | The web server | The content for the window, on localhost |
+| background | The scheduler | Scans on a schedule |
 
-> Cần cân nhắc lại nếu repo này thành portfolio: người đọc ở UK sẽ không đọc được
-> chú thích tiếng Việt. Chưa quyết — xem §7.
+The port is **handed out by the operating system**, so it changes from run to
+run; the live address is written to `data/dang-chay.txt` (see
+`core/dia_chi.py`), which is how `start.command` finds a running instance
+instead of booting a second one on top of the same SQLite file.
 
-## 7. Hình dạng app
+`setActivationPolicy(Regular)` -> a Dock icon, and cmd-tab works.
+Confirmed: `lsappinfo` reports `ApplicationType="Foreground"`, and
+`CGWindowListCopyWindowInfo` shows the window `'jobbot' 1180x806 layer=0`
+alongside the status item `'Item-0' layer=25`.
 
-**App macOS thật, không phải tab trình duyệt.** Cùng cách Discord/Slack/VS Code làm:
-nội dung là HTML, nhưng nằm trong `NSWindow` + `WKWebView` native.
+Discord-shaped behaviour: `windowShouldClose:` returns `False` and calls
+`orderOut:` — closing the window hides it and the app keeps running.
+`applicationShouldTerminateAfterLastWindowClosed:` is `False` too. Clicking the
+Dock icon -> `applicationShouldHandleReopen:` brings the window back.
 
-Một tiến trình, ba phần:
+WebKit has no prebuilt bindings in Anaconda's PyObjC, so it is loaded
+dynamically with `objc.loadBundle` -> still nothing extra to install.
 
-| Luồng | Việc | Ghi chú |
+launchd keeps it alive: `KeepAlive={SuccessfulExit: false}` — restart after a
+crash, but stay down after Quit. With `KeepAlive=true`, every Quit would be
+followed by an immediate restart.
+
+## 8. The interface
+
+A **desktop app** layout, not a web page:
+
+- **A fixed left sidebar** (216px) running to the top of the window. Settings
+  sits at its foot.
+- A transparent title bar with the text hidden (`FullSizeContentView`), leaving
+  only the three traffic-light buttons floating on the ground. The CSS reserves
+  `--top`.
+- A **status bar along the bottom of the app** carrying the state that belongs
+  to the whole app, not to one tab — always visible, with no page to open.
+- **Home = the situation**, not a wall of numbers. The order is: *what needs you*
+  -> *what the machine is doing* -> *the numbers* -> *what was done*. Someone
+  opening the app does not ask "how many postings are there", they ask "is there
+  anything for me".
+
+The palette — a committed dark theme, **one tone**, not following the system
+theme:
+
+| Variable | Value | Role |
 |---|---|---|
-| chính | Cocoa event loop + cửa sổ | Bắt buộc phải là luồng chính |
-| nền | Web server | Nội dung cho cửa sổ, ở localhost:8765 |
-| nền | Scheduler | Tự quét mỗi 60 phút |
+| `--bg` | `#0D0D0D` | The MAIN area's ground: black |
+| `--side` | `#1A1A1A` | The chrome: grey, lighter than main |
+| `--panel` | `#212121` | Cards, lifting clear of the main ground |
+| `--ink` | `#D4D4D4` | The main text. Softer than white, less glare |
+| `--acc` | `#55C98D` | A soft green — neither neon nor washed out |
 
-`setActivationPolicy(Regular)` -> có icon Dock, cmd-tab được.
-Xác nhận: `lsappinfo` báo `ApplicationType="Foreground"`, và `CGWindowListCopyWindowInfo`
-thấy cửa sổ `'jobbot' 1180x806 layer=0` cùng status item `'Item-0' layer=25`.
+Every colour is a variable, so changing the tone means editing one `:root`
+block. The Settings panel offers a few accent themes on top of it, and a test
+proves each one still meets the 4.5:1 contrast bar. The native window's
+background is set to match `--bg` so nothing flashes white on open.
 
-Hành vi kiểu Discord: `windowShouldClose:` trả về `False` và `orderOut:` — đóng cửa sổ
-thì ẩn, app chạy tiếp. `applicationShouldTerminateAfterLastWindowClosed:` cũng `False`.
-Bấm icon Dock -> `applicationShouldHandleReopen:` hiện lại cửa sổ.
+## 9. The stack
 
-WebKit không có bindings dựng sẵn trong PyObjC của Anaconda, nên nạp động bằng
-`objc.loadBundle` -> vẫn không phải cài gì thêm.
-
-launchd giữ cho nó sống: `KeepAlive={SuccessfulExit: false}` — crash thì bật lại,
-nhưng bấm Quit thì dừng hẳn. Dùng `KeepAlive=true` là mỗi lần Quit nó lại tự bật.
-
-## 8. Giao diện
-
-Bố cục **app desktop**, không phải trang web:
-
-- **Sidebar trái cố định** (216px), chạy lên tận đỉnh cửa sổ. Chân sidebar hiện
-  trạng thái engine — luôn nhìn thấy, không phải mở trang nào.
-- Thanh tiêu đề trong suốt + ẩn chữ (`FullSizeContentView`), chỉ còn ba nút
-  traffic light nổi trên nền. CSS chừa sẵn `--top: 38px`.
-- **Home = tình hình**, không phải bảng số. Thứ tự: *cần bạn làm gì* -> *máy đang
-  làm gì* -> *con số* -> *đã làm gì*. Người mở app không hỏi "có bao nhiêu tin",
-  họ hỏi "có gì cần tôi không".
-
-Bảng màu — dark theme dứt khoát, **chỉ một tông**, không theo theme hệ thống:
-
-| Biến | Mã | Vai trò |
-|---|---|---|
-| `--bg` | `#191B1C` | Nền ghi đậm. Không dùng đen tuyệt đối — tương phản quá gắt, mỏi mắt khi nhìn lâu |
-| `--panel` | `#212426` | Thẻ |
-| `--ink` | `#DDE1DF` | Chữ chính. Không trắng tinh |
-| `--acc` | `#55C98D` | Xanh lá dịu — không neon, cũng không xám nhờ |
-
-Toàn bộ CSS chạy bằng biến, nên đổi tông là sửa đúng khối `:root`.
-Nền cửa sổ native đặt khớp `--bg` để không nháy trắng lúc mở.
-
-## 9. Stack
-
-| Chọn | Vì sao |
+| Choice | Why |
 |---|---|
-| Python | Việc chính là parse, chấm điểm, gọi API |
-| SQLite | Một file. Không cần server. Restart không mất. Một người dùng thì thừa sức. |
-| Web dashboard nhỏ | Xem live, bấm Yes/No |
+| Python | The real work is parsing, scoring and calling APIs |
+| SQLite | One file. No server. Nothing lost on restart. Far more than enough for one user. |
+| A small web dashboard | Watch it live, click Yes/No |
 
-**Không dùng:** Docker, Postgres, message queue, microservice.
-Thêm vào chỉ tốn công bảo trì, không giải quyết gì ở quy mô một người.
+**Not used:** Docker, Postgres, a message queue, microservices.
+Adding any of them costs maintenance and solves nothing at the scale of one
+person.
 
-## 10. Quyết định đã chốt
+## 10. Decisions settled
 
-- [x] Một vòng lặp `Proposal` duy nhất cho mọi module
-- [x] Mọi hành động không đảo ngược được đều qua cổng Yes/No
-- [x] Python + SQLite + dashboard nhỏ
-- [x] Không lấy LinkedIn làm trung tâm — nó chỉ là một nguồn trong nhiều nguồn
-- [x] Làm đến đâu test được đến đấy (xem `roadmap.md`)
+- [x] One `Proposal` loop for every module
+- [x] Every irreversible action passes the Yes/No gate
+- [x] Python + SQLite + a small dashboard
+- [x] LinkedIn is not the centre — it is one source among several
+- [x] Nothing is built without a test to match (see `roadmap.md`)
+- [x] The whole project is written in English (see §6)
 
-## 11. Đã bỏ (có lý do)
+## 11. Dropped, with a reason
 
-**Đối chiếu sponsor register gov.uk** — Vin đang có Graduate visa nên không cần lọc
-theo công ty được phép bảo lãnh. Bỏ khỏi bước 1.
+**Checking the gov.uk sponsor register** — the user is on a Graduate visa, so
+there is no need to filter by which companies may sponsor. Dropped from step 1.
 
-Dữ liệu vẫn có sẵn nếu cần bật lại: `gov.uk/government/publications/register-of-licensed-sponsors-workers`,
-CSV 143.082 tổ chức, cập nhật hàng ngày. Đáng bật lại khi Graduate visa còn ~9 tháng —
-lúc đó công ty không bảo lãnh được là công ty không giữ được Vin.
+The data is still there if it has to come back:
+`gov.uk/government/publications/register-of-licensed-sponsors-workers`, a CSV of
+143,082 organisations, updated daily. Worth switching back on when the Graduate
+visa has about 9 months left — at that point a company that cannot sponsor is a
+company that cannot keep them.
 
-## 12. Chưa quyết
+## 12. Still open
 
-- [ ] Engine chấm điểm: keyword/BM25 thuần, embedding, hay LLM — quyết sau khi có dữ liệu thật ở M5
-- [ ] Framework dashboard cụ thể
-- [ ] Gửi mail qua đâu
-- [ ] Có dịch chú thích code sang tiếng Anh không (cần nếu repo thành portfolio — xem §5)
+- [ ] The scoring engine: pure keyword/BM25, embeddings, or something else —
+      decided once there is real data at M5. Not an LLM: founding law 1.
+- [ ] Which route mail goes out by

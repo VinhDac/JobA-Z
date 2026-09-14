@@ -1,329 +1,315 @@
-# Roadmap — 6 bước, theo đúng đề bài
+# Roadmap — 6 steps, following the brief exactly
 
-Đề bài Vin giao:
+The brief:
 
 ```
-24/7  tìm việc khớp
-      -> sửa CV bám sát yêu cầu từng JD
-      -> dựng personal project chứng minh độ khớp
-      -> gửi đi (autoclick qua Chrome)
-      -> theo dõi: đã gửi gì, cho ai, bao giờ
-      -> nhắc kiểm tra hộp thư
+24/7  find matching jobs
+      -> tailor the CV to each JD's wording
+      -> build a personal project proving the match
+      -> send it (auto-clicking through Chrome)
+      -> track: what went out, to whom, when
+      -> remind me to check the mailbox
 ```
 
-Không cần nhanh. Cần **thay được người**. Phải có cache vì việc kéo dài nhiều tuần.
+It does not need to be fast. It needs to **replace a person**. It has to cache,
+because the work runs over weeks.
 
-**Luật:** không sang bước sau khi bước trước chưa đạt "Xong khi".
-"Xong khi" phải nhìn thấy được hoặc chạy được — không phải "đã viết code".
+**The law:** do not move to the next step until the previous one meets its "Done
+when". A "Done when" has to be visible or runnable — never "the code is written".
 
-Trạng thái: ` ` chưa làm · `~` đang làm · `x` xong
+Status: ` ` not started · `~` in progress · `x` done
 
 ---
 
-## Đã xong
+## Done first
 
-| | Việc | Kết quả |
+| | Work | Result |
 |---|---|---|
-|x| **Hồ sơ người dùng** | 5 phần · 35 câu · lưu SQLite có phiên bản · hồ sơ Vin đã nạp |
-|x| **Giao diện đầy đủ** | 8 trang bấm được, dữ liệu giả trong `dashboard/mock.py` |
+|x| **The user profile** | 5 sections · 35 questions · stored in SQLite with versions |
+|x| **The whole interface** | every page clickable, against mock data |
 
-`mock.py` là **bản hợp đồng**: nối backend = thay ruột hàm, giữ nguyên hình dạng trả về.
-Trang không phải sửa dòng nào.
+The mock layer was **the contract**: connecting the backend meant replacing a
+function's insides while keeping the shape of what it returned. No page had to
+change a line. It has since been removed — every page now reads real data.
 
 ---
 
-## Bước 1 — TÌM   *(xong)*
+## Step 1 — FIND   *(done)*
 
-Kéo tin thật về, gộp trùng, lưu cache.
+Pull real postings in, group the duplicates, cache everything.
 
-| | Việc | Thư mục |
+| | Work | Directory |
 |---|---|---|
-|x| Store + cache 4 tầng: raw / posting / source_run / audit | `core/` |
-|x| Arbeitnow · Remotive · Greenhouse ×14 · Lever ×3 · Ashby ×4 | `ingest/` |
-|x| Lọc theo hồ sơ, LUÔN ghi lý do bỏ | `ingest/filter.py` |
-|x| Gộp trùng theo vân tay công ty + chức danh | `dedup/group.py` |
-|x| Nối `/` và `/jobs` vào dữ liệu thật | `dashboard/live.py` |
-|x| **Chrome tự lái** — client WebSocket + CDP tự viết | `browser/` |
-|x| **eFinancialCareers** — board tài chính lớn nhất London | `ingest/web/` |
-| | Bright Network · Milkround · Prospects | `ingest/web/` |
+|x| Store + a 4-layer cache: raw / posting / source_run / audit | `core/` |
+|x| Greenhouse ×14 · Lever ×3 · Ashby ×4 | `ingest/` |
+|x| Filter by the profile, ALWAYS recording why something was dropped | `ingest/filter.py` |
+|x| Group duplicates by a company + title fingerprint | `dedup/group.py` |
+|x| Wire the pages to real data | `dashboard/live.py` |
+|x| **Chrome, driven** — a hand-written WebSocket + CDP client | `browser/` |
+|x| **eFinancialCareers** — London's largest finance board | `ingest/web/` |
 
-**Kết quả lần chạy 04/09/2026:**
+**The run on 2026-09-04:**
 
 ```
-2.910 tin thật  ->  lọc còn 24  ->  gộp thành 20 việc duy nhất
+2,910 real postings  ->  filtered to 24  ->  grouped into 20 unique jobs
 ```
 
-Trong đó có: Jane Street Quantitative Researcher · Point72 Academy 2026 Investment
-Analyst Program · Zopa 2027 Graduate Analyst · Man Group Quantitative Developer AHL ·
-Squarepoint Junior Credit Research Analyst · GSA · Winton · Quadrature · IMC.
-Tất cả ở London, tất cả đúng dải graduate/junior.
+Among them: Jane Street Quantitative Researcher · Point72 Academy 2026
+Investment Analyst Program · Zopa 2027 Graduate Analyst · Man Group Quantitative
+Developer AHL · Squarepoint Junior Credit Research Analyst · GSA · Winton ·
+Quadrature · IMC. All in London, all in the graduate/junior band.
 
-### Chrome — bổ sung sau khi rõ định hướng
+### Chrome — added once the direction was clear
 
-Nút thắt nằm ở phía nhà tuyển dụng: họ mất **một tuần** mới trả lời. Máy nhanh
-gấp trăm lần cũng không rút ngắn được ngày nào. Nên ngân sách đúng cho mỗi tin
-là **hàng giờ máy chạy**, không phải vài giây — và điều đó mở ra việc đọc kỹ.
+The bottleneck is on the employer's side: they take **a week** to reply. A
+machine a hundred times faster shortens that by not one day. So the right budget
+per posting is **hours of machine time**, not seconds — and that is what makes
+deep reading possible.
 
 | | |
 |---|---|
-| `browser/ws.py` | Client WebSocket ~120 dòng, thư viện chuẩn. Không cài gì |
-| `browser/chrome.py` | Chrome RIÊNG, profile riêng, cổng 9333 |
-| `browser/cdp.py` | Mở trang, chờ, chạy JS, cuộn, bấm |
-| `ingest/web/` | Một file một trang, trả về đúng kiểu `Posting` |
+| `browser/ws.py` | A WebSocket client, ~120 lines, standard library. Nothing installed |
+| `browser/chrome.py` | ITS OWN Chrome, its own profile, on port 9333 |
+| `browser/cdp.py` | Open a page, wait, run JS, scroll, click |
+| `ingest/web/` | One file per site, each returning the same `Posting` type |
 
-**Headed, không headless.** Headless bị Cloudflare chặn (`Just a moment…`, `403`).
-Chrome thường thì vào bình thường — đây là dùng trình duyệt thật, không phải kỹ
-thuật né tránh.
+**Headed, not headless.** Headless is blocked by Cloudflare (`Just a moment…`,
+`403`). An ordinary Chrome gets in normally — this is using a real browser, not
+an evasion technique.
 
-**Hai luật an toàn, có test chặn:**
+**Two safety laws, each with a test behind it:**
 
-1. Hộp cookie: **luôn bấm Reject, không bao giờ Accept.** Hệ thống không có quyền
-   đồng ý điều khoản thay người dùng.
-2. Trang nào trả về thử thách chống bot thì **ghi nhận rồi bỏ qua** — trang đó
-   đang nói không với máy, không cãi lại.
+1. Cookie banners: **always press Reject, never Accept.** The system has no
+   authority to agree to terms on the user's behalf.
+2. A page returning a bot challenge is **recorded and skipped** — that page is
+   saying no to a machine, and the answer is not to argue.
 
-### Đi thẳng nhà tuyển dụng, bỏ trung gian
+### Straight to the employer, past the middleman
 
-Board trung gian có vấn đề: **19/28 tin lấy từ eFinancialCareers là của công ty
-môi giới**, không phải chủ việc. Họ viết lại JD, giấu tên công ty thật, và nộp
-qua đó là hồ sơ đi thêm một tầng lọc nữa.
+Middleman boards have a problem: **19 of the 28 postings taken from
+eFinancialCareers belonged to agencies**, not employers. They rewrite the JD,
+hide the real company name, and applying through them puts the application
+through one more filter.
 
 | | |
 |---|---|
-| `ingest/web/agency.py` | Nhận diện tin môi giới — tên hãng + chữ trong JD |
-| `ingest/web/careers.py` | Dò trang tuyển dụng của công ty, xác minh đúng chủ |
-| `ingest/web/companies.py` | Bảng công ty mục tiêu, **tự lớn lên** |
-| `config/companies.toml` | 55 công ty hạt giống: quỹ, quản lý tài sản, fintech UK |
+| `ingest/web/agency.py` | Recognising an agency posting — the firm's name plus the JD's wording |
+| `ingest/web/careers.py` | Finding a company's careers page and verifying it is the real employer |
+| `ingest/web/companies.py` | The target-company table, which **grows by itself** |
+| `config/companies.toml` | 55 seed companies: funds, asset managers, UK fintech |
 
-**Tự mở rộng:** mỗi lần quét, chủ việc thật thấy trong tin được thêm vào bảng và
-tự dò ATS. `boards.toml` gõ tay giờ chỉ còn là hạt giống.
+**Self-expanding:** on every scan, the real employers seen in postings are added
+to the table and their ATS is worked out. The hand-typed `boards.toml` is now
+only a seed.
 
-**Kết quả:** 24/65 công ty dò ra ATS — thêm Qube Research (197 tin), Ebury (173),
-Jump Trading (109), Schonfeld (67), Thought Machine (41), Quantexa (30).
+**Result:** 24 of 65 companies resolved to an ATS — adding Qube Research (197
+postings), Ebury (173), Jump Trading (109), Schonfeld (67), Thought Machine
+(41), Quantexa (30).
 
 ```
-việc khớp   20  →  68        (49 trực tiếp · 19 qua môi giới)
+matching jobs   20  ->  68        (49 direct · 19 through an agency)
 ```
 
-**Hai lỗi thật đã sửa:**
+**Two real bugs fixed:**
 
-1. `norm_company` cắt cả `"Group"`, `"Capital"` — đúng khi so khớp tên nhưng sai
-   khi đoán slug. *"Man Group"* thành `man`, mất `mangroup`.
-2. Đoán slug bắt nhầm board công ty khác: *"London Stock Exchange Group"* → slug
-   `london`. Giờ xác minh bằng tên công ty mà board tự khai.
+1. `norm_company` stripped `"Group"` and `"Capital"` too — right for matching a
+   name, wrong for guessing a slug. *"Man Group"* became `man`, losing
+   `mangroup`.
+2. Slug guessing caught another company's board: *"London Stock Exchange Group"*
+   -> slug `london`. It now verifies against the company name the board declares
+   for itself.
 
-**Kết quả trước đó:** eFinancialCareers cho **66 tin**, việc khớp từ 20 lên **48**.
-Vòng đọc kỹ mở từng tin lấy mô tả đầy đủ: 66 tin trong **144 giây**.
+**The earlier result:** eFinancialCareers gave **66 postings**, taking matching
+jobs from 20 to **48**. The deep-read pass opens each posting for the full
+description: 66 postings in **144 seconds**.
 
-Top bảng giờ có cả nguồn mới: *Eka Finance — Junior Quantitative Researcher* **100 điểm**.
+The top of the table then included a posting from the new source: *Eka Finance —
+Junior Quantitative Researcher*, **100 points**.
 
-**Lỗi thật đã sửa:** cache chặn luôn cả việc **bổ sung**. Vòng quét nhanh ghi tin
-không mô tả, vòng đọc kỹ lấy được mô tả nhưng `INSERT OR IGNORE` bỏ qua nên không
-ghi vào đâu được. Giờ: đã có mà đang thiếu mô tả thì cập nhật, và không bao giờ
-đè mô tả dài bằng mô tả ngắn.
+**A real bug fixed:** the cache blocked **enrichment** as well. The fast pass
+wrote postings with no description, the deep-read pass fetched the description,
+and `INSERT OR IGNORE` dropped it so it had nowhere to go. Now: an existing row
+missing its description is updated, and a long description is never overwritten
+by a short one.
 
-Test: 24/24 (`test_ingest`) + 28/28 (`test_browser`).
+Tests: 24/24 (`test_ingest`) + 28/28 (`test_browser`).
 
-**Ba lỗi thật đã sửa trong lúc làm:**
+**Three real bugs fixed along the way:**
 
-1. `"analyst"` từng nằm trong `JUNIOR_WORDS` -> mọi tin *"Senior ... Analyst"* lọt qua
-   bộ lọc cấp bậc. Trong tài chính "Analyst" là chức danh ở MỌI cấp.
-2. Greenhouse: dùng `first_published` -> Jane Street hiện "2228 ngày trước" vì tin để mở
-   từ 2020. Đổi sang `updated_at`.
-3. Arbeitnow trả ngày kiểu Unix timestamp, không phải ISO -> mọi tin mất ngày.
+1. `"analyst"` was in `JUNIOR_WORDS` -> every *"Senior … Analyst"* posting slipped
+   through the seniority filter. In finance, "Analyst" is a title at EVERY level.
+2. Greenhouse: using `first_published` showed Jane Street as "2228 days ago",
+   because the posting had been open since 2020. Switched to `updated_at`.
+3. Arbeitnow returned dates as Unix timestamps, not ISO -> every posting lost its
+   date.
 
-**Đã bỏ:** đối chiếu sponsor register — Vin đang có Graduate visa (design.md §8).
+**Dropped:** checking the sponsor register — the user is on a Graduate visa
+(design.md §11).
 
-**Board rỗng đã loại:** `marshallwace`, `optiver` trả 200 nhưng 0 tin.
+**Empty boards removed:** `marshallwace`, `optiver` return 200 with 0 postings.
 
-## Bước 2 — CHẤM   *(xong)*
+## Step 2 — SCORE   *(done)*
 
-Chấm điểm khớp, và **giải thích được vì sao**.
+Score the match, and **be able to explain why**.
 
-| | Việc | Thư mục |
+| | Work | Directory |
 |---|---|---|
-|x| Tách yêu cầu khỏi JD — theo tiêu đề phần + gạch đầu dòng | `scoring/extract.py` |
-|x| Vòng dự phòng cho JD viết văn xuôi, loại câu phúc lợi | `scoring/extract.py` |
-|x| Đối chiếu từng yêu cầu, kèm bằng chứng trích từ hồ sơ | `scoring/score.py` |
-|x| Phân biệt bằng chứng MẠNH (CV, học vấn) và YẾU (từ khoá) | `scoring/score.py` |
-|x| Điểm 100 chia 4 phần, giải thích được từng phần | `scoring/score.py` |
-|x| Lọc + sắp theo điểm trên giao diện | `dashboard/` |
+|x| Pull the requirements out of the JD — by section heading and bullet | `scoring/extract.py` |
+|x| A fallback pass for prose JDs, dropping benefits sentences | `scoring/extract.py` |
+|x| Check each requirement, with the evidence quoted from the profile | `scoring/score.py` |
+|x| Tell STRONG evidence (CV, education) from WEAK (a keyword) | `scoring/score.py` |
+|x| 100 points in 4 parts, each part explicable | `scoring/score.py` |
+|x| Filter and sort by score in the interface | `dashboard/` |
 
-**Thang điểm:** 55 yêu cầu bắt buộc · 15 điểm cộng · 20 đúng cấp bậc · 10 chức danh.
+**The scale:** 55 for the must-have requirements · 15 for the nice-to-haves · 20
+for the right seniority · 10 for the title.
 
-**Không bịa:** yêu cầu không nhận ra được KHÔNG tính vào mẫu số. JD không đọc
-được yêu cầu thì `score = NULL` và nói thẳng *"can't read requirements"*.
+**Nothing invented:** a requirement that could not be recognised does NOT go into
+the denominator. If a JD's requirements cannot be read at all, `score = NULL` and
+it says outright *"can't read requirements"*.
 
-Chạy 24 tin trong **12ms**, không gọi LLM lần nào. Test: 31/31 qua.
+24 postings scored in **12ms**, with no LLM call. Tests: 31/31.
 
-**Ba lỗi thật đã sửa:**
+**Three real bugs fixed:**
 
-1. `strip_html` bỏ thẻ TRƯỚC rồi mới giải mã `&lt;` -> thẻ mã hoá biến thành thẻ
-   thật sau khi đã bỏ xong. **1.522 tin dính HTML nguyên trong mô tả.**
-2. Lấy bằng cấp CAO NHẤT được nhắc rồi đòi đúng cái đó -> dòng *"Undergraduate,
-   MS, or PhD"* bị chấm trượt dù có MSc. JD viết "hoặc" thì phải là hoặc.
-3. `"ba"` và `"ms"` so kiểu chuỗi con -> `"database"` thành bằng BA, `"systems"`
-   thành bằng MS. Đổi sang so theo ranh giới từ.
+1. `strip_html` removed tags BEFORE decoding `&lt;` -> an encoded tag became a
+   real tag after the removal had finished. **1,522 postings carried raw HTML in
+   their description.**
+2. It took the HIGHEST degree mentioned and then demanded exactly that -> a line
+   reading *"Undergraduate, MS, or PhD"* was scored as a miss despite an MSc. If
+   the JD writes "or", it has to mean or.
+3. `"ba"` and `"ms"` were compared as substrings -> `"database"` became a BA and
+   `"systems"` an MS. Switched to word-boundary matching.
 
-**Còn thiếu:** CV đầy đủ của Vin. Hiện nhiều bằng chứng phải dựa vào *từ khoá tìm
-kiếm* thay vì CV — hệ thống có đánh dấu chỗ nào yếu, nhưng điền CV vào là chắc hẳn.
+## Step 3 — TAILOR THE CV   *(done)*
 
-## Bước 3 — SỬA CV   *(xong)*
+|x| Split the CV into blocks (roles, projects, education, skills) | `cv/blocks.py` |
+|x| The CV writing rules, drawn from a real CV that was being rejected | `cv/rules.py` |
+|x| Choose and order sentences per JD | `cv/build.py` |
+|x| The `/jobs/<id>/cv` page with its audit section | `cv/report.py` |
 
-|x| Tách CV thành khối rời (vai trò, project, học vấn, kỹ năng) | `cv/blocks.py` |
-|x| Bộ luật viết CV, rút từ CV thật đang bị từ chối | `cv/rules.py` |
-|x| Chọn + sắp câu theo từng JD | `cv/build.py` |
-|x| Trang `/jobs/<id>/cv` kèm phần kiểm chứng | `cv/render.py` |
+**The mechanism: CHOOSE and ORDER, never write.** Every sentence on a generated
+CV is a sentence the user wrote. The system only decides which go on, in what
+order, and which are dropped — and it always shows the reason for a drop.
 
-**Cơ chế: CHỌN và SẮP XẾP, không viết mới.** Mọi câu trên CV sinh ra đều là câu
-Vin đã viết. Hệ thống chỉ quyết định câu nào lên, thứ tự nào, bỏ câu nào — và
-luôn hiện lý do bỏ.
+**The rules (applied to every JD, not hand-fixed once):**
 
-**Bộ luật (áp cho mọi JD, không phải sửa tay một lần):**
-
-| Luật | Vì sao |
+| Rule | Why |
 |---|---|
-| Gạch đầu dòng, không đoạn văn | Vòng quét 6 giây phải có chỗ đậu mắt |
-| Câu trúng thứ JD đòi lên trước | Bước 2 đã tách sẵn yêu cầu |
-| **Bỏ thất bại về KẾT QUẢ** | Người đọc 200 CV chỉ nhớ câu tệ nhất |
-| **GIỮ kiến thức kỹ thuật** | Đây mới là thứ tách khỏi 40 người cùng khớp |
-| Bỏ ý kiến, giữ bằng chứng | *"Profit means nothing"* không chứng minh gì |
-| Bỏ nhóm Compute và Method | Dạy người đọc kiến thức cơ bản = tín hiệu non tay |
-| Câu nhạy cảm mà có số -> ĐÁNH DẤU, không vứt | Vứt cả câu thì mất luôn con số |
+| Bullets, not paragraphs | A 6-second scan needs somewhere for the eye to land |
+| The sentences hitting what the JD asks for come first | Step 2 already extracted the requirements |
+| **Drop a failure of OUTCOME** | Someone reading 200 CVs remembers only the worst sentence |
+| **KEEP technical knowledge** | That is what separates you from the 40 others who also match |
+| Drop opinion, keep evidence | *"Profit means nothing"* proves nothing |
+| Drop the Compute and Method groups | Teaching the reader the basics reads as inexperience |
+| A sensitive sentence carrying a number -> MARK it, do not throw it away | Throwing the sentence away throws the number away too |
 
-**Phân biệt quan trọng nhất:**
-
-```
-"A random train/test split leaks"      -> KIẾN THỨC   -> giữ
-"Live drawdown ran 30% deeper"          -> KẾT QUẢ HỎNG -> chuyển sang trang project
-```
-
-Bản đầu tôi bắt cả chữ `leaks` nên bỏ mất phần chuyên môn giá trị nhất. Đã sửa,
-có test chặn tái phát.
-
-**Chạy trên tin thật:**
+**The most important distinction:**
 
 ```
-Point72 Quant Researcher Intern   thiếu: — (danh sách "hoặc" đã đủ)
-IMC Quant Researcher Equities     thiếu: derivatives, equities
-Jane Street Quant Researcher      thiếu: market data
+"A random train/test split leaks"      -> KNOWLEDGE       -> keep
+"Live drawdown ran 30% deeper"          -> A FAILED OUTCOME -> belongs on the project page
 ```
 
-Test: 28/28 qua. Không gọi LLM lần nào.
+The first version caught the word `leaks` as well, and so dropped the most
+valuable technical content there was. Fixed, with a test against a relapse.
 
-**Chưa làm:** xuất PDF/DOCX. Hiện xem trên web, copy ra được.
-
-## Bước 4 — PROJECT   *(xong — bảy chặng)*
-
-**Sửa lại theo đúng ý Vin:** không dùng project cũ. Chúng quá lớn, chi phí đọc cao,
-người tuyển không bước vào. Hệ thống phải ĐỀ XUẤT bài nhỏ mới.
+**Run against real postings:**
 
 ```
-0 NHẮM         nhóm JD -> cần chứng minh cái gì          projects/cluster.py
-1 NGHIÊN CỨU   đọc kỹ toàn bộ JD, lọc câu khuôn mẫu      projects/research.py
-2 SINH         LLM đề xuất 4 phương án, không phải 1     core/llm.py
-3 KIỂM CỨNG    8 luật, trượt là loại                     projects/brief.py
-4 KIỂM DỮ LIỆU tải thật, nhìn BÊN TRONG                  projects/feasible.py
-5 XẾP HẠNG     6 chiều                                   projects/rank.py
-6 CHỌN         lấy đầu bảng, giữ cái bị loại kèm lý do   projects/pipeline.py
+Point72 Quant Researcher Intern   missing: — (the "or" list is satisfied)
+IMC Quant Researcher Equities     missing: derivatives, equities
+Jane Street Quant Researcher      missing: market data
 ```
 
-**Chặng 4 là chỗ phân biệt đề bài THẬT với đề bài NGHE HỢP LÝ.** `URL trả 200`
-là hàng rào yếu. Hàng rào mạnh là tải vài KB đầu rồi nhìn vào: có cột ngày thật
-không, có cột giá không, bao nhiêu dòng, có phải bảng tra cứu không.
+Tests: 28/28. No LLM call anywhere.
 
-Bắt được lỗi ngay trong đề bài tôi tự sinh ra: dataset S&P 500 constituents trả
-200, qua hết 8 luật cứng — nhưng là **bảng tra cứu 399 dòng không có giá**, không
-backtest được gì. Bốn lý do từ chối cụ thể, trong đó có
-*"cột 'Date added' là siêu dữ liệu, không phải trục thời gian"*.
+**Since then:** the CV tab also measures THE GAP — what to write tonight that
+would unlock the most postings — and prints to PDF through an inspection gate
+that looks at the page about to print.
 
-**Chặng 5, sáu chiều:** phủ · **bác bỏ được** · cụ thể · dữ liệu sẵn · gọn · mới.
+## Step 4 — PERSONAL PROJECTS   *(built, then removed)*
 
-Chiều *bác bỏ được* quan trọng nhất: câu hỏi phải có thể ra kết quả NGƯỢC. Đề bài
-chỉ có thể xác nhận thì không phải nghiên cứu, là quảng cáo.
+This step was built in full — a seven-stage pipeline that clustered JDs, read
+them closely, had an LLM propose four briefs, put them through 8 hard rules,
+downloaded the candidate datasets and looked INSIDE them, ranked on 6 dimensions
+and picked the winner.
 
-Test: 65/65 (`test_brief`).
+**It was then removed entirely**, along with `core/llm.py`, when founding law 1
+(no LLM anywhere) was settled. Nothing in `src/` references it now, and the
+routes it left behind return 404 — with a test proving it.
 
-|x| Gom JD thành nhóm bằng greedy set cover | `projects/cluster.py` |
-|x| Đối chiếu project đã có với từng nhóm, chỉ ra chỗ trống | `projects/cluster.py` |
-|x| Dựng trang kết quả 5 phần cho từng JD | `projects/page.py` |
-|x| Báo trang còn thiếu gì (số đo, đánh đổi, link code) | `projects/page.py` |
+What the work taught, and what was kept:
 
-**Vòng lặp khép ở đây.** Những câu `cv/rules.py` CẮT khỏi CV — tự phê bình, kể thất
-bại — chính là nguyên liệu cho phần *"What I gave up, and got wrong"*. Không mất gì,
-chỉ đổi tầng:
-
-```
-CV        -> bỏ chỗ làm sai   -> qua vòng lọc
-Trang này -> chỗ làm sai là điểm mạnh nhất -> được gọi phỏng vấn
-```
-
-Có test chặn: mọi câu bị CV cắt phải rơi đúng vào phần Đánh đổi.
-
-**Gom nhóm dùng greedy set cover, KHÔNG dùng k-means** — vì nó giải thích được:
-*"nhóm này tồn tại vì 10 tin cùng đòi alpha research"*.
-
-**Kết quả trên 24 tin thật:**
+- **Checking a URL returns 200 is a weak gate.** The strong gate is downloading a
+  few KB and looking inside: is there a real date column, a price column, how
+  many rows, is it merely a lookup table. That gate caught a brief the pipeline
+  itself had produced: an S&P 500 constituents dataset that returned 200 and
+  passed all 8 hard rules — but was a **399-row lookup table with no prices**,
+  which can backtest nothing.
+- **A question has to be refutable.** A brief that can only ever confirm itself
+  is not research, it is advertising.
+- **The loop closes here.** The sentences `cv/rules.py` CUTS from the CV — the
+  self-criticism, the failures — are exactly the material for a project page's
+  *"What I gave up, and got wrong"*. Nothing is lost, it only changes layer:
 
 ```
-python + alpha research + statistics    10 tin   ✓ Quant Trading Studio
-python + machine learning + statistics   6 tin   ✓ Quant Trading Studio
-python + rust                            2 tin   ⚠ chưa project nào trả lời
-portfolio + statistics                   2 tin   ✓ Quant Trading Studio
+The CV         -> drop where it went wrong     -> pass the filter
+A project page -> where it went wrong is the strongest part -> get the interview
 ```
 
-**Hai lỗi thật đã sửa:**
+The CV layer still cuts those sentences and still says why, so the material is
+still there for a page written by hand.
 
-1. Greedy set cover lấy kỹ năng phổ biến nhất làm khoá -> `python` có ở 19/24 tin
-   nên nuốt gọn tất cả vào một nhóm. Bỏ kỹ năng xuất hiện >60% khỏi danh sách khoá.
-2. Từ vựng thiếu hẳn nhóm **validation** (`out-of-sample`, `look-ahead bias`,
-   `data leakage`, `overfitting`) và `efficient frontier`, `sharpe`, `drawdown` —
-   đúng phần chuyên môn phân biệt người biết việc với người mới học. Thêm rồi thì
-   project mới khớp được với nhóm.
+## Step 5 — APPLY   *(done)*
 
-Test: 21/21 qua.
-
-## Bước 5 — GỬI
-
-Duyệt theo lô, rồi máy tự gửi.
-
-| | Việc | Thư mục |
+| | Work | Directory |
 |---|---|---|
-| | Hàng đợi Yes/No chạy thật | `core/` |
-| | Điều khiển Chrome, điền form, bấm gửi | `browser/` |
-| | Chống gửi trùng — cùng công ty, cùng vị trí | `core/` |
-| | Nhật ký: gửi gì, cho ai, lúc nào, kết quả ra sao | `core/` |
+|x| Open the posting, fill in the form's boring fields | `apply/` |
+|x| **The machine never presses Send** — the last click is the user's | `apply/send.py` |
+|x| Answers come only from the profile, never guessed | `apply/answer.py` |
+|x| No duplicate applications — same company, same role | `track/board.py` |
+|x| The journal: what went out, to whom, when, and how it turned out | `core/journal.py` |
 
-**Xong khi:** bấm duyệt một lô → **một đơn thật được gửi thành công**, có ghi nhật ký.
+**Done when:** a real application goes out and a row appears in the table, with a
+journal entry. Met.
 
-**Cần chuẩn bị:** một profile Chrome riêng, đăng nhập một lần.
+`work_auth`, sponsorship, demographic questions, GPA and graduation dates are
+never guessed — the machine leaves them for the user, by design.
 
-## Bước 6 — THEO DÕI + NHẮC
+## Step 6 — TRACK + REMIND   *(done)*
 
-| | Việc | Thư mục |
+| | Work | Directory |
 |---|---|---|
-| | State machine vòng đời ứng tuyển | `core/` |
-| | Đọc hộp thư, khớp thư trả lời về đúng đơn | `mail/` |
-| | Nhắc kiểm tra thư · nhắc follow-up khi im lặng quá lâu | `notify/` |
-| | Thống kê: tỉ lệ phản hồi theo nguồn, theo điểm | `stats/` |
+|x| The application lifecycle | `track/board.py` |
+|x| Read the mailbox and match replies back to the right application | `track/mail.py` · `track/scan.py` |
+|x| The silence mark: past N days with no reply, treat it as rejected — an inference, never written down | `track/board.py` |
+|x| A queue for mail that carries an outcome but no known owner | `dashboard/views/trackcho.py` |
+|x| Notifications: macOS, and Telegram if it is connected | `core/notify.py` · `bao.py` |
+|x| Counts: the funnel, results, output per day, a diagnosis | `dashboard/tongquan.py` |
 
-**Xong khi:** gửi → thấy trong `/pipeline` → có thư trả lời → khớp đúng về đơn đó →
-nhắc đúng lúc.
+**Done when:** apply -> see it in the table -> a reply arrives -> it matches back
+to that application -> the reminder arrives at the right time. Met.
+
+The mailbox is **read-only**, with four constraints enforced in code.
 
 ---
 
-## Vì sao thứ tự này
+## Why this order
 
-- **Bước 1 chặn tất cả.** Chưa có tin thật thì chấm điểm, sửa CV, dựng project đều là đoán.
-- Bước 2 cần dữ liệu thật mới chọn được thuật toán. Chọn trước là đoán mò.
-- Bước 3–4 cần bước 2 để biết JD đòi gì.
-- Bước 5 gửi ra ngoài → chỉ làm sau khi CV và project đã đủ tốt.
-- Bước 6 cần bước 5 chạy đủ lâu mới có gì để đếm.
+- **Step 1 blocks everything.** Without real postings, scoring, CV tailoring and
+  project building are all guesswork.
+- Step 2 needed real data before an algorithm could be chosen. Choosing first
+  would have been a guess.
+- Steps 3–4 needed step 2 to know what a JD asks for.
+- Step 5 goes outside -> only after the CV was good enough.
+- Step 6 needed step 5 running long enough to have something to count.
 
-Ghi `audit` **ngay từ bước 1**. Thiếu nó thì đến bước 6 không có gì để đếm và không lấy lại được.
+Write `audit` **from step 1 onward**. Without it, step 6 has nothing to count and
+nothing can be recovered.
 
-## Việc gấp hơn cả roadmap này
+## More urgent than this roadmap
 
-Tháng 9 là mùa graduate scheme UK mở đơn cho intake 2027, nhiều nơi đóng khi đủ người.
-Vin nộp tay ngay từ bây giờ, song song với việc xây hệ thống. Hệ thống là bộ khuếch đại,
-không phải cái cớ để hoãn.
+September is when UK graduate schemes open for the 2027 intake, and many close
+as soon as they are full. Apply by hand now, in parallel with building the
+system. The system is an amplifier, not an excuse to postpone.
