@@ -98,13 +98,15 @@ def xoa(conn: sqlite3.Connection) -> int:
 
 
 def stage(conn: sqlite3.Connection) -> dict:
-    """Lượt dựng TỚI sẽ làm gì. MỘT chỗ quyết, nút Chạy chỉ đọc lại để đặt tên.
+    """What the NEXT build will do. ONE place decides; the Run button only
+    reads it back to name itself.
 
-        Chạy      chưa dựng lần nào
-        Cập nhật  đã dựng, nhưng chữ CV / luật / tập tin đã đổi
-        Dựng lại  đang khớp — bấm cũng được, chỉ là không có gì mới
+        Run       never built
+        Update    built, but the CV text / rules / posting set have changed
+        Rebuild   in sync — pressing it is allowed, there is just nothing new
 
-    Nút đoán một kiểu còn máy làm một kiểu thì chữ trên nút là lời nói dối.
+    A button that guesses one thing while the machine does another is a
+    button that lies.
     """
     from ..profile import store as pstore
     answers = pstore.load(conn)
@@ -116,40 +118,41 @@ def stage(conn: sqlite3.Connection) -> dict:
 
     cu = saved(conn)
     ban = len((cu or {}).get("versions") or [])
-    chung = {"kept": ban, "worth": dang, "state": "chưa dựng bản nào"}
+    chung = {"kept": ban, "worth": dang, "state": "nothing built yet"}
 
     if not co_cv:
-        # Không có CV thì không dựng được gì. Nói ra, đừng để nút mời một việc
-        # bấm vào không xảy ra chuyện gì.
-        return {**chung, "mode": "chua_cv", "label": "Chạy", "todo": 0,
-                "note": "hồ sơ chưa có CV — nhập CV ở tab Profile trước"}
+        # No CV means nothing can be built. Say so, rather than offering a
+        # button that does nothing when pressed.
+        return {**chung, "mode": "chua_cv", "label": "Run", "todo": 0,
+                "note": "the profile has no CV — paste one on the Profile tab first"}
     if not dang:
-        return {**chung, "mode": "chua_tin", "label": "Chạy", "todo": 0,
-                "note": "chưa có tin nào đáng nộp — chạy Search trước"}
+        return {**chung, "mode": "chua_tin", "label": "Run", "todo": 0,
+                "note": "no posting is worth applying to yet — run Search first"}
     if cu is None:
-        return {**chung, "mode": "dau", "label": "Chạy", "todo": dang,
-                "note": f"chưa dựng lần nào — dựng bản cho {dang:,} tin đáng nộp"}
+        return {**chung, "mode": "dau", "label": "Run", "todo": dang,
+                "note": f"never built — building versions for {dang:,} worthwhile postings"}
 
     moi = stamp(conn, cv_text)
-    xong = f"{ban} bản · dựng lúc {str(cu.get('made_at') or '')[11:16]}"
+    xong = f"{ban} versions · built at {str(cu.get('made_at') or '')[11:16]}"
     if cu.get("stamp") != moi:
         vi_sao = _vi_sao_cu(cu.get("stamp") or "", moi)
-        return {**chung, "mode": "moi", "label": "Cập nhật", "todo": dang,
-                "state": xong, "note": f"bản đang có đã cũ — {vi_sao}"}
-    return {**chung, "mode": "khop", "label": "Dựng lại", "todo": 0,
-            "state": xong, "note": "bản đang có vẫn khớp — dựng lại cũng ra y hệt"}
+        return {**chung, "mode": "moi", "label": "Update", "todo": dang,
+                "state": xong, "note": f"what you have is stale — {vi_sao}"}
+    return {**chung, "mode": "khop", "label": "Rebuild", "todo": 0,
+            "state": xong, "note": "what you have is still in sync — rebuilding gives the same"}
 
 
 def _vi_sao_cu(cu: str, moi: str) -> str:
-    """Cũ vì CÁI GÌ. "Đã cũ" trơ trọi thì người dùng không biết mình vừa đổi gì."""
+    """Stale because of WHAT. A bare "stale" leaves the user with no idea
+    what they just changed."""
     a, b = cu.split("|"), moi.split("|")
     if len(a) != len(b):
-        return "luật dựng đã đổi"
-    ten = ("chữ trên CV đã sửa", "luật viết CV đã đổi", "luật chấm điểm đã đổi",
-           "số tin đáng nộp đã đổi", "có tin mới về",
-           "bạn vừa xoay núm ở tấm Điều chỉnh")
+        return "the build rules changed"
+    ten = ("the CV text was edited", "the CV writing rules changed",
+           "the scoring rules changed", "the set of worthwhile postings changed",
+           "new postings arrived", "you turned a knob on the Adjust panel")
     doi = [ten[i] for i in range(len(b)) if a[i] != b[i]]
-    return " · ".join(doi) or "đầu vào đã đổi"
+    return " · ".join(doi) or "the inputs changed"
 
 
 def run(conn: sqlite3.Connection, log=None) -> dict:

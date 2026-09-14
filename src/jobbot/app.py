@@ -1,23 +1,27 @@
-"""App macOS thật — cửa sổ riêng, icon Dock, cmd-tab được.
+"""A real macOS app — its own window, a Dock icon, cmd-tab.
 
-Giống hệt cách Discord/Slack/VS Code làm: nội dung là HTML, nhưng nó nằm trong
-cửa sổ native chứ không phải tab trình duyệt. Khác biệt với người dùng là toàn bộ.
+Exactly how Discord/Slack/VS Code do it: the content is HTML, but it lives in
+a native window rather than a browser tab. For the user the difference is
+everything.
 
-    AppKit/Foundation  — PyObjC. KHÔNG có sẵn trên macOS: /usr/bin/python3
-                         (3.9.6) không có objc, và bản đó cũng dưới 3.11.
-                         Nó đến từ bản Python người dùng thật sự chạy bằng
-                         (Anaconda ở máy này). Thiếu nó KHÔNG phải lỗi —
-                         shell.has_mac_native() trả False và app lùi về cửa
-                         sổ Chrome --app.
-    WebKit             — nạp động bằng objc.loadBundle, không cần bindings dựng sẵn
+    AppKit/Foundation  — PyObjC. NOT preinstalled on macOS: /usr/bin/python3
+                         (3.9.6) has no objc, and that build is also below
+                         3.11. It comes from whichever Python the user
+                         actually runs (Anaconda on this machine). Its
+                         absence is NOT an error — shell.has_mac_native()
+                         returns False and the app falls back to a Chrome
+                         --app window.
+    WebKit             — loaded at runtime with objc.loadBundle, no prebuilt
+                         bindings needed
 
-Một tiến trình, ba phần:
-    luồng chính  Cocoa event loop + cửa sổ
-    luồng nền    web server (nội dung cho cửa sổ)
-    luồng nền    scheduler (tự quét theo lịch)
+One process, three parts:
+    main thread        Cocoa event loop + the window
+    background thread  the web server (the window's content)
+    background thread  the scheduler (scanning on a schedule)
 
-Hành vi kiểu Discord: đóng cửa sổ thì ẨN, app vẫn chạy nền. Bấm icon Dock hoặc
-icon thanh menu thì hiện lại. Chỉ Quit mới thật sự thoát.
+Discord-style behaviour: closing the window HIDES it, the app keeps running.
+Click the Dock icon or the menu-bar icon and it comes back. Only Quit really
+exits.
 """
 
 from __future__ import annotations
@@ -40,15 +44,15 @@ from .core import journal
 from .core import scheduler as scheduler_mod
 from .dashboard.server import serve
 
-# WebKit không có bindings dựng sẵn trong PyObjC của Anaconda -> nạp lúc chạy.
+# WebKit has no prebuilt bindings in Anaconda's PyObjC -> load it at runtime.
 objc.loadBundle("WebKit", globals(),
                 bundle_path="/System/Library/Frameworks/WebKit.framework")
 
-# loadBundle chỉ nạp CLASS, không nạp chữ ký method. Hàm mở hộp thoại chọn tệp
-# nhận một BLOCK ở tham số cuối; không khai chữ ký thì PyObjC không biết gọi
-# block đó thế nào và `handler(...)` chết ngay — mà chết ở đây thì <input
-# type=file> treo luôn, bấm mãi không mở. Chỉ số 5 = sau self, _cmd, webView,
-# parameters, frame.
+# loadBundle loads CLASSES only, not method signatures. The file-picker
+# callback takes a BLOCK as its last argument; without a declared signature
+# PyObjC does not know how to call that block and `handler(...)` dies on the
+# spot — and dying here means <input type=file> hangs forever, clicking it
+# does nothing. Index 5 = after self, _cmd, webView, parameters, frame.
 objc.registerMetaDataForSelector(
     b"NSObject",
     b"webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:",
@@ -62,8 +66,9 @@ IDLE, BUSY = "◆", "◇"
 
 
 class Delegate(NSObject):
-    """Đại diện cho cả app lẫn cửa sổ. Thuộc tính gán từ ngoài vào —
-    PyObjC biến mọi method thành selector nên không định nghĩa được setter thường."""
+    """Stands in for both the app and the window. Attributes are assigned
+    from outside — PyObjC turns every method into a selector, so an ordinary
+    setter cannot be defined."""
 
     window = None
     webview = None
@@ -71,54 +76,57 @@ class Delegate(NSObject):
     status_item = None
     url = ""
 
-    # --- hộp thoại chọn tệp ----------------------------------------------
-    # BẮT BUỘC PHẢI CÓ. WKWebView không tự mở được NSOpenPanel: thiếu hàm này
-    # thì <input type=file> chết câm — bấm "Choose File" không có gì xảy ra,
-    # không lỗi, không log. Trong trình duyệt thường thì cùng trang đó chạy
-    # bình thường, nên lỗi này rất dễ bị đổ oan cho HTML.
+    # --- the file picker --------------------------------------------------
+    # THIS IS MANDATORY. WKWebView cannot open an NSOpenPanel by itself:
+    # without this method <input type=file> dies silently — clicking "Choose
+    # File" does nothing, no error, no log. In an ordinary browser that same
+    # page works fine, so this bug is very easy to blame on the HTML.
     def _mo_hop_chon_tep(self, _webview, params, _frame, handler):
         panel = NSOpenPanel.openPanel()
         panel.setCanChooseFiles_(True)
         panel.setCanChooseDirectories_(False)
         panel.setAllowsMultipleSelection_(bool(params.allowsMultipleSelection()))
-        # Người dùng bấm Cancel -> PHẢI gọi handler(None). Không gọi thì
-        # WKWebView treo ô nhập vĩnh viễn, lần sau bấm cũng không mở nữa.
+        # The user pressed Cancel -> handler(None) MUST still be called.
+        # Skip it and WKWebView leaves the input wedged forever; clicking it
+        # again never opens anything.
         handler(panel.URLs() if panel.runModal() == NSModalResponseOK else None)
 
-    # Chữ ký phải khai TAY. Để PyObjC tự suy thì tham số cuối thành "@" (một
-    # object bình thường) thay vì "@?" (block) — lúc đó `handler(...)` gọi vào
-    # hư không và ô chọn tệp treo. Đã kiểm: không có dòng này thì signature ra
-    # v@:@@@@, có thì ra v@:@@@@?.
+    # The signature has to be declared BY HAND. Let PyObjC infer it and the
+    # last argument becomes "@" (an ordinary object) instead of "@?" (a
+    # block) — at which point `handler(...)` calls into nothing and the
+    # picker hangs. Measured: without this line the signature is v@:@@@@,
+    # with it, v@:@@@@?.
     webView_runOpenPanelWithParameters_initiatedByFrame_completionHandler_ = objc.selector(
         _mo_hop_chon_tep,
         selector=b"webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:",
         signature=b"v@:@@@@?",
     )
 
-    # --- đường ra ngoài ---------------------------------------------------
-    # Tin tuyển dụng nằm ở linkedin.com, greenhouse.io… — tức là NGOÀI app.
-    # WKWebView không tự mở cửa sổ mới: thiếu hàm này thì <a target=_blank>
-    # bấm vào KHÔNG có gì xảy ra, không lỗi, không log — đúng lớp lỗi mà ô
-    # chọn tệp ở trên đã mắc một lần rồi.
+    # --- the way out ------------------------------------------------------
+    # Job postings live on linkedin.com, greenhouse.io… — that is, OUTSIDE
+    # the app. WKWebView does not open a new window by itself: without this
+    # method clicking <a target=_blank> does NOTHING, no error, no log — the
+    # very same class of bug the file picker above already hit once.
     #
-    # Và cũng đừng để nó mở NGAY TRONG cửa sổ app: cửa sổ này không có thanh
-    # địa chỉ, không có nút Back. Đi sang LinkedIn là mất luôn dashboard, chỉ
-    # còn cách tắt app mở lại.
+    # And do not let it open INSIDE the app window either: this window has no
+    # address bar and no Back button. Navigating to LinkedIn loses the
+    # dashboard, and the only way back is to quit and reopen.
     #
-    # Nên: đẩy sang trình duyệt mặc định, rồi trả None để WKWebView khỏi dựng
-    # webview mới.
+    # So: hand it to the default browser, then return None so WKWebView does
+    # not build a new webview.
     def _mo_ra_trinh_duyet(self, _webview, _config, action, _features):
         url = action.request().URL()
         if url is not None:
             NSWorkspace.sharedWorkspace().openURL_(url)
-        return None                    # None = đừng dựng webview mới
+        return None                    # None = do not build a new webview
 
-    # Chữ ký khai TAY, y như lý do ở hộp chọn tệp. Để PyObjC tự suy thì nó
-    # nhìn `return None` và kết luận hàm trả về void ("v"), trong khi WKWebView
-    # gọi hàm này để LẤY VỀ một WKWebView* ("@"). Khai sai kiểu trả về thì nó
-    # đọc rác ở thanh ghi trả về — lúc chạy được lúc không, và loại lỗi đó
-    # không bao giờ hiện thành thông báo.
-    #   @ = trả về object · @: = self, cmd · @@@@ = bốn tham số object
+    # The signature is declared BY HAND for the same reason as the file
+    # picker. Let PyObjC infer it and it sees `return None` and concludes the
+    # method returns void ("v"), while WKWebView calls it to GET BACK a
+    # WKWebView* ("@"). Declare the return type wrong and it reads garbage
+    # out of the return register — works sometimes, not others, and that kind
+    # of bug never surfaces as a message.
+    #   @ = returns an object · @: = self, cmd · @@@@ = four object arguments
     webView_createWebViewWithConfiguration_forNavigationAction_windowFeatures_ = objc.selector(
         _mo_ra_trinh_duyet,
         selector=b"webView:createWebViewWithConfiguration:"
@@ -126,9 +134,9 @@ class Delegate(NSObject):
         signature=b"@@:@@@@",
     )
 
-    # --- vòng đời app -----------------------------------------------------
+    # --- the app lifecycle ------------------------------------------------
     def applicationShouldTerminateAfterLastWindowClosed_(self, _app) -> bool:
-        return False                       # đóng cửa sổ != thoát app
+        return False                       # closing the window != quitting
 
     def applicationShouldHandleReopen_hasVisibleWindows_(self, _app, has_visible) -> bool:
         if not has_visible:
@@ -136,10 +144,10 @@ class Delegate(NSObject):
         return True
 
     def windowShouldClose_(self, _sender) -> bool:
-        self.window.orderOut_(None)        # ẩn, không đóng — app chạy tiếp
+        self.window.orderOut_(None)        # hide, do not close — the app runs on
         return False
 
-    # --- hành động --------------------------------------------------------
+    # --- actions ------------------------------------------------------------
     def showWindow_(self, _sender) -> None:
         self.window.makeKeyAndOrderFront_(None)
         NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
@@ -156,14 +164,15 @@ class Delegate(NSObject):
 
     def doQuit_(self, _sender) -> None:
         self.scheduler.stop()
-        # Chrome chạy bằng profile riêng của app — thoát app mà bỏ nó lại thì
-        # nó thành cửa sổ mồ côi, không ai đóng. MỌI cổng, không riêng cổng
-        # quét: cửa sổ Nộp cố ý được để mở, nên chỉ có chỗ này đóng nó.
+        # Chrome runs under the app's own profile — quitting and leaving it
+        # behind makes it an orphaned window nobody closes. EVERY port, not
+        # just the scan port: the Apply window is deliberately left open, so
+        # this is the only place that closes it.
         from .browser import chrome
         chrome.shutdown_all()
         AppHelper.stopEventLoop()
 
-    # --- nhãn trên thanh menu ---------------------------------------------
+    # --- the menu-bar labels ----------------------------------------------
     def tick_(self, _timer) -> None:
         self.status_item.button().setTitle_(BUSY if self.scheduler.running else IDLE)
         menu = self.status_item.menu()
@@ -196,7 +205,8 @@ def _item(title: str, selector: str | None, key: str, target=None) -> NSMenuItem
 
 
 def _build_main_menu(delegate: Delegate) -> NSMenu:
-    """Menu trên cùng. Thiếu menu Edit thì cmd-C/cmd-V không chạy trong WebView."""
+    """The top menu. Without an Edit menu, cmd-C/cmd-V do not work in the
+    WebView."""
     main = NSMenu.alloc().init()
 
     app_menu = NSMenu.alloc().init()
@@ -241,23 +251,23 @@ def _build_status_item(delegate: Delegate):
 
 def run() -> int:
     httpd, url = serve()
-    dia_chi.ghi(url)        # xem core/dia_chi.py — cổng không còn cố định
+    dia_chi.ghi(url)        # see core/dia_chi.py — the port is no longer fixed
     threading.Thread(target=httpd.serve_forever, daemon=True, name="web").start()
 
-    # Gắn nhật ký vào DB thật — trước dòng này nó chỉ sống trong bộ nhớ.
+    # Attach the journal to the real DB — before this line it is memory only.
     journal.log.open()
     scheduler = scheduler_mod.current()
     scheduler.start()
 
-    # LUỒNG NGHE LỆNH TELEGRAM — riêng một luồng, không dùng chung với
-    # scheduler: mỗi lượt long-poll ngủ 25 giây, mà vòng quét thì không được
-    # ngủ theo. Tự thoát ngay nếu chưa nối bot hoặc mức điều khiển đang TẮT.
+    # THE TELEGRAM LISTENER — its own thread, not shared with the scheduler:
+    # each long-poll sleeps 25 seconds and the scan must not sleep with it.
+    # It exits immediately if no bot is connected or the control level is OFF.
     from . import bao as _bao
     threading.Thread(target=_bao.nghe, args=(scheduler.stop_flag,),
                      daemon=True, name="telegram").start()
 
     app = NSApplication.sharedApplication()
-    app.setActivationPolicy_(NSApplicationActivationPolicyRegular)   # có icon Dock, cmd-tab
+    app.setActivationPolicy_(NSApplicationActivationPolicyRegular)   # Dock icon, cmd-tab
 
     delegate = Delegate.alloc().init()
 
@@ -266,15 +276,17 @@ def run() -> int:
         rect,
         NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
         | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable
-        | NSWindowStyleMaskFullSizeContentView,      # nội dung chạy lên dưới thanh tiêu đề
+        | NSWindowStyleMaskFullSizeContentView,      # content runs under the title bar
         NSBackingStoreBuffered, False)
     window.setTitle_("jobbot")
-    # Thanh tiêu đề trong suốt + ẩn chữ -> sidebar chạy lên tận đỉnh, chỉ còn
-    # ba nút traffic light nổi trên nền đen. CSS chừa sẵn 38px ở trên.
+    # A transparent title bar with hidden text -> the sidebar reaches the top
+    # and only the three traffic lights float over the dark background. The
+    # CSS already reserves 38px up there.
     window.setTitlebarAppearsTransparent_(True)
     window.setTitleVisibility_(NSWindowTitleHidden)
-    # khớp với --side trong app.css (#1A1A1A) — nền KHUNG app, không phải nền
-    # vùng làm việc. Sai màu ở đây thì lúc mở cửa sổ nháy một cái khác tông.
+    # matches --side in app.css (#1A1A1A) — the app FRAME background, not the
+    # workspace background. Get it wrong and the window flashes off-tone as
+    # it opens.
     window.setBackgroundColor_(
         NSColor.colorWithSRGBRed_green_blue_alpha_(0.102, 0.102, 0.102, 1.0))
     window.setMinSize_(NSMakeRect(0, 0, 760, 540).size)
@@ -284,8 +296,8 @@ def run() -> int:
     config = WKWebViewConfiguration.alloc().init()                   # noqa: F821
     webview = WKWebView.alloc().initWithFrame_configuration_(rect, config)   # noqa: F821
     webview.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)
-    webview.setValue_forKey_(False, "drawsBackground")   # nền webview trong suốt -> đen
-    webview.setUIDelegate_(delegate)     # không có dòng này thì <input type=file> chết câm
+    webview.setValue_forKey_(False, "drawsBackground")   # transparent webview -> dark
+    webview.setUIDelegate_(delegate)     # without this line <input type=file> dies silently
     window.contentView().addSubview_(webview)
     webview.loadRequest_(NSURLRequest.requestWithURL_(NSURL.URLWithString_(url)))
 

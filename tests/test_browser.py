@@ -659,7 +659,7 @@ check("Chrome chưa chạy -> coi như đã tắt, không báo hỏng",
 runner_src = Path("src/jobbot/scan_runner.py").read_text()
 app_src = Path("src/jobbot/app.py").read_text()
 check("quét xong thì đóng Chrome", "chrome.shutdown()" in runner_src)
-check("và báo ra nếu đóng không được", "không đóng được Chrome" in runner_src)
+check("và báo ra nếu đóng không được", "could not close Chrome" in runner_src)
 # ĐÓNG PHẢI NẰM TRONG `finally`. Trước đây lệnh đóng nằm ở cuối hàm, ngoài mọi
 # try: chỉ cần một lỗi ở giữa — DB khoá lúc đọc already_read, máy ngủ dậy
 # socket chết — là cửa sổ Chrome nằm lại tới khi tắt app. App chạy 24/7 nên

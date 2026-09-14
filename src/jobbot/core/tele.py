@@ -1,36 +1,38 @@
-"""Telegram — báo về điện thoại, và nhận lệnh từ xa.
+"""Telegram — notifications to your phone, and remote commands back.
 
-Máy treo ở nhà 24/7. Thông báo của hệ điều hành (notify.py) hiện trên chính
-cái máy đó, nên với trạm trực nó vô dụng: không ai đứng đấy mà nhìn.
+The machine sits at home 24/7. Operating-system notifications (notify.py)
+appear on that same machine, which makes them useless for a 24/7 station:
+nobody is standing there looking at it.
 
-VÌ SAO TELEGRAM, không phải thứ khác:
+WHY TELEGRAM, and not something else:
 
-  · Bot API là HTTPS + JSON, nên `urllib.request` của thư viện chuẩn là đủ.
-    Không cài gói nào — đúng luật không-phụ-thuộc của cả app.
-  · `getUpdates` là LONG POLLING: máy ở nhà chỉ gọi RA ngoài. Không mở cổng
-    router, không cần IP tĩnh, không ngrok. Mọi cách khác (webhook, dựng
-    server công khai) đều đòi mở một đường ĐI VÀO nhà người dùng.
+  · The Bot API is HTTPS + JSON, so the stdlib's `urllib.request` is enough.
+    No package to install — the app's no-dependency rule holds.
+  · `getUpdates` is LONG POLLING: the machine at home only calls OUT. No
+    router port to open, no static IP, no ngrok. Every alternative (webhook,
+    a public server) requires opening a way INTO the user's home.
 
-ĐÃ LOẠI, và lý do:
-  · Gmail tự gửi cho mình — hộp thư đang bị khoá CHỈ ĐỌC bằng bốn ràng buộc
-    trong code (track/mail.py). Gửi được thư là phá cái khoá đó. Đổi một
-    tiện lợi nhỏ lấy ranh giới an toàn lớn nhất của app: không đáng.
-  · Push APNs — phải có tài khoản Apple Developer trả phí.
+REJECTED, and why:
+  · Gmail sending mail to itself — the mailbox is locked READ ONLY by four
+    constraints in code (track/mail.py). Being able to send breaks that
+    lock. Trading a small convenience for the app's biggest safety boundary:
+    not worth it.
+  · APNs push — needs a paid Apple Developer account.
 
-BA CHỐT AN TOÀN, và cả ba đều là chốt CỨNG:
+THREE SAFETY GUARDS, all three of them HARD:
 
-  1. BOT TELEGRAM AI CŨNG NHẮN ĐƯỢC. Biết tên bot là nhắn được. Nên mọi tin
-     đến phải qua `duoc_phep()`: sai chat_id là bỏ và ghi nhật ký. Không có
-     chốt này thì người lạ đọc được cả đường đi nước bước tìm việc, và bật
-     tắt được máy ở nhà.
-  2. TOKEN LÀ BÍ MẬT — nằm trong config/config.toml (chmod 600, đã
-     gitignore). Không vào DB, không vào nhật ký, không vào HTML.
-  3. RANH GIỚI "MÁY KHÔNG BẤM GỬI" GIỮ NGUYÊN QUA TELEGRAM. Không có lệnh
-     nộp đơn từ xa, ở bất kỳ mức điều khiển nào. Cú bấm Gửi vẫn là của người
-     dùng, trước mặt cái form.
+  1. ANYONE CAN MESSAGE A TELEGRAM BOT. Knowing the bot's name is enough. So
+     every incoming message goes through `duoc_phep()`: a wrong chat_id is
+     dropped and logged. Without this guard a stranger reads the whole job
+     search and can start and stop the machine at home.
+  2. THE TOKEN IS A SECRET — it lives in config/config.toml (chmod 600,
+     gitignored). Never in the DB, never in the journal, never in HTML.
+  3. THE "THE MACHINE DOES NOT PRESS SEND" BOUNDARY SURVIVES TELEGRAM. There
+     is no remote apply command, at any control level. The Send click stays
+     the user's, in front of the form.
 
-KHÔNG BAO GIỜ NÉM LỖI RA NGOÀI. Hàm ở đây chạy trong luồng nền; một ngoại lệ
-thoát ra là giết vòng chạy 24/7, và app im lặng thôi làm việc.
+NEVER RAISE OUT. The functions here run on background threads; an escaping
+exception kills the 24/7 loop and the app silently stops working.
 """
 
 from __future__ import annotations
@@ -40,15 +42,17 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-# KHOÁ CỨNG CHO LÚC CHẠY TEST.
+# A HARD LOCK FOR TEST RUNS.
 #
-# Đây không phải lo xa. Bộ test đọc config/config.toml THẬT (nó chỉ được canh
-# phần GHI, không canh phần ĐỌC), nên từ lúc Vin nối bot, MỌI lượt chạy test
-# đều gửi tin thật về điện thoại anh — kể cả một báo động giả "⚠️ Phiên hỏng"
-# do bài test dựng ra. Một bộ test làm phiền người dùng thật là bộ test hỏng.
+# This is not paranoia. The test suite reads the REAL config/config.toml (it
+# was only guarded on WRITES, not on READS), so from the moment Vin connected
+# his bot, EVERY test run sent real messages to his phone — including a fake
+# "⚠️ Session failed" alarm a test had constructed. A test suite that
+# bothers the real user is a broken test suite.
 #
-# Chốt đặt ở ĐÂY, tầng thấp nhất và duy nhất chạm mạng: mọi đường gửi/nhận
-# đều đi qua goi(), nên không có lối vòng.
+# The guard sits HERE, at the lowest layer and the only one that touches the
+# network: every send and receive goes through goi(), so there is no way
+# around it.
 import os
 
 OFFLINE = "JOBBOT_OFFLINE"
@@ -59,21 +63,21 @@ def khoa_mang() -> bool:
 
 
 API = "https://api.telegram.org"
-MUC = "telegram"                 # tên mục trong config.toml
+MUC = "telegram"                 # the section name in config.toml
 
-# Chờ tối đa mỗi lượt long-poll. 25 giây: đủ dài để không gọi dồn, đủ ngắn để
-# dưới mọi thời hạn chờ của proxy trên đường (thường 30-60 giây).
+# Maximum wait per long-poll. 25 seconds: long enough not to hammer the API,
+# short enough to stay under every proxy timeout on the way (usually 30-60).
 CHO = 25
 HET_GIO = CHO + 10
 
 
-# --- CẤU HÌNH ------------------------------------------------------------
+# --- CONFIGURATION --------------------------------------------------------
 
 def cau_hinh() -> dict:
-    """{token, chat_id} từ config.toml. Đọc hỏng thì rỗng, KHÔNG nổ.
+    """{token, chat_id} from config.toml. Unreadable means empty, never raise.
 
-    Lúc chạy thử thì coi như CHƯA NỐI, dù trên đĩa có gì: bài test phải chạy
-    trong một thế giới không có bí mật của ai cả.
+    Under test it reports NOT CONNECTED regardless of what is on disk: a test
+    has to run in a world with nobody's secrets in it.
     """
     if khoa_mang():
         return {}
@@ -91,37 +95,38 @@ def da_noi() -> bool:
 
 
 def che(token: str) -> str:
-    """Token để in ra cho người xem — chỉ còn đuôi. Dùng ở màn Cài đặt.
+    """The token as shown to a person — the tail only. Used on Settings.
 
-    Không bao giờ in nguyên token: nó nằm trong HTML thì đọc được bằng View
-    Source và bị trình duyệt lưu vào bộ nhớ đệm.
+    Never print the whole token: in HTML it is readable through View Source
+    and gets cached by the browser.
     """
     t = str(token or "").strip()
-    return f"…{t[-4:]}" if len(t) > 4 else ("đã lưu" if t else "")
+    return f"…{t[-4:]}" if len(t) > 4 else ("saved" if t else "")
 
 
-# --- GỬI ĐI ---------------------------------------------------------------
+# --- SENDING --------------------------------------------------------------
 
 def goi(duong: str, tham: dict, giay: int = 12) -> tuple:
-    """Một lượt gọi API -> (dữ liệu, LÝ DO HỎNG).
+    """One API call -> (data, WHY IT FAILED).
 
-    Trả cả lý do chứ không chỉ None: nút Test tồn tại để nói HỎNG Ở ĐÂU, mà
-    nuốt lý do thì nó chỉ nói được "không gửi được" — đúng cái câu người dùng
-    đã tự biết rồi.
+    It returns the reason, not just None: the Test button exists to say WHERE
+    it broke, and swallowing the reason leaves it able to say only "could not
+    send" — the exact sentence the user already knew.
 
-    Lý do dịch sang tiếng người ngay tại đây, vì chỉ chỗ này biết mã lỗi của
-    Telegram nghĩa là gì: 401 là token sai, 400 + "chat not found" là số chat
-    sai. Để người gọi tự đoán từ mã số là bắt họ học API.
+    The reason is turned into human words right here, because this is the
+    only place that knows what a Telegram error code means: 401 is a bad
+    token, 400 + "chat not found" is a bad chat id. Making the caller guess
+    from a number is making them learn the API.
     """
-    # KIỂM CỤC BỘ TRƯỚC, KHOÁ MẠNG SAU. Cả hai cùng đúng thì lý do cụ thể
-    # hơn phải thắng: "chưa dán token" chỉ đúng việc phải làm, còn "đang chạy
-    # thử" thì không giúp được ai đang cấu hình.
+    # LOCAL CHECKS FIRST, THE NETWORK LOCK SECOND. When both apply, the more
+    # specific reason has to win: "no token pasted yet" names the thing to
+    # do, while "running under test" helps nobody who is configuring.
     c = cau_hinh()
     token = str(c.get("token", "")).strip()
     if not token:
-        return None, "chưa dán token — lấy ở @BotFather trên Telegram"
+        return None, "no token yet — get one from @BotFather on Telegram"
     if khoa_mang():
-        return None, "đang chạy thử — mọi lượt gọi ra ngoài đều bị chặn"
+        return None, "running under test — every outbound call is blocked"
     url = f"{API}/bot{token}/{duong}"
     data = urllib.parse.urlencode(
         {k: v for k, v in tham.items() if v is not None}).encode()
@@ -138,43 +143,45 @@ def goi(duong: str, tham: dict, giay: int = 12) -> tuple:
         except Exception:                   # noqa: BLE001
             pass
         if e.code == 401:
-            return None, "token sai hoặc đã bị thu hồi — tạo lại ở @BotFather"
+            return None, "wrong or revoked token — make a new one at @BotFather"
         if e.code in (400, 403) and "chat" in than.lower():
-            return None, ("số chat sai, hoặc bạn chưa nhắn câu nào cho bot. "
-                          "Nhắn một câu rồi bấm Tìm chat.")
-        return None, f"Telegram trả lỗi {e.code}" + (f" — {than[:70]}" if than else "")
+            return None, ("wrong chat id, or you have not messaged the bot "
+                          "yet. Send it a message, then press Save.")
+        return None, f"Telegram returned error {e.code}" + (f" — {than[:70]}" if than else "")
     except urllib.error.URLError as e:
-        return None, f"không ra được mạng — {str(getattr(e, 'reason', e))[:60]}"
+        return None, f"could not reach the network — {str(getattr(e, 'reason', e))[:60]}"
     except Exception as e:                  # noqa: BLE001
         return None, f"{type(e).__name__}: {str(e)[:60]}"
 
 
 def _goi(duong: str, tham: dict, giay: int = 12) -> dict | None:
-    """Bản nuốt lỗi, cho mấy chỗ chạy nền — ở đó không ai đọc lý do."""
+    """The error-swallowing variant, for background callers where nobody
+    reads the reason."""
     return goi(duong, tham, giay)[0]
 
 
 def gui_chi_tiet(text: str) -> tuple:
-    """Gửi và trả (được không, LÝ DO nếu không). Dùng cho nút Test."""
+    """Send, and return (did it work, WHY NOT). Used by the Test button."""
     c = cau_hinh()
     chat = str(c.get("chat_id", "")).strip()
     if not chat:
-        return False, ("chưa có số chat — nhắn một câu cho bot rồi bấm "
-                       "Tìm chat")
+        return False, ("no chat id yet — message the bot once, then press "
+                       "Save")
     ra, loi = goi("sendMessage", {"chat_id": chat, "text": str(text)[:4000],
                                   "parse_mode": "HTML",
                                   "disable_web_page_preview": "true"})
     if ra and ra.get("ok"):
         return True, ""
-    return False, loi or str((ra or {}).get("description", ""))[:80] or "không rõ vì sao"
+    return False, loi or str((ra or {}).get("description", ""))[:80] or "reason unknown"
 
 
 def gui(text: str) -> bool:
-    """Gửi một tin cho đúng chat đã ghim. Trả False nếu chưa nối hoặc hỏng.
+    """Send one message to the pinned chat. False if not connected or broken.
 
-    HTML chứ không Markdown: tên công ty hay có dấu _ và * (ví dụ
-    "Susquehanna_UK"), mà Markdown của Telegram thấy chúng là dấu định dạng
-    và trả về lỗi 400 cho cả tin. HTML chỉ phải thoát ba ký tự.
+    HTML rather than Markdown: company names often contain _ and * (for
+    example "Susquehanna_UK"), and Telegram's Markdown reads those as
+    formatting and returns a 400 for the whole message. HTML only needs three
+    characters escaped.
     """
     c = cau_hinh()
     chat = str(c.get("chat_id", "")).strip()
@@ -187,42 +194,45 @@ def gui(text: str) -> bool:
 
 
 def thoat(text) -> str:
-    """Ba ký tự HTML phải thoát. Tên công ty thật có cả ba."""
+    """The three HTML characters that must be escaped. Real company names
+    contain all three."""
     return (str(text or "").replace("&", "&amp;")
             .replace("<", "&lt;").replace(">", "&gt;"))
 
 
-# --- NHẬN LỆNH ------------------------------------------------------------
+# --- RECEIVING COMMANDS ---------------------------------------------------
 #
-# BA MỨC ĐIỀU KHIỂN. Người dùng chọn ở Cài đặt · Thông báo, và mỗi mức là một
-# mặt tấn công khác nhau — nên mức phải là một con số kiểm được, không phải
-# một câu hứa trong tài liệu.
+# THREE CONTROL LEVELS. The user picks one under Settings · Notifications,
+# and each level is a different attack surface — so the level has to be a
+# checkable value, not a promise in the documentation.
 TAT, XEM, DAY_DU = "tat", "xem", "day_du"
 
 MUC_DIEU_KHIEN = {
-    TAT: ("Chỉ báo, một chiều",
-          "Bot chỉ gửi đi, không nhận lệnh nào. Không có mặt tấn công. Đổi "
-          "lại: tối ở ngoài thấy phiên hỏng thì phải về nhà mới sửa được."),
-    XEM: ("Xem và bật/tắt phiên",
-          "Thêm ba lệnh vô hại: /trangthai, /batphien, /tatphien. Không lệnh "
-          "nào đụng vào CV, hồ sơ, hay nộp đơn."),
-    DAY_DU: ("Thêm duyệt thư từ xa",
-             "Như trên, cộng /thu · /nhan <số> · /boqua <số> để duyệt mấy thư "
-             "máy đề xuất đổi trạng thái. Lệnh từ xa bắt đầu GHI vào bảng."),
+    TAT: ("Notifications only, one way",
+          "The bot only sends. It accepts no commands at all. No attack "
+          "surface. The trade: if you are out and a session fails, you "
+          "cannot fix it until you get home."),
+    XEM: ("View, and start/stop the session",
+          "Adds three harmless commands: /trangthai, /batphien, /tatphien. "
+          "None of them touches the CV, the profile, or applying."),
+    DAY_DU: ("Also approve mail remotely",
+             "As above, plus /thu · /nhan <n> · /boqua <n> to approve the "
+             "mail the machine proposes a status change for. Remote commands "
+             "start WRITING to the table."),
 }
 
-# Lệnh nào cho mức nào. KHÔNG có lệnh nộp đơn ở bất kỳ mức nào — xem chốt 3
-# ở đầu file.
+# Which commands belong to which level. There is NO apply command at any
+# level — see guard 3 at the top of this file.
 LENH_XEM = ("trangthai", "batphien", "tatphien", "giupdo", "start")
 LENH_GHI = ("thu", "nhan", "boqua")
 
 
 def duoc_phep(tin: dict, chat_id: str) -> bool:
-    """CHỐT CỨNG: tin này có đúng từ chat đã ghim không.
+    """THE HARD GUARD: is this message really from the pinned chat.
 
-    Đây là hàng rào duy nhất giữa cái máy ở nhà và bất kỳ ai biết tên bot.
-    Nên nó là một hàm riêng, thuần, có bài test — không phải một câu `if`
-    nằm lẫn trong vòng lặp.
+    It is the only fence between the machine at home and anyone who knows the
+    bot's name. So it is its own pure function with its own tests — not an
+    `if` buried inside a loop.
     """
     if not chat_id:
         return False
@@ -231,9 +241,9 @@ def duoc_phep(tin: dict, chat_id: str) -> bool:
 
 
 def doc_lenh(tin: dict) -> tuple:
-    """(lệnh, tham số) từ một update. Không phải lệnh thì ('', '').
+    """(command, argument) from an update. Not a command -> ('', '').
 
-    Nhận cả "/trangthai@ten_bot" — Telegram tự thêm đuôi đó trong nhóm.
+    Accepts "/trangthai@bot_name" too — Telegram appends that in groups.
     """
     chu = str(((tin or {}).get("message") or {}).get("text", "")).strip()
     if not chu.startswith("/"):
@@ -243,7 +253,7 @@ def doc_lenh(tin: dict) -> tuple:
 
 
 def cho_phep_lenh(lenh: str, muc: str) -> bool:
-    """Mức điều khiển có cho chạy lệnh này không."""
+    """Does this control level allow this command."""
     if muc == TAT or not lenh:
         return False
     if lenh in LENH_XEM:
@@ -252,20 +262,20 @@ def cho_phep_lenh(lenh: str, muc: str) -> bool:
 
 
 def nhan(offset: int) -> tuple:
-    """Một lượt long-poll. Trả (danh sách update, offset kế tiếp).
+    """One long-poll. Returns (updates, next offset, error).
 
-    Hỏng mạng thì trả ([], offset cũ) — vòng ngoài ngủ rồi thử lại, không ai
-    phải xử lý ngoại lệ.
+    A network failure returns ([], the old offset, why) — the outer loop
+    sleeps and retries, and nobody has to handle an exception.
     """
     ra, loi = goi("getUpdates",
                   {"offset": offset, "timeout": CHO,
                    "allowed_updates": json.dumps(["message"])}, giay=HET_GIO)
     if loi or not ra or not ra.get("ok"):
-        # TRẢ CẢ LÝ DO. Không có nó thì vòng nghe không phân biệt được "chờ
-        # 25 giây không ai nhắn" (bình thường) với "token 401" (hỏng) — và
-        # 401 thì trả lời tức thì, nên vòng quay tít gọi Telegram không nghỉ,
-        # không một dòng nhật ký.
-        return [], offset, (loi or "Telegram trả về không ok")
+        # RETURN THE REASON TOO. Without it the listener cannot tell "waited
+        # 25 seconds and nobody messaged" (normal) from "401 token" (broken)
+        # — and a 401 answers instantly, so the loop spins calling Telegram
+        # without pause, without a single journal line.
+        return [], offset, (loi or "Telegram did not return ok")
     ds = ra.get("result") or []
     if not ds:
         return [], offset, ""

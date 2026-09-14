@@ -191,7 +191,7 @@ with tempfile.TemporaryDirectory() as tmp:
     _sr._run_source(_c, "greenhouse:rong", lambda: [], log=lambda _m: None)
     _sau = chung.tail(SEARCH, 999)
     check("nguồn KHÔNG có tin mới vẫn ghi một dòng", len(_sau) == _truoc + 1)
-    check("và dòng đó nói rõ là 0 mới", "0 mới" in _sau[0].text, _sau[0].text)
+    check("và dòng đó nói rõ là 0 mới", "0 new" in _sau[0].text, _sau[0].text)
     check("mức 'info' chứ không phải 'ok' — không có gì để mừng",
           _sau[0].level == "info")
     _c.close()
@@ -226,7 +226,7 @@ with tempfile.TemporaryDirectory() as tmp:
         # Câu lỗi phải nói ĐÚNG khúc: "hỏng" chung chung thì người đọc đi
         # kiểm mạng, trong khi lỗi nằm ở đĩa.
         check("và nói rõ hỏng ở khúc ghi DB, không phải khúc lấy tin",
-              "ghi vào DB" in (_dong[1] or ""), str(_dong[1]))
+              "writing to the DB" in (_dong[1] or ""), str(_dong[1]))
     _hong = chung.tail(SEARCH, 999)
     check("nhật ký cũng có dòng đỏ", any("greenhouse:khoa" in r.text and
                                          r.level == "error" for r in _hong))

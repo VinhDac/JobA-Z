@@ -917,10 +917,10 @@ with tempfile.TemporaryDirectory() as tmp:
     _pfN.set_flag(_cvn, _pfN.CV_TU_LO, False)
     _pfN.put(_cvn, _pfN.CV_RIENG, "chung")
     _st_num = _bt.stage(_cvn)
-    check("xoay núm -> nút thành Cập nhật", _st_num["label"] == "Cập nhật",
+    check("xoay núm -> nút thành Cập nhật", _st_num["label"] == "Update",
           _st_num["label"])
     check("và nói rõ CÁI GÌ vừa đổi",
-          "xoay núm" in _st_num["note"], _st_num["note"])
+          "turned a knob" in _st_num["note"], _st_num["note"])
     _pfN.put(_cvn, _pfN.CV_RIENG, "rieng")
     # ĐỘ MAY ĐO phải đổi được CHỮ IN RA THẬT, không chỉ đổi một dòng trong DB.
     # Đây là núm đổi nhiều nhất của cả app: đo trên kho thật 358 tin, chung 25
@@ -1327,11 +1327,11 @@ with tempfile.TemporaryDirectory() as tmp:
     # LinkedIn.
     _trong = db.connect(Path(tmp) / "nut-trong.db")
     check("chưa có gì -> nút mời CHẠY",
-          _lv.search_stage(_trong)["run_label"] == "Chạy",
+          _lv.search_stage(_trong)["run_label"] == "Run",
           _lv.search_stage(_trong)["run_label"])
     # Và nói thẳng vì sao chưa quét được, thay vì mời một việc sẽ bị từ chối.
     check("hồ sơ rỗng -> nói rõ thiếu chức danh",
-          "chưa khai chức danh" in _lv.search_stage(_trong)["run_note"],
+          "no job titles" in _lv.search_stage(_trong)["run_note"],
           _lv.search_stage(_trong)["run_note"])
     _trong.close()
 
@@ -1340,7 +1340,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # là CHẠY. "Cập nhật" ở đây là sai: hỏi cửa sổ 24 giờ thì bỏ sót sạch
     # những gì LinkedIn đang có.
     check("board đã về nhưng LinkedIn chưa quét -> vẫn CHẠY",
-          _lv.search_stage(_nut)["run_label"] == "Chạy",
+          _lv.search_stage(_nut)["run_label"] == "Run",
           _lv.search_stage(_nut)["run_label"])
 
     import json as _js3
@@ -1351,7 +1351,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # Có dòng chạy thôi CHƯA đủ: lượt đó có thể bị dừng giữa chừng, mới đi
     # được vài cặp đầu. Trí nhớ là DANH SÁCH CẶP, không phải một cái cờ.
     check("có dòng chạy nhưng chưa phủ cặp nào -> vẫn CHẠY",
-          _lv.search_stage(_nut)["run_label"] == "Chạy",
+          _lv.search_stage(_nut)["run_label"] == "Run",
           _lv.search_stage(_nut)["run_label"])
 
     def _phu_het(conn):
@@ -1363,10 +1363,10 @@ with tempfile.TemporaryDirectory() as tmp:
 
     _phu_het(_nut)
     check("phủ hết lưới, không còn việc dở -> CẬP NHẬT",
-          _lv.search_stage(_nut)["run_label"] == "Cập nhật",
+          _lv.search_stage(_nut)["run_label"] == "Update",
           _lv.search_stage(_nut)["run_label"])
     check("và Cập nhật chỉ hỏi cửa sổ 24 giờ",
-          "24 giờ" in _lv.search_stage(_nut)["run_note"])
+          "24 hours" in _lv.search_stage(_nut)["run_note"])
 
     # THÊM chức danh -> chỉ MẤY CẶP MỚI là chưa phủ. Không bắt cả lưới quét
     # lại: đó đúng là "chạy đi chạy lại một thứ".
@@ -1374,12 +1374,12 @@ with tempfile.TemporaryDirectory() as tmp:
                                    "Machine Learning Engineer"}, "thêm chức danh")
     from jobbot.scan_runner import scan_mode as _sm
     _st_them = _lv.search_stage(_nut)
-    check("thêm chức danh -> quay về CHẠY", _st_them["run_label"] == "Chạy",
+    check("thêm chức danh -> quay về CHẠY", _st_them["run_label"] == "Run",
           _st_them["run_label"])
     check("nhưng CHỈ quét đầy mấy lượt mới, không quét lại cả lưới",
           _sm(_nut)["todo"] == 1, str(_sm(_nut)["todo"]))
     check("và nói rõ phần còn lại chỉ hỏi tin mới",
-          "phần còn lại chỉ hỏi tin mới" in _st_them["run_note"],
+          "the rest only asks for new postings" in _st_them["run_note"],
           _st_them["run_note"])
 
     # BỎ BỚT chức danh -> KHÔNG có gì mới để tìm -> đừng quét lại cái gì cả.
@@ -1387,24 +1387,24 @@ with tempfile.TemporaryDirectory() as tmp:
     _phu_het(_nut)
     _ps3.save(_nut, {"job_titles": "Quantitative Analyst"}, "bỏ bớt chức danh")
     check("bỏ bớt chức danh -> vẫn CẬP NHẬT, không quét lại",
-          _lv.search_stage(_nut)["run_label"] == "Cập nhật",
+          _lv.search_stage(_nut)["run_label"] == "Update",
           _lv.search_stage(_nut)["run_label"])
 
     # Sửa thứ KHÔNG đụng câu hỏi gửi LinkedIn thì đừng bắt quét lại.
     _ps3.save(_nut, {"phone": "+44 7000 000000"}, "đổi số điện thoại")
     check("đổi số điện thoại -> vẫn CẬP NHẬT",
-          _lv.search_stage(_nut)["run_label"] == "Cập nhật",
+          _lv.search_stage(_nut)["run_label"] == "Update",
           _lv.search_stage(_nut)["run_label"])
 
     # THU HẸP cấp bậc không đẻ ra tin mới -> giữ nguyên phủ.
     _ps3.save(_nut, {"seniority": ["grad"]}, "thu hẹp cấp bậc")
     check("thu hẹp cấp bậc -> vẫn CẬP NHẬT",
-          _lv.search_stage(_nut)["run_label"] == "Cập nhật",
+          _lv.search_stage(_nut)["run_label"] == "Update",
           _lv.search_stage(_nut)["run_label"])
     # NỚI RỘNG thì f_E đổi cho MỌI cặp -> phải hỏi đầy lại.
     _ps3.save(_nut, {"seniority": ["grad", "mid", "senior"]}, "nới cấp bậc")
     check("nới rộng cấp bậc -> quay về CHẠY",
-          _lv.search_stage(_nut)["run_label"] == "Chạy",
+          _lv.search_stage(_nut)["run_label"] == "Run",
           _lv.search_stage(_nut)["run_label"])
     _ps3.save(_nut, {"seniority": ["grad", "junior"],
                      "job_titles": "Quantitative Analyst\nData Scientist"}, "trả lại")
@@ -1423,8 +1423,8 @@ with tempfile.TemporaryDirectory() as tmp:
     _nut.commit()
     _st = _lv.search_stage(_nut)
     check("còn tin chưa đọc kỹ -> nút mời TIẾP TỤC",
-          _st["run_label"] == "Tiếp tục", _st["run_label"])
-    check("và nói rõ còn bao nhiêu tin dở", "1 tin chưa đọc kỹ" in _st["run_note"])
+          _st["run_label"] == "Continue", _st["run_label"])
+    check("và nói rõ còn bao nhiêu tin dở", "1 postings still unread" in _st["run_note"])
 
     # HÀNG ĐỢI THEO NGUỒN, KHÔNG PHẢI MỘT RỔ. Tin dở ở đây là của nguồn
     # `linkedin`; tắt nguồn đó thì hàng đợi của nó không phải việc của lượt
@@ -1432,11 +1432,11 @@ with tempfile.TemporaryDirectory() as tmp:
     _pf3.set_flag(_nut, _pf3.SRC_LINKEDIN, False)
     _st_tat = _lv.search_stage(_nut)
     check("tắt LinkedIn -> hàng đợi CỦA NÓ không còn mời Tiếp tục",
-          _st_tat["run_label"] != "Tiếp tục", _st_tat["run_label"])
+          _st_tat["run_label"] != "Continue", _st_tat["run_label"])
     check("và nói rõ lượt tới chỉ còn nguồn nào",
-          "LinkedIn đang tắt" in _st_tat["run_note"], _st_tat["run_note"])
+          "LinkedIn is off" in _st_tat["run_note"], _st_tat["run_note"])
     check("KHÔNG còn đòi bật LinkedIn để đọc tin nguồn khác",
-          "cần bật LinkedIn" not in _st_tat["run_note"], _st_tat["run_note"])
+          "turn LinkedIn on" not in _st_tat["run_note"], _st_tat["run_note"])
 
     # Nhưng tin của THƯ BÁO là nguồn KHÁC, công tắc KHÁC. LinkedIn tắt thì nó
     # vẫn phải đi trọn dây chuyền: "2 cách khác nhau phải làm 2 nguồn khác
@@ -1449,19 +1449,19 @@ with tempfile.TemporaryDirectory() as tmp:
     _nut.commit()
     _st_thu = _lv.search_stage(_nut)
     check("LinkedIn tắt mà thư báo còn tin dở -> VẪN mời Tiếp tục",
-          _st_thu["run_label"] == "Tiếp tục", _st_thu["run_label"])
+          _st_thu["run_label"] == "Continue", _st_thu["run_label"])
     check("và chỉ đếm tin của nguồn đang bật, không đếm cả rổ",
-          "1 tin chưa đọc kỹ" in _st_thu["run_note"], _st_thu["run_note"])
+          "1 postings still unread" in _st_thu["run_note"], _st_thu["run_note"])
     _pf3.set_flag(_nut, _pf3.SRC_ALERT, False)
     check("tắt luôn thư báo -> không còn hàng đợi nào để mời",
-          _lv.search_stage(_nut)["run_label"] != "Tiếp tục")
+          _lv.search_stage(_nut)["run_label"] != "Continue")
     _pf3.set_flag(_nut, _pf3.SRC_ALERT, True)
     _nut.execute("DELETE FROM posting WHERE source = 'alert'")
     _nut.execute("DELETE FROM raw_posting WHERE source = 'alert'")
     _nut.commit()
     _pf3.set_flag(_nut, _pf3.SRC_LINKEDIN, True)
     check("bật lại thì mời Tiếp tục như cũ",
-          _lv.search_stage(_nut)["run_label"] == "Tiếp tục")
+          _lv.search_stage(_nut)["run_label"] == "Continue")
     # Đọc xong tin đó thì lời mời phải đổi lại — nếu không, nút đứng ở
     # "Tiếp tục" vĩnh viễn và chữ trên nút thành lời nói dối.
     _nut.execute("UPDATE posting SET description = ? WHERE source='linkedin'",
@@ -1469,7 +1469,7 @@ with tempfile.TemporaryDirectory() as tmp:
     _nut.commit()
     _phu_het(_nut)
     check("đọc kỹ xong thì quay về CẬP NHẬT",
-          _lv.search_stage(_nut)["run_label"] == "Cập nhật",
+          _lv.search_stage(_nut)["run_label"] == "Update",
           _lv.search_stage(_nut)["run_label"])
     # Tin lưới sàng ĐÃ LOẠI mà thiếu mô tả thì KHÔNG phải việc dở — vòng đọc
     # kỹ không bao giờ mở chúng. Đếm cả chúng thì nút hứa 1.855 trong khi
@@ -1481,16 +1481,16 @@ with tempfile.TemporaryDirectory() as tmp:
                  " AND url = 'https://x/8'")
     _nut.commit()
     check("tin lưới đã loại KHÔNG được tính là việc dở",
-          _lv.search_stage(_nut)["run_label"] == "Cập nhật",
+          _lv.search_stage(_nut)["run_label"] == "Update",
           _lv.search_stage(_nut)["run_label"])
     _nut.close()
     # Chữ lúc rảnh phải đi kèm nút, để live.js trả về được sau khi hiện
     # "Đang quét…". Không có nó thì quét xong nút kẹt ở chữ tạm.
     check("nút mang theo chữ gốc để khôi phục",
-          "data-run='Cập nhật'" in _deck("search", "S", "", [], run="Cập nhật"))
+          "data-run='Update'" in _deck("search", "S", "", [], run="Update"))
     check("và mang lời giải thích khi rê chuột",
-          "title='còn 3 tin dở'" in _deck("search", "S", "", [],
-                                          run="Tiếp tục", run_note="còn 3 tin dở"))
+          "title='3 postings left'" in _deck("search", "S", "", [],
+                                          run="Continue", run_note="3 postings left"))
 
     # Ô TÌM TRONG KHO. Backend nhận `q` từ ngày đầu — lọc theo chức danh hoặc
     # tên công ty, ràng buộc tham số đàng hoàng — mà chưa bao giờ có chỗ gõ
@@ -2414,7 +2414,7 @@ with tempfile.TemporaryDirectory() as tmp:
         check("nói thẳng là có nhiều chat", "2" in _cau and "chat" in _cau, _cau)
         check("kể cả tên chat kia, để người dùng biết mình chọn nhầm chưa",
               "Nhóm tuyển dụng" in _cau, _cau)
-        check("và chỉ cách sửa", "Lưu" in _cau, _cau)
+        check("và chỉ cách sửa", "Save" in _cau, _cau)
         # Một chat thôi thì câu phải NGẮN, không doạ người dùng.
         _ra2 = {"result": [{"message": {"chat": {"id": 111, "first_name": "Vin"}}}]}
         _tl.goi = lambda ham, _t=None, **_k: (
@@ -2422,7 +2422,8 @@ with tempfile.TemporaryDirectory() as tmp:
             else (_ra2, ""))
         _ok2, _cau2 = _bao.luu("")
         check("một chat -> vẫn gọi tên", _ok2 and "Vin" in _cau2, _cau2)
-        check("một chat -> không doạ về nhiều chat", "chat đã nhắn" not in _cau2, _cau2)
+        check("một chat -> không doạ về nhiều chat",
+              "chats have messaged" not in _cau2, _cau2)
         # Tên có ký tự HTML thì phải thoát — câu này đi thẳng vào trang.
         _ra3 = {"result": [{"message": {"chat": {"id": 111,
                                                  "first_name": "<script>x"}}}]}
@@ -2440,16 +2441,16 @@ with tempfile.TemporaryDirectory() as tmp:
     # Tin thử chính LÀ bản hướng dẫn: nói chế độ đang dùng, lệnh dùng được,
     # và sẽ nhắn khi nào. Một tin chỉ nói "ok" thì mới chứng minh ĐƯỜNG ĐI
     # thông, chưa chứng minh CẤU HÌNH đúng.
-    for _muc, _ten in ((_tl.TAT, "Chỉ báo"), (_tl.XEM, "Xem và"),
-                       (_tl.DAY_DU, "duyệt thư")):
+    for _muc, _ten in ((_tl.TAT, "Notifications only"), (_tl.XEM, "View, and"),
+                       (_tl.DAY_DU, "approve mail")):
         _prefs.put(_ct, _prefs.BAO_MUC, _muc)
         _tin = _bao.tin_thu(_ct)
         check(f"tin thử nói chế độ «{_muc}»", _ten in _tin)
-        check(f"và nói sẽ nhắn khi nào (mức {_muc})", "nhắn khi" in _tin
-              or "Chưa bật loại báo nào" in _tin)
+        check(f"và nói sẽ nhắn khi nào (mức {_muc})", "Will message when" in _tin
+              or "No notification kind is enabled" in _tin)
     _prefs.put(_ct, _prefs.BAO_MUC, _tl.TAT)
     check("mức TẮT thì nói thẳng là không nhận lệnh",
-          "không nhận lệnh" in _bao.tin_thu(_ct))
+          "accepts no commands" in _bao.tin_thu(_ct))
     check("và KHÔNG bày lệnh nào ra", "/trangthai" not in _bao.tin_thu(_ct))
     _prefs.put(_ct, _prefs.BAO_MUC, _tl.DAY_DU)
     _tin = _bao.tin_thu(_ct)
@@ -2487,7 +2488,7 @@ with tempfile.TemporaryDirectory() as tmp:
     _okt, _lyd = _bao.thu(_ct)
     check("chưa nối thì Test trả về THẤT BẠI", not _okt)
     check("và câu báo chỉ đúng việc phải làm",
-          "Tìm chat" in _lyd or "số chat" in _lyd)
+          "message the bot" in _lyd or "chat id" in _lyd or "token" in _lyd)
     _ct.close()
     _stt = _setm.render(every=60, hours=(8, 22), status=[],
                         tin_test=(False, "token sai hoặc đã bị thu hồi"))
@@ -2718,7 +2719,7 @@ with tempfile.TemporaryDirectory() as tmp:
           (store.load(_cX).get("cv_text") or "") == _cvtext_X)
     # XOÁ XONG THÌ NẰM YÊN — không có đường nào tự dựng lại. Phải chạy Search,
     # sang tab CV, bấm Chạy.
-    check("nút trên thanh về lại 'Chạy'", _btX.stage(_cX)["label"] == "Chạy")
+    check("nút trên thanh về lại 'Chạy'", _btX.stage(_cX)["label"] == "Run")
     _cX.close()
     _, _sau_xoa = get("/cv")
     check("mở lại tab CV vẫn trống, máy KHÔNG tự dựng",

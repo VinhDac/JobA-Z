@@ -317,12 +317,13 @@ print("\n[LỆNH TỪ XA — chốt quyền TRƯỚC, rồi mới đọc nội d
 check("lệnh không rõ thì chỉ đường, không im",
       "giupdo" in _bao.tra_loi(c4, "xyz", ""))
 check("/giupdo nói rõ KHÔNG có lệnh nộp đơn",
-      "không có lệnh nộp đơn" in _bao.GIUP.lower())
-check("/nhan thiếu số thì nói thiếu gì", "Thiếu số hiệu" in _bao.tra_loi(c4, "nhan", ""))
+      "no apply command" in _bao.GIUP.lower())
+check("/nhan thiếu số thì nói thiếu gì",
+      "Missing the mail number" in _bao.tra_loi(c4, "nhan", ""))
 check("/nhan số lạ thì không nổ, chỉ báo không thấy",
-      "Không thấy" in _bao.tra_loi(c4, "nhan", "99999"))
+      "not in the queue" in _bao.tra_loi(c4, "nhan", "99999"))
 _tt = _bao.tra_loi(c4, "trangthai", "")
-for _so in ("tìm được", "nộp", "gọi tiếp", "trượt", "trạm trực"):
+for _so in ("found", "applied", "forward", "rejected", "station"):
     check(f"/trangthai có «{_so}»", _so in _tt)
 c4.close()
 

@@ -119,12 +119,12 @@ try:
     _noi = []
     _kq = _sr.run_scan(log=_noi.append, chrome_sources=False, deep=False)
     check("hồ sơ trống thì từ chối quét", _kq["ok"] is False)
-    check("và NÓI RA lý do", bool(_noi) and "hồ sơ chưa đủ" in _noi[0])
+    check("và NÓI RA lý do", bool(_noi) and "profile is incomplete" in _noi[0])
     check("lý do nêu đúng tên câu còn thiếu",
           bool(_noi) and all(all_questions()[q].text[:20] in _noi[0]
                              for q in _kq["missing"]))
     _dong = _conn.execute(
-        "SELECT COUNT(*) FROM audit WHERE level='warn' AND detail LIKE '%chưa quét được%'"
+        "SELECT COUNT(*) FROM audit WHERE level='warn' AND detail LIKE '%cannot scan yet%'"
     ).fetchone()[0]
     check("và ghi vào nhật ký", _dong >= 1)
 finally:
