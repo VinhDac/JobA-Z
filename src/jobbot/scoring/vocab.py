@@ -1,22 +1,22 @@
-"""Từ vựng để nhận ra một dòng yêu cầu đang đòi cái gì.
+"""The vocabulary for recognising what a requirement line is asking for.
 
-Không có LLM ở đây. Cố ý:
-  - Chạy trên 4.000 tin mà không tốn xu nào
-  - Cùng đầu vào luôn cho cùng đầu ra -> test được -> bắt được lỗi
-  - LLM để dành cho chỗ so chuỗi bó tay (bước 2b)
+No LLM here. Deliberately:
+  - Runs over 4,000 postings for nothing
+  - The same input always gives the same output -> testable -> catches bugs
+  - An LLM is reserved for where string matching genuinely gives up (step 2b)
 
-Từ vựng nghiêng về mảng quant / tài chính / dữ liệu — đúng dải của người dùng.
-Thiếu từ thì thêm vào đây, không sửa chỗ khác.
+The vocabulary leans quant / finance / data — the user's actual band. A
+missing word gets added here, not fixed somewhere else.
 """
 
 from __future__ import annotations
 
 import re
 
-# --------------------------------------------------------------- kỹ năng
-# key = tên chuẩn, value = các cách viết khác (đã thường hoá)
+# ----------------------------------------------------------------- skills
+# key = the canonical name, value = other spellings (already normalised)
 SKILLS: dict[str, set[str]] = {
-    # ngôn ngữ
+    # languages
     "python": {"python", "python3"},
     "c++": {"c++", "cpp"},
     "java": {"java"},
@@ -47,7 +47,7 @@ SKILLS: dict[str, set[str]] = {
     "bayesian": {"bayesian"},
     "data pipeline": {"etl", "data pipeline", "airflow", "dbt", "kafka"},
     "visualisation": {"visualisation", "visualization", "tableau", "power bi", "matplotlib"},
-    # tài chính
+    # finance
     "portfolio": {"portfolio", "asset allocation", "efficient frontier",
                   "portfolio construction", "rebalanc", "position sizing"},
     "derivatives": {"derivative", "derivatives", "options", "futures", "swaps"},
@@ -58,8 +58,9 @@ SKILLS: dict[str, set[str]] = {
     "alpha research": {"alpha", "signal research", "systematic trading", "quant research"},
     "backtesting": {"backtest", "backtesting", "walk-forward", "walk forward",
                     "paper trading", "simulation"},
-    # Nhóm này thiếu hẳn, mà nó chính là chuyên môn phân biệt người biết việc
-    # với người mới học: biết một con số có đáng tin không.
+    # This group was missing entirely, and it is exactly the expertise that
+    # separates someone who knows the work from someone who has just learned
+    # it: knowing whether a number can be trusted.
     "validation": {"out-of-sample", "out of sample", "cross-validation",
                    "cross validation", "look-ahead", "look ahead bias",
                    "data leakage", "data snooping", "overfit", "overfitting",
@@ -78,7 +79,7 @@ SKILLS: dict[str, set[str]] = {
     "ci/cd": {"ci/cd", "continuous integration", "jenkins"},
 }
 
-# --------------------------------------------------------- bằng cấp / năm
+# ------------------------------------------------------- degrees / years
 DEGREE_WORDS = {
     "phd": {"phd", "ph.d", "doctorate", "doctoral"},
     "masters": {"master", "masters", "msc", "ms", "m.sc", "mba", "postgraduate", "meng"},
@@ -91,19 +92,20 @@ QUANT_FIELD = {"mathematics", "maths", "math", "physics", "statistics", "compute
 
 YEARS = re.compile(r"(\d+)\s*(?:\+|\s*-\s*\d+)?\s*(?:or more\s*)?year", re.I)
 
-# ------------------------------------------------------------- phân loại
-# Tiêu đề mở đầu một phần YÊU CẦU
+# -------------------------------------------------------- classification
+# Headings that open a REQUIREMENTS section
 REQ_HEADS = re.compile(
     r"^\s*(requirements?|qualifications?|what we(?:'re| are)? looking for|"
     r"who you are|about you|you(?:'ll| will)? have|you have|your profile|"
     r"skills? (?:and|&) experience|experience required|what you(?:'ll| will)? bring|"
     r"ideal candidate|must[- ]haves?|essential|the ideal)", re.I)
 
-# Tiêu đề mở đầu phần VIỆC PHẢI LÀM.
+# Headings that open a RESPONSIBILITIES section.
 #
-# Nửa này của JD trước giờ bị vứt. Đo ngày 10/09 trên 176 tin: 48% có phần YÊU
-# CẦU (đang đọc), 47% có phần VIỆC PHẢI LÀM (bỏ qua) — mà chính nửa thứ hai
-# mới mô tả công việc, tức là mô tả sẵn một project trông thế nào.
+# This half of the JD used to be thrown away. Measured 10 Sep over 176
+# postings: 48% had a REQUIREMENTS section (being read), 47% had a
+# RESPONSIBILITIES section (skipped) — and it is that second half that
+# describes the work, which is to say it describes what a project looks like.
 DO_HEADS = re.compile(
     r"^\s*(responsibilit\w+|the role|your role|role (?:overview|summary)|"
     r"what you(?:'ll| will)? (?:do|be doing)|key (?:duties|responsibilities|tasks)|"
@@ -111,19 +113,19 @@ DO_HEADS = re.compile(
     r"in this role|you will be|your impact|the opportunity|"
     r"about the (?:role|position)|job description)", re.I)
 
-# Tiêu đề mở đầu phần ĐIỂM CỘNG
+# Headings that open a NICE-TO-HAVE section
 NICE_HEADS = re.compile(
     r"^\s*(nice[- ]to[- ]haves?|bonus|preferred|desirable|advantageous|"
     r"plus(?:es)?|it would be great|good to have)", re.I)
 
-# Tiêu đề KHÔNG phải yêu cầu — phải loại, nếu không sẽ chấm điểm dựa trên
-# phúc lợi công ty ("we offer 25 days holiday")
+# Headings that are NOT requirements — they must be excluded, or the score
+# is based on the company's benefits ("we offer 25 days holiday")
 STOP_HEADS = re.compile(
     r"^\s*(what we offer|benefits?|perks?|our offer|compensation|salary|"
     r"about (?:us|the (?:company|team|firm))|why join|diversity|equal opportunit|"
     r"how to apply|application process|next steps|our values?|life at)", re.I)
 
-# Dấu hiệu bắt buộc / không bắt buộc ngay trong câu
+# Required / optional signals inside the sentence itself
 MUST_WORDS = re.compile(r"\b(must|required|essential|strong|proven|solid|demonstrated)\b", re.I)
 NICE_WORDS = re.compile(
     r"\b(nice to have|bonus|preferred|desirable|advantage|a plus|would be great|"
@@ -131,7 +133,7 @@ NICE_WORDS = re.compile(
 
 
 def alias_map() -> dict[str, str]:
-    """Mọi cách viết -> tên chuẩn."""
+    """Every spelling -> the canonical name."""
     out: dict[str, str] = {}
     for canonical, forms in SKILLS.items():
         out[canonical] = canonical
@@ -144,45 +146,49 @@ ALIASES = alias_map()
 
 
 # --------------------------------------------------------------- khớp alias
-# Khớp CHUỖI CON là sai, và sai to: 'excel' nằm trong 'excellent', nên 70 tin
-# đang giữ được gắn kỹ năng Excel chỉ vì JD viết "excellent communication" —
-# và nhóm project lớn nhất trên màn hình /projects mọc lên từ đó. Cùng kiểu:
+# SUBSTRING matching is wrong, and badly wrong: 'excel' is inside
+# 'excellent', so 70 kept postings were tagged with the skill Excel purely
+# because the JD said "excellent communication" — and the largest project
+# cluster on the /projects screen grew out of that. Same pattern:
 # 'scala' trong 'scalable' (46 tin), 'rust' trong 'trust' (35), 'valuation'
 # trong 'evaluation' (10).
 #
-# Nhưng cấm hẳn chuỗi con thì mất phần lớn cái ĐÚNG, vì tiếng Anh chia đuôi:
-# backtesting, derivatives, pipelines, containerisation, portfolios. Nên luật
-# là: phải đúng RANH GIỚI TỪ ở đầu, và chỉ cho phép một cái ĐUÔI CHIA ở cuối.
+# But banning substrings outright loses most of what is RIGHT, because
+# English inflects: backtesting, derivatives, pipelines, containerisation,
+# portfolios. So the rule is: a proper WORD BOUNDARY at the start, and only
+# one INFLECTIONAL SUFFIX allowed at the end.
 _TAIL = r"(?:s|es|ed|ing|ings|ation|ations|isation|isations|ization|izations)?"
 
-# Alias ngắn hơn con số này thì KHÔNG được gắn đuôi chia — xem _alias_pattern.
+# An alias shorter than this gets NO suffix — see _alias_pattern.
 DU_DAI_CHO_DUOI = 3
 
 
 def _alias_pattern(alias: str) -> re.Pattern:
-    """Ranh giới bằng (?<!\\w) / (?!\\w), KHÔNG bằng \\b.
+    """Boundaries via (?<!\\w) / (?!\\w), NOT via \\b.
 
-    `\\b` là ranh giới GIỮA ký tự từ và không-từ, nên nó không bao giờ thành
-    thật ở sau một alias kết thúc bằng ký tự không-từ: mẫu `\\bc\\+\\+\\b` không
-    khớp nổi chuỗi "c++ and python", vì hai bên chỗ đó đều là không-từ.
+    `\\b` is the boundary BETWEEN a word character and a non-word one, so it
+    can never be true after an alias ending in a non-word character: the
+    pattern `\\bc\\+\\+\\b` cannot match "c++ and python", because both sides
+    there are non-word.
 
-    Đo trên kho thật: 208 tin đòi C++ và CV của Vin CÓ C++ — máy chưa bao giờ
-    nhìn thấy một tin nào trong số đó. Cùng lỗi với c#, kdb+, ci/cd.
+    Measured on the real store: 208 postings ask for C++ and Vin's CV HAS
+    C++ — the machine had never seen one of them. Same bug for c#, kdb+,
+    ci/cd.
 
-    (?<!\\w) và (?!\\w) nói đúng thứ mình muốn: "không có ký tự từ dính liền".
-    Với alias thường ("python") nó cho kết quả y hệt \\b.
+    (?<!\\w) and (?!\\w) say exactly what is meant: "no word character glued
+    to it". For an ordinary alias ("python") they behave identically to \\b.
     """
     # ĐUÔI CHIA CHỈ GẮN CHO ALIAS ĐỦ DÀI.
     #
     # "r" + "ed" = "red", "r" + "ing" = "ring", "go" + "ing" = "going". Đo
-    # thật: câu "the red car is going fast" cho ra kỹ năng {Go, R}, và "a ring
-    # of trust during the day" cho ra {R}. Một tin tuyển dụng bất kỳ có chữ
-    # "red"/"ring"/"going" là được cộng điểm cho hai ngôn ngữ mà JD không hề
-    # nhắc tới — điểm sai mà không ai chỉ ra được chỗ sai.
+    # real: "the red car is going fast" yields the skills {Go, R}, and "a
+    # ring of trust during the day" yields {R}. Any posting containing
+    # "red"/"ring"/"going" scored for two languages the JD never mentions —
+    # a wrong score with nobody able to point at the error.
     #
-    # Alias ngắn (r, go, c, js, ai, ml) gần như không bao giờ cần đuôi chia:
-    # người ta viết "R", "Go", "C" chứ không viết "Rs", "Going". Alias dài
-    # thì cần: "api" -> "apis", "model" -> "modelling".
+    # Short aliases (r, go, c, js, ai, ml) almost never need a suffix:
+    # people write "R", "Go", "C", not "Rs" or "Going". Longer aliases do:
+    # "api" -> "apis", "model" -> "modelling".
     duoi = _TAIL if len(alias) >= DU_DAI_CHO_DUOI else ""
     return re.compile(r"(?<!\w)" + re.escape(alias) + duoi + r"(?!\w)")
 
@@ -194,10 +200,11 @@ _ALIAS_RE: dict[str, tuple[re.Pattern, str]] = {
 
 
 def alias_hits(normed: str) -> list[str]:
-    """Tên chuẩn của mọi kỹ năng có mặt trong CHỮ ĐÃ CHUẨN HOÁ, giữ thứ tự.
+    """The canonical names of every skill present in ALREADY-NORMALISED
+    TEXT, in order.
 
-    Đầu vào phải đi qua ingest.base.norm trước — luật ranh giới từ dựa vào
-    việc dấu câu đã thành khoảng trắng.
+    The input must have gone through ingest.base.norm first — the word
+    boundary rule depends on punctuation having become spaces.
     """
     found: list[str] = []
     for pattern, canonical in _ALIAS_RE.values():
@@ -206,20 +213,21 @@ def alias_hits(normed: str) -> list[str]:
     return found
 
 
-# ------------------------------------------------------------------ ngành
-# BẢY NHÃN, không hơn. Đây là bộ từ dùng cho ô "ngành" trong hồ sơ: gõ một
-# danh sách riêng cho màn hình thì người dùng chọn được ngành mà máy không
-# biết nhận ra.
+# ------------------------------------------------------------ industries
+# SEVEN LABELS, no more. This is the vocabulary behind the profile's
+# "industry" field: typing a separate list for the screen would let the user
+# pick an industry the machine cannot recognise.
 #
-# Trước ở projects/inventory.py. Nó chưa bao giờ thuộc về tính năng đó — đây
-# là TỪ VỰNG, mà từ vựng thì ở đây: "thiếu từ thì thêm vào đây, không sửa chỗ
-# khác".
+# It used to live in projects/inventory.py. It never belonged to that
+# feature — this is VOCABULARY, and vocabulary lives here: "a missing word
+# gets added here, not fixed somewhere else".
 INDUSTRY: dict[str, set[str]] = {
     "hedge fund": {"hedge fund", "systematic fund", "multi-strategy",
                    "multi strategy", "prop trading", "proprietary trading",
                    "market making", "market maker", "quant fund"},
-    # "structuring" trần bị bỏ: đo được nó khớp vào "cleansing and structuring
-    # for downstream" — cấu trúc DỮ LIỆU, không phải cấu trúc sản phẩm tài chính.
+    # Bare "structuring" was dropped: measured, it matched "cleansing and
+    # structuring for downstream" — structuring DATA, not structuring a
+    # financial product.
     "investment bank": {"investment bank", "sell-side", "sell side",
                         "trading desk", "front office", "deal structuring",
                         "product structuring"},

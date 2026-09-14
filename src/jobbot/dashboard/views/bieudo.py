@@ -1,19 +1,20 @@
-"""Biểu đồ — SVG dựng sẵn ở máy chủ, KHÔNG thư viện, KHÔNG JavaScript.
+"""Charts — SVG built on the server, NO library, NO JavaScript.
 
-Vì sao không nạp một thư viện vẽ: mấy màn này của app không có một dòng JS
-nào ngoài live.js, và mỗi thư viện ngoài là một CDN phải với ra ngoài mạng —
-app chạy được lúc mất mạng là một tính chất, không phải may mắn. Biểu đồ ở
-đây toàn thanh và cột, mà thanh với cột thì `<rect>` là đủ.
+Why no charting library: these screens contain not one line of JS beyond
+live.js, and every external library is a CDN reaching out to the network —
+the app working offline is a property, not luck. The charts here are bars and
+columns, and for bars and columns `<rect>` is enough.
 
 BA LUẬT CHO MỌI HÌNH TRONG FILE NÀY:
 
-  1. KHÔNG VẼ CÁI KHÔNG ĐO ĐƯỢC. Ngày app chưa chạy thì không có cột, không
-     phải cột bằng 0 — "hôm đó làm được 0" và "hôm đó chưa có app" là hai sự
-     thật khác nhau, vẽ giống nhau là nói dối bằng hình.
-  2. LUÔN CÓ MẪU SỐ. Một cái thanh 3% mà không nói 3% của bao nhiêu thì người
-     đọc tự điền con số trong đầu họ, và thường là điền sai.
-  3. ĐỌC ĐƯỢC KHÔNG CẦN MÀU. Mọi hình đều kèm số bằng chữ; màu chỉ để xếp
-     nhóm nhanh, không phải để mang thông tin.
+  1. NEVER DRAW WHAT WAS NOT MEASURED. A day before the app existed has no
+     column, not a column of 0 — "that day produced 0" and "the app did not
+     exist that day" are two different truths, and drawing them the same is
+     lying with a picture.
+  2. ALWAYS SHOW THE DENOMINATOR. A 3% bar that does not say 3% of what
+     leaves the reader filling in the number themselves, usually wrongly.
+  3. READABLE WITHOUT COLOUR. Every shape carries its number in text; colour
+     only groups things quickly, it never carries information.
 
 CHỈ VẼ.
 """
@@ -25,7 +26,7 @@ from html import escape as esc
 
 
 def _so(n) -> str:
-    """12345 -> 12.345. Số dài mà không chấm thì đọc phải đếm chữ số."""
+    """12345 -> 12,345. A long number without separators has to be counted."""
     try:
         return f"{int(n):,}".replace(",", ".")
     except (TypeError, ValueError):
@@ -34,78 +35,83 @@ def _so(n) -> str:
 
 def cot_ngay(cot: list, dinh: int, cao: int = 34, mau: str = "",
              truoc: int = 0) -> str:
-    """Cột theo ngày. MỘT cột một ngày, cao theo đỉnh của CHÍNH chuỗi này.
+    """Columns by day. ONE column per day, scaled to THIS series' own peak.
 
-    Chuẩn hoá theo đỉnh riêng chứ không theo trục chung: một ngày quét ra
-    4.651 tin trong khi nộp 4 đơn. Chung trục thì dải "nộp" phẳng lì thành
-    một vạch, và cái dải đó chính là thứ người dùng cần nhìn nhất.
+    Normalised to its own peak rather than a shared axis: one day's scan
+    returns 4,651 postings while 4 applications go out. On a shared axis the
+    "applied" strip flattens to a line, and that strip is exactly the one the
+    user most needs to see.
 
-    Đổi lại, HAI DẢI KHÔNG SO ĐƯỢC VỚI NHAU BẰNG MẮT — nên mỗi dải phải in
-    đỉnh của nó ra bằng chữ, và chỗ gọi có trách nhiệm làm việc đó.
+    The cost: TWO STRIPS CANNOT BE COMPARED BY EYE — so each strip has to
+    print its own peak in text, and the caller is responsible for that.
     """
     if not cot:
         return ""
-    # `truoc` = mấy ngày TRONG cửa sổ mà app CHƯA CHẠY. Chúng vẫn chiếm chỗ
-    # trên dải, vẽ bằng một vạch mờ sát đáy — khác hẳn cột 0 (đậm hơn, đặc).
+    # `truoc` = days INSIDE the window when the app WAS NOT RUNNING. They
+    # still take their place on the strip, drawn as a faint line at the
+    # bottom — clearly different from a 0 column (darker, solid).
     #
-    # Bỏ chúng đi thì hai ngày số liệu nở ra choán hết dải, đọc thành "lúc
-    # nào cũng đều"; điền 0 cho chúng thì đọc thành "năng suất sụp đổ". Cả
-    # hai đều sai, và cái sai thứ hai còn làm người dùng đi sửa nhầm chỗ.
+    # Drop them and two days of data expand to fill the strip, reading as
+    # "steady all along"; fill them with 0 and it reads as "productivity
+    # collapsed". Both are wrong, and the second sends the user off fixing
+    # the wrong thing.
     n = len(cot) + truoc
     w = round(100 / n, 4)
     o = []
     for i in range(truoc):
         o.append(f"<rect x='{round(i * w, 4)}%' y='99.4%'"
                  f" width='{round(w * .74, 4)}%' height='0.6%'"
-                 f" class=ngoai><title>app chưa chạy</title></rect>")
+                 f" class=ngoai><title>the app was not running</title></rect>")
     for j, (d, v) in enumerate(cot):
         i = j + truoc
         h = round(v * 100 / dinh, 2) if dinh else 0
-        h = max(h, 1.6) if v else 0          # có số thì phải thấy được
+        h = max(h, 1.6) if v else 0          # a non-zero value must be visible
         nhan = f"{esc(str(d))}: {_so(v)}"
         if h:
             o.append(f"<rect x='{round(i * w, 4)}%' y='{round(100 - h, 2)}%'"
                      f" width='{round(w * .74, 4)}%' height='{h}%' rx='0.6'>"
                      f"<title>{nhan}</title></rect>")
         else:
-            # Ngày CÓ trong dải mà số bằng 0: vẽ một chấm đáy. Bỏ trống hẳn
-            # thì nó lẫn với ngày nằm ngoài dải (app chưa chạy).
+            # A day that IS in the window with a value of 0: draw a dot at
+            # the bottom. Leaving it blank makes it look like a day outside
+            # the window (the app was not running).
             o.append(f"<rect x='{round(i * w, 4)}%' y='99%'"
                      f" width='{round(w * .74, 4)}%' height='1%' rx='0.5'"
                      f" class=khong><title>{nhan}</title></rect>")
     lop = f" {mau}" if mau else ""
-    # Chiều cao do CSS lo (.spark), không gắn style vào từng hình: mở to ô
-    # thì dải phải cao lên theo, mà một con số nhúng trong HTML thì không.
+    # The height is CSS's job (.spark), not a style on each shape: expanding
+    # the panel has to make the strip taller, and a number baked into the
+    # HTML cannot do that.
     return (f"<svg class='spark{lop}' viewBox='0 0 100 100'"
             f" preserveAspectRatio=none aria-hidden=true>{''.join(o)}</svg>")
 
 
 def dai_viec(v: dict) -> str:
-    """Một việc = một dải: tên · tổng · trung bình · cột ngày · khoảng ngày."""
+    """One metric = one strip: name · total · average · daily columns · range."""
     cot = v.get("cot") or []
     if not cot:
         return (f"<div class=dai><div class=daitop><b>{esc(v['ten'])}</b>"
-                f"<span class=muted>chưa có ngày nào</span></div></div>")
+                f"<span class=muted>no days yet</span></div></div>")
     truoc = v.get("truoc") or 0
-    # Nhãn mốc trái phải là MÉP TRÁI CỦA DẢI, không phải ngày có số đầu tiên:
-    # dải giờ vẽ cả đoạn app chưa chạy, nên lấy ngày có số làm mép là nói sai
-    # cái người ta đang nhìn.
+    # The left-hand label has to be THE LEFT EDGE OF THE STRIP, not the
+    # first day with a value: the strip now draws the not-running stretch
+    # too, so using the first day with data misnames what is on screen.
     dau = (v.get("mep_trai") or cot[0][0])[5:].replace("-", "/")
     cuoi = cot[-1][0][5:].replace("-", "/")
-    # Nói THẲNG có bao nhiêu ngày app chưa chạy, đừng bắt người đọc suy ra từ
-    # một khoảng trống — khoảng trống nào cũng đọc được thành "làm được 0".
-    chan = (f"{v['ngay_co']} ngày có số" if not truoc else
-            f"{truoc} ngày app chưa chạy · {v['ngay_co']} ngày có số")
-    # VIỆC HIẾM THÌ "TB 0/ngày" LÀ MỘT CÂU VÔ NGHĨA. Được gọi phỏng vấn 1
-    # lần trong 60 ngày là một sự thật rất đáng biết, mà in ra thành "TB
-    # 0/ngày · đỉnh 1" thì nó đọc như dữ liệu hỏng. Với dải thưa, câu trả lời
-    # đúng là LẦN CUỐI LÀ KHI NÀO.
+    # SAY OUTRIGHT how many days the app was not running; do not make the
+    # reader infer it from a gap — any gap reads as "produced 0".
+    chan = (f"{v['ngay_co']} days with data" if not truoc else
+            f"{truoc} days before the app ran · {v['ngay_co']} days with data")
+    # FOR A RARE EVENT, "avg 0/day" IS A MEANINGLESS SENTENCE. One interview
+    # invitation in 60 days is a fact very much worth knowing, and printing
+    # it as "avg 0/day · peak 1" reads like broken data. For a sparse series
+    # the right answer is WHEN IT LAST HAPPENED.
     cuoi_co = next((d for d, x in reversed(cot) if x), "")
     if round(v["tb"]) < 1 and v["tong"]:
         phu = (f"lần cuối {esc(cuoi_co[5:].replace('-', '/'))}"
-               if cuoi_co else f"đỉnh {_so(v['dinh'])}")
+               if cuoi_co else f"peak {_so(v['dinh'])}")
     else:
-        phu = f"TB {_so(round(v['tb']))}/ngày · đỉnh {_so(v['dinh'])}"
+        phu = f"avg {_so(round(v['tb']))}/day · peak {_so(v['dinh'])}"
     return (f"<div class=dai>"
             f"<div class=daitop><a href='{esc(v['di'])}'>{esc(v['ten'])}</a>"
             f"<span class=daiso><b>{_so(v['tong'])}</b><i>{phu}</i>"
@@ -117,7 +123,8 @@ def dai_viec(v: dict) -> str:
 
 
 def cot_thu(so: list, ten: list, mau: str = "") -> str:
-    """Bảy cột, một cột một thứ. Dùng CHO CHUỖI ĐỦ DÀI thôi — chỗ gọi gác."""
+    """Seven columns, one per weekday. Only for a LONG ENOUGH series — the
+    caller guards that."""
     dinh = max(so) if so else 0
     o = ""
     for i, v in enumerate(so):
@@ -128,25 +135,28 @@ def cot_thu(so: list, ten: list, mau: str = "") -> str:
     return f"<div class='thubar {esc(mau)}'>{o}</div>"
 
 
-def chua_du(co: int, can: int, don: str = "ngày") -> str:
-    """Chưa đủ dữ liệu thì NÓI RA, không vẽ một cái lưới trống.
+def chua_du(co: int, can: int, don: str = "days") -> str:
+    """Not enough data yet -> SAY SO, do not draw an empty grid.
 
-    Đây là hình quan trọng nhất file này: một biểu đồ trống trông y hệt một
-    biểu đồ "năng suất bằng 0", và người dùng sẽ tin cái thứ hai.
+    This is the most important shape in this file: an empty chart looks
+    exactly like a "productivity is zero" chart, and the user will believe
+    the second one.
     """
-    return (f"<div class=chuadu><b>Chưa đủ để nói</b>"
-            f"<span>mới có <b>{co}</b> {esc(don)} số liệu, cần <b>{can}</b> "
-            f"{esc(don)} thì gộp lại mới có nghĩa. App chạy thêm là mục này "
-            f"tự hiện.</span></div>")
+    return (f"<div class=chuadu><b>Not enough to say</b>"
+            f"<span>only <b>{co}</b> {esc(don)} of data so far; <b>{can}</b> "
+            f"{esc(don)} are needed before an average means anything. Keep "
+            f"the app running and this appears on its own.</span></div>")
 
 
-# -------------------------------------------------------------------- PHỄU
+# ------------------------------------------------------------------ FUNNEL
 
 def pheu(buoc: list, chu: str = "") -> str:
-    """Rơi rụng qua từng khúc. Bề rộng theo bước ĐẦU, nên mắt thấy ngay độ hụt.
+    """Drop-off through each stage. Widths are relative to the FIRST stage,
+    so the eye sees the loss at once.
 
-    Kèm % GIỮ LẠI của từng bước so với bước liền trước — đó mới là con số nói
-    lên khúc nào đang cắt mạnh nhất; so với bước đầu thì bước nào cũng nhỏ.
+    It also prints the % KEPT at each stage relative to the one before — that
+    is the number that says which stage is cutting hardest; against the first
+    stage every later one just looks small.
     """
     if not buoc:
         return ""
@@ -156,7 +166,7 @@ def pheu(buoc: list, chu: str = "") -> str:
     for ten, so, di in buoc:
         r = max(round(so * 100 / dau, 2), 0.8) if dau else 0
         rot = ("" if truoc in (None, 0) else
-               f"<i class=protr>giữ {round(so * 100 / truoc)}% bước trước</i>")
+               f"<i class=protr>{round(so * 100 / truoc)}% of the previous step</i>")
         o += (f"<a class=fbuoc href='{esc(di)}'>"
               f"<span class=pten>{esc(ten)}</span>"
               f"<span class=pbar><span style='width:{r}%'></span></span>"
@@ -167,13 +177,15 @@ def pheu(buoc: list, chu: str = "") -> str:
 
 
 def thanh_chia(phan: list, tong: int) -> str:
-    """Một thanh chia khúc: [(nhãn, số, lớp)]. Mẫu số in ngay bên cạnh.
+    """A segmented bar: [(label, count, class)]. The denominator prints
+    beside it.
 
-    Khúc nào 0 thì KHÔNG vẽ, không vẽ một vạch tóc rồi chú thích — chú thích
-    cho một khúc không tồn tại làm người đọc đi tìm nó trên thanh.
+    A segment of 0 is NOT drawn — no hairline with a caption, because a
+    caption for a segment that does not exist sends the reader hunting for it
+    on the bar.
     """
     if not tong:
-        return "<div class=empty-box>chưa nộp chỗ nào</div>"
+        return "<div class=empty-box>nothing applied to yet</div>"
     o = "".join(
         f"<span class='segq {lop}' style='width:{round(so * 100 / tong, 2)}%'"
         f" title='{esc(ten)}: {_so(so)}/{_so(tong)}'></span>"
@@ -185,14 +197,14 @@ def thanh_chia(phan: list, tong: int) -> str:
 
 
 def ti_le(pc, tren: str, ten: str, lop: str = "") -> str:
-    """MỘT tỉ lệ + mẫu số của nó. Không bao giờ in % mà giấu mẫu số."""
+    """ONE ratio + its denominator. Never print a % while hiding what of."""
     v = "—" if pc is None else f"{pc:g}%"
     return (f"<div class='tile {lop}'><b>{esc(v)}</b>"
             f"<span>{esc(ten)}</span><i>{esc(tren)}</i></div>")
 
 
 def thang_gan(thang: dict, n: int = 6, mau: str = "") -> str:
-    """Mấy tháng gần nhất. Tên tháng viết ra, không để 2026-08 trần."""
+    """The last few months. Month names spelled out, not a bare 2026-08."""
     if not thang:
         return ""
     muc = sorted(thang.items())[-n:]
@@ -201,7 +213,8 @@ def thang_gan(thang: dict, n: int = 6, mau: str = "") -> str:
     for t, v in muc:
         h = round(v * 100 / dinh)
         try:
-            nhan = f"tháng {int(t[5:7])}"
+            nhan = ("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec"
+                    .split()[int(t[5:7]) - 1])
         except (TypeError, ValueError):
             nhan = t
         o += (f"<div class=tcot><span class=tbar style='height:{max(h, 2)}%'"
@@ -212,4 +225,4 @@ def thang_gan(thang: dict, n: int = 6, mau: str = "") -> str:
 
 def hom_nay_la() -> str:
     t = date.today()
-    return ("hai ba tư năm sáu bảy".split() + ["chủ nhật"])[t.weekday()]
+    return "Mon Tue Wed Thu Fri Sat Sun".split()[t.weekday()]

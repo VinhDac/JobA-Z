@@ -153,7 +153,7 @@ check("chuỗi rỗng thì không vẽ khung trống", bd.cot_ngay([], 0) == "")
 # Chưa đủ dữ liệu thì NÓI RA. Một biểu đồ trống trông y hệt một biểu đồ
 # "năng suất bằng 0", và người dùng sẽ tin cái thứ hai.
 _cd = bd.chua_du(2, 21)
-check("chưa đủ thì nói thẳng", "Chưa đủ để nói" in _cd)
+check("chưa đủ thì nói thẳng", "Not enough to say" in _cd)
 check("và nói rõ đang có mấy, cần mấy", ">2<" in _cd and ">21<" in _cd)
 check("tỉ lệ luôn đi kèm mẫu số",
       "1/37" in bd.ti_le(2.7, "1/37 lần nộp", "đi tiếp"))
