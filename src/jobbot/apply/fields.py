@@ -1,15 +1,17 @@
-"""Đọc form nộp, rồi xếp mỗi ô vào ĐÚNG MỘT trong ba giỏ.
+"""Read an application form and sort each field into EXACTLY ONE of three
+buckets.
 
-    ĐIỀN   máy chứng minh được câu trả lời  -> máy điền
-    HỎI    câu cần Vin quyết                -> để trống, ghi lý do
-    CẤM    nhân khẩu học                    -> KHÔNG chạm, dù form bắt buộc
+    FILL   the machine can prove the answer   -> it fills it
+    ASK    a question Vin has to decide       -> left empty, with a reason
+    SKIP   demographics                       -> NOT TOUCHED, even if required
 
-Một ô rơi vào một giỏ, không hai. Ô nào không luật nào nhận thì mặc định là
-HỎI — không biết thì hỏi, đó là hướng an toàn duy nhất.
+One field, one bucket, never two. A field no rule claims defaults to ASK —
+when you do not know, ask; that is the only safe direction.
 
-Ghép theo CÂU HỎI chứ không theo tên ô: Greenhouse gọi `first_name`, Ashby gọi
-`_systemfield_name`, Lever gọi `name`. Cả ba đều hỏi "tên bạn là gì". Bám vào
-tên ô là ba bộ luật; bám vào câu hỏi là một.
+Matched by THE QUESTION rather than the field name: Greenhouse calls it
+`first_name`, Ashby `_systemfield_name`, Lever `name`. All three ask "what is
+your name". Keying on field names is three rule sets; keying on the question
+is one.
 """
 
 from __future__ import annotations
@@ -17,59 +19,66 @@ from __future__ import annotations
 import json
 import re
 
-FILL, ASK, SKIP = "điền", "hỏi", "bỏ"
+FILL, ASK, SKIP = "fill", "ask", "skip"
 
-# --- CẤM ------------------------------------------------------------------
-# Đặc điểm được pháp luật bảo vệ. Máy không trả lời thay người về những thứ
-# này, kể cả khi form đánh dấu bắt buộc. Vin tự chọn, kể cả chọn "không nói".
+# --- SKIP -----------------------------------------------------------------
+# Legally protected characteristics. The machine does not answer these on a
+# person's behalf, even when the form marks them required. Vin chooses,
+# including choosing "prefer not to say".
 NEVER = re.compile(
     r"gender|\bsex\b|\brace\b|ethnic|hispanic|latin[ox]|veteran|militar|"
     r"armed forces|disabilit|"
     r"disabled|sexual orientation|lgbt|transgender|pronoun|self identif|"
     r"equal opportunit|eeoc|protected (class|characteristic)")
 
-# --- HỎI ------------------------------------------------------------------
-# Mỗi dòng kèm LÝ DO, vì lý do là thứ Vin đọc để biết phải làm gì.
+# --- ASK ------------------------------------------------------------------
+# Each entry carries a REASON, because the reason is what Vin reads to know
+# what to do.
 ASK_RULES: list[tuple[re.Pattern, str]] = [
-    # Lối viết phổ biến nhất của Greenhouse/Lever là ĐẢO: "authorized to work
-    # in this country". Bản cũ chỉ bắt "work authoriz…" theo đúng thứ tự đó,
-    # nên câu đảo lọt xuống luật ĐIỀN `country` và máy trả lời một câu Có/Không
-    # về quyền làm việc bằng chữ "United Kingdom".
+    # Greenhouse/Lever's most common phrasing is REVERSED: "authorized to
+    # work in this country". The old version only caught "work authoriz…" in
+    # that exact order, so the reversed phrasing fell through to the FILL rule
+    # for `country` and the machine answered a Yes/No question about the right
+    # to work with the words "United Kingdom".
     (re.compile(r"sponsor|visa|right to work|immigration|"
                 r"work (authoris|authoriz)|(authoris|authoriz)\w*\s+to work|"
                 r"legally (authoris|authoriz)|eligib\w*\s+to work|"
                 r"work permit|permitted to work"),
-     "sai một chữ là hỏng đơn — Graduate visa: HIỆN không cần bảo lãnh, TƯƠNG LAI có"),
-    # Quốc tịch / nơi sinh KHÔNG phải nơi đang ở. Bản cũ để mọi ô có chữ
-    # "country" rơi vào luật ĐIỀN và trả lời bằng nước cư trú.
+     "one wrong word ruins the application — Graduate visa: NO sponsorship "
+     "needed now, YES in future"),
+    # Nationality / country of birth is NOT where you live. The old version
+    # let every field containing "country" fall into the FILL rule and
+    # answered with the country of residence.
     (re.compile(r"citizen|nationalit|country of birth|born in|place of birth|"
                 r"passport|domicile|country of origin"),
-     "tư cách pháp lý — Vin quốc tịch Việt Nam, đang ở UK bằng Graduate visa"),
+     "legal status — Vin is a Vietnamese national living in the UK on a "
+     "Graduate visa"),
     (re.compile(r"\bgpa\b|grade point|classification|predicted grade"),
-     "MSc chưa có điểm tổng; BA là 3.59/4.0"),
+     "the MSc has no final grade yet; the BA is 3.59/4.0"),
     (re.compile(r"graduat\w*|expected completion|when .* finish"),
-     "Vin tốt nghiệp 2026 — đoán sai là bị loại thẳng"),
+     "Vin graduates in 2026 — a wrong guess is an outright rejection"),
     (re.compile(r"salary|compensation|expected pay|day rate|remuneration"),
-     "con số này Vin tự quyết"),
+     "this number is Vin's own call"),
     (re.compile(r"cover letter|why (do|are) you|motivat|tell us|describe|"
                 r"what interests|in your own words"),
-     "câu này viết tay, không lắp ghép"),
+     "this one is written by hand, not assembled"),
     (re.compile(r"notice period|start date|earliest|available from|when can you"),
-     "phụ thuộc lịch của Vin"),
-    (re.compile(r"relocat"), "Vin tự quyết"),
-    (re.compile(r"criminal|conviction|background check|dbs"), "khai báo pháp lý"),
+     "depends on Vin's own schedule"),
+    (re.compile(r"relocat"), "Vin's own call"),
+    (re.compile(r"criminal|conviction|background check|dbs"), "a legal declaration"),
     (re.compile(r"agree|consent|acknowledg|privacy|terms|gdpr|data protection"),
-     "đồng ý điều khoản là chữ ký — chỉ Vin bấm được"),
-    # \b: chuỗi "referr" nằm NGAY TRONG chữ "preferred", nên mọi ô
-    # "Preferred name" bị xếp vào giỏ HỎI và Vin phải gõ tay tên mình mỗi lần.
+     "agreeing to terms is a signature — only Vin can click it"),
+    # \b: the string "referr" sits INSIDE the word "preferred", so every
+    # "Preferred name" field landed in the ASK bucket and Vin typed his own
+    # name by hand every time.
     (re.compile(r"how did you hear|\breferr|\bsource\b|who referred"),
-     "Vin tự chọn"),
-    (re.compile(r"cover_letter|coverletter"), "chưa có tệp thư ngỏ"),
+     "Vin picks this himself"),
+    (re.compile(r"cover_letter|coverletter"), "no cover-letter file yet"),
 ]
 
-# --- ĐIỀN -----------------------------------------------------------------
-# Sự thật kiểm chứng được, lấy từ answer.book(). Thứ tự có ý nghĩa: luật hẹp
-# đứng trước luật rộng ("first name" trước "name").
+# --- FILL -----------------------------------------------------------------
+# Verifiable facts, taken from answer.book(). The order matters: narrow rules
+# come before broad ones ("first name" before "name").
 FILL_RULES: list[tuple[re.Pattern, str]] = [
     (re.compile(r"first name|given name|forename|\bfname\b"), "first_name"),
     (re.compile(r"last name|family name|surname|\blname\b"), "last_name"),
@@ -94,31 +103,34 @@ FILL_RULES: list[tuple[re.Pattern, str]] = [
 
 RESUME = re.compile(r"resume|\bcv\b|curriculum")
 
-# Dấu hiệu đây là một CÂU HỎI, không phải nhãn của một ô dữ kiện.
+# Signals that this is a QUESTION rather than the label of a data field.
 #
-# Luật ĐIỀN so khớp chuỗi con, nên "Do you have a valid driving licence for
-# work in your city?" trúng luật `city` và máy điền "London" vào đó. Nhãn ô dữ
-# kiện thật thì ngắn và không hỏi han: "City", "Country", "Phone". Câu hỏi thì
-# có chủ ngữ và dấu hỏi. Thấy dấu hiệu hỏi -> để Vin trả lời.
+# FILL rules match substrings, so "Do you have a valid driving licence for
+# work in your city?" hits the `city` rule and the machine types "London" into
+# it. A real data-field label is short and asks nothing: "City", "Country",
+# "Phone". A question has a subject and a question mark. Seeing question
+# signals -> leave it for Vin.
 ASKING = re.compile(
     r"\b(do|did|does|are|is|have|has|will|would|can|could|should|were|was)\s+you"
     r"|\byou\b.{0,24}\?|^\s*(why|how|what|which|when|where|who)\b"
     r"|\bplease (tell|describe|explain|list|confirm)\b")
 
-# Đọc mọi ô đang hiện, gắn cho mỗi ô một số hiệu để lát nữa điền không bị lạc.
+# Read every visible field and give each an index so filling cannot get lost.
 #
-# BA THỨ HỌC ĐƯỢC TỪ FORM THẬT (Point72, Greenhouse bản Remix 2025):
+# THREE THINGS LEARNED FROM A REAL FORM (Point72, Greenhouse Remix 2025):
 #
-# 1. Không còn <select> nào. Mọi thứ trông như danh sách thả xuống đều là
-#    input[role=combobox] — react-select. Đặt .value cho nó chỉ là gõ vào ô
-#    LỌC, chưa chọn gì; mà `el.value` sau đó đúng bằng chữ vừa gõ, nên kiểm
-#    tra kiểu đó BÁO THÀNH CÔNG GIẢ. Đo được 4 ô như vậy.
-# 2. Cạnh mỗi combobox có một input BÓNG: không name, không id, chỉ để react
-#    hiện chữ "bắt buộc". Nó không nhãn nên tự mượn nhãn hàng xóm -> mọi câu
-#    hỏi hiện ra hai lần. Ô không name lẫn id thì form không đọc; bỏ.
-# 3. Câu nhiều lựa chọn là N ô đánh dấu CÙNG name. Đọc rời ra thì "London",
-#    "Paris", "Hong Kong" thành ba câu hỏi bắt buộc riêng — vô nghĩa. Gộp
-#    theo name, một câu một dòng.
+# 1. There is no <select> left. Everything that looks like a dropdown is an
+#    input[role=combobox] — react-select. Setting .value on it only types
+#    into the FILTER box and selects nothing; and `el.value` afterwards
+#    equals exactly what was typed, so that kind of check REPORTS FALSE
+#    SUCCESS. Measured: 4 such fields.
+# 2. Beside each combobox is a SHADOW input: no name, no id, there only so
+#    react can show "required". Having no label it borrows its neighbour's ->
+#    every question appears twice. A field with neither name nor id is not
+#    read by the form; drop it.
+# 3. A multiple-choice question is N checkboxes sharing ONE name. Read
+#    separately, "London", "Paris" and "Hong Kong" become three separate
+#    required questions — meaningless. Grouped by name, one question per row.
 READ_JS = r"""
 (() => {
   const seen = [], out = [];
@@ -133,8 +145,8 @@ READ_JS = r"""
               if (by) { const n = document.getElementById(by); if (n) t = n.innerText; } }
     return clean(t).slice(0, 200);
   };
-  // Câu hỏi CHUNG của một nhóm ô đánh dấu: đi ngược lên tìm nhãn khác nhãn
-  // của chính ô này.
+  // The SHARED question of a checkbox group: walk up looking for a label
+  // that is not this field's own.
   const groupLabel = (el, mine) => {
     const fs = el.closest('fieldset');
     if (fs) { const lg = fs.querySelector('legend'); if (lg) return clean(lg.innerText).slice(0, 200); }
@@ -152,14 +164,16 @@ READ_JS = r"""
     const type = (el.type || '').toLowerCase();
     if (['hidden','submit','button','image','reset'].includes(type)) return;
     if (el.disabled) return;
-    // Ô KHOÁ (readOnly) vẫn phải VÀO danh sách. Widget chọn ngày hay khoá ô
-    // chữ để bắt bấm vào lịch, và ô đó thường BẮT BUỘC. Bỏ nó ra khỏi danh
-    // sách thì missing() không thấy, và máy bấm Gửi cho một lá đơn thiếu ngày
-    // tốt nghiệp. Giữ lại, đánh dấu là khoá, rồi để Vin tự chọn.
+    // A LOCKED (readOnly) field still BELONGS in the list. Date pickers
+    // often lock the text box to force use of the calendar, and that field
+    // is usually REQUIRED. Leave it out and missing() cannot see it, and the
+    // machine presses Send on an application with no graduation date. Keep
+    // it, mark it locked, and let Vin pick.
     const locked = !!el.readOnly;
-    // Ô bóng (không name lẫn id) thì form không đọc — BỎ, TRỪ ô tệp: rất
-    // nhiều ATS để <input type=file> ẩn, không name không id, điều khiển
-    // hoàn toàn bằng JS. Bỏ nó là gửi đơn KHÔNG có CV mà không ai báo.
+    // A shadow field (neither name nor id) is not read by the form — DROP
+    // it, EXCEPT file inputs: many ATSes hide <input type=file> with no name
+    // and no id, driven entirely by JS. Dropping it sends an application
+    // with NO CV and nobody says so.
     if (!el.name && !el.id && type !== 'file') return;
     if (type !== 'file' && !el.offsetParent) return;
     const n = seen.length; seen.push(el); el.setAttribute('data-jb', n);
@@ -172,12 +186,14 @@ READ_JS = r"""
                : type;
     const mine = own(el);
     const grouped = (type === 'checkbox' || type === 'radio');
-    // Nhãn DÙNG ĐỂ DÒ. Với ô nhóm, nhãn của từng lựa chọn là "London",
-    // "Yes" — không có dấu * nào, nên cờ `required` tính từ nó luôn ra false
-    // và missing() không thấy câu sponsorship bắt buộc còn trống.
+    // The label USED FOR MATCHING. For a grouped field, each option's label
+    // is "London" or "Yes" — with no * anywhere, so a `required` flag
+    // computed from it is always false and missing() cannot see an empty
+    // required sponsorship question.
     const lab = grouped ? (groupLabel(el, mine) || mine) : (mine || el.placeholder || '');
-    // Giá trị ĐANG CÓ. Với danh sách thả xuống, giá trị thật không nằm ở
-    // el.value (đó chỉ là ô lọc) mà ở cái "chip" vẽ trong thẻ bọc.
+    // The CURRENT value. For a dropdown the real value is not in el.value
+    // (that is just the filter box) but in the "chip" drawn inside the
+    // wrapper.
     let now = '';
     if (grouped) now = el.checked ? (mine || 'x') : '';
     else if (combo) {
@@ -205,52 +221,56 @@ READ_JS = r"""
 """
 
 
-# Tên ô kiểu lập trình: firstName, opportunityLocationId.
+# Programmer-style field names: firstName, opportunityLocationId.
 _CAMEL = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
-# Ô định danh nội bộ của trang, không phải câu hỏi cho người.
+# The site's internal identifier fields, not questions for a person.
 INTERNAL = re.compile(r"\bid\b$|\buuid\b|\btoken\b|\bcsrf\b")
 
 
 def _ask(text: str) -> str:
-    """Câu hỏi rút về dạng so khớp được: tách camelCase, chữ thường, chỉ chữ số."""
+    """The question reduced to a matchable form: camelCase split, lowercased,
+    letters and digits only."""
     return re.sub(r"[^a-z0-9]+", " ", _CAMEL.sub(" ", text or "").lower()).strip()
 
 
 def classify(field: dict) -> tuple[str, str]:
-    """Ô này -> (giỏ, khoá-hoặc-lý-do). Luật đầu tiên trúng thì thắng."""
+    """This field -> (bucket, key-or-reason). The first matching rule wins."""
     asked = _ask(f"{field.get('label','')} {field.get('name','')} {field.get('dom_id','')}")
     if not asked:
-        return ASK, "ô không nhãn"
-    # Không nhãn cho người đọc, mà tên là định danh nội bộ (Lever:
-    # `opportunityLocationId`) — đó không phải câu hỏi. Đoán vào là điền bừa.
-    # Dùng bản ĐÃ TÁCH, vì luật này cần ranh giới từ.
+        return ASK, "unlabelled field"
+    # No human-readable label, and the name is an internal identifier
+    # (Lever: `opportunityLocationId`) — that is not a question. Guessing
+    # means filling in nonsense. Uses the SPLIT form, because this rule needs
+    # word boundaries.
     if not field.get("label") and INTERNAL.search(asked):
-        return ASK, "ô nội bộ của trang"
+        return ASK, "an internal field of the site"
 
-    # Dò trên CẢ HAI dạng. Tách camelCase giúp `opportunityLocationId`, nhưng
-    # nó cũng bẻ "LinkedIn" thành "linked in" và "GitHub" thành "git hub" —
-    # luật `linkedin` trượt, ô LinkedIn im lặng thành "cần bạn" không lý do.
+    # Matched against BOTH forms. Splitting camelCase helps
+    # `opportunityLocationId`, but it also breaks "LinkedIn" into "linked in"
+    # and "GitHub" into "git hub" — the `linkedin` rule misses and the
+    # LinkedIn field silently becomes "needs you" with no reason.
     hay = f"{asked} {asked.replace(' ', '')}"
     if NEVER.search(hay):
         return SKIP, ""
     if field.get("kind") == "file":
-        return (FILL, "resume") if RESUME.search(hay) else (ASK, "tệp đính kèm khác")
+        return (FILL, "resume") if RESUME.search(hay) else (ASK, "another attachment")
     for rule, reason in ASK_RULES:
         if rule.search(hay):
             return ASK, reason
     asking = bool(ASKING.search(asked)) or asked.count(" ") >= 8
     for rule, key in FILL_RULES:
         if rule.search(hay):
-            # Câu hỏi dài, có chủ ngữ "you", hay có dấu hỏi thì không phải một
-            # ô dữ kiện — dù nó có tình cờ nhắc tới "city" hay "country".
+            # A long question with the subject "you" or a question mark is
+            # not a data field — even if it happens to mention "city" or
+            # "country".
             if asking:
-                return ASK, "câu hỏi, không phải ô dữ kiện — máy không đoán"
+                return ASK, "a question, not a data field — the machine does not guess"
             return FILL, key
     return ASK, ""
 
 
 def read(tab) -> list[dict]:
-    """Mọi ô của form đang mở, đã gộp nhóm và phân giỏ sẵn."""
+    """Every field of the open form, already grouped and bucketed."""
     raw = tab.eval(READ_JS) or "[]"
     out: list[dict] = []
     groups: dict[str, dict] = {}
@@ -270,8 +290,9 @@ def read(tab) -> list[dict]:
         out.append(f)
     for f in out:
         f["bucket"], f["key"] = classify(f)
-        # Ô khoá thì không gõ vào được — chỉ chọn bằng widget. Giữ trong danh
-        # sách để missing() thấy, nhưng đừng để fill() đi gõ.
+        # A locked field cannot be typed into — only picked with the widget.
+        # Keep it in the list so missing() can see it, but do not let fill()
+        # go typing.
         if f.get("locked") and f["bucket"] == FILL:
-            f["bucket"], f["key"] = ASK, "ô khoá — chọn bằng lịch/widget trên trang"
+            f["bucket"], f["key"] = ASK, "locked field — pick it with the page's calendar/widget"
     return out
