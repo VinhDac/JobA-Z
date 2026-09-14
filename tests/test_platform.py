@@ -1,11 +1,12 @@
-"""Test phần chạy đa nền tảng — macOS / Windows / Linux.
+"""Test the cross-platform parts — macOS / Windows / Linux.
 
-Bài test này viết TRÊN macOS nhưng phải bảo vệ được đường Windows. Không chạy
-thử máy Windows thật được, nên cách kiểm là: ép sys.platform rồi xem code
-dựng ra cái gì. Nó không chứng minh Windows chạy được; nó chứng minh code
-KHÔNG cắm cứng macOS.
+This test is written ON macOS but has to protect the Windows path. A real
+Windows machine cannot be tried here, so the method is: force sys.platform and
+look at what the code builds. It does not prove Windows works; it proves the
+code is NOT hardwired to macOS.
 
-Chỗ nào chỉ có thể thử trên máy thật thì ghi rõ ở đây, đừng giả vờ đã test.
+Whatever can only be tried on a real machine is written down here rather than
+pretended to be tested.
 
     python3 tests/test_platform.py
 """
@@ -23,7 +24,7 @@ def check(name, cond, extra=""):
 
 
 class platform_is:
-    """Ép sys.platform trong một khối, rồi trả lại như cũ."""
+    """Force sys.platform inside a block, then put it back."""
     def __init__(self, module, name):
         self.module, self.name = module, name
     def __enter__(self):
@@ -34,58 +35,59 @@ class platform_is:
         self.module.sys.platform = self.old
 
 
-print("[tìm Chrome: mỗi hệ một chỗ]")
+print("[finding Chrome: a different place on each system]")
 from jobbot.browser import chrome
 
 with platform_is(chrome, "win32"):
     os.environ.setdefault("PROGRAMFILES", r"C:\Program Files")
     win = chrome._candidates()
-    check("Windows dò chrome.exe", any(c.endswith("chrome.exe") for c in win))
-    check("và cả msedge.exe (Edge cũng là Chromium)",
+    check("Windows looks for chrome.exe", any(c.endswith("chrome.exe") for c in win))
+    check("and msedge.exe too (Edge is Chromium as well)",
           any(c.endswith("msedge.exe") for c in win))
-    check("KHÔNG dò đường macOS trên Windows",
+    check("it does NOT look at macOS paths on Windows",
           not any("/Applications/" in c for c in win))
-    check("dò cả chỗ cài cho riêng một tài khoản (LOCALAPPDATA)",
+    check("it looks at per-account installs too (LOCALAPPDATA)",
           len(win) > 4)
 
 with platform_is(chrome, "darwin"):
     mac = chrome._candidates()
-    check("macOS dò /Applications", all(c.startswith("/Applications/") for c in mac))
+    check("macOS looks in /Applications", all(c.startswith("/Applications/") for c in mac))
 
 with platform_is(chrome, "linux"):
     lin = chrome._candidates()
-    check("Linux dò /usr/bin", any(c.startswith("/usr/bin/") for c in lin))
+    check("Linux looks in /usr/bin", any(c.startswith("/usr/bin/") for c in lin))
 
-check("không tìm thấy thì báo rõ, không im lặng",
+check("not finding it is reported outright, never silently",
       "ChromeError" in Path("src/jobbot/browser/chrome.py").read_text())
 
 
-print("\n[thông báo: mỗi hệ một lệnh]")
+print("\n[notifications: a different command on each system]")
 from jobbot.core import notify
 
 with platform_is(notify, "darwin"):
-    cmd = notify.command("jobbot", "5 việc mới", "xem đi")
-    check("macOS dùng osascript", cmd[0] == "osascript")
+    cmd = notify.command("jobbot", "5 new postings", "go and look")
+    check("macOS uses osascript", cmd[0] == "osascript")
 
 with platform_is(notify, "win32"):
-    cmd = notify.command("jobbot", "5 việc mới", "xem đi")
-    check("Windows dùng powershell", cmd[0] == "powershell")
-    check("không cần cài module ngoài (không BurntToast)",
+    cmd = notify.command("jobbot", "5 new postings", "go and look")
+    check("Windows uses powershell", cmd[0] == "powershell")
+    check("no external module needed (no BurntToast)",
           "BurntToast" not in cmd[-1])
-    # Chuỗi lọt vào lệnh PowerShell phải được rào, y như bài học AppleScript.
+    # A string reaching a PowerShell command has to be quoted, the same
+    # lesson AppleScript taught.
     hack = notify.command("a", "'; Remove-Item C:\\ -Recurse; '", "")
-    check("nháy đơn trong nội dung bị nhân đôi, không thoát ra được lệnh",
+    check("a single quote in the body is doubled, it cannot escape the command",
           "''" in hack[-1] and "Remove-Item" in hack[-1])
 
 with platform_is(notify, "linux"):
-    check("Linux dùng notify-send",
+    check("Linux uses notify-send",
           notify.command("a", "b")[0] == "notify-send")
 
-check("hệ lạ thì lùi về notify-send, không nổ",
+check("an unknown system falls back to notify-send, it does not blow up",
       notify.BUILDERS.get("freebsd13") is None)
 
 
-print("\n[đọc PDF: không được chỉ chạy trên macOS]")
+print("\n[reading a PDF: it must not be macOS-only]")
 import zlib
 from jobbot.profile import import_cv as ic
 
@@ -102,116 +104,122 @@ CV = _pdf(["ADA GRACE LOVELACE  London, UK  you@example.com"]
 
 with platform_is(ic, "win32"):
     text = ic.from_pdf(CV)
-    check("Windows đọc được PDF chữ thường", "ADA GRACE LOVELACE" in text)
-    check("và lấy được cả phần dưới", "Computational Finance" in text)
-    # Font nhúng bảng mã riêng (LaTeX, Canva) bóc ra là rác. Nhét rác vào hồ
-    # sơ còn tệ hơn báo lỗi — người dùng còn đường dán chữ.
+    check("Windows reads an ordinary-text PDF", "ADA GRACE LOVELACE" in text)
+    check("and picks up the lower part too", "Computational Finance" in text)
+    # A font with its own embedded encoding (LaTeX, Canva) extracts as junk.
+    # Stuffing junk into the profile is worse than reporting an error — the
+    # user still has pasting as a way in.
     try:
         ic.from_pdf(_pdf(["\x01\x02\x03\x04\x05\x06\x07" * 40]))
-        check("PDF font nhúng -> báo lỗi, KHÔNG nhét rác vào hồ sơ", False)
+        check("an embedded-font PDF -> an error, NO junk into the profile", False)
     except ic.ReadError as exc:
-        check("PDF font nhúng -> báo lỗi, KHÔNG nhét rác vào hồ sơ", True)
-        check("và chỉ đường khác (dán chữ)", "PASTE" in str(exc))
+        check("an embedded-font PDF -> an error, NO junk into the profile", True)
+        check("and it points at the other way in (pasting)", "PASTE" in str(exc))
 
-check("nhận ra chữ thật", ic._looks_like_text("Analyst at Acme. " * 20))
-check("nhận ra rác", not ic._looks_like_text("\x01\x02\x03\x04" * 80))
-check("chuỗi quá ngắn không tính là CV", not ic._looks_like_text("hello"))
+check("it recognises real text", ic._looks_like_text("Analyst at Acme. " * 20))
+check("it recognises junk", not ic._looks_like_text("\x01\x02\x03\x04" * 80))
+check("too short a string does not count as a CV", not ic._looks_like_text("hello"))
 
 
-print("\n[vỏ cửa sổ]")
+print("\n[the window shell]")
 from jobbot import shell
 
 with tempfile.TemporaryDirectory() as tmp:
     os.environ["JOBBOT_DATA_DIR"] = tmp
     with platform_is(shell, "win32"):
-        check("Windows KHÔNG dùng vỏ macOS", not shell.has_mac_native())
-    # Cửa sổ giao diện phải dùng profile RIÊNG: chung với profile đi cào thì
-    # người dùng đóng cửa sổ là giết luôn tab máy đang lái.
+        check("Windows does NOT use the macOS shell", not shell.has_mac_native())
+    # The interface window has to use ITS OWN profile: shared with the
+    # scraping profile, closing the window kills the tab the machine is
+    # driving.
     from jobbot.browser import chrome as ch
-    check("profile cửa sổ khác profile đi cào",
+    check("the window profile differs from the scraping profile",
           shell.ui_profile_dir() != ch.profile_dir())
     src = Path("src/jobbot/shell.py").read_text()
-    check("và KHÔNG mở cổng debug ở cửa sổ giao diện",
+    check("and it opens NO debug port on the interface window",
           "--remote-debugging-port" not in src.split('"""')[2])
-    check("mở --app, không phải tab trình duyệt thường", "--app=" in src)
+    check("it opens --app, not an ordinary browser tab", "--app=" in src)
     os.environ.pop("JOBBOT_DATA_DIR", None)
 
 
-print("\n[đường dẫn: không ghép chuỗi, không cắm cứng dấu /]")
+print("\n[paths: no string joining, no hardcoded /]")
 from jobbot.core import paths
 src = Path("src/jobbot/core/paths.py").read_text()
-check("chỉ dùng pathlib", "Path(" in src and '"/"' not in src)
+check("pathlib only", "Path(" in src and '"/"' not in src)
 with tempfile.TemporaryDirectory() as tmp:
     os.environ["JOBBOT_DATA_DIR"] = tmp
-    check("đổi được chỗ chứa dữ liệu bằng biến môi trường",
+    check("the data directory can be moved with an environment variable",
           paths.data_dir() == Path(tmp))
     os.environ.pop("JOBBOT_DATA_DIR", None)
 
 
-print("\n[lối chạy trên Windows]")
+print("\n[the Windows entry points]")
 for name in ("run.bat", "run-console.bat"):
     raw = Path(name).read_bytes()
-    check(f"{name} có", bool(raw))
-    # cmd.exe đọc sai file chỉ có LF — dòng lệnh dính vào nhau.
-    check(f"{name} xuống dòng kiểu CRLF", b"\r\n" in raw)
-    check(f"{name} chỉ ASCII (cmd.exe mặc định không phải UTF-8)",
+    check(f"{name} exists", bool(raw))
+    # cmd.exe misreads a file with LF only — the command lines run together.
+    check(f"{name} uses CRLF line endings", b"\r\n" in raw)
+    check(f"{name} is ASCII only (cmd.exe does not default to UTF-8)",
           all(b < 128 for b in raw))
 
 run_py = Path("run.py").read_text()
-check("run.py chặn Python quá cũ", "3, 11" in run_py)
+check("run.py refuses too old a Python", "3, 11" in run_py)
 
 
 
-print("\n[cửa sổ app macOS — ô chọn tệp]")
-# WKWebView KHÔNG tự mở được hộp thoại chọn tệp. Thiếu delegate thì
-# <input type=file> chết câm: bấm "Choose File" không có gì xảy ra, không lỗi,
-# không log — mà trong trình duyệt thường thì cùng trang đó chạy bình thường.
+print("\n[the macOS app window — the file picker]")
+# WKWebView CANNOT open a file dialog by itself. Without the delegate,
+# <input type=file> dies silently: pressing "Choose File" does nothing, with no
+# error and no log — while the same page works normally in an ordinary
+# browser.
 if sys.platform == "darwin":
     try:
         from jobbot.app import Delegate
         _sel = (b"webView:runOpenPanelWithParameters:"
                 b"initiatedByFrame:completionHandler:")
         _m = Delegate.webView_runOpenPanelWithParameters_initiatedByFrame_completionHandler_
-        check("Delegate có hàm mở hộp thoại chọn tệp", _m.selector == _sel)
-        # Chữ ký phải khai tay. Để PyObjC tự suy thì tham số cuối ra "@" chứ
-        # không phải "@?" (block) — `handler(...)` gọi vào hư không và ô chọn
-        # tệp treo vĩnh viễn.
-        check("tham số cuối khai đúng là BLOCK",
+        check("the Delegate has a file-picker method", _m.selector == _sel)
+        # The signature has to be declared by hand. Left to PyObjC to infer,
+        # the last parameter comes out "@" rather than "@?" (a block) —
+        # `handler(...)` then calls into nothing and the file picker hangs
+        # forever.
+        check("the last parameter is declared as a BLOCK",
               _m.signature.decode().endswith("@?"))
         _src = (Path(__file__).resolve().parent.parent
                 / "src/jobbot/app.py").read_text(encoding="utf-8")
-        check("và delegate được gắn vào webview", "setUIDelegate_(delegate)" in _src)
+        check("and the delegate is attached to the webview", "setUIDelegate_(delegate)" in _src)
 
-        # Đường RA NGOÀI. Tin tuyển dụng nằm ở linkedin.com, greenhouse.io —
-        # không có hàm này thì <a target=_blank> bấm vào KHÔNG có gì xảy ra:
-        # không lỗi, không log, đúng lớp lỗi hộp chọn tệp đã mắc một lần.
+        # THE WAY OUT. Job postings live on linkedin.com, greenhouse.io —
+        # without this method an <a target=_blank> click does NOTHING: no
+        # error, no log, exactly the class of bug the file picker hit once.
         _sel2 = (b"webView:createWebViewWithConfiguration:"
                  b"forNavigationAction:windowFeatures:")
         _m2 = Delegate.webView_createWebViewWithConfiguration_forNavigationAction_windowFeatures_
-        check("Delegate có hàm mở đường ra ngoài", _m2.selector == _sel2)
-        # Để PyObjC tự suy thì nó nhìn `return None` và kết luận trả về VOID,
-        # trong khi WKWebView gọi hàm này để lấy về một WKWebView* — sai kiểu
-        # trả về thì runtime đọc rác ở thanh ghi, lúc chạy được lúc không.
-        check("kiểu TRẢ VỀ khai là object, không phải void",
+        check("the Delegate has a method for opening links out", _m2.selector == _sel2)
+        # Left to PyObjC to infer, it sees `return None` and concludes the
+        # return is VOID, while WKWebView calls this method to get back a
+        # WKWebView* — with the wrong return type the runtime reads junk out
+        # of a register, and it works sometimes and not others.
+        check("the RETURN type is declared as object, not void",
               _m2.signature.decode().startswith("@@:"), _m2.signature.decode())
-        # Mở ngay trong cửa sổ app là mất luôn dashboard: cửa sổ đó không có
-        # thanh địa chỉ, không có nút Back.
-        check("đẩy sang trình duyệt mặc định của máy",
+        # Opening it inside the app window loses the dashboard: that window
+        # has no address bar and no Back button.
+        check("it hands off to the machine's default browser",
               "NSWorkspace.sharedWorkspace().openURL_" in _src)
     except ImportError:
-        check("bỏ qua — máy này không có PyObjC", True)
+        check("skipped — no PyObjC on this machine", True)
 else:
-    check("bỏ qua — không phải macOS", True)
+    check("skipped — not macOS", True)
 
-print("\n[CÚ PHÁP CHẠY ĐƯỢC TRÊN BẢN PYTHON APP TỰ KHAI]")
-# LỖI ĐÃ XẢY RA THẬT, và nó là loại CHỈ HIỆN RA Ở MÁY NGƯỜI KHÁC:
-# views/settings.py viết f"...{" on" if x else ""}..." — nháy kép lồng nháy
-# kép, tức PEP 701, chỉ hợp lệ TỪ Python 3.12. Máy đang phát triển chạy 3.13
-# nên 2.300 phép kiểm đều xanh, trong khi trên macOS sạch (Python 3.9.6) cả
-# file không biên dịch nổi: mở tab Cài đặt là app nổ.
+print("\n[SYNTAX THAT RUNS ON THE PYTHON VERSION THE APP CLAIMS]")
+# A BUG THAT REALLY HAPPENED, and of the kind that ONLY SHOWS ON SOMEBODY
+# ELSE'S MACHINE: views/settings.py wrote f"...{" on" if x else ""}..." —
+# double quotes nested in double quotes, i.e. PEP 701, valid only FROM Python
+# 3.12. The development machine runs 3.13 so all 2,300 checks were green,
+# while on a clean macOS (Python 3.9.6) the whole file would not compile:
+# opening the Settings tab blew the app up.
 #
-# Bài này biên dịch MỌI file bằng một trình thông dịch CŨ HƠN. /usr/bin/python3
-# luôn có sẵn trên macOS, nên chốt này không đòi cài thêm gì.
+# This test compiles EVERY file with AN OLDER interpreter. /usr/bin/python3 is
+# always present on macOS, so this latch asks for nothing to be installed.
 import subprocess as _sp
 _cu_py = Path("/usr/bin/python3")
 if _cu_py.exists():
@@ -229,12 +237,12 @@ if _cu_py.exists():
     _ra = _sp.run([str(_cu_py), "-c", _ma], capture_output=True, text=True,
                   cwd=str(Path(__file__).resolve().parent.parent))
     _xau = [x for x in _ra.stdout.strip().split("|") if x]
-    check(f"mọi file biên dịch được bằng Python {_ban}"
-          + (f" — hỏng: {', '.join(_xau[:3])}" if _xau else ""), not _xau)
+    check(f"every file compiles under Python {_ban}"
+          + (f" — broken: {', '.join(_xau[:3])}" if _xau else ""), not _xau)
 else:
-    check("bỏ qua — máy này không có /usr/bin/python3", True)
+    check("skipped — no /usr/bin/python3 on this machine", True)
 
-print("\n[ICON APP — vẽ bằng HÌNH, đen trắng, cùng dấu với logo trong app]")
+print("\n[THE APP ICON — drawn as SHAPES, black and white, the same mark as the in-app logo]")
 import importlib.util as _il
 from pathlib import Path as _P
 _goc = _P(__file__).resolve().parent.parent
@@ -242,45 +250,45 @@ _spec = _il.spec_from_file_location("make_app", _goc / "scripts/make_app.py")
 _ma = _il.module_from_spec(_spec); _spec.loader.exec_module(_ma)
 _src = (_goc / "scripts/make_app.py").read_text(encoding="utf-8")
 
-# ĐEN TRẮNG: ba màu phải là xám thuần — ba kênh RGB bằng nhau.
-for _ten, _h in (("nền", _ma.NEN), ("vòng", _ma.VONG), ("chìa", _ma.NET)):
+# BLACK AND WHITE: all three colours have to be pure grey — three equal RGB channels.
+for _ten, _h in (("ground", _ma.NEN), ("rings", _ma.VONG), ("key", _ma.NET)):
     _rgb = [int(_h.lstrip("#")[i:i+2], 16) for i in (0, 2, 4)]
-    check(f"màu {_ten} là xám thuần, không ám màu nào",
+    check(f"the {_ten} colour is pure grey, with no cast",
           _rgb[0] == _rgb[1] == _rgb[2])
-check("vòng tròn tương phản hẳn với nền",
+check("the rings contrast sharply with the ground",
       abs(int(_ma.NEN.lstrip('#')[:2], 16) - int(_ma.VONG.lstrip('#')[:2], 16)) > 200)
-check("chìa cùng màu nền nên nó là hình CẮT RA khỏi vòng tròn",
+check("the key is the ground colour, so it is a shape CUT OUT of the rings",
       _ma.NET == _ma.NEN)
-# VẼ BẰNG HÌNH, KHÔNG BẰNG KÝ TỰ. Bản trước vẽ "◆" bằng font hệ thống: cỡ
-# quang học và baseline do font quyết, nên đổi macOS là icon xê dịch và không
-# có gì báo.
-# Canh THỨ ĐANG CHẠY, không canh chữ trong chú thích: dòng chú thích kể lại
-# cái đã bỏ là dòng đáng giữ nhất, cấm nó là cấm nhầm.
+# DRAWN AS SHAPES, NOT AS A CHARACTER. The previous version drew "◆" in the
+# system font: optical size and baseline were the font's to decide, so a macOS
+# update shifted the icon with nothing to say so.
+# It guards WHAT RUNS, not words in a comment: a comment recounting what was
+# removed is the most worth keeping, and banning it bans the wrong thing.
 _code = "\n".join(l for l in _src.splitlines() if not l.lstrip().startswith("#"))
 for _cam in ("NSAttributedString", "NSFont", "drawAtPoint_"):
-    check(f"không còn dựa vào «{_cam}»", _cam not in _code)
-check("chìa vẽ bằng đường, có hàm riêng", hasattr(_ma, "_khoa"))
-check("ba vòng tay cầm là NÉT, không tô — lỗ là lỗ thật",
+    check(f"it no longer relies on «{_cam}»", _cam not in _code)
+check("the key is drawn with paths, in a function of its own", hasattr(_ma, "_khoa"))
+check("the three grip rings are STROKED, not filled — the holes are real holes",
       "setLineWidth_" in _src and ".stroke()" in _src)
-# Icon ở Dock và logo trên thanh bên phải là MỘT cái tên.
-# ĐẾM TRONG LOGO, không đếm cả file: bộ icon thanh bên cũng có <circle>
-# (kính lúp, người, bánh răng) — đúng lớp lỗi bài "ba vòng chìa" bên test_web
-# đã dính. Cùng một cái bẫy, hai lần.
+# The Dock icon and the sidebar logo are ONE name.
+# COUNT INSIDE THE LOGO, not the whole file: the sidebar icon set also has
+# <circle>s (the magnifier, the person, the cog) — exactly the class of bug
+# the "three key rings" test in test_web hit. The same trap, twice.
 _lay = (_goc / "src/jobbot/dashboard/layout.py").read_text(encoding="utf-8")
 _logo = _lay[_lay.index("LOGO = ("):]
 _logo = _logo[:_logo.index("</svg>")]
-check("logo trong app cũng là chìa khoá ba vòng", _logo.count("<circle cx=") == 3)
-check("bộ đủ cỡ tới 16px cho Finder", "16, 32, 128, 256, 512" in _src)
+check("the in-app logo is the same three-ring key", _logo.count("<circle cx=") == 3)
+check("the set goes down to 16px for Finder", "16, 32, 128, 256, 512" in _src)
 _icns = _goc / "jobbot.app/Contents/Resources/jobbot.icns"
 if _icns.exists():
-    check("bản .icns đã đóng gói không rỗng", _icns.stat().st_size > 10_000)
+    check("the packaged .icns is not empty", _icns.stat().st_size > 10_000)
 
-print("\n[MỞ APP — cổng KHÔNG cố định nữa]")
+print("\n[OPENING THE APP — the port is NO LONGER fixed]")
 import re as _re2
 import subprocess as _sp2
 _goc2 = _P(__file__).resolve().parent.parent
 
-# --- tệp địa chỉ: ghi -> đọc -> xoá -------------------------------------
+# --- the address file: write -> read -> delete ---------------------------
 _cu_data = os.environ.get("JOBBOT_DATA_DIR")
 _tmp2 = tempfile.mkdtemp()
 os.environ["JOBBOT_DATA_DIR"] = _tmp2
@@ -289,76 +297,80 @@ try:
     from jobbot.core import dia_chi as _dc
     _ilib.reload(_dc)
     _dc.ghi("http://127.0.0.1:8799/")
-    check("ghi rồi đọc lại ra đúng địa chỉ", _dc.doc() == ("http://127.0.0.1:8799/", os.getpid()))
-    check("dòng 1 đọc được bằng `head -1` của shell",
+    check("written and read back gives the right address", _dc.doc() == ("http://127.0.0.1:8799/", os.getpid()))
+    check("line 1 is readable with the shell's `head -1`",
           _sp2.run(["head", "-n", "1", str(_dc.tep())], capture_output=True,
                    text=True).stdout.strip() == "http://127.0.0.1:8799/")
-    # Tệp rác thì trả None, KHÔNG nổ: nó là tệp trên đĩa, ai cũng sửa được.
-    _dc.tep().write_text("rác\n", encoding="utf-8")
-    check("tệp hỏng -> None, không nổ", _dc.doc() is None)
-    _dc.tep().write_text("http://127.0.0.1:8799/\nkhong-phai-so\n", encoding="utf-8")
-    check("PID hỏng vẫn lấy được địa chỉ", _dc.doc() == ("http://127.0.0.1:8799/", 0))
+    # A junk file returns None and does NOT blow up: it is a file on disk and
+    # anybody can edit it.
+    _dc.tep().write_text("junk\n", encoding="utf-8")
+    check("a broken file -> None, no blow-up", _dc.doc() is None)
+    _dc.tep().write_text("http://127.0.0.1:8799/\nnot-a-number\n", encoding="utf-8")
+    check("a broken PID still yields the address", _dc.doc() == ("http://127.0.0.1:8799/", 0))
     _dc.xoa()
-    check("xoá rồi thì đọc ra None", _dc.doc() is None)
-    check("xoá lần hai không nổ", _dc.xoa() is None)
+    check("deleted, it reads back as None", _dc.doc() is None)
+    check("deleting a second time does not blow up", _dc.xoa() is None)
 finally:
     if _cu_data is None: os.environ.pop("JOBBOT_DATA_DIR", None)
     else: os.environ["JOBBOT_DATA_DIR"] = _cu_data
 
-# --- start.command không được hỏi một cổng cắm cứng ---------------------
+# --- start.command must not ask for a hardcoded port ---------------------
 _start = (_goc2 / "start.command").read_text(encoding="utf-8")
 _start_code = "\n".join(l for l in _start.splitlines() if not l.lstrip().startswith("#"))
-check("start.command KHÔNG còn cắm cứng cổng 8765", "8765" not in _start_code)
-check("start.command đọc data/dang-chay.txt", "dang-chay.txt" in _start_code)
-check("start.command xác minh đúng jobbot đang trả lời, không chỉ 200",
+check("start.command NO LONGER hardcodes port 8765", "8765" not in _start_code)
+check("start.command reads data/dang-chay.txt", "dang-chay.txt" in _start_code)
+check("start.command verifies it is really jobbot answering, not just a 200",
       "api/alive" in _start_code)
-check("start.command hỏng thì KÊU LÊN", "display alert" in _start_code)
-check("cú pháp start.command chạy được",
+check("start.command SPEAKS UP when it fails", "display alert" in _start_code)
+check("start.command's syntax is valid",
       _sp2.run(["bash", "-n", str(_goc2 / "start.command")]).returncode == 0)
 
-# --- MỌI đường vào đều phải nói mình chạy ở đâu -------------------------
-# Bẫy: thêm một đường vào thứ ba (ví dụ một kịch bản dịch vụ) mà quên ghi
-# địa chỉ thì bấm đúp lại bật lượt thứ hai — đúng lỗi vừa sửa, lặp lại.
+# --- EVERY entry point has to say where it is running --------------------
+# The trap: add a third entry point (a service script, say) and forget to
+# write the address, and double-clicking starts a second instance — exactly
+# the bug just fixed, repeated.
 _duong_vao = []
 for _f in sorted((_goc2 / "src").rglob("*.py")):
     _t = _f.read_text(encoding="utf-8")
-    # `= serve()` chứ không phải "serve()": chữ đó còn nằm trong chú thích
-    # và docstring của các module khác, và bắt nhầm docstring thì bài test
-    # đòi dia_chi.py phải tự ghi địa chỉ cho chính nó.
+    # `= serve()` and not "serve()": that word also appears in comments and
+    # docstrings of other modules, and catching a docstring would have the
+    # test demand that dia_chi.py write the address for itself.
     if _re2.search(r"=\s*serve\(\)", _t):
         _duong_vao.append((_f, "dia_chi.ghi" in _t))
-check("tìm được đúng hai đường vào (__main__ và app)", len(_duong_vao) == 2,
+check("exactly two entry points found (__main__ and app)", len(_duong_vao) == 2,
       str([str(f.name) for f, _ in _duong_vao]))
 for _f, _co in _duong_vao:
-    check(f"{_f.name} gọi serve() thì cũng ghi địa chỉ", _co)
+    check(f"{_f.name} calls serve() and writes the address too", _co)
 
-# --- vỏ .app: không nướng cứng Python, hỏng thì nói ---------------------
+# --- the .app wrapper: no baked-in Python, and it speaks when it fails ---
 _ma_app = _il.module_from_spec(_spec); _spec.loader.exec_module(_ma_app)
 _vo = _ma_app.VO
-check("vỏ .app KHÔNG nướng cứng đường Python", "/opt/anaconda3" not in _vo
+check("the .app wrapper does NOT bake in a Python path", "/opt/anaconda3" not in _vo
       and "sys.executable" not in _vo)
-check("vỏ .app đi tìm Python lúc chạy, dùng chung bản với start.command",
+check("the .app wrapper finds Python at run time, sharing start.command's finder",
       "scripts/tim-python.sh" in _vo)
-check("vỏ .app kiểm dự án còn đó không trước khi cd", "run.py" in _vo.split("cd ")[0])
-check("vỏ .app hỏng thì KÊU LÊN, không thoát lặng lẽ",
+check("the .app wrapper checks the project is still there before cd", "run.py" in _vo.split("cd ")[0])
+check("the .app wrapper SPEAKS UP when it fails, it does not exit silently",
       "display alert" in _vo and _vo.count("keu ") >= 2)
 _vo_thu = _goc2 / "jobbot.app/Contents/MacOS/jobbot"
 if _vo_thu.exists():
-    # Bản ĐANG cài trên máy, không phải bản trong mã nguồn: dựng lại mới ăn.
-    check("bản .app đang cài đã là vỏ mới", "tim-python.sh" in
+    # The version INSTALLED on this machine, not the one in the source: only a
+    # rebuild takes effect.
+    check("the installed .app is already the new wrapper", "tim-python.sh" in
           _vo_thu.read_text(encoding="utf-8"))
 
-# --- bộ tìm Python: chọn theo SỐ HIỆU, không theo cái tên ---------------
+# --- the Python finder: it picks by VERSION NUMBER, never by name --------
 _tim = (_goc2 / "scripts/tim-python.sh").read_text(encoding="utf-8")
-check("bộ tìm Python hỏi version chứ không tin cái tên", "version_info >= (3, 11)" in _tim)
-check("chỉ tay được bằng JOBBOT_PYTHON khi máy lạ", "JOBBOT_PYTHON" in _tim)
+check("the Python finder asks the version rather than trusting the name", "version_info >= (3, 11)" in _tim)
+check("JOBBOT_PYTHON can point at it by hand on an unusual machine", "JOBBOT_PYTHON" in _tim)
 _cu_py2 = Path("/usr/bin/python3")
 if _cu_py2.exists():
-    # Máy này /usr/bin/python3 là 3.9 — bộ lọc PHẢI loại nó, nếu không thì
-    # bấm đúp sẽ chạy bằng bản thiếu tomllib rồi chết ở dòng đầu run.py.
+    # On this machine /usr/bin/python3 is 3.9 — the filter MUST reject it, or
+    # double-clicking runs on a build with no tomllib and dies on run.py's
+    # first line.
     _thu = _sp2.run([str(_cu_py2), "-c",
                      "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)"])
-    check("chính câu lọc đó loại được /usr/bin/python3 cũ", _thu.returncode == 1)
+    check("that very filter rejects the old /usr/bin/python3", _thu.returncode == 1)
 
 print(f"\n{ok} ok, {fail} fail")
 sys.exit(1 if fail else 0)
