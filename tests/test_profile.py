@@ -1,4 +1,4 @@
-"""Test M0 — hồ sơ người dùng. Chạy: python3 tests/test_profile.py"""
+"""Test M0 — the user profile. Run: python3 tests/test_profile.py"""
 
 import sys, tempfile
 from pathlib import Path
@@ -20,97 +20,102 @@ def check(name, cond):
 print("\n[schema]")
 qs = all_questions()
 ids = [q.id for s in SECTIONS for q in s.questions]
-check("không trùng id câu hỏi", len(ids) == len(set(ids)))
-check("mọi câu chọn đều có option", all(
+check("no duplicate question id", len(ids) == len(set(ids)))
+check("every choice question has options", all(
     q.options for q in qs.values() if q.kind in ("single", "multi")))
-check("cổng ingest tồn tại trong schema", all(q in qs for q in INGEST_GATE))
-check("job_titles là câu tự do, không phải danh sách cố định",
+check("the ingest gate's questions exist in the schema", all(q in qs for q in INGEST_GATE))
+check("job_titles is free text, not a fixed list",
       qs["job_titles"].kind == "longtext" and not qs["job_titles"].options)
-# Ba câu CHẾT của phần project cũ (proof_jds, existing_projects,
-# project_numbers) đã bỏ — không chỗ nào trong app đọc chúng. Phần project
-# quay lại với hình dạng khác: KHỐI, ghi thẳng vào cv_text, tức là thứ bộ chấm
-# điểm và bộ dựng CV thật sự đọc.
-check("ba câu chết đã bỏ",
+# The three DEAD questions of the old project feature (proof_jds,
+# existing_projects, project_numbers) are gone — nowhere in the app read
+# them. The project feature came back in a different shape: BLOCKS, written
+# straight into cv_text, which is what the scorer and the CV builder really
+# read.
+check("the three dead questions are gone",
       not any(q in all_questions() for q in
               ("proof_jds", "existing_projects", "project_numbers")))
-check("kinh nghiệm & project là mục riêng của HỒ SƠ — đó là thông tin cá nhân",
+check("experience & projects are sections of THE PROFILE — that is personal information",
       section_by_id("kinh_nghiem") is not None
       and section_by_id("project") is not None)
-check("và lưu vào khối cv_text, không đẻ bản sao",
+check("and they are stored as cv_text blocks, with no copy",
       all_questions()["experience_blocks"].block_kind == "experience"
       and all_questions()["project_blocks"].block_kind == "project")
-# Máy nhập CV xong đã rút ra khối rồi thì phải TÍNH LÀ XONG. Chỉ nhìn bảng
-# profile_answer thì Home báo "0/1 — chưa xong" trong khi dữ liệu đã nằm đó.
+# Once the CV import has extracted the blocks it has to COUNT AS DONE.
+# Looking only at the profile_answer table has Home reporting "0/1 — not
+# done" while the data is already there.
 _cv_khoi = ("DAC VINH NGUYEN\n\nEXPERIENCE\n"
             "Quant Analyst — Schonfeld Jan 2025 – Sep 2025\n  did a thing\n")
-check("có khối trong cv_text thì câu đó coi như đã trả lời",
+check("a block in cv_text means that question is answered",
       store.has_answer({"cv_text": _cv_khoi}, all_questions()["experience_blocks"]))
-check("không có khối thì chưa",
+check("no block means it is not",
       not store.has_answer({"cv_text": _cv_khoi}, all_questions()["project_blocks"]))
-check("và mục kinh nghiệm được tính là XONG",
+check("and the experience section counts as DONE",
       store.is_section_done({"cv_text": _cv_khoi}, section_by_id("kinh_nghiem")))
-check("work_auth nằm trong phần mục tiêu, không phải danh tính",
+check("work_auth belongs to the goals section, not to identity",
       any(q.id == "work_auth" for q in section_by_id("muc_tieu").questions))
-check("không còn lựa chọn riêng của thị trường VN",
+check("no Vietnam-specific market option is left",
       not any(o.value.startswith("vn_") for q in all_questions().values() for o in q.options))
-check("không câu bắt buộc nào nằm ngoài cổng ingest",
+check("no required question sits outside the ingest gate",
       {q.id for q in qs.values() if q.required} == set(INGEST_GATE))
 
-print("\n[lưu trữ]")
+print("\n[storage]")
 with tempfile.TemporaryDirectory() as tmp:
     conn = db.connect(Path(tmp) / "t.db")
 
-    check("DB trống -> hồ sơ rỗng", store.load(conn) == {})
-    check("DB trống -> chưa tìm được", not store.can_ingest({}))
-    check("nêu đúng cái còn thiếu", store.missing_for_ingest({}) == list(INGEST_GATE))
+    check("an empty DB -> an empty profile", store.load(conn) == {})
+    check("an empty DB -> cannot search yet", not store.can_ingest({}))
+    check("it names exactly what is missing", store.missing_for_ingest({}) == list(INGEST_GATE))
 
     store.save(conn, {"job_titles": "Backend Engineer"}, "t")
-    check("thiếu markets + work_auth -> vẫn chặn",
+    check("missing markets + work_auth -> still blocked",
           store.missing_for_ingest(store.load(conn)) == ["markets", "work_auth"])
 
     store.save(conn, {"markets": ["uk_remote"], "work_auth": "citizen"}, "t")
     answers = store.load(conn)
-    check("đủ 3 câu -> mở cổng", store.can_ingest(answers))
-    check("câu cũ được mang sang", answers["job_titles"] == "Backend Engineer")
-    check("lịch sử giữ 2 phiên bản", len(store.history(conn)) == 2)
+    check("all 3 answered -> the gate opens", store.can_ingest(answers))
+    check("the old answer is carried over", answers["job_titles"] == "Backend Engineer")
+    check("history keeps 2 versions", len(store.history(conn)) == 2)
 
-    store.save(conn, {"khong_ton_tai": "x"}, "rác")
-    check("bỏ qua câu ngoài schema", "khong_ton_tai" not in store.load(conn))
+    store.save(conn, {"khong_ton_tai": "x"}, "junk")
+    check("a question outside the schema is ignored", "khong_ton_tai" not in store.load(conn))
 
-    check("phần kế tiếp đúng thứ tự", store.next_section("muc_tieu").id == "rang_buoc")
-    check("phần cuối -> hết", store.next_section(SECTIONS[-1].id) is None)
+    check("the next section is in the right order", store.next_section("muc_tieu").id == "rang_buoc")
+    check("the last section -> none", store.next_section(SECTIONS[-1].id) is None)
     conn.close()
 
-print("\n[đọc form]")
+print("\n[reading the form]")
 a = _form_to_answers({"markets": ["uk_remote", "HACK"],
                       "markets__other": ["Ireland, Netherlands"]}, "muc_tieu")
-check("bỏ giá trị không có trong option", "HACK" not in a["markets"])
-check("giữ giá trị hợp lệ", "uk_remote" in a["markets"])
-check("ô tự do được gộp vào", a["markets"] == ["uk_remote", "Ireland", "Netherlands"])
+check("a value not in the options is dropped", "HACK" not in a["markets"])
+check("a valid value is kept", "uk_remote" in a["markets"])
+check("the free-text field is merged in", a["markets"] == ["uk_remote", "Ireland", "Netherlands"])
 
-b = _form_to_answers({"work_auth__other": ["Graduate visa, hết hạn 03/2027"]}, "muc_tieu")
-check("câu chọn-một cũng nhận ô tự do", b["work_auth"] == "Graduate visa, hết hạn 03/2027")
+b = _form_to_answers({"work_auth__other": ["Graduate visa, expires 03/2027"]}, "muc_tieu")
+check("a single-choice question takes the free-text field too", b["work_auth"] == "Graduate visa, expires 03/2027")
 
 c = _form_to_answers({"job_titles": ["  Backend Engineer\nSWE  "]}, "muc_tieu")
-check("text được cắt khoảng trắng", c["job_titles"] == "Backend Engineer\nSWE")
+check("text is whitespace-trimmed", c["job_titles"] == "Backend Engineer\nSWE")
 
 
 
-print("\n[cổng chặn phải NÓI RA, không lặng lẽ bỏ cuộc]")
-# Người dùng mới bấm Chạy khi hồ sơ trống: trước đây run_scan `return` lặng lẽ,
-# API vẫn đáp "đang chạy…", nhật ký trống, không tin nào về — ngồi chờ vô tận.
+print("\n[a blocking gate has to SAY SO, never give up silently]")
+# A new user presses Run with an empty profile: run_scan used to `return`
+# silently, the API still answered "running…", the journal was empty and no
+# posting came back — an endless wait.
 import os as _os
 _tmp = tempfile.mkdtemp()
-# JOBBOT_DATA_DIR, KHÔNG phải JOBBOT_DB — không có biến nào tên vậy. Bản cũ
-# gõ sai tên nên bài test chạy thẳng vào DB THẬT: lúc hồ sơ còn trống nó vẫn
-# xanh (cổng đóng, quét bị từ chối), nhưng hồ sơ vừa đủ cổng là nó QUÉT THẬT
-# — 2.226 tin ghi vào DB của người dùng chỉ vì chạy test.
+# JOBBOT_DATA_DIR, NOT JOBBOT_DB — no such variable exists. The old version
+# typed the name wrong, so this test ran straight into THE REAL DB: with the
+# profile still empty it stayed green (the gate closed, the scan refused), but
+# the moment the profile passed the gate it REALLY SCANNED — 2,226 postings
+# written into the user's DB purely by running a test.
 _os.environ["JOBBOT_DATA_DIR"] = _tmp
 try:
-    # Và kiểm lại, đừng tin mỗi cái gán: bài test này gọi run_scan, tức là có
-    # thể mở mạng và ghi hàng nghìn dòng. Sai chỗ một lần là hỏng dữ liệu thật.
+    # And check again rather than trusting the assignment: this test calls
+    # run_scan, i.e. it can open the network and write thousands of rows. One
+    # wrong path once and real data is damaged.
     from jobbot.core.paths import db_path as _dbp
-    assert str(_dbp()).startswith(_tmp), f"test đang trỏ vào DB THẬT: {_dbp()}"
+    assert str(_dbp()).startswith(_tmp), f"the test is pointing at THE REAL DB: {_dbp()}"
     from jobbot.core import journal as _journal
     from jobbot import scan_runner as _sr
     _conn = db.connect()
@@ -118,22 +123,23 @@ try:
     _journal.log.open()
     _noi = []
     _kq = _sr.run_scan(log=_noi.append, chrome_sources=False, deep=False)
-    check("hồ sơ trống thì từ chối quét", _kq["ok"] is False)
-    check("và NÓI RA lý do", bool(_noi) and "profile is incomplete" in _noi[0])
-    check("lý do nêu đúng tên câu còn thiếu",
+    check("an empty profile refuses the scan", _kq["ok"] is False)
+    check("and it SAYS why", bool(_noi) and "profile is incomplete" in _noi[0])
+    check("the reason names the missing questions",
           bool(_noi) and all(all_questions()[q].text[:20] in _noi[0]
                              for q in _kq["missing"]))
     _dong = _conn.execute(
         "SELECT COUNT(*) FROM audit WHERE level='warn' AND detail LIKE '%cannot scan yet%'"
     ).fetchone()[0]
-    check("và ghi vào nhật ký", _dong >= 1)
+    check("and it is written to the journal", _dong >= 1)
 finally:
     _os.environ.pop("JOBBOT_DATA_DIR", None)
 
 
-print("\n[nhập CV phải mở được CỔNG, không chỉ điền phần danh tính]")
-# Trước đây import rút 9 ô nhưng KHÔNG ô nào thuộc cổng (job_titles, markets,
-# work_auth) — nhập CV xong vẫn không chạy được gì, vẫn phải gõ tay.
+print("\n[importing a CV has to OPEN THE GATE, not just fill in the identity]")
+# The import used to extract 9 fields with NOT ONE of them in the gate
+# (job_titles, markets, work_auth) — after importing a CV nothing could run,
+# and it all still had to be typed by hand.
 from jobbot.profile.import_cv import propose as _propose
 _cv = """DAC VINH NGUYEN
 London, United Kingdom | vin@example.com | +44 7000 000000
@@ -149,9 +155,10 @@ Python, pandas, SQL, machine learning, backtesting
 References available on request.
 """
 _p = {x.field: x.value for x in _propose(_cv, {})}
-check("đề xuất được chức danh", "job_titles" in _p)
-# Hai luật dưới đây rút ra từ một CV THẬT đọc hụt: chức danh + công ty + ngày
-# tháng nằm CÙNG MỘT DÒNG (81 ký tự), và có mục SELECTED PROJECTS trông y hệt.
+check("it proposes job titles", "job_titles" in _p)
+# The two rules below came out of a REAL CV read badly: the job title +
+# company + dates were ON ONE LINE (81 characters), and there was a SELECTED
+# PROJECTS section that looked exactly the same.
 _that = """DAC VINH NGUYEN
 London, United Kingdom
 
@@ -168,45 +175,48 @@ Python, pandas
 """
 _pt = {x.field: x.value for x in _propose(_that, {})}
 _tt = (_pt.get("job_titles") or "").splitlines()
-check("dòng dài (chức danh + công ty + ngày) vẫn rút được",
+check("a long line (title + company + dates) is still extracted",
       "Founder / Quantitative Developer" in _tt)
-check("cắt được đuôi ngày tháng", "Research Consultant" in _tt)
-check("KHÔNG lấy tên project ở mục SELECTED PROJECTS làm chức danh",
+check("the trailing dates are cut", "Research Consultant" in _tt)
+check("a project name under SELECTED PROJECTS is NOT taken as a job title",
       not any("Quant Trading Studio" in t for t in _tt))
-check("đọc đúng chức danh, bỏ tên công ty",
+check("the title is read correctly, with the company dropped",
       _p.get("job_titles", "").splitlines()[:1] == ["Quantitative Analyst Intern"])
-check("KHÔNG nhận câu mô tả làm chức danh",
+check("a description sentence is NOT taken as a job title",
       "Built an analyst dashboard" not in _p.get("job_titles", ""))
-check("KHÔNG nhận 'References available on request'",
+check("'References available on request' is NOT taken either",
       "References" not in _p.get("job_titles", ""))
-check("đề xuất được thị trường từ địa điểm",
+check("it proposes markets from the location",
       _p.get("markets") == ["uk_onsite", "uk_remote"])
-check("đề xuất bậc từ chữ in trên CV", "intern" in (_p.get("seniority") or []))
-# Đây là luật CỐ Ý, không phải thiếu sót: quyền làm việc là sự thật pháp lý
-# về con người, CV không nói, đoán sai thì hỏng cả lá đơn.
-check("KHÔNG BAO GIỜ đoán quyền làm việc", "work_auth" not in _p)
+check("it proposes seniority from the words on the CV", "intern" in (_p.get("seniority") or []))
+# This is A DELIBERATE rule, not an omission: right to work is a legal fact
+# about a person, the CV does not say it, and a wrong guess ruins the whole
+# application.
+check("it NEVER guesses right to work", "work_auth" not in _p)
 _con = [q for q in INGEST_GATE if q not in _p]
-check("nhập CV xong chỉ còn đúng 1 câu phải tự trả lời", _con == ["work_auth"])
-# Không đè lên thứ người dùng đã tự điền.
+check("after importing exactly 1 question is left to answer by hand", _con == ["work_auth"])
+# It never overwrites what the user filled in themselves.
 _p2 = {x.field for x in _propose(_cv, {"job_titles": "Quant Researcher"})}
-check("ô đã có sẵn thì không đề xuất đè", "job_titles" not in _p2)
-# MỘT ngoại lệ, cố ý: cv_text. "Nhập một CV mới" rõ ràng là muốn thay bản cũ,
-# mà ô dán CV đã bỏ khỏi form — không cho thay ở đây thì CV đóng băng vĩnh
-# viễn, không còn đường nào sửa.
-_p3 = {x.field: x for x in _propose(_cv, {"cv_text": "CV CŨ", "full_name": "X"})}
-check("nhập CV mới THAY được bản cũ", "cv_text" in _p3)
-# LUẬT TỔNG QUÁT. store.save() lọc theo schema, nên MỌI ô mà máy nhập đề xuất
-# đều phải có trong schema — thiếu một cái là nó lặng lẽ không bao giờ được
-# lưu, mà màn hình duyệt vẫn tick xanh như thường.
+check("a field already filled is not proposed over", "job_titles" not in _p2)
+# ONE exception, deliberately: cv_text. "Import a new CV" plainly means
+# replacing the old one, and the paste-a-CV field is gone from the form —
+# refuse the replacement here and the CV is frozen forever, with no way left
+# to change it.
+_p3 = {x.field: x for x in _propose(_cv, {"cv_text": "OLD CV", "full_name": "X"})}
+check("importing a new CV CAN replace the old one", "cv_text" in _p3)
+# THE GENERAL RULE. store.save() filters by schema, so EVERY field the import
+# proposes has to be in the schema — one missing and it silently never gets
+# saved, while the review screen still ticks green.
 _lac = [f for f in _p if f not in all_questions()]
-check(f"mọi ô máy nhập đề xuất đều LƯU được {_lac or ''}", not _lac)
-check("và nói rõ là sẽ thay", "REPLACES the stored CV" in _p3["cv_text"].note)
-check("còn ô khác vẫn giữ luật không-đè", "full_name" not in _p3)
-# cv_text KHÔNG vẽ ra form, nhưng PHẢI ở lại schema. store.save() lọc theo
-# schema — gỡ khỏi đó là nó lặng lẽ không lưu được nữa. Đã mất nguyên toàn văn
-# CV vì đúng chuyện này: nhập CV báo "13 fields" mà chỉ 12 câu vào DB.
-check("cv_text vẫn ở trong schema để LƯU được", "cv_text" in all_questions())
-check("nhưng không vẽ ra form", all_questions()["cv_text"].hidden)
+check(f"every field the import proposes CAN be saved {_lac or ''}", not _lac)
+check("and it says outright that it replaces", "REPLACES the stored CV" in _p3["cv_text"].note)
+check("other fields still obey the no-overwrite rule", "full_name" not in _p3)
+# cv_text is NOT drawn on the form, but it MUST stay in the schema.
+# store.save() filters by schema — remove it and it silently stops being
+# savable. A whole CV was lost to exactly this: the import reported "13
+# fields" while only 12 answers reached the DB.
+check("cv_text stays in the schema so it CAN be saved", "cv_text" in all_questions())
+check("but it is not drawn on the form", all_questions()["cv_text"].hidden)
 _tmpdb = tempfile.mkdtemp()
 _env_cu = _os.environ.get("JOBBOT_DATA_DIR")
 _os.environ["JOBBOT_DATA_DIR"] = _tmpdb
@@ -217,7 +227,7 @@ try:
     _c2 = db.connect(Path(_tmpdb) / "t.db")
     db.migrate(_c2)
     store.save(_c2, {"cv_text": "EXPERIENCE\nQuant Analyst — X Jan 2025 – Sep 2025\n"}, "t")
-    check("lưu cv_text rồi đọc lại được",
+    check("cv_text saves and reads back",
           "Quant Analyst" in str(store.load(_c2).get("cv_text") or ""))
     _c2.close()
 finally:
@@ -229,10 +239,11 @@ finally:
     from jobbot.core import paths as _p3
     _il3.reload(_p3)
 
-print("\n[học vấn & chứng chỉ — HÌNH DẠNG phải khớp ngữ pháp hệ thống đọc]")
-# cv/build.py làm `certs.splitlines()[0]` để lấy chứng chỉ mạnh nhất, score.py
-# cũng đọc theo dòng. CV thật viết "A · B · C" trên MỘT dòng — giữ nguyên thì
-# máy đếm ra 1 chứng chỉ trong khi có 3, và CV nhét cả cụm làm một "fact".
+print("\n[education & certifications — THE SHAPE has to match the grammar the system reads]")
+# cv/build.py does `certs.splitlines()[0]` to take the strongest
+# certification, and score.py reads by line too. A real CV writes "A · B · C"
+# on ONE line — kept as it is, the machine counts 1 certification where there
+# are 3, and the CV packs the whole run in as one "fact".
 _cv2 = """DAC VINH NGUYEN
 London, UK
 
@@ -245,87 +256,90 @@ Certifications — CFA Level I, October 2024 · IBM Data Science · IBM Machine 
 """
 _d2 = {x.field: x.value for x in _propose(_cv2, {})}
 _ce = str(_d2.get("certifications", "")).splitlines()
-check("mỗi chứng chỉ một dòng", len(_ce) == 3)
-check("không nuốt mất cái nào", "IBM Machine Learning" in _ce)
+check("one certification per line", len(_ce) == 3)
+check("none is swallowed", "IBM Machine Learning" in _ce)
 _ed = str(_d2.get("education", "")).splitlines()
-check("bỏ dòng rác chỉ có dấu chấm", "·" not in _ed)
-check("nhưng giữ nguyên dòng điểm môn",
+check("a junk line of just a bullet is dropped", "·" not in _ed)
+check("but the module-grades line is kept",
       any("Investment & Portfolio Management" in l for l in _ed))
-# Và ô chứng chỉ phải là Ô THẺ, để sửa tay cũng không phá được hình dạng đó.
-check("certifications là ô thẻ nối bằng xuống dòng",
+# And the certifications field has to be A TAG BOX, so editing by hand cannot
+# break that shape either.
+check("certifications is a tag box joined by newlines",
       all_questions()["certifications"].tags == "\n")
-# Ngữ pháp học vấn phải được NÓI RA ở chỗ người ta gõ — apply/answer cần đúng
-# dạng đó mới điền hộ được ngày tốt nghiệp trên form xin việc.
-check("ô học vấn nói rõ ngữ pháp hệ thống đọc",
+# The education grammar has to be STATED where people type — apply/answer
+# needs exactly that shape to fill in a graduation date on an application.
+check("the education field states the grammar the system reads",
       "ONE DEGREE PER LINE" in all_questions()["education"].why)
 
-print("\n[học vấn — MỘT ngữ pháp, ghi và đọc cùng dùng]")
-# Đây là ô CÓ TẢI: apply/answer đọc nó ra ngày tốt nghiệp để điền form xin
-# việc. Form ghi bằng line(), máy đọc bằng educations() — lệch nhau là form
-# ghi ra thứ máy không hiểu, và mỗi lá đơn Vin phải tự chọn lại ngày.
+print("\n[education — ONE grammar, shared by the writer and the reader]")
+# This field CARRIES WEIGHT: apply/answer reads a graduation date out of it to
+# fill in applications. The form writes with line(), the machine reads with
+# educations() — let them drift and the form writes something the machine
+# cannot read, and Vin picks the date again on every application.
 from jobbot.apply.answer import educations as _eds, line as _eline, education as _ed1
 from jobbot.profile.schema import ROWS as _ROWS
-check("ô học vấn là kiểu HÀNG, không phải chữ thô",
+check("the education field is of kind ROWS, not raw text",
       all_questions()["education"].kind == _ROWS)
 _l = _eline("MSc", "Computational Finance", "Royal Holloway", "Sep 2025", "Sep 2026", "IPM 86")
 _back = _eds(_l)[0]
-check("ghi rồi đọc lại ra đúng bằng", _back.degree == "MSc")
-check("đúng ngành", _back.discipline == "Computational Finance")
-check("đúng trường", _back.school == "Royal Holloway")
-check("GIỮ được tháng — thứ mà form xin việc hỏi",
+check("written and read back gives the right degree", _back.degree == "MSc")
+check("the right discipline", _back.discipline == "Computational Finance")
+check("the right school", _back.school == "Royal Holloway")
+check("THE MONTH survives — the thing applications ask for",
       (_back.start_month, _back.start_year) == (9, 2025)
       and (_back.end_month, _back.end_year) == (9, 2026))
-check("và không còn báo thiếu tháng", _ed1(_l).missing == [])
-check("ghi chú thành dòng phụ, không thành bằng thứ hai",
+check("and it no longer reports a missing month", _ed1(_l).missing == [])
+check("the note becomes a secondary line, not a second degree",
       len(_eds(_l)) == 1 and "IPM 86" in _back.note)
-# CV thật viết điểm môn SÁT LỀ, không thụt vào. Nhận nhầm thì nó hiện ra
-# thành một cái bằng tên "Investment".
+# A real CV writes module grades FLUSH LEFT, not indented. Misread, it shows
+# up as a degree called "Investment".
 _ban = ("MSc Computational Finance — Royal Holloway, 2025 – 2026\n"
         "Investment & Portfolio Management 86 · Data Analysis 83\n"
         "BA (Hons) Advanced Finance — National Economics University")
 _hai = _eds(_ban)
-check("dòng điểm môn sát lề KHÔNG bị nhận thành bằng", len(_hai) == 2)
-check("mà thành ghi chú của bằng ngay trên nó",
+check("a flush-left module-grades line is NOT read as a degree", len(_hai) == 2)
+check("but as a note on the degree right above it",
       "Investment & Portfolio Management 86" in _hai[0].note)
 
 
-print("\n[kho chức danh rút từ TIN THẬT, không gõ tay]")
-# Câu hỏi nói "viết ĐÚNG như trên tin", nên nguồn đúng duy nhất là chính tin.
-# Danh sách gõ tay trong mã sai ngay từ ngày viết và mục dần từ đó.
+print("\n[the job title store is extracted from REAL POSTINGS, never typed]")
+# The question says "write them EXACTLY as the posting does", so the only
+# correct source is the postings themselves. A list typed into the source is
+# wrong from the day it is written and rots from there.
 from jobbot.profile.titles import extract as _extract
 from jobbot.profile.schema import suggestions as _sug
-check("schema KHÔNG còn danh sách chức danh gõ tay", _sug("titles") == [])
-check("kho kỹ năng vẫn lấy từ vựng chấm điểm", len(_sug("skills")) > 20)
-# Kho ngành cũng KHÔNG gõ tay: nó đúng bằng bộ ngành mà projects/inventory.py
-# dùng để dán nhãn cho tin thật. Gõ danh sách riêng cho màn hình thì người
-# dùng chọn được ngành mà máy không biết nhận ra.
+check("the schema has NO hand-typed job title list", _sug("titles") == [])
+check("the skill store still comes from the scoring vocabulary", len(_sug("skills")) > 20)
+# The industry store is NOT hand-typed either: it is exactly the industry set
+# projects/inventory.py uses to label real postings. A separate list for the
+# screen lets the user pick an industry the machine cannot recognise.
 from jobbot.scoring.vocab import INDUSTRY as _IND
-check("kho ngành lấy từ bộ máy ĐANG dùng để nhận ngành trên tin",
+check("the industry store comes from the engine ACTUALLY used to recognise industries",
       _sug("industries") == sorted(_IND))
-check("ô ngành là ô thẻ", all_questions()["industries"].tags == ", ")
-check("và nói rõ để trống = không kén ngành",
+check("the industry field is a tag box", all_questions()["industries"].tags == ", ")
+check("and it says outright that empty = no industry preference",
       "Leaving it EMPTY" in all_questions()["industries"].why)
 
-# Tiêu đề thật trông như thế này — dùng nguyên thì vô dụng làm gợi ý.
+# Real titles look like this — used as they are, they are useless as suggestions.
 _that = ["2027 Point72 Academy Investment Analyst Summer Internship - Japan (BCF)",
          "Investment Analyst", "Investment Analyst - London",
          "Quantitative Researcher", "Quantitative Researcher (Systematic)",
          "Quantitative Researcher — New York", "Software Engineer, Platform",
          "Software Engineer", "Software Engineer - Backend"]
 _cum = dict(_extract(_that, least=2))
-check("rút ra CỤM NGHỀ chứ không giữ nguyên tiêu đề",
+check("it extracts A ROLE PHRASE rather than keeping the whole title",
       "Quantitative Researcher" in _cum)
-check("bỏ được đuôi địa điểm", _cum.get("Quantitative Researcher") == 3)
-check("bỏ được phần trong ngoặc", "Investment Analyst" in _cum)
-check("KHÔNG giữ cụm dính năm", not any(c[0].isdigit() for c in _cum))
-check("cụm phải KẾT THÚC bằng từ nghề",
+check("a trailing location is dropped", _cum.get("Quantitative Researcher") == 3)
+check("a bracketed part is dropped", "Investment Analyst" in _cum)
+check("a phrase carrying a year is NOT kept", not any(c[0].isdigit() for c in _cum))
+check("a phrase has to END in a role word",
       all(c.split()[-1].lower() in
           {"analyst","engineer","scientist","developer","researcher","manager",
            "trader","strategist","consultant","associate","specialist",
            "architect","lead","intern","quant","technologist","administrator"}
           for c in _cum))
-# Sàn: cụm chỉ gặp một lần thường là tên chương trình riêng của một công ty.
-check("có sàn số tin, không nhận cụm gặp một lần",
+# A floor: a phrase seen once is usually one company's own programme name.
+check("there is a posting-count floor, a phrase seen once is not taken",
       all(v >= 2 for v in _cum.values()))
 
 print(f"\n{ok} ok, {fail} fail")
