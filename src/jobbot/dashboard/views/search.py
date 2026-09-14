@@ -201,7 +201,7 @@ def _noi(flt, gan: str, vung: str, dem: dict | None = None) -> str:
     Chưa khai nơi ở thì GIẤU chip "Gần tôi": một nút không lọc được gì là nút
     bấm vào thấy y nguyên, và người dùng thôi tin cả hàng nút.
     """
-    ten = {"near": f"Gần tôi · {gan}" if gan else "", "home": f"Cả {vung}"}
+    ten = {"near": f"Near me · {gan}" if gan else "", "home": f"All of {vung}"}
     chon = [(v, ten.get(v) or nhan) for v, nhan in LOC
             if not (v == "near" and not gan)]
     return ("<span class=vlabel>Nơi</span>"

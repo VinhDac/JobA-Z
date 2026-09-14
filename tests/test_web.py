@@ -1557,7 +1557,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     # THANG = SÀN. Chọn "Có thể" phải KÈM cả "Đáng nộp" — giấu mất những tin
     # tốt nhất là hỏng đúng việc người dùng cần.
-    _n = lambda h: int(_re2.search(r">Giữ ([0-9,]+)<", h).group(1).replace(",", ""))
+    _n = lambda h: int(_re2.search(r">Kept ([0-9,]+)<", h).group(1).replace(",", ""))
     # Bất biến của một cái SÀN: nâng sàn lên thì tập kết quả chỉ co lại, không
     # bao giờ phình ra. (Bao nhiêu tin ở mỗi mức là chuyện của DỮ LIỆU, nên
     # không khẳng định co THẬT SỰ ở đây — test_filters.py kiểm phần SQL.)
@@ -1621,7 +1621,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     # NƠI CHỐN — chữ trên nút lấy từ ô "Where you're based", không đóng cứng.
     check("có hàng lọc theo nơi", "name=loc" in _f0 or "loc=" in _f0)
-    check("nút 'Gần tôi' nói rõ gần ĐÂU", "Gần tôi ·" in _f0, "")
+    check("nút 'Gần tôi' nói rõ gần ĐÂU", "Near me ·" in _f0, "")
     # Nơi ở không CẮT, nó chỉ ƯU TIÊN: "Cả nước" vẫn còn đó để xem hết.
     check("và vẫn có nút xem cả nước", "Cả " in _f0)
     # Chưa khai nơi ở thì GIẤU nút "Gần tôi": một nút không lọc được gì là
@@ -1630,8 +1630,8 @@ with tempfile.TemporaryDirectory() as tmp:
     _trong = _sv._noi(_lv.JobFilter.from_query({}) if hasattr(_lv, "JobFilter")
                       else __import__("jobbot.dashboard.filters", fromlist=["x"])
                       .JobFilter.from_query({}), "", "UK")
-    check("chưa khai nơi ở -> giấu luôn nút 'Gần tôi'", "Gần tôi" not in _trong)
-    _n2 = lambda h: int(_re2.search(r">Giữ ([0-9,]+)<", h).group(1).replace(",", ""))
+    check("chưa khai nơi ở -> giấu luôn nút 'Gần tôi'", "Near me" not in _trong)
+    _n2 = lambda h: int(_re2.search(r">Kept ([0-9,]+)<", h).group(1).replace(",", ""))
     _, _gan = get("/search?loc=near")
     check("lọc 'gần tôi' thì danh sách hẹp lại, không rỗng",
           0 < _n2(_gan) <= _n2(_f0), f"{_n2(_gan)} / {_n2(_f0)}")
@@ -1679,8 +1679,8 @@ with tempfile.TemporaryDirectory() as tmp:
     import re as _re
     _dem = lambda h, n: int(_re.search(f">{n} ([0-9,]+)<", h).group(1).replace(",", ""))
     check("đếm lại theo chữ tìm, không giữ số cũ",
-          _dem(_s1, "Giữ") < _dem(_s0, "Giữ"),
-          f"{_dem(_s1, 'Giữ')} vs {_dem(_s0, 'Giữ')}")
+          _dem(_s1, "Kept") < _dem(_s0, "Kept"),
+          f"{_dem(_s1, 'Kept')} vs {_dem(_s0, 'Kept')}")
     # Chữ người dùng gõ đi thẳng vào câu SQL. Phải là tham số ràng buộc.
     _ma_nhay, _ = get("/search?q=%27%20OR%201%3D1%20--")
     check("dấu nháy trong ô tìm không làm sập trang", _ma_nhay == 200, str(_ma_nhay))

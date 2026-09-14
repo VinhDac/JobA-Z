@@ -1,14 +1,15 @@
-"""Bộ lọc do NGƯỜI DÙNG điều khiển, trạng thái nằm trong URL.
+"""Filters THE USER drives, with the state living in the URL.
 
-Khác với `ingest/filter.py`: cái kia chạy lúc quét, quyết định tin nào GIỮ trong DB.
-Cái này chạy lúc xem, quyết định tin nào HIỆN ra — không xoá gì, đổi ý là bấm lại.
+Not the same as `ingest/filter.py`: that runs during a scan and decides what
+is KEPT in the DB. This runs while viewing and decides what is SHOWN —
+nothing is deleted, and changing your mind is one more click.
 
-Trạng thái nằm hết trên URL (`/search?q=quant&show=dropped`) nên:
-  - nút Back của trình duyệt chạy đúng
-  - lưu được link về đúng bộ lọc đang xem
-  - không cần JavaScript, không cần lưu session
+The whole state is in the URL (`/search?q=quant&show=dropped`), so:
+  - the browser's Back button behaves correctly
+  - a link can be saved to exactly the filter being viewed
+  - no JavaScript, no session storage
 
-Truy vấn LUÔN dùng tham số ràng buộc — không bao giờ nối chuỗi vào SQL.
+Queries ALWAYS use bound parameters — nothing is ever concatenated into SQL.
 """
 
 from __future__ import annotations
@@ -16,58 +17,62 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-# BA LOẠI NÚT KHÁC NHAU, đừng vẽ giống nhau:
+# FOUR DIFFERENT KINDS OF CONTROL — do not draw them alike:
 #
-#   KHO     xem chồng nào          -> chip, loại trừ nhau
-#   THANG   có THỨ TỰ              -> THANH MỨC ĐỘ, chọn sàn
-#   TAG     loại, không thứ tự     -> chip
-#   XẾP     không lọc gì cả        -> chip, tách hẳn ra một hàng
+#   STORE   which pile to view      -> chips, mutually exclusive
+#   SCALE   has an ORDER            -> a LEVEL BAR, picking a floor
+#   TAG     a kind, no order        -> chips
+#   SORT    filters nothing at all  -> chips, on their own row
 #
-# Trước đây cả bốn loại đều là pill xám giống hệt nhau, trộn chung ba hàng:
-# 20 nút, không nhìn ra nút nào liên quan nút nào. Nặng nhất là hai cái có
-# thứ tự — "Worth applying / Maybe / Long shot" là một THANG, mà vẽ thành ba
-# nút rời thì phải đọc hết cả ba mới đoán ra thứ tự.
+# All four used to be identical grey pills mixed across three rows: 20
+# controls with no way to see which related to which. The worst were the two
+# with an order — "Worth applying / Maybe / Long shot" is a SCALE, and drawn
+# as three separate buttons you have to read all three to infer the order.
 
-SHOW = [("matched", "Giữ"), ("dropped", "Đã loại"), ("all", "Tất cả")]
-# NƠI CHỐN — tính theo HỒ SƠ, không đóng cứng tên thành phố nào.
+SHOW = [("matched", "Kept"), ("dropped", "Dropped"), ("all", "All")]
+# PLACE — computed from THE PROFILE, with no hardcoded city name.
 #
-# "london" và "uk" từng nằm thẳng ở đây, tức là bộ lọc chỉ đúng với đúng MỘT
-# người dùng. Giờ id là QUAN HỆ — gần tôi / cả nước / nơi khác — còn chữ hiện
-# lên nút thì lấy từ ô "Where you're based".
+# "london" and "uk" used to sit here literally, which made the filter correct
+# for exactly ONE user. The ids are now RELATIONS — near me / my country /
+# elsewhere — and the label on the button comes from "Where you're based".
 #
-# Đây là chỗ `location` đúng ra phải tác động: nó không quyết định việc nào
-# HỢP LỆ (cắt theo London là mất 71 việc UK ngoài London, đo 12/09), nó cho
-# một cú bấm để xem việc nào TIỆN.
-LOC = [("", "Mọi nơi"), ("near", "Gần tôi"), ("home", "Cả nước"),
-       ("remote", "Remote"), ("other", "Nơi khác")]
-DAYS = [("", "Mọi lúc"), ("7", "7 ngày"), ("30", "30 ngày"), ("90", "90 ngày")]
-SORT = [("score", "Khớp nhất"), ("new", "Mới nhất"), ("old", "Cũ nhất"),
-        ("company", "Công ty"), ("title", "Chức danh")]
+# This is where `location` should act: it does not decide which jobs are
+# VALID (cutting to London loses 71 UK jobs outside London, measured 12 Sep),
+# it gives one click to see which are CONVENIENT.
+LOC = [("", "Anywhere"), ("near", "Near me"), ("home", "My country"),
+       ("remote", "Remote"), ("other", "Elsewhere")]
+DAYS = [("", "Any time"), ("7", "7 days"), ("30", "30 days"), ("90", "90 days")]
+SORT = [("score", "Best match"), ("new", "Newest"), ("old", "Oldest"),
+        ("company", "Company"), ("title", "Title")]
 
-# --- THANG: giá trị là SÀN, không phải một mức riêng lẻ -------------------
-# Chọn "Có thể" nghĩa là có thể TRỞ LÊN — tức là kèm cả "Đáng nộp".
+# --- SCALE: the value is a FLOOR, not one isolated level -----------------
+# Picking "Possible" means possible AND ABOVE — so it includes "Worth it".
 #
-# Trước đây là bằng-đúng: chọn "Maybe" thì giấu mất "Worth applying", đúng
-# những tin tốt nhất. Không ai muốn thế. Việc thật của người dùng là gạt bớt
-# phần dưới, nên sàn mới là phép đúng — và sàn thì vẽ được thành thanh.
-CHANCE = [("", "Tất cả"), ("unlikely", "Khó"), ("possible", "Có thể"),
-          ("likely", "Đáng nộp")]
+# It used to be equality: picking "Maybe" hid "Worth applying", which is
+# exactly the best postings. Nobody wants that. What the user actually does
+# is cut off the bottom, so a floor is the right operation — and a floor can
+# be drawn as a bar.
+CHANCE = [("", "All"), ("unlikely", "Unlikely"), ("possible", "Possible"),
+          ("likely", "Worth it")]
 CHANCE_RANK = {"unlikely": 1, "possible": 2, "likely": 3}
-BAND = [("", "Tất cả"), ("60", "60+"), ("75", "75+")]
+BAND = [("", "All"), ("60", "60+"), ("75", "75+")]
 
 # --- TAG ------------------------------------------------------------------
-# Dùng "all", KHÔNG dùng chuỗi rỗng: chuỗi rỗng bị coi là "chưa chọn" nên rơi
-# về mặc định, và người dùng không có cách nào bảo "cho tôi xem cả hai".
-VIA = [("direct", "Chủ trực tiếp"), ("all", "Cả môi giới"), ("agency", "Chỉ môi giới")]
-# Tìm bằng CÁCH NÀO. Hai cách tìm mù ở hai chỗ khác nhau, và chúng cho ra hai
-# loại tin khác hẳn: board công ty có mô tả đầy đủ, LinkedIn thì phải mở từng
-# tin mới có. Lọc được theo cách tìm là soi được ngay cách nào đang đẻ ra rác.
-FOUND = [("", "Mọi nguồn"), ("board", "board"), ("linkedin", "linkedin"),
+# Uses "all", NOT an empty string: an empty string reads as "not chosen" and
+# falls back to the default, leaving the user no way to say "show me both".
+VIA = [("direct", "Direct employer"), ("all", "Include agencies"),
+       ("agency", "Agencies only")]
+# HOW it was found. The two search routes are blind in different places and
+# produce very different postings: a company board carries the full
+# description, while LinkedIn needs each posting opened. Filtering by route
+# shows at a glance which route is producing the noise.
+FOUND = [("", "Every source"), ("board", "board"), ("linkedin", "linkedin"),
          ("alert", "alert")]
 
-# UK_LIKE ĐÃ BỎ. Nó là bản sao thứ BA của cùng một danh sách địa danh
-# (ingest/filter.UK_WORDS, ingest/web/linkedin.MARKET_PLACE, và đây) — ba bản
-# rời nhau, lệch nhau mà không ai biết. Giờ đọc chung `ingest.filter.NOI`.
+# UK_LIKE WAS REMOVED. It was the THIRD copy of the same place list
+# (ingest/filter.UK_WORDS, ingest/web/linkedin.MARKET_PLACE, and this) —
+# three separate copies drifting apart with nobody noticing. They now all
+# read `ingest.filter.NOI`.
 
 
 PER_PAGE = 50
@@ -75,8 +80,8 @@ PER_PAGE = 50
 
 @dataclass
 class JobFilter:
-    """company/source chọn được NHIỀU (ô tích). Còn lại là dải chồng nhau
-    hoặc loại trừ nhau nên chọn một (chip)."""
+    """company/source allow MULTIPLE choices (checkboxes). The rest are
+    overlapping or mutually exclusive ranges, so they pick one (chips)."""
     q: str = ""
     show: str = "matched"
     source: list[str] = field(default_factory=list)
@@ -85,13 +90,13 @@ class JobFilter:
     days: str = ""
     band: str = ""
     via: str = "direct"
-    found: str = ""            # tìm bằng cách nào: api / chrome
-    raw: str = ""              # "1" = CHỈ xem tin máy chưa đọc được
+    found: str = ""            # how it was found: api / chrome
+    raw: str = ""              # "1" = show ONLY postings the machine could not read
     chance: str = ""
     sort: str = "score"
     page: int = 1
 
-    # --- đọc từ URL -------------------------------------------------------
+    # --- reading from the URL ---------------------------------------------
     @staticmethod
     def from_query(query: dict[str, list[str]]) -> "JobFilter":
         def one(key: str, default: str = "") -> str:
@@ -104,7 +109,7 @@ class JobFilter:
                 if value and value.lower() not in seen:
                     seen.add(value.lower())
                     out.append(value)
-            return out[:30]                       # chặn URL bị nhồi vô hạn
+            return out[:30]                       # stops an endlessly stuffed URL
 
         found = JobFilter(
             q=one("q")[:120],
@@ -124,7 +129,7 @@ class JobFilter:
             found.page = max(1, int(one("page", "1")))
         except ValueError:
             found.page = 1
-        # chỉ nhận giá trị có trong danh sách — phần còn lại vứt
+        # only accepts values from the list — the rest is discarded
         valid = lambda value, options: value if value in {v for v, _ in options} else ""
         found.show = valid(found.show, SHOW) or "matched"
         found.loc = valid(found.loc, LOC)
@@ -136,13 +141,13 @@ class JobFilter:
         found.sort = valid(found.sort, SORT) or "score"
         return found
 
-    # --- dựng SQL ---------------------------------------------------------
+    # --- building the SQL -------------------------------------------------
     def where(self, nha: str = "uk", near: str = "") -> tuple[str, list]:
-        """`nha` = vùng người dùng đang ở, `near` = thành phố đang ở.
+        """`nha` = the region the user is in, `near` = the city they are in.
 
-        Hai thứ này là NGỮ CẢNH chứ không phải lựa chọn của người dùng, nên
-        chúng không nằm trên URL — chúng đến từ hồ sơ. Để mặc định thì xử như
-        UK, y hệt nếp cũ.
+        These two are CONTEXT rather than user choices, so they do not live
+        in the URL — they come from the profile. Left at their defaults they
+        behave as the UK, exactly as before.
         """
         clauses: list[str] = []
         args: list = []
@@ -171,8 +176,8 @@ class JobFilter:
             vung = NOI.get(nha) or NOI["uk"]
             ca_nuoc = sorted(vung["manh"] | vung["thanh"])
             if self.loc == "near":
-                # Hồ sơ chưa khai nơi ở -> "gần tôi" không có nghĩa gì. Không
-                # lọc còn hơn lọc theo một chỗ bịa ra.
+                # The profile has no location -> "near me" means nothing.
+                # Better not to filter than to filter by an invented place.
                 if near:
                     clauses.append("LOWER(location) LIKE ?")
                     args.append(f"%{near.lower()}%")
@@ -191,12 +196,13 @@ class JobFilter:
             clauses.append("via_agency = 0")
         elif self.via == "agency":
             clauses.append("via_agency = 1")
-        # "all" -> không thêm điều kiện nào
+        # "all" -> adds no condition
 
-        # THANG = SÀN. "Có thể" nghĩa là có thể TRỞ LÊN, kèm cả "Đáng nộp".
-        # Tin máy chưa đọc được (realism rỗng hoặc 'unknown') xếp hạng 0, nên
-        # chọn bất cứ mức nào khác "Tất cả" là nó tự rụng — không cần thêm
-        # điều kiện nào, và đó cũng là điều người dùng chờ đợi.
+        # SCALE = FLOOR. "Possible" means possible AND ABOVE, including
+        # "Worth it". Postings the machine could not read (realism empty or
+        # 'unknown') rank 0, so picking any level other than "All" drops them
+        # on its own — no extra condition needed, and that is what the user
+        # expects anyway.
         if self.chance in CHANCE_RANK:
             clauses.append(
                 "CASE realism WHEN 'likely' THEN 3 WHEN 'possible' THEN 2"
@@ -214,11 +220,12 @@ class JobFilter:
         elif self.found == "board":
             clauses.append("source <> 'linkedin'")
 
-        # MỘT nút thay cho hai. "Can't tell" (chưa đoán được cơ hội) và
-        # "Not scorable" (chưa chấm được điểm) nằm ở hai hàng khác nhau, mà
-        # đo trên kho thật thì chúng gần như cùng một chồng tin: 185 tin
-        # thiếu cả hai, 0 tin chỉ thiếu cơ hội. Cùng một nguyên nhân — vòng
-        # đọc kỹ chưa mở tới tin đó nên chưa có mô tả để mà đọc.
+        # ONE control instead of two. "Can't tell" (no chance estimated) and
+        # "Not scorable" (no score computed) sat on two different rows, while
+        # on the real store they are almost the same pile: 185 postings
+        # missing both, 0 missing only the chance. One cause — the deep-read
+        # pass has not reached that posting, so there is no description to
+        # read.
         if self.raw:
             clauses.append("(score IS NULL OR COALESCE(realism,'')"
                            " IN ('', 'unknown'))")
@@ -241,19 +248,20 @@ class JobFilter:
 
     # --- dựng URL ---------------------------------------------------------
     def pairs(self, **changes) -> list[tuple[str, str]]:
-        """Trạng thái lọc dưới dạng cặp key/value. MỘT chỗ dựng, hai nơi dùng.
+        """The filter state as key/value pairs. ONE builder, two consumers.
 
-        `url()` nối chúng thành query string cho các chip; ô TÌM đổ chúng ra
-        thành <input hidden> để một form GET không làm mất bộ lọc đang bật.
-        Hai chỗ tự liệt kê là hai danh sách, và thêm một bộ lọc mới thì có
-        ngày quên sửa một bên — lúc đó gõ tìm là mọi chip đang chọn bay sạch.
+        `url()` joins them into a query string for the chips; the SEARCH box
+        pours them into <input hidden> so a GET form does not lose the active
+        filters. Two places listing them separately are two lists, and adding
+        a filter eventually means forgetting one of them — at which point
+        typing a search wipes every selected chip.
         """
         state: dict = {"q": self.q, "show": self.show, "source": list(self.source),
                        "company": list(self.company), "loc": self.loc,
                        "days": self.days, "band": self.band, "via": self.via,
                        "found": self.found, "raw": self.raw,
                        "chance": self.chance, "sort": self.sort, "page": self.page}
-        # đổi bộ lọc thì về trang 1 — trừ khi chính nó đang đổi trang
+        # changing a filter returns to page 1 — unless it is the page changing
         if "page" not in changes:
             state["page"] = ""
         state.update(changes)
@@ -272,11 +280,11 @@ class JobFilter:
     def url(self, **changes) -> str:
         from urllib.parse import urlencode
         got = self.pairs(**changes)
-        # Danh sách việc nằm trong tab Search — tab Jobs đã bỏ.
+        # The job list lives in the Search tab — the Jobs tab is gone.
         return "/search" + (f"?{urlencode(got)}" if got else "")
 
     def toggle(self, key: str, value: str) -> str:
-        """URL sau khi bật/tắt một ô tích."""
+        """The URL after toggling one checkbox."""
         current = list(getattr(self, key))
         low = [c.lower() for c in current]
         if value.lower() in low:
@@ -289,7 +297,7 @@ class JobFilter:
         return value.lower() in [c.lower() for c in getattr(self, key)]
 
     def active(self) -> list[tuple[str, str]]:
-        """Các bộ lọc đang bật, kèm URL để tắt từng cái."""
+        """The active filters, each with a URL that turns it off."""
         out: list[tuple[str, str]] = []
         if self.q:
             out.append((f'"{self.q}"', self.url(q="")))
@@ -312,5 +320,5 @@ class JobFilter:
         if self.found:
             out.append((dict(FOUND)[self.found], self.url(found="")))
         if self.raw:
-            out.append(("chưa đọc được", self.url(raw="")))
+            out.append(("could not be read", self.url(raw="")))
         return out
