@@ -1,19 +1,21 @@
-"""Hai luật nền CHƯA CÓ AI CANH — và chỗ canh năm luật còn lại.
+"""The two founding laws WITH NOBODY WATCHING THEM — and where the other five
+are watched.
 
-Bảy luật dựng nên app này. Năm cái đã có bài canh thật; hai cái thì không, và
-đúng hai cái đó là thứ người ngoài đọc README sẽ tin ngay:
+Seven laws built this app. Five have real guards; two did not, and those two
+are exactly what an outsider reading the README will believe at once:
 
-    1  KHÔNG LLM                      -> canh ở ĐÂY
-    2  Câu chữ trên CV là của Vin     -> tests/test_cv.py
-    3  Hộp thư CHỈ ĐỌC                -> tests/test_track.py
-    4  Máy KHÔNG bấm Gửi              -> tests/test_apply.py
-    5  Bí mật chỉ nằm trong config    -> tests/test_privacy.py
-    6  Bị chặn thì DỪNG               -> tests/test_browser.py
-    7  Hỏng thì phải KÊU              -> rải khắp, rõ nhất ở test_journal.py
+    1  NO LLM                               -> guarded HERE
+    2  The CV's sentences are Vin's own     -> tests/test_cv.py
+    3  The mailbox is READ ONLY             -> tests/test_track.py
+    4  The machine NEVER presses Send       -> tests/test_apply.py
+    5  Secrets live only in the config      -> tests/test_privacy.py
+    6  Blocked means STOP                   -> tests/test_browser.py
+    7  Failures must SPEAK                  -> everywhere, clearest in
+                                               test_journal.py
 
-    + KHÔNG PHỤ THUỘC (chỉ thư viện chuẩn)  -> canh ở ĐÂY
+    + NO DEPENDENCIES (standard library only)  -> guarded HERE
 
-Luật không có bài canh thì nó là một câu trong README, không phải một luật.
+A law with no guard is a sentence in the README, not a law.
 
     python3 tests/test_luat.py
 """
@@ -43,20 +45,22 @@ NGUON = sorted((ROOT / "src").rglob("*.py"))
 
 
 def khong_chu_thich(text: str) -> str:
-    """Bỏ dòng chú thích. Canh THỨ ĐANG CHẠY, không canh chữ trong chú thích —
-    dòng chú thích kể lại cái đã bỏ là dòng đáng giữ nhất."""
+    """Strip comment lines. It guards WHAT RUNS, not words in a comment — a
+    comment recounting what was removed is the most worth keeping."""
     return "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))
 
 
 # ---------------------------------------------------------------------------
-print("[LUẬT: KHÔNG PHỤ THUỘC — chỉ thư viện chuẩn]")
-# README hứa "không cần cài gì thêm, không venv". Một dòng `import requests`
-# lọt vào là lời hứa đó chết, mà nó chết ÂM THẦM: máy đang dựng thì có sẵn
-# gói đó, chỉ máy người khác mới nổ.
+print("[LAW: NO DEPENDENCIES — standard library only]")
+# The README promises "nothing to install, no venv". One `import requests`
+# slipping in kills that promise, and it dies SILENTLY: the machine it was
+# built on already has the package, and only somebody else's machine blows
+# up.
 
-# PyObjC là NGOẠI LỆ DUY NHẤT, và nó phải là ngoại lệ CÓ ĐƯỜNG LÙI: mỗi chỗ
-# dùng đều nằm sau một lớp bọc, thiếu nó thì app vẫn chạy (cửa sổ Chrome thay
-# cửa sổ macOS, bóc PDF bằng tay thay PDFKit).
+# PyObjC is THE ONLY EXCEPTION, and it has to be an exception WITH A FALLBACK:
+# every use site sits behind a wrapper, and without it the app still runs (a
+# Chrome window instead of a macOS window, hand-rolled PDF extraction instead
+# of PDFKit).
 COCOA = {"objc", "AppKit", "Foundation", "PyObjCTools", "WebKit", "Quartz"}
 
 ngoai: dict[str, set[str]] = {}
@@ -73,29 +77,29 @@ chuan = set(sys.stdlib_module_names)
 la = {k: v for k, v in ngoai.items() if k not in chuan and k != "jobbot"}
 ngoai_le = {k: v for k, v in la.items() if k in COCOA}
 cam = {k: v for k, v in la.items() if k not in COCOA}
-check(f"không gói ngoài nào ({len(ngoai)} module được nạp)", not cam,
+check(f"no external package ({len(ngoai)} modules loaded)", not cam,
       ", ".join(f"{k} ({', '.join(sorted(v))})" for k, v in sorted(cam.items())))
-check("PyObjC vẫn là ngoại lệ duy nhất", set(ngoai_le) <= COCOA)
+check("PyObjC is still the only exception", set(ngoai_le) <= COCOA)
 
-# Và ngoại lệ đó phải CÓ ĐƯỜNG LÙI: không tệp nào nạp Cocoa ở mức module rồi
-# được import vô điều kiện. app.py nạp ở mức module, nên chỗ gọi nó
-# (__main__.py) phải bọc try.
+# And that exception has to HAVE A FALLBACK: no file may load Cocoa at module
+# level and then be imported unconditionally. app.py does load it at module
+# level, so its caller (__main__.py) has to wrap it in a try.
 mac_module = sorted({f for v in ngoai_le.values() for f in v})
-check(f"đúng những tệp đã biết mới chạm Cocoa ({', '.join(mac_module)})",
+check(f"only the known files touch Cocoa ({', '.join(mac_module)})",
       set(mac_module) <= {"app.py", "shell.py", "import_cv.py"},
       str(mac_module))
 _mainpy = khong_chu_thich((ROOT / "src/jobbot/__main__.py").read_text(encoding="utf-8"))
-check("và __main__ bọc app.py trong try, thiếu PyObjC vẫn chạy",
+check("and __main__ wraps app.py in a try, so it runs without PyObjC",
       "from .app import run" in _mainpy
       and "except (ImportError, AttributeError)" in _mainpy)
 _shell = khong_chu_thich((ROOT / "src/jobbot/shell.py").read_text(encoding="utf-8"))
-check("shell.has_mac_native() hỏi thử rồi mới kết luận",
+check("shell.has_mac_native() tries before concluding",
       "import objc" in _shell and "except Exception" in _shell)
 _icv = khong_chu_thich((ROOT / "src/jobbot/profile/import_cv.py").read_text(encoding="utf-8"))
-check("bóc PDF thiếu PyObjC thì lùi về bóc tay",
+check("PDF extraction falls back to the hand-rolled path without PyObjC",
       "_pdf_plain" in _icv and "except Exception" in _icv)
 
-# run.py và scripts/ cũng phải sạch — chúng là thứ người dùng gõ đầu tiên.
+# run.py and scripts/ have to be clean too — they are the first thing a user types.
 for _p in [ROOT / "run.py"] + sorted((ROOT / "scripts").glob("*.py")):
     _cay = ast.parse(io.open(_p, encoding="utf-8").read(), str(_p))
     _la = set()
@@ -105,18 +109,19 @@ for _p in [ROOT / "run.py"] + sorted((ROOT / "scripts").glob("*.py")):
         elif isinstance(n, ast.ImportFrom) and n.level == 0 and n.module:
             _la.add(n.module.split(".")[0])
     _la -= chuan | {"jobbot"} | COCOA
-    check(f"{_p.name} không cần gói ngoài", not _la, str(sorted(_la)))
+    check(f"{_p.name} needs no external package", not _la, str(sorted(_la)))
 
 
 # ---------------------------------------------------------------------------
-print("\n[LUẬT: KHÔNG LLM — không mô hình ngôn ngữ, không gọi ai chấm hộ]")
-# Cả app không có LLM, và đó là quyết định chứ không phải thiếu sót: mọi câu
-# chữ trên CV là của Vin, mọi điểm số đều truy ra được một dòng luật. Một lời
-# gọi API ở đâu đó là cả hai điều trên hết đúng, và không ai đọc ra được.
-# CẤM THEO MẶT API, KHÔNG CẤM THEO TÊN CÔNG TY. Cohere, Anthropic, Mistral,
-# OpenAI đều là NHÀ TUYỂN DỤNG — tên họ nằm trong danh sách board và sẽ nằm
-# trong dữ liệu việc làm. Cấm cái tên thì bài test đỏ vì một công ty đăng
-# tuyển, và người sửa sẽ học được đúng một điều: tắt bài test này đi.
+print("\n[LAW: NO LLM — no language model, nobody asked to judge on our behalf]")
+# The whole app has no LLM, and that is a decision rather than an omission:
+# every sentence on the CV is Vin's, and every score traces back to a line of
+# rules. One API call somewhere and both of those stop being true, with
+# nobody able to read it.
+# BANNED BY API SURFACE, NOT BY COMPANY NAME. Cohere, Anthropic, Mistral and
+# OpenAI are all EMPLOYERS — their names are in the board list and will be in
+# the job data. Ban the name and the test goes red because a company posted a
+# job, and whoever fixes it learns exactly one thing: turn this test off.
 DAU_LLM = ("api.openai.com", "api.anthropic.com", "api.cohere",
            "api.mistral", "generativelanguage.googleapis.com",
            "api-inference.huggingface", "openrouter.ai", "api.together.xyz",
@@ -126,26 +131,26 @@ for f in NGUON:
     than = khong_chu_thich(f.read_text(encoding="utf-8")).lower()
     dinh = [d for d in DAU_LLM if d in than]
     if dinh:
-        check(f"{f.name} không gọi mô hình nào", False, ", ".join(dinh))
-check(f"không tệp nào trong src/ chạm mặt API của mô hình ({len(NGUON)} tệp)", True)
-# CHỐT MẠNH NHẤT nằm ở luật trên: không gói ngoài nào được phép, nên KHÔNG
-# CÓ SDK nào của bất kỳ nhà cung cấp mô hình nào tồn tại được trong app này.
-# Hai luật khoá lẫn nhau, và đó là lý do luật "không phụ thuộc" đáng canh.
-check("và không SDK mô hình nào lọt vào được (luật không-phụ-thuộc khoá)",
+        check(f"{f.name} calls no model", False, ", ".join(dinh))
+check(f"no file in src/ touches a model's API surface ({len(NGUON)} files)", True)
+# THE STRONGEST LATCH is the law above: no external package is allowed, so NO
+# SDK from any model provider can exist in this app at all. The two laws lock
+# each other, and that is why the no-dependencies law is worth guarding.
+check("and no model SDK can get in (the no-dependencies law locks it)",
       not {"openai", "anthropic", "cohere", "mistralai", "google",
            "transformers", "torch", "llama_cpp"} & set(ngoai))
 
-# MẠNH HƠN MỘT DANH SÁCH CẤM: liệt kê MỌI máy chủ app gọi ra ngoài. Danh sách
-# cấm chỉ bắt được cái mình nghĩ ra; danh sách CHO PHÉP bắt cả cái chưa nghĩ
-# tới — thêm một nhà cung cấp mới là bài này đỏ, dù tên nó chưa ai biết.
+# STRONGER THAN A BAN LIST: enumerate EVERY host the app calls out to. A ban
+# list only catches what was thought of; an ALLOW list catches what was not —
+# add a new provider and this test goes red, whatever its name.
 import re as _re
 CHO_PHEP = {
-    "127.0.0.1",                     # chính máy này
+    "127.0.0.1",                     # this machine
     "localhost",
-    "www.linkedin.com", "linkedin.com",   # nguồn tin (đọc, đã đăng nhập tay)
-    "boards-api.greenhouse.io", "api.lever.co", "api.ashbyhq.com",  # ATS công khai
-    "api.telegram.org",              # báo về điện thoại
-    "github.com",                    # chỉ là chữ mẫu trong ô hồ sơ
+    "www.linkedin.com", "linkedin.com",   # a source (read, logged in by hand)
+    "boards-api.greenhouse.io", "api.lever.co", "api.ashbyhq.com",  # public ATS
+    "api.telegram.org",              # messages to the phone
+    "github.com",                    # only sample text in a profile field
 }
 thay = set()
 for f in NGUON:
@@ -153,30 +158,32 @@ for f in NGUON:
                          khong_chu_thich(f.read_text(encoding="utf-8"))):
         thay.add(u.lower())
 la_mat = sorted(thay - CHO_PHEP)
-check(f"chỉ gọi ra {len(thay)} máy chủ, đều đã khai", not la_mat, str(la_mat))
+check(f"only {len(thay)} hosts called, all declared", not la_mat, str(la_mat))
 
-# IMAP không đi qua http:// nên regex trên không thấy. Và hộp thư là chỗ
-# riêng tư nhất, nên máy chủ KHÔNG được đóng cứng vào một nhà cung cấp: bản
-# cũ ghi thẳng "imap.gmail.com", kèm một bộ lọc chỉ nhận app password của
-# Google — ai dùng Outlook/iCloud/hộp thư công ty thì bị chặn ngay cửa, bằng
-# một câu chẳng liên quan gì tới lý do thật.
+# IMAP does not go through http:// so the regex above does not see it. And a
+# mailbox is the most private place there is, so the host must NOT be
+# hardcoded to one provider: the old version wrote "imap.gmail.com" straight
+# in, with a filter accepting only Google app passwords — anyone on
+# Outlook/iCloud/a company mailbox was turned away at the door by a sentence
+# with nothing to do with the real reason.
 from jobbot.track import mail as _ml
-check("máy chủ thư suy từ tên miền, không đóng cứng Gmail",
+check("the mail host is derived from the domain, not hardcoded to Gmail",
       _ml.may_chu("x@outlook.com") == "outlook.office365.com")
-check("tên miền lạ vẫn thử được quy ước imap.<tên miền>",
+check("an unknown domain still tries the imap.<domain> convention",
       _ml.may_chu("x@congty.co.uk") == "imap.congty.co.uk")
-check("nhà cung cấp không nói IMAP ra ngoài thì NÓI THẲNG, không đoán bừa",
+check("a provider that does not publish IMAP is SAID OUTRIGHT, never guessed",
       _ml.may_chu("x@proton.me") == "")
-check("và config.toml đè được tất cả", "host" in
+check("and config.toml overrides all of it", "host" in
       khong_chu_thich((ROOT / "config/config.example.toml").read_text(encoding="utf-8")))
-check("bộ lọc app password chỉ áp cho Google",
+check("the app password filter applies to Google only",
       _ml._la_google("imap.gmail.com") and not _ml._la_google("outlook.office365.com"))
 
-# KHOÁ MẠNG lúc chạy thử — một công tắc cho CẢ HAI đường ra ngoài. Bộ test
-# từng nhắn tin thật về điện thoại mỗi lần chạy; IMAP là đường thứ hai.
+# THE NETWORK LOCK during a test run — one switch for BOTH routes out. The
+# test suite used to send real messages to the phone on every run; IMAP is the
+# second route.
 _srcmail = khong_chu_thich((ROOT / "src/jobbot/track/mail.py").read_text(encoding="utf-8"))
-check("IMAP cũng nghe JOBBOT_OFFLINE như Telegram", "khoa_mang()" in _srcmail)
-check("và chốt đó đặt TRƯỚC lúc mở socket",
+check("IMAP obeys JOBBOT_OFFLINE the same as Telegram", "khoa_mang()" in _srcmail)
+check("and that latch sits BEFORE the socket opens",
       _srcmail.index("khoa_mang()") < _srcmail.index("IMAP4_SSL(host"))
 
 print(f"\n{ok} ok, {fail} fail")
