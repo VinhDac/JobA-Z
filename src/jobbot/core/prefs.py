@@ -1,248 +1,275 @@
-"""Tuỳ chọn của APP — nhớ qua các lần mở lại.
+"""APP preferences — remembered across restarts.
 
-Khác profile_answer: đó là hồ sơ NGƯỜI DÙNG (có phiên bản, có lịch sử). Đây
-chỉ là mấy cái công tắc của chính cái app, không cần lịch sử gì.
+Not the same as profile_answer: that is the USER's profile (versioned, with
+history). These are just switches belonging to the app itself, and they need
+no history.
 
-Đọc hỏng thì trả về mặc định. Một cái công tắc đọc không được KHÔNG được phép
-làm app không mở lên nổi.
+A failed read returns the default. One unreadable switch must never be the
+reason the app will not open.
 """
 
 from __future__ import annotations
 
 import sqlite3
 
-# Tự quét ngay khi mở app. MẶC ĐỊNH TẮT, cố ý:
-# mở app lên mà nó tự mở Chrome đi quét LinkedIn trong lúc người dùng còn chưa
-# kịp vào Settings là sai. Người dùng bật khi nào họ thấy đã cấu hình xong.
+# Scan as soon as the app opens. OFF BY DEFAULT, deliberately: opening the
+# app and having it launch Chrome to scrape LinkedIn before the user has even
+# reached Settings is wrong. They turn it on when they decide they are
+# configured.
 AUTORUN = "autorun"
 
-# Ba núm người dùng thật sự đổi. Mọi thứ khác giữ nguyên trong code — bày ra
-# một cái núm mà không ai muốn vặn thì đó là rác, không phải lựa chọn.
-SCAN_EVERY = "scan_every_min"    # quét lại mỗi bao nhiêu phút
-HOURS_FROM = "hours_from"        # Chrome chỉ chạy trong khung giờ này
+# The three knobs a user actually changes. Everything else stays in the code
+# — offering a knob nobody wants to turn is clutter, not choice.
+SCAN_EVERY = "scan_every_min"    # rescan every N minutes
+HOURS_FROM = "hours_from"        # Chrome only runs inside this window
 HOURS_TO = "hours_to"
 
-# NHỊP gọi LinkedIn. Đây là núm hiệu năng THẬT của vòng quét, và nó là một
-# núm ĐÁNH ĐỔI chứ không phải núm "nhanh hơn miễn phí": đi nhanh là gọi dày
-# hơn, mà LinkedIn là bên duy nhất app đang ở nhờ.
+# LinkedIn PACE. This is the real performance knob of the scan, and it is a
+# TRADE-OFF knob, not a "free speed" knob: going faster means calling more
+# often, and LinkedIn is the one host this app is a guest of.
 #
-# Vì sao không làm "chạy nhiều tab song song": N tab với nhịp P giống hệt 1
-# tab với nhịp P/N — cùng số lượt gọi mỗi giây, cùng rủi ro bị bóp. Song song
-# chỉ là cách viết phức tạp hơn của một con số nhỏ hơn, cộng thêm N cửa sổ
-# Chrome ăn RAM và N chỗ có thể chết nửa chừng.
+# Why not "run several tabs in parallel": N tabs at pace P is identical to 1
+# tab at pace P/N — the same calls per second, the same throttling risk.
+# Parallelism is just a more complicated way of writing a smaller number,
+# plus N Chrome windows eating RAM and N places to die half-way.
 PACE = "linkedin_pace"
 
-# BẬT/TẮT từng nguồn. Hai cách tìm cho ra hai loại tin khác hẳn nhau — board
-# công ty có mô tả đầy đủ và miễn phí (22 giây), LinkedIn phải mở từng trang
-# và tốn nửa tiếng — nên có lúc chỉ muốn chạy một cái.
+# ON/OFF per source. The two ways of searching produce very different
+# postings — a company board gives the full description for free (22
+# seconds), LinkedIn needs a page opened per posting and costs half an hour —
+# so sometimes you only want one.
 #
-# MẶC ĐỊNH BẬT CẢ HAI. Một nguồn tắt lặng lẽ là kiểu hỏng tệ nhất: quét xong
-# ít tin hơn hẳn mà không ai hiểu vì sao.
+# BOTH ON BY DEFAULT. A source silently off is the worst kind of failure: the
+# scan finishes with far fewer postings and nobody knows why.
 SRC_BOARD = "src_board"
 SRC_LINKEDIN = "src_linkedin"
 
-# ... và từng ATS riêng. Ba nhà cung cấp này cho ra ba loại tin khác hẳn nhau
-# (đo trên kho thật 12/09: greenhouse 1.520 tin giữ 82; lever 442 giữ 18;
-# ashby 600 giữ 6 nhưng 523 tin có cờ remote thật). Ai thấy một nguồn toàn
-# rác với mình thì tắt hẳn, không phải chịu đựng nó mỗi giờ.
+# ... and each ATS on its own. These three providers yield very different
+# postings (measured on the real store, 12 Sep: greenhouse 1,520 fetched, 82
+# kept; lever 442 / 18; ashby 600 / 6, but 523 with a genuine remote flag).
+# Anyone for whom one source is all noise can switch it off outright instead
+# of putting up with it every hour.
 SRC_ATS = {"greenhouse": "src_greenhouse", "lever": "src_lever",
            "ashby": "src_ashby"}
 
-# Thư báo việc của LinkedIn gửi vào hộp thư. Nguồn thứ ba, và là nguồn duy
-# nhất không đụng tới Điều khoản của ai — thư gửi cho mình thì đọc thôi.
+# LinkedIn job-alert emails landing in the mailbox. The third source, and the
+# only one that touches nobody's Terms — mail sent to you is yours to read.
 SRC_ALERT = "src_alert"
 
-# NHỮNG CẶP (chức danh × nơi) ĐÃ QUÉT ĐẦY ít nhất một lần, dạng JSON.
+# The (title × place) PAIRS that have been fully scanned at least once, JSON.
 #
-# Đơn vị quét là CẶP, không phải cả lưới. Một dấu vân tay cho cả lưới thì thô
-# quá: bỏ bớt một chức danh cũng bắt quét lại từ đầu, trong khi bỏ bớt thì
-# làm gì có gì mới để tìm. Nhớ theo cặp thì luật rút về đúng một câu —
+# The unit of scanning is the PAIR, not the whole grid. One fingerprint for
+# the whole grid is too coarse: dropping a title would force a full rescan,
+# and dropping a title cannot produce anything new. Remembering per pair
+# reduces the rule to a single sentence —
 #
-#     cặp nào CHƯA quét bao giờ thì quét đầy, cặp nào rồi thì chỉ hỏi tin mới.
+#     a pair never scanned gets scanned fully, a pair already scanned only
+#     gets asked for what is new.
 #
-# Và hai việc đó chạy được trong CÙNG một lượt.
+# And both of those run in the SAME pass.
 LI_DONE = "li_done"
 
-# Cấp bậc (tham số f_E) của lần quét trước. Nó áp cho MỌI cặp nên không nhét
-# vào khoá cặp được. NỚI RỘNG cấp bậc thì mọi cặp thành chưa phủ; THU HẸP thì
-# không, vì thu hẹp không đẻ ra tin nào mới.
+# The seniority levels (the f_E parameter) of the previous scan. It applies
+# to EVERY pair, so it cannot live inside the pair key. WIDENING the levels
+# makes every pair uncovered again; NARROWING does not, because narrowing
+# cannot produce a new posting.
 LI_LEVELS = "li_levels"
 
-# Đọc lại bao nhiêu ngày thư khi quét hộp thư. Mặc định 30: đủ bắt thư trả
-# lời cho đơn nộp tháng trước, mà không phải lôi cả hộp thư về.
+# How many days of mail to re-read on a mailbox pass. Default 30: enough to
+# catch a reply to an application sent last month without dragging the whole
+# mailbox down.
 MAIL_DAYS = "mail_days"
 
-# --- BA NGUỒN, NHƯNG LÀ CÂU HỎI KHÁC ------------------------------------
+# --- THREE SOURCES, BUT A DIFFERENT QUESTION -----------------------------
 #
-# `SRC_*` ở trên hỏi: CÓ QUÉT nguồn này không.
-# `NOP_*` dưới đây hỏi: CÓ NỘP tin từ nguồn này không.
+# `SRC_*` above asks: do we SCAN this source.
+# `NOP_*` below asks: do we APPLY to postings from this source.
 #
-# Cùng ba cái tên, hai việc khác hẳn nhau, nên hai bộ công tắc — mỗi tab hỏi
-# câu của mình. Gộp làm một thì tắt LinkedIn để khỏi nộp là mất luôn 2.409
-# tin khỏi kho, và người dùng không hiểu vì sao Search trống.
+# Same three names, two entirely different jobs, so two sets of switches —
+# each tab asks its own question. Merge them and switching LinkedIn off to
+# stop applying also removes 2,409 postings from the store, and the user
+# cannot work out why Search is empty.
 #
-# LINKEDIN KHÔNG BỊ TẮT CẢ CỤM. Phần lớn tin LinkedIn dẫn ra trang nộp của
-# chính công ty (xem apply/linkedin.py) — nộp được bình thường. Chỉ tin nào
-# BUỘC nộp trong LinkedIn mới nằm ngoài tầm; chúng có nhãn riêng và có đường
-# nộp tay, chứ không kéo cả nguồn xuống theo.
+# LINKEDIN IS NOT SWITCHED OFF WHOLESALE. Most LinkedIn postings lead to the
+# company's own application page (see apply/linkedin.py) — those apply
+# normally. Only postings that FORCE applying inside LinkedIn are out of
+# reach; they get their own label and a manual path, rather than dragging the
+# whole source down with them.
 NOP_BOARD = "nop_board"
 NOP_LINKEDIN = "nop_linkedin"
 NOP_ALERT = "nop_alert"
-NOP = {NOP_BOARD: ("board", "trang tuyển của chính công ty — nộp thẳng được"),
-       NOP_LINKEDIN: ("linkedin", "tin LinkedIn; cái nào dẫn ra web công ty "
-                      "thì nộp được, cái nào buộc nộp trong LinkedIn thì để "
-                      "bạn tự làm"),
-       NOP_ALERT: ("alert", "tin đến từ thư báo việc")}
+NOP = {NOP_BOARD: ("board", "the company's own careers page — applies directly"),
+       NOP_LINKEDIN: ("linkedin", "LinkedIn postings; the ones that lead out "
+                      "to the company site can be applied to, the ones that "
+                      "force LinkedIn's own form are left to you"),
+       NOP_ALERT: ("alert", "postings that arrived in a job-alert email")}
 
-# --- THÔNG BÁO VỀ ĐIỆN THOẠI -------------------------------------------
+# --- NOTIFICATIONS TO YOUR PHONE ----------------------------------------
 #
-# Luật gốc của notify.py giữ nguyên: BÁO ÍT THÔI. Báo nhiều thì người dùng
-# tắt, và lúc đó cái tin đáng giá duy nhất cũng mất theo.
+# notify.py's founding rule still holds: NOTIFY RARELY. Notify often and the
+# user switches it off, and the one message that mattered goes with it.
 #
-# Nên bốn loại, không hơn, và mỗi loại phải trả lời được "biết cái này thì
-# làm gì khác đi":
+# So four kinds, no more, and each has to answer "what would I do
+# differently for knowing this":
 #
-#   tiep  có người gọi đi tiếp — đo trên hộp thư thật: 1 lần trong 60 ngày.
-#         Hiếm nhất và quan trọng nhất. Biết sớm là trả lời sớm.
-#   hong  một khúc của phiên hỏng — LinkedIn chặn, app password bị thu hồi.
-#         HỎNG CÂM là kiểu hỏng tệ nhất: máy đứng im mấy ngày mà bảng vẫn
-#         xanh, và người dùng chỉ phát hiện khi thấy lâu quá không có tin.
-#   cho   hàng chờ dồn quá ngưỡng — việc đang đợi người, không ai làm hộ.
-#   ngay  bản tin cuối ngày — bốn số của hôm nay.
+#   tiep  someone moved you forward — measured on the real mailbox: once in
+#         60 days. The rarest and the most important. Knowing early means
+#         replying early.
+#   hong  a stage of the session failed — LinkedIn blocked, app password
+#         revoked. A SILENT FAILURE is the worst kind: the machine sits
+#         still for days while the board stays green, and the user only
+#         notices when nothing new has arrived for too long.
+#   cho   the queue has piled past a threshold — work waiting on a person,
+#         and nobody else will do it.
+#   ngay  the end-of-day report — today's four numbers.
 #
-# KHÔNG BÁO "quét xong 515 tin". Đó là tin về máy, không phải tin về việc.
+# NO "finished scanning 515 postings". That is news about the machine, not
+# news about the job search.
 BAO_TIEP = "bao_tiep"
 BAO_HONG = "bao_hong"
 BAO_CHO = "bao_cho"
 BAO_NGAY = "bao_ngay"
-BAO = {BAO_TIEP: ("Có người gọi đi tiếp",
-                  "Thư mời phỏng vấn hoặc nhận việc vừa về. Hiếm nhất, đáng "
-                  "biết nhất — biết sớm là trả lời sớm."),
-       BAO_HONG: ("Phiên chạy hỏng",
-                  "Một khúc không chạy được: LinkedIn chặn, app password bị "
-                  "thu hồi, mất mạng. Hỏng câm thì máy đứng im mấy ngày mà "
-                  "không có gì trên màn hình nói ra."),
-       BAO_CHO: ("Hàng chờ dồn",
-                 "Thư máy không tự chốt được đang chất đống, chờ bạn quyết."),
-       BAO_NGAY: ("Bản tin cuối ngày",
-                  "Bốn số của hôm nay: tìm được, đã nộp, được gọi tiếp, báo "
-                  "trượt. Gửi một lần, đúng giờ bạn đặt.")}
+BAO = {BAO_TIEP: ("Someone moved you forward",
+                  "An interview invitation or an offer just arrived. The "
+                  "rarest and the most worth knowing — knowing early means "
+                  "replying early."),
+       BAO_HONG: ("A session failed",
+                  "A stage could not run: LinkedIn blocked it, the app "
+                  "password was revoked, the network dropped. A silent "
+                  "failure means the machine sits idle for days with nothing "
+                  "on screen saying so."),
+       BAO_CHO: ("The queue is piling up",
+                 "Mail the machine could not settle is stacking up, waiting "
+                 "on your decision."),
+       BAO_NGAY: ("End-of-day report",
+                  "Today's four numbers: found, applied, moved forward, "
+                  "rejected. Sent once, at the hour you choose.")}
 
-# Ngưỡng cho `cho`: dồn quá bao nhiêu việc thì mới nhắn. Dưới ngưỡng thì
-# không đáng làm phiền — người dùng mở app lúc nào cũng thấy.
+# The threshold for `cho`: how many items have to pile up before it messages
+# you. Below that it is not worth interrupting — the user sees it whenever
+# they open the app.
 BAO_NGUONG = "bao_nguong"
-BAO_GIO = "bao_gio"          # giờ gửi bản tin cuối ngày (0-23)
+BAO_GIO = "bao_gio"          # what hour to send the end-of-day report (0-23)
 
-# MỐC ĐÃ BÁO TỚI ĐÂU — số hiệu lá thư cuối cùng đã nhắn về điện thoại.
-# Không có nó thì mỗi lần quét lại nhắn lại đúng lá cũ, và người dùng tắt
-# thông báo sau đúng hai ngày.
+# HOW FAR NOTIFICATIONS HAVE GOT — the id of the last mail already sent to
+# the phone. Without it, every scan re-sends the same old mail and the user
+# switches notifications off after exactly two days.
 BAO_MOC = "bao_moc"
-BAO_NGAY_CUOI = "bao_ngay_cuoi"   # bản tin cuối ngày đã gửi cho ngày nào
+BAO_NGAY_CUOI = "bao_ngay_cuoi"   # which date the daily report was sent for
 
-# MỨC ĐIỀU KHIỂN TỪ XA. Giá trị hợp lệ ở core/tele.py (TAT / XEM / DAY_DU).
-# Mặc định TAT: bot mới nối xong mà đã nhận lệnh là mở cửa trước khi người
-# dùng kịp hiểu cửa đó dẫn đi đâu.
+# REMOTE CONTROL LEVEL. The valid values live in core/tele.py (TAT / XEM /
+# DAY_DU). Default TAT: a bot that starts accepting commands the moment it
+# connects opens a door before the user has understood where it leads.
 BAO_MUC = "bao_muc"
 
 
-# MÀU NHẤN của cả app. Giá trị hợp lệ và bảng màu nằm ở dashboard/mau.py —
-# ở đây chỉ giữ cái KHOÁ, vì core không được biết gì về chuyện vẽ vời.
+# THE ACCENT COLOUR of the whole app. The valid values and the palette live
+# in dashboard/mau.py — only the KEY lives here, because core is not allowed
+# to know anything about drawing.
 MAU = "mau_nhan"
 
 
-# --- PHIÊN: BA KHÚC, MỘT VÒNG ------------------------------------------
+# --- A SESSION: THREE STAGES, ONE LOOP ----------------------------------
 #
-# Home là trạm trực 24/7. Một PHIÊN là một vòng chạy hết cả dây chuyền, và ba
-# công tắc này nói vòng đó gồm khúc nào.
+# Home is a 24/7 station. A SESSION is one pass through the whole pipeline,
+# and these three switches say which stages it contains.
 #
-# THỨ TỰ TRONG DICT LÀ THỨ TỰ CHẠY, không phải tình cờ: tìm việc trước (kho
-# mới có tin), dựng CV sau (nó xếp chữ theo tin trong kho), đọc thư sau cùng
-# (nó cập nhật bảng theo thứ đã nộp). Đảo lại thì lượt dựng CV đang xếp theo
-# kho của vòng trước.
+# THE ORDER IN THE DICT IS THE ORDER OF EXECUTION, not an accident: search
+# first (that is what fills the store), build CVs second (they are laid out
+# against what is in the store), read mail last (it updates the table
+# according to what was applied to). Reverse it and the CV pass is laying out
+# against the previous loop's store.
 #
-# VÌ SAO PHẢI TẮT ĐƯỢC TỪNG KHÚC: ba khúc có giá rất khác nhau. Đọc thư 12
-# giây, dựng CV 5,3 giây, còn quét LinkedIn phải mở Chrome và tốn nửa tiếng.
-# Ai chỉ muốn trực hộp thư ban đêm thì tắt hai khúc kia, chứ không phải chọn
-# giữa "chạy tất" và "không chạy gì".
+# WHY EACH STAGE MUST BE SWITCHABLE: the three cost wildly different amounts.
+# Reading mail 12 seconds, building CVs 5.3 seconds, and scanning LinkedIn
+# needs Chrome and half an hour. Someone who only wants the mailbox watched
+# overnight turns the other two off, instead of choosing between "run
+# everything" and "run nothing".
 #
-# MẶC ĐỊNH BẬT CẢ BA. Một khúc tắt lặng lẽ là kiểu hỏng tệ nhất: phiên chạy
-# suốt đêm mà sáng ra không có bản CV nào mới, và không ai hiểu vì sao.
+# ALL THREE ON BY DEFAULT. A stage silently off is the worst kind of failure:
+# the session runs all night and in the morning there is no new CV, and
+# nobody can work out why.
 PHIEN_SEARCH = "phien_search"
 PHIEN_CV = "phien_cv"
 PHIEN_MAIL = "phien_mail"
 PHIEN = {PHIEN_SEARCH: ("search", "Search",
-                        "tìm tin mới ở board công ty và LinkedIn, lọc rồi "
-                        "chấm điểm. Khúc đắt nhất: phải mở Chrome."),
+                        "find new postings on company boards and LinkedIn, "
+                        "filter them, score them. The most expensive stage: "
+                        "it has to open Chrome."),
          PHIEN_CV: ("cv", "Make CV",
-                    "xếp lại chữ trên CV cho khớp từng tin trong kho. Không "
-                    "viết câu mới — chỉ chọn và sắp xếp câu bạn đã viết."),
+                    "re-lay the CV against each posting in the store. Writes "
+                    "no new sentences — only picks and orders the ones you "
+                    "wrote."),
          PHIEN_MAIL: ("track", "Manage mail",
-                      "đọc hộp thư rồi cập nhật bảng Quản lí. Chỉ đọc, "
-                      "không đụng gì vào hộp thư của bạn.")}
+                      "read the mailbox and update the Manage table. Read "
+                      "only; it touches nothing in your mailbox.")}
 
 
-# --- NÚM CỦA TẦNG QUẢN LÍ ------------------------------------------------
+# --- THE MANAGE LAYER'S KNOB --------------------------------------------
 #
-# QUÁ BAO NHIÊU NGÀY IM THÌ COI NHƯ TRƯỢT.
+# HOW MANY DAYS OF SILENCE COUNTS AS A REJECTION.
 #
-# Đây là cái núm biến một đống "chưa biết" thành "xong" — và không có nó thì
-# bảng chỉ lớn dần chứ không bao giờ vơi: đo trên hộp thư thật, 28/37 lần nộp
-# không bao giờ nhận được một chữ nào. Chúng nằm mãi ở "đang chờ", và "đang
-# chờ" 40 ngày là một lời nói dối lịch sự.
+# This is the knob that turns a pile of "don't know" into "done" — and
+# without it the table only ever grows: measured on the real mailbox, 28 of
+# 37 applications never received a single word back. They sat at "waiting"
+# forever, and "waiting" after 40 days is a polite lie.
 #
-# SỐ NÀY LÀ PHÉP SUY, KHÔNG PHẢI SỰ THẬT — nên nó KHÔNG ghi vào cột `stage`.
-# Mỗi lần đọc bảng mới tính lại; hạ xuống 10 rồi nâng lại 45 thì mọi dòng
-# quay về đúng chỗ cũ. Ghi xuống thì đó là đường một chiều, và một hôm nào
-# đó thư trả lời về sau 31 ngày sẽ đâm vào một dòng đã bị đóng vĩnh viễn.
+# THIS NUMBER IS AN INFERENCE, NOT A FACT — so it is NOT written to the
+# `stage` column. It is recomputed every time the table is read; drop it to
+# 10 and raise it back to 45 and every row returns to where it was. Writing
+# it down would make it a one-way street, and one day a reply arriving on day
+# 31 will land on a row that was closed permanently.
 IM_QUA = "im_qua"
 
-# Năm mức, và mỗi mức phải trả lời được "chọn nó thì khác gì" — không phải
-# một thanh trượt 1..365 để người dùng tự đoán.
+# Five steps, and each has to answer "what changes if I pick this" — not a
+# 1..365 slider for the user to guess with.
 IM_MUC = ("10", "14", "20", "30", "45")
 
-# --- HAI NÚM CỦA TẦNG CV ------------------------------------------------
+# --- THE CV LAYER'S TWO KNOBS -------------------------------------------
 #
-# HAI, không hơn. Mỗi núm phải trả lời được "xoay nó thì bản CV đổi thế nào"
-# bằng một con số — núm nào không trả lời được thì nó là núm trang trí, và
-# một núm trang trí làm người dùng mất tin vào cả bảng.
+# TWO, no more. Each knob has to answer "what does turning it change about
+# the CV" with a number — a knob that cannot is decoration, and one
+# decorative knob costs the user their trust in the whole panel.
 #
-# BẢY NÚM ĐÃ BỎ, và đây là lý do từng cái:
+# SEVEN KNOBS WERE REMOVED, and here is why each one went:
 #
-#   độ dày từ khoá   xoay sang "dày" đổi ĐÚNG 0/60 bản. Nó cũng dựa trên một
-#                    thứ không có thật: không nhà cung cấp ATS nào công bố
-#                    công thức "keyword density".
-#   giọng văn        6/26 câu có chủ ngữ để lược. Lược chủ ngữ là quy ước CV
-#                    ai cũng theo — bày ra để chọn là bày một câu hỏi không
-#                    ai muốn trả lời.
-#   bố cục           đổi 19 -> 22 bản, nhưng "mấy dòng mỗi khối" là câu hỏi
-#                    của người dàn trang, không phải của người tìm việc.
-#   giữ câu kể thất bại · giữ câu ý kiến · giữ câu mời nghi ngờ ·
-#   giữ mục kỹ năng mềm · giữ mọi khối kinh nghiệm
-#                    năm công tắc lật lại năm LUẬT. Luật đúng trong đa số
-#                    trường hợp và đã có số đo hậu thuẫn; bày ra để lật là
-#                    bắt người dùng học năm luật trước khi dùng được app.
-#                    Giờ chúng chạy cố định theo mặc định đã đo, và bản chấm
-#                    điểm (report.py) vẫn nói rõ câu nào bị bỏ vì sao.
+#   keyword density  turning it to "dense" changed EXACTLY 0 of 60 builds. It
+#                    also rests on something that does not exist: no ATS
+#                    vendor publishes a "keyword density" formula.
+#   tone of voice    6 of 26 sentences had a subject to drop. Dropping the
+#                    subject is a CV convention everyone follows — offering
+#                    it as a choice is asking a question nobody wants.
+#   layout           changed 19 -> 22 builds, but "how many lines per block"
+#                    is a typesetter's question, not a job-seeker's.
+#   keep failure lines · keep opinion lines · keep lines that invite doubt ·
+#   keep the soft-skills section · keep every experience block
+#                    five switches that reverse five RULES. The rules are
+#                    right in most cases and have measurements behind them;
+#                    offering them as switches forces the user to learn five
+#                    rules before they can use the app. They now run fixed at
+#                    the measured defaults, and the report (report.py) still
+#                    states exactly which sentence was dropped and why.
 #
-# Người dùng cần đúng hai thứ: bản CV riêng cho từng tin tới mức nào, và máy
-# có tự lo phần nó lo được hay không.
+# The user needs exactly two things: how far the CV is tailored per posting,
+# and whether the machine handles what it can handle on its own.
 
 CV_RIENG = "cv_rieng"
-RIENG = {"chung": "một bản dùng chung cho nhiều tin",
-         "vua": "xếp mục kỹ năng theo tin",
-         "rieng": "xếp cả món trong từng mục"}
+RIENG = {"chung": "one shared version across many postings",
+         "vua": "order the skills section per posting",
+         "rieng": "order the items inside each section too"}
 
-# TỰ LO — máy làm sẵn mọi phần nó làm được, không đợi bấm.
+# SELF-DRIVING — the machine does everything it can do without being asked.
 #
-#   1  mọi chỗ hụt nhãn VIẾT đều có bản nháp dựng sẵn, chờ điền bằng chứng
-#   2  chữ trên CV vừa đổi thì dựng lại toàn bộ bản CV ngay, chạy nền
+#   1  every WRITE-labelled gap gets a draft prepared, waiting for evidence
+#   2  changing a CV sentence rebuilds every version at once, in the background
 #
-# Phần DUY NHẤT máy không tự lo được là con số: bao nhiêu cái, trên bao nhiêu
-# dữ liệu, đổi được mấy phần. Máy không biết người dùng đã làm gì, và câu
-# trên CV là câu họ phải đỡ được trong phòng phỏng vấn.
+# The ONE part the machine cannot do for you is the number: how many, over
+# how much data, how much it moved. The machine does not know what the user
+# did, and a line on a CV is a line they have to stand behind in the room.
 #
-# CÓ nằm trong dấu cũ-mới (`cv/batch.stamp`): nó quyết định bản dựng có kèm
-# bản nháp hay không, nên lật nó là bản đang có đã cũ thật.
+# This IS part of the freshness stamp (`cv/batch.stamp`): it decides whether
+# a build ships with drafts, so flipping it genuinely makes existing builds
+# stale.
 CV_TU_LO = "cv_tu_lo"
 
 
@@ -285,9 +312,11 @@ def set_flag(conn: sqlite3.Connection, key: str, on: bool) -> None:
 
 
 def num(conn: sqlite3.Connection, key: str, low: int, high: int) -> int:
-    """Số nguyên trong khoảng. Giá trị hỏng -> về mặc định, không nổ.
+    """An integer inside a range. A broken value falls back to the default
+    rather than raising.
 
-    Người dùng gõ được gì vào ô cũng không được làm chết vòng quét nền.
+    Whatever the user types into a box must not be able to kill the
+    background scan.
     """
     try:
         value = int(get(conn, key))

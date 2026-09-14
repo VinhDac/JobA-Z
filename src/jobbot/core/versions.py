@@ -1,28 +1,32 @@
-"""Phiên bản của các bộ luật.
+"""Versions of the rule sets.
 
-Đổi luật thì ĐỔI SỐ Ở ĐÂY. Tin nào được phán bằng phiên bản cũ sẽ tự động
-được tính lại ở lần quét sau.
+Change a rule, CHANGE THE NUMBER HERE. Anything judged under an older version
+is recomputed automatically on the next scan.
 
-Không có cơ chế này thì: sửa vocab.py xong, điểm cũ và điểm mới nằm lẫn trong
-cùng một bảng, không cách nào biết cái nào tính bằng luật nào.
+Without this: edit vocab.py and old scores sit next to new scores in the same
+table, with no way to tell which rule produced which.
 """
 
-# 2026-09-12.1 — "chỗ mình" suy từ ô hồ sơ "Where you're based" thay vì đóng
-# cứng UK, + chốt chặn mã bang Mỹ cho tên thành phố đụng nhau (Birmingham, AL).
+# 2026-09-12.1 — "where you are" is derived from the profile answer "Where
+# you're based" instead of being hardcoded to the UK, + a guard for US state
+# codes where city names collide (Birmingham, AL).
 FILTER_RULES = "2026-09-12.1"  # ingest/filter.py + ingest/base.norm_*
 # scoring/vocab.py + scoring/extract.py + scoring/score.py + realism + deadline
-# 2026-09-12.4 — (a) norm() giữ `+ # /` và ranh giới alias đổi từ \b sang
-# (?<!\w)/(?!\w): trước đó "C++" bị chuẩn hoá thành "c" nên 208 tin đòi C++
-# không bao giờ khớp, dù CV CÓ C++. (b) bỏ search_keywords/stack_want khỏi chỉ
-# số bằng chứng — nhãn tự khai "(not proof)" mà vẫn cho 249 dòng ở 153 tin
-# tính là ĐẠT. Điểm sẽ tụt; đó là điểm thật.
+# 2026-09-12.4 — (a) norm() now keeps `+ # /` and alias boundaries moved from
+# \b to (?<!\w)/(?!\w): before that "C++" normalised down to "c", so 208
+# postings asking for C++ never matched, even though the CV HAS C++. (b)
+# search_keywords/stack_want dropped from the evidence index — they are
+# self-declared, labelled "(not proof)", and were still letting 249 lines
+# across 153 postings count as MET. Scores will drop; those are the real ones.
 SCORE_RULES = "2026-09-12.4"
-# cv/rules.py + cv/build.py + cv/rewrite.py. Bản dựng CV được LƯU xuống đĩa
-# (bảng cv_build), nên đổi luật viết CV mà không đổi số ở đây thì bản cũ nằm
-# lại và không ai biết nó được dựng bằng luật nào.
+# cv/rules.py + cv/build.py + cv/rewrite.py. A built CV is SAVED to disk
+# (table cv_build), so changing the CV rules without changing this number
+# leaves old builds behind with no record of which rules made them.
 #
-# 2026-09-12.1 — bộ dựng bắt đầu HỎI rules.sentence_ok (trước đó không hỏi, và
-# 3 câu bị cấm đi ra ngoài trên mọi bản), + cv/rewrite.py lược chủ ngữ ngôi 1.
-# 2026-09-12.2 — dòng "Bản sẽ gửi" tính phủ trên TIN ĐẦU ĐÀN thay vì trên
-# hợp cả nhóm (hợp thì đo kích thước nhóm, không đo chất lượng CV).
+# 2026-09-12.1 — the builder started ASKING rules.sentence_ok (before that it
+# did not, and 3 banned sentences went out on every version), + cv/rewrite.py
+# drops first-person subjects.
+# 2026-09-12.2 — the "what will be sent" coverage line measures the LEAD
+# posting instead of the union of the group (the union measures group size,
+# not CV quality).
 CV_RULES = "2026-09-13.1"

@@ -1,11 +1,11 @@
-"""Khởi động jobbot. Chạy được trên macOS, Windows, Linux.
+"""Start jobbot. Runs on macOS, Windows, Linux.
 
-    python run.py            cửa sổ app (macOS: NSWindow · còn lại: Chrome --app)
-    python run.py --window   chạy trong terminal, mở trình duyệt, Ctrl+C dừng
-    python run.py --scan     quét một lần rồi thoát
+    python run.py            app window (macOS: NSWindow · else: Chrome --app)
+    python run.py --window   run in the terminal, open a browser, Ctrl+C stops
+    python run.py --scan     scan once, then exit
 
-Trên Windows dùng `python`, trên macOS/Linux thường là `python3`. Cần Python
-3.11 trở lên (tomllib).
+On Windows use `python`, on macOS/Linux usually `python3`. Needs Python 3.11
+or newer (tomllib).
 """
 
 from __future__ import annotations
@@ -22,43 +22,45 @@ from .dashboard.server import serve
 
 
 def run_window(app_window: bool = False) -> int:
-    """Server + scheduler chạy ở tiến trình này, log ra terminal.
+    """Server + scheduler run in this process, logging to the terminal.
 
-    app_window=True  mở cửa sổ Chrome --app (vỏ app trên Windows/Linux)
-    app_window=False mở trình duyệt mặc định
+    app_window=True  open a Chrome --app window (the app shell on Windows/Linux)
+    app_window=False open the default browser
     """
     ran = db.migrate(db.connect())
-    journal.log.open()                      # trước dòng này nhật ký chỉ ở bộ nhớ
+    journal.log.open()                      # before this line the journal is memory-only
     httpd, url = serve()
-    # Nói cho NGOÀI biết đang chạy ở đâu. Cổng do hệ cấp nên nó đổi theo
-    # từng lượt; không ghi ra thì `start.command` bấm đúp sẽ gõ nhầm cửa.
+    # Tell the OUTSIDE where we are listening. The OS hands out the port, so
+    # it changes every run; without this file a double-click on start.command
+    # knocks on the wrong door.
     dia_chi.ghi(url)
     runner = scheduler.current()
     runner.start()
 
-    # LUỒNG NGHE LỆNH TELEGRAM — bật ở ĐÂY, không chỉ ở đường macOS/PyObjC.
+    # THE TELEGRAM COMMAND LISTENER — started HERE, not only on the
+    # macOS/PyObjC path.
     #
-    # Trước đây nó chỉ nằm trong app.py (vỏ PyObjC). Chạy bằng
-    # `run.py --window`, chạy trên Windows/Linux, hay chạy khi máy thiếu
-    # PyObjC thì điều khiển từ xa chết CÂM: màn hình vẫn nói mức điều khiển
-    # đang bật, mà nhắn cho bot thì không ai trả lời.
+    # It used to live only in app.py (the PyObjC shell). Run with
+    # `run.py --window`, run on Windows/Linux, or run on a machine without
+    # PyObjC, and remote control died SILENTLY: the screen still said which
+    # control level was on, but messaging the bot got no answer.
     from . import bao as _bao
     threading.Thread(target=_bao.nghe, args=(runner.stop_flag,),
                      daemon=True, name="telegram").start()
 
     print(f"  jobbot  ->  {url}", flush=True)
     print(f"  DB      ->  {db_path()}", flush=True)
-    print(f"  vỏ      ->  {shell.describe()}", flush=True)
+    print(f"  shell   ->  {shell.describe()}", flush=True)
     if ran:
         print(f"  ran {ran} migration(s)", flush=True)
-    print(f"  tự quét: {'BẬT' if not runner.paused else 'TẮT'}"
-          "  ·  Ctrl+C để dừng\n", flush=True)
+    print(f"  auto-scan: {'ON' if not runner.paused else 'OFF'}"
+          "  ·  Ctrl+C to stop\n", flush=True)
 
     window = None
     if app_window:
         window = shell.open_window(url)
         if window is None:
-            print("  (không mở được cửa sổ Chrome — mở trình duyệt thay)")
+            print("  (could not open a Chrome window — opening your browser instead)")
     if window is None:
         threading.Timer(0.4, lambda: webbrowser.open(url)).start()
 
@@ -72,7 +74,7 @@ def run_window(app_window: bool = False) -> int:
         if window is not None:
             window.terminate()
         from .browser import chrome
-        chrome.shutdown_all()               # đừng bỏ lại cửa sổ cào mồ côi
+        chrome.shutdown_all()               # never leave an orphaned scraping window
         dia_chi.xoa()
     return 0
 
@@ -89,13 +91,13 @@ def main() -> int:
     if "--window" in sys.argv:
         return run_window()
 
-    # macOS có PyObjC -> cửa sổ thật. Windows/Linux -> cửa sổ Chrome --app.
+    # macOS with PyObjC -> a real window. Windows/Linux -> a Chrome --app window.
     if shell.has_mac_native():
         try:
             from .app import run
             return run()
         except (ImportError, AttributeError) as exc:
-            print(f"  (không dựng được cửa sổ macOS: {exc})")
+            print(f"  (could not build the macOS window: {exc})")
     return run_window(app_window=True)
 
 

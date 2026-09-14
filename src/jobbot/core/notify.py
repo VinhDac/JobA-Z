@@ -1,21 +1,23 @@
-"""Thông báo hệ điều hành — macOS, Windows, Linux. Không cài gì thêm.
+"""Operating-system notifications — macOS, Windows, Linux. Nothing to install.
 
     macOS    osascript (AppleScript)
-    Windows  PowerShell + WinRT toast — CHƯA thử trên máy Windows thật
+    Windows  PowerShell + WinRT toast — NOT yet tried on a real Windows box
     Linux    notify-send
 
-Luật: BÁO ÍT THÔI. Báo nhiều thì bị phớt lờ, và lúc đó cổng Yes/No thành vô dụng.
-Chỉ báo khi CẦN NGƯỜI LÀM GÌ ĐÓ, không báo "đã quét xong 47 tin".
+The rule: NOTIFY RARELY. Notify often and you get ignored, and at that point
+the Yes/No gate is worthless. Only notify when A PERSON HAS TO DO SOMETHING,
+never "finished scanning 47 postings".
 
-LỖI ĐÃ SỬA: trước đây dựng câu lệnh bằng shlex.quote — đó là cách rào chuỗi
-cho SHELL, không phải cho AppleScript. shlex.quote("Jobbot") trả về Jobbot
-trần, AppleScript đọc ra một danh từ nó không biết:
+A BUG THAT WAS FIXED: the command used to be built with shlex.quote — that
+quotes for a SHELL, not for AppleScript. shlex.quote("Jobbot") returns a bare
+Jobbot, and AppleScript reads it as a noun it does not know:
 
     display notification '5 new matches' with title Jobbot
     -> 21:22: syntax error ... found unknown token. (-2741)
 
-Nghĩa là KHÔNG một thông báo nào từng hiện lên, và send() trả False mà không
-ai đọc. AppleScript rào chuỗi bằng dấu nháy KÉP, thoát \\ và " bằng gạch chéo.
+Which means NOT ONE notification ever appeared, and send() returned False
+with nobody reading it. AppleScript quotes with DOUBLE quotes, escaping \\
+and " with a backslash.
 """
 
 from __future__ import annotations
@@ -25,8 +27,8 @@ import sys
 
 
 def _as_string(text: str) -> str:
-    """Một chuỗi AppleScript hợp lệ. Xuống dòng cũng phải thoát, nếu không câu
-    lệnh bị cắt làm đôi."""
+    """A valid AppleScript string. Newlines must be escaped too, or the
+    command gets cut in half."""
     escaped = (str(text).replace("\\", "\\\\").replace('"', '\\"')
                .replace("\n", "\\n").replace("\r", ""))
     return f'"{escaped}"'
@@ -45,13 +47,14 @@ def _mac(title: str, message: str, subtitle: str) -> list[str]:
 
 
 def _windows(title: str, message: str, subtitle: str) -> list[str]:
-    """Toast của Windows 10/11 qua PowerShell — không cài thêm gì.
+    """A Windows 10/11 toast through PowerShell — nothing to install.
 
-    Dùng WinRT có sẵn trong hệ. BurntToast tiện hơn nhưng phải cài module,
-    mà cả app này không cài gói nào.
+    Uses the WinRT that ships with the system. BurntToast is nicer but needs
+    a module installed, and this whole app installs no packages.
 
-    CHƯA THỬ TRÊN MÁY WINDOWS THẬT — viết theo tài liệu. Hỏng thì send() trả
-    False và scheduler ghi 'notify_failed' vào nhật ký, không im lặng.
+    NOT TRIED ON A REAL WINDOWS BOX — written from the docs. If it fails,
+    send() returns False and the scheduler writes 'notify_failed' to the
+    journal. It does not go quiet.
     """
     body = message + (f"\n{subtitle}" if subtitle else "")
     ps = (
@@ -75,7 +78,8 @@ def _linux(title: str, message: str, subtitle: str) -> list[str]:
 
 
 def _ps_quote(text: str) -> str:
-    """Chuỗi PowerShell rào bằng nháy ĐƠN; bên trong, nháy đơn nhân đôi."""
+    """A PowerShell string quoted with SINGLE quotes; inside, a single quote
+    is doubled."""
     return "'" + str(text).replace("'", "''").replace("\r", "") + "'"
 
 
@@ -83,13 +87,15 @@ BUILDERS = {"darwin": _mac, "win32": _windows}
 
 
 def command(title: str, message: str, subtitle: str = "") -> list[str]:
-    """Lệnh sẽ chạy trên hệ hiện tại. Tách ra để test được mà không phải gọi."""
+    """The command this platform would run. Split out so it can be tested
+    without actually running it."""
     build = BUILDERS.get(sys.platform, _linux)
     return build(title, message, subtitle)
 
 
 def send(title: str, message: str, subtitle: str = "") -> bool:
-    """True = đã hiện lên. False = KHÔNG hiện — người gọi phải xử lý, đừng nuốt."""
+    """True = it appeared. False = it did NOT — the caller must handle that,
+    not swallow it."""
     try:
         subprocess.run(command(title, message, subtitle),
                        check=True, capture_output=True, timeout=10)

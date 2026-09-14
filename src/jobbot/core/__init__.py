@@ -1,14 +1,14 @@
-"""Lõi — xương sống dùng chung cho mọi module.
+"""Core — the shared backbone every module sits on.
 
-Ở đây:
-    - Kiểu dữ liệu chung: Job, Proposal, Application, AuditEntry
-    - Store SQLite + 4 tầng raw / derived / state / audit
-    - Cache (chống fetch lại, chống chấm điểm lại)
-    - Hàng đợi đề xuất và cổng Yes/No
-    - Thực thi đề xuất sau khi được duyệt
+Lives here:
+    - Shared data types: Job, Proposal, Application, AuditEntry
+    - SQLite store + the 4 layers raw / derived / state / audit
+    - Cache (never fetch twice, never score twice)
+    - The proposal queue and the Yes/No gate
+    - Executing a proposal once it has been approved
 
-KHÔNG ở đây:
-    - Logic riêng của bất kỳ nguồn nào (-> ingest/)
-    - Luật chấm điểm (-> scoring/)
-    - Bất cứ thứ gì biết LinkedIn/Greenhouse/... là gì
+Does NOT live here:
+    - Anything specific to one source (-> ingest/)
+    - Scoring rules (-> scoring/)
+    - Anything that knows what LinkedIn/Greenhouse/... is
 """

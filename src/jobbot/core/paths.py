@@ -1,6 +1,6 @@
-"""Đường dẫn — phải chạy giống nhau trên macOS / Windows / Linux.
+"""Paths — must behave identically on macOS / Windows / Linux.
 
-Luật: không bao giờ ghép đường dẫn bằng chuỗi. Chỉ dùng pathlib.
+Rule: never join paths by string concatenation. Only pathlib.
 """
 
 from __future__ import annotations
@@ -12,23 +12,24 @@ PACKAGE_DIR = Path(__file__).resolve().parent.parent      # src/jobbot
 
 
 def project_root() -> Path:
-    """Gốc repo — nơi chứa config/ và data/.
+    """The repo root — where config/ and data/ live.
 
-    ĐỔI ĐƯỢC bằng JOBBOT_ROOT, và đó không phải tiện nghi: `reset.run()` xoá
-    `config/config.toml` theo đường này. Hằng số cứng nghĩa là mọi lần chạy
-    thử đường phá hoại đều xoá đúng tệp thật.
+    OVERRIDABLE with JOBBOT_ROOT, and that is not a convenience: `reset.run()`
+    deletes `config/config.toml` down this path. A hardcoded constant means
+    every test of the destructive path deletes the real file.
     """
     override = os.environ.get("JOBBOT_ROOT")
     return Path(override).expanduser() if override else PACKAGE_DIR.parent.parent
 
 
-# Giữ tên cũ cho chỗ nào chỉ cần đường dẫn lúc nạp module. KHÔNG dùng nó ở
-# đường phá hoại — chỗ đó phải gọi project_root() để còn chuyển hướng được.
+# The old name, kept for places that only need a path at import time. Do NOT
+# use it on a destructive path — that code must call project_root() so it can
+# still be redirected.
 PROJECT_ROOT = PACKAGE_DIR.parent.parent
 
 
 def data_dir() -> Path:
-    """Nơi chứa DB và cache. Đổi được bằng biến môi trường JOBBOT_DATA_DIR."""
+    """Where the DB and caches live. Override with JOBBOT_DATA_DIR."""
     override = os.environ.get("JOBBOT_DATA_DIR")
     path = Path(override).expanduser() if override else project_root() / "data"
     path.mkdir(parents=True, exist_ok=True)

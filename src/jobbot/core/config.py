@@ -1,11 +1,11 @@
-"""Đọc config/config.toml — MỘT chỗ.
+"""Read config/config.toml — from ONE place.
 
-Trước đây mỗi module tự mở tệp bằng tomllib. Hai bộ đọc là hai cách hiểu về
-cùng một tệp, và chúng trôi xa nhau mà không ai biết — đúng bệnh vừa chữa ở
-tầng chấm điểm và tầng dựng CV.
+Every module used to open the file itself with tomllib. Two readers are two
+understandings of the same file, and they drift apart with nobody noticing —
+exactly the disease just cured in the scoring layer and the CV builder.
 
-Không có tệp thì trả {} chứ không nổ: app phải chạy được khi Vin chưa cấu
-hình gì, chỉ là mấy tính năng cần cấu hình thì tự tắt.
+No file means {} rather than an exception: the app has to run before Vin has
+configured anything. The features that need configuration simply switch off.
 """
 
 from __future__ import annotations
@@ -20,17 +20,17 @@ from .paths import project_root
 
 
 def _tep(ten: str) -> Path:
-    """Đường tới một tệp cấu hình, tính LÚC CHẠY.
+    """The path to a config file, computed AT CALL TIME.
 
-    Hằng số ở mức module thì bài test không chuyển hướng được, và nó đã ghi
-    thẳng vào config.toml THẬT — để lại địa chỉ giả "a@b.c" và app password
-    rỗng trong tệp của Vin ngày 12/09.
+    A module-level constant cannot be redirected by a test, and it did write
+    straight into the REAL config.toml — leaving a fake address "a@b.c" and
+    an empty app password in Vin's file on 12 Sep.
     """
     return project_root() / "config" / ten
 
 
 class _Duong:
-    """Cho `config.PATH` vẫn dùng được như một Path, nhưng tính lúc gọi."""
+    """Lets `config.PATH` still be used like a Path, but resolved on use."""
 
     def __init__(self, ten: str) -> None:
         self._ten = ten
@@ -52,25 +52,26 @@ PATH = _Duong("config.toml")
 
 
 def load() -> dict:
-    """Đọc config.toml. Hỏng thì trả rỗng — NHƯNG PHẢI KÊU.
+    """Read config.toml. Broken means empty — BUT IT MUST SAY SO.
 
-    Trả rỗng lặng lẽ là hỏng câm ở chỗ tệ nhất: sai một dấu nháy trong tệp là
-    Gmail VÀ Telegram cùng tắt, và Telegram chính là kênh duy nhất báo được
-    chuyện đó ra ngoài. Máy treo ở nhà thì người dùng không biết gì cả — chỉ
-    thấy mãi không có tin mới.
+    Returning empty in silence is the worst place for a silent failure: one
+    stray quote in the file switches OFF both Gmail AND Telegram, and
+    Telegram is the only channel that could have reported it. With the
+    machine sitting at home the user knows nothing — they just see no new
+    postings, forever.
 
-    Tệp KHÔNG CÓ thì im lặng: đó là trạng thái hợp lệ của người dùng mới.
+    A MISSING file stays silent: that is the legitimate state of a new user.
     """
     if not PATH.exists():
         return {}
     try:
         return tomllib.loads(PATH.read_text())
     except tomllib.TOMLDecodeError as e:
-        _keu(f"config.toml SAI CÚ PHÁP — {str(e)[:90]}. Gmail và Telegram "
-             f"đều tắt cho tới khi sửa.")
+        _keu(f"config.toml IS NOT VALID TOML — {str(e)[:90]}. Gmail and "
+             f"Telegram are both off until it is fixed.")
         return {}
     except OSError as e:
-        _keu(f"không đọc được config.toml — {type(e).__name__}: {str(e)[:70]}")
+        _keu(f"could not read config.toml — {type(e).__name__}: {str(e)[:70]}")
         return {}
 
 
@@ -78,8 +79,9 @@ _da_keu: set = set()
 
 
 def _keu(cau: str) -> None:
-    """Ghi nhật ký MỘT LẦN cho mỗi câu. `load()` bị gọi hàng chục lần mỗi
-    lượt vẽ trang; kêu mỗi lần thì nhật ký thành rác và dòng đáng đọc trôi."""
+    """Log ONCE per distinct message. `load()` is called dozens of times per
+    page render; shouting every time turns the journal into noise and pushes
+    the line worth reading off the top."""
     if cau in _da_keu:
         return
     _da_keu.add(cau)
@@ -96,24 +98,26 @@ def section(name: str) -> dict:
 
 
 EXAMPLE = _Duong("config.example.toml")
-SECRET = 0o600          # chỉ chủ máy đọc được — trong này có app password
+SECRET = 0o600          # owner-only — this file holds an app password
 
 
 def _quote(value: str) -> str:
-    """Chuỗi TOML kiểu cơ bản. Escape dấu \\ và " — app password của Google
-    không có hai ký tự đó, nhưng luật này không được phụ thuộc vào may mắn."""
+    """A basic TOML string. Escapes \\ and " — a Google app password contains
+    neither, but this rule must not depend on luck."""
     return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def write_value(name: str, key: str, value: str) -> None:
-    """Đặt một giá trị trong config.toml, CHỈ đụng đúng dòng đó.
+    """Set one value in config.toml, touching ONLY that line.
 
-    Không dựng lại cả tệp: config.toml có phần chú thích dài giải thích vì sao
-    dùng hộp thư riêng, vì sao app password là chìa khoá toàn quyền. Ghi đè cả
-    tệp là xoá mất phần giải thích đó, và người đọc sau sẽ không biết.
+    It does not rebuild the file: config.toml carries long comments about why
+    to use a separate mailbox and why an app password is a full-access key.
+    Overwriting the whole file deletes that reasoning, and the next reader
+    will not know.
 
-    Không dùng thư viện ghi TOML vì stdlib chỉ có bộ ĐỌC (tomllib). Sửa theo
-    dòng là đủ cho một tệp cấu hình phẳng, và giữ nguyên mọi thứ khác.
+    No TOML writer library, because the stdlib only ships a READER
+    (tomllib). Line-wise editing is enough for a flat config file and leaves
+    everything else exactly as it was.
     """
     if not PATH.exists():
         PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -139,22 +143,23 @@ def write_value(name: str, key: str, value: str) -> None:
     if target >= 0:
         lines[target] = new
     elif last >= 0:
-        lines.insert(last + 1, new)                  # cuối phần đó
+        lines.insert(last + 1, new)                  # end of that section
     else:
         lines += ["", f"[{name}]", new]
 
-    # GHI NGUYÊN TỬ: ghi ra tệp tạm CÙNG THƯ MỤC rồi đổi tên đè lên.
+    # ATOMIC WRITE: write a temp file IN THE SAME DIRECTORY, then rename over.
     #
-    # `write_text` cắt cụt tệp rồi mới ghi. Đứt giữa hai bước đó — mất điện,
-    # đĩa đầy, app bị kill — là còn lại một config.toml rỗng hoặc cụt, tức
-    # là MẤT app password Gmail và token Telegram vĩnh viễn. Không có bản
-    # sao nào cả: chúng chỉ nằm đúng ở tệp này.
+    # `write_text` truncates the file before writing. An interruption between
+    # those two steps — power cut, full disk, the app killed — leaves an
+    # empty or truncated config.toml, which means the Gmail app password and
+    # the Telegram token are gone for good. There is no copy anywhere: they
+    # exist only in this file.
     #
-    # `os.replace` trên cùng một hệ tệp là thao tác nguyên tử: hoặc tệp cũ
-    # nguyên vẹn, hoặc tệp mới nguyên vẹn, không có trạng thái giữa.
+    # `os.replace` within one filesystem is atomic: either the old file
+    # intact, or the new file intact, never anything in between.
     #
-    # chmod TRÊN TỆP TẠM, trước khi đổi tên — làm sau thì có một khe thời
-    # gian tệp bí mật nằm đó với quyền mặc định.
+    # chmod ON THE TEMP FILE, before the rename — doing it after leaves a
+    # window where the secret sits there with default permissions.
     goc = Path(str(PATH))
     tam = goc.with_name(goc.name + ".moi")
     tam.write_text("\n".join(lines).rstrip() + "\n")

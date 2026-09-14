@@ -1,11 +1,12 @@
-"""Vòng chạy nền — cái làm cho nó thành APP thay vì trang web phải tự bấm.
+"""The background loop — what makes this an APP rather than a web page you
+have to press yourself.
 
-Nhịp (design.md §3):
-  - Nguồn có API công khai: chạy 24/7, không có lý do gì phải nhịn.
-  - Nguồn qua Chrome: chỉ trong cửa sổ giờ người. Không ai lướt web 3 giờ sáng
-    mỗi đêm — chính nhịp đó tố cáo, chứ không phải tốc độ click.
+The cadence (design.md §3):
+  - Sources with a public API: 24/7, there is no reason to hold back.
+  - Sources through Chrome: only inside the human window. Nobody browses at
+    3am every night — it is that rhythm that gives you away, not click speed.
 
-Mọi vòng chạy đều ghi audit. Hỏng một nguồn không được làm chết cả vòng.
+Every run writes an audit row. One broken source must never kill the run.
 """
 
 from __future__ import annotations
@@ -19,20 +20,20 @@ from . import prefs
 from .journal import SEARCH, SYSTEM, log as jlog
 from .db import connect
 
-# Mặc định. Người dùng đổi được ở menu Cài đặt; hai hằng số này chỉ còn là
-# giá trị khởi điểm khi bảng pref chưa có gì.
+# Defaults. The user changes these in Settings; these two constants are only
+# the starting values while the pref table is still empty.
 SCAN_EVERY_MIN = 60
-HUMAN_WINDOW = (8, 22)          # giờ địa phương, cho nguồn qua Chrome
+HUMAN_WINDOW = (8, 22)          # local hours, for sources that go through Chrome
 
-MIN_EVERY, MAX_EVERY = 5, 1440  # 5 phút tới 24 giờ
+MIN_EVERY, MAX_EVERY = 5, 1440  # 5 minutes to 24 hours
 
 
 def _pref(key: str, low: int, high: int) -> int:
-    """Đọc LÚC CHẠY, không phải lúc nạp module.
+    """Read AT CALL TIME, not at import time.
 
-    Import theo giá trị thì con số đóng băng: đổi 60 -> 15 phút phải khởi động
-    lại app mới ăn. Đọc hỏng thì trả mặc định — người dùng gõ gì vào ô cũng
-    không được làm chết vòng quét nền.
+    Importing by value freezes the number: changing 60 -> 15 minutes would
+    need an app restart to take effect. A failed read returns the default —
+    whatever the user types into a box must not kill the background loop.
     """
     try:
         conn = connect()
@@ -53,14 +54,15 @@ def human_window() -> tuple[int, int]:
 
 
 def in_human_window(now: datetime | None = None) -> bool:
-    """Giờ này có nằm trong khung được phép quét không.
+    """Is this hour inside the window where scanning is allowed.
 
-    Khung QUA ĐÊM là khung hợp lệ: 22:00–08:00 nghĩa là quét ban đêm, đúng lúc
-    máy rảnh. Công thức cũ `low <= hour < high` cho ra RỖNG với khung đó — vòng
-    quét im lặng không chạy giờ nào, và không có cảnh báo nào cả.
+    A window that CROSSES MIDNIGHT is a legitimate window: 22:00-08:00 means
+    scan at night, exactly when the machine is free. The old formula
+    `low <= hour < high` yields EMPTY for such a window — the scan silently
+    never ran at any hour, with no warning anywhere.
 
-    low == high thì coi là CẢ NGÀY: người đặt hai đầu bằng nhau có ý "lúc nào
-    cũng được", không phải "không bao giờ".
+    low == high means ALL DAY: someone setting both ends equal meant "any
+    time", not "never".
     """
     hour = (now or datetime.now()).hour
     low, high = human_window()
@@ -72,33 +74,34 @@ def in_human_window(now: datetime | None = None) -> bool:
 
 
 class Scheduler:
-    """Chạy trong luồng nền. Không bao giờ ném lỗi ra ngoài — app phải sống tiếp."""
+    """Runs on a background thread. Never raises out — the app must live on."""
 
     def __init__(self, scan_every_min: int = SCAN_EVERY_MIN):
         self.scan_every = scan_every_min * 60
         self.stop_flag = threading.Event()
         self.last_scan: float = 0.0
-        self.last_result: str = "chưa chạy lần nào"
-        # `running` KHÔNG lưu riêng — nó là khoá đang bị giữ hay không. Giữ
-        # cả cờ lẫn khoá là hai nguồn sự thật, và chúng sẽ lệch nhau.
+        self.last_result: str = "never run"
+        # `running` is NOT stored separately — it is whether the lock is
+        # held. Keeping both a flag and a lock is two sources of truth, and
+        # they will drift apart.
         self._gate = threading.Lock()
-        # Mặc định DỪNG. Mở app lên mà nó tự đi quét trong lúc người dùng còn
-        # đang cấu hình là sai — cấu hình chưa xong thì quét về cũng là rác.
-        # Đọc lại lựa chọn lần trước, chưa có thì tắt.
+        # PAUSED by default. Opening the app and having it scan while the
+        # user is still configuring is wrong — an unfinished configuration
+        # only scrapes rubbish. The previous choice is reloaded; absent, off.
         self.paused = True
         self._thread: threading.Thread | None = None
 
-    # --- điều khiển -------------------------------------------------------
+    # --- control ----------------------------------------------------------
     def start(self) -> None:
         self.paused = not self._autorun()
-        # Mốc đếm bắt đầu TỪ LÚC MỞ APP, không phải từ 0. Để 0 thì
-        # "now - 0 >= 3600" luôn đúng và vòng quét nổ ngay sau 5 giây —
-        # Chrome bật lên trong khi cửa sổ còn chưa vẽ xong.
+        # The clock starts AT BOOT, not at 0. Left at 0, "now - 0 >= 3600"
+        # is always true and the scan fires 5 seconds in — Chrome launching
+        # while the window has not finished drawing.
         self.last_scan = time.time()
         jlog.emit(SYSTEM,
-                  "app mở — trạm trực đang TẮT, bấm Start session trên tab Tổng quan"
+                  "app started — the station is OFF, press Start session on Overview"
                   if self.paused else
-                  f"app mở — trạm trực ĐANG BẬT, vòng đầu sau {self.scan_every // 60} phút")
+                  f"app started — the station is ON, first loop in {self.scan_every // 60} min")
         self._thread = threading.Thread(target=self._loop, daemon=True, name="scheduler")
         self._thread.start()
 
@@ -111,31 +114,31 @@ class Scheduler:
             finally:
                 conn.close()
         except Exception:                       # noqa: BLE001
-            return False                        # đọc hỏng -> KHÔNG tự chạy
+            return False                        # unreadable -> do NOT auto-run
 
     def stop(self) -> None:
         self.stop_flag.set()
 
     def pause(self) -> None:
-        """Ngưng quét tự động, và NHỚ lựa chọn đó cho lần mở app sau.
+        """Stop auto-scanning, and REMEMBER that choice for the next boot.
 
-        KHÁC stop(): luồng vẫn sống, bấm tiếp là chạy lại.
-        Không cắt ngang lần quét đang chạy dở — cắt giữa chừng thì Chrome
-        treo tab và giao dịch trong derive() cuộn lại nửa vời.
+        NOT stop(): the thread stays alive, press again and it runs.
+        It does not interrupt a scan in flight — cutting mid-way leaves
+        Chrome with a hung tab and derive()'s transaction half rolled back.
         """
         self.paused = True
         self._remember(False)
-        jlog.warn(SYSTEM, "TRẠM TRỰC ĐÃ TẮT — không tự chạy vòng nào nữa")
+        jlog.warn(SYSTEM, "THE STATION IS OFF — no further loops will run on their own")
 
     def resume(self) -> None:
         self.paused = False
         self._remember(True)
-        jlog.ok(SYSTEM, f"trạm trực ĐÃ BẬT — vòng sau trong {self.next_in() // 60} phút")
+        jlog.ok(SYSTEM, f"the station is ON — next loop in {self.next_in() // 60} min")
 
     @staticmethod
     def _remember(on: bool) -> None:
-        """Nhớ lựa chọn. Không nhớ thì lần mở app sau lại tự chạy, đúng cái
-        vừa tắt đi."""
+        """Remember the choice. Without it the next boot auto-runs again —
+        exactly what was just switched off."""
         try:
             conn = connect()
             try:
@@ -146,23 +149,24 @@ class Scheduler:
             pass
 
     def state(self) -> str:
-        """Một chữ cho giao diện: đang chạy / tạm dừng / chờ."""
+        """One word for the UI: running / paused / idle."""
         if self.running:
             return "running"
         return "paused" if self.paused else "idle"
 
     def next_in(self) -> int:
-        """Còn bao nhiêu giây tới lần quét sau."""
+        """Seconds until the next scan."""
         if not self.last_scan:
             return 0
         return max(0, int(self.scan_every - (time.time() - self.last_scan)))
 
-    # --- vòng lặp ---------------------------------------------------------
+    # --- the loop ---------------------------------------------------------
     def _loop(self) -> None:
-        time.sleep(5)                       # để server lên trước
+        time.sleep(5)                       # let the server come up first
         while not self.stop_flag.is_set():
-            # Đọc lại nhịp MỖI vòng, không phải lúc khởi tạo: đổi 60 -> 15
-            # phút ở menu Cài đặt là ăn ngay, không phải mở lại app.
+            # Re-read the cadence EVERY loop, not at construction: changing
+            # 60 -> 15 minutes in Settings takes effect at once, with no
+            # restart.
             self.scan_every = scan_every_min() * 60
             if not self.paused and time.time() - self.last_scan >= self.scan_every:
                 self.phien_once()
@@ -170,27 +174,27 @@ class Scheduler:
 
     @property
     def running(self) -> bool:
-        """Đang quét dở? Suy từ khoá, không lưu riêng."""
+        """Scan in flight? Derived from the lock, not stored separately."""
         return self._gate.locked()
 
     def scan_once(self) -> str:
-        """Một lần quét. Nuốt mọi lỗi — một nguồn chết không được giết app."""
-        # Khoá, KHÔNG phải kiểm-rồi-gán. `if self.running: ... self.running =
-        # True` là hai bước: bấm RUN đúng lúc lịch trình cũng kích hoạt thì cả
-        # hai luồng đều thấy False và cùng đặt True — hai vòng quét cùng ghi
-        # một DB và cùng mở Chrome.
+        """One scan. Swallows every error — a dead source must not kill the app."""
+        # A lock, NOT check-then-set. `if self.running: ... self.running =
+        # True` is two steps: press RUN at the moment the scheduler also
+        # fires and both threads see False and both set True — two scans
+        # writing one DB and both launching Chrome.
         if not self._gate.acquire(blocking=False):
-            jlog.warn(SYSTEM, "đang quét dở — bỏ qua yêu cầu chạy chồng")
+            jlog.warn(SYSTEM, "a scan is already in flight — ignoring the overlapping request")
             return self.last_result
         self.last_scan = time.time()
         try:
-            from ..scan_runner import run_scan          # nạp muộn, tránh vòng import
+            from ..scan_runner import run_scan          # late import, avoids a cycle
             result = run_scan()
             self.last_result = result["summary"]
             self._maybe_notify(result)
         except Exception as exc:                        # noqa: BLE001
-            self.last_result = f"lỗi: {type(exc).__name__}: {exc}"
-            jlog.error(SYSTEM, f"lần quét hỏng: {type(exc).__name__} — {str(exc)[:70]}")
+            self.last_result = f"error: {type(exc).__name__}: {exc}"
+            jlog.error(SYSTEM, f"scan failed: {type(exc).__name__} — {str(exc)[:70]}")
             try:
                 conn = connect()
                 postings.log(conn, "scan_error", str(exc)[:300])
@@ -204,29 +208,30 @@ class Scheduler:
         return self.last_result
 
     def phien_once(self) -> str:
-        """MỘT PHIÊN: chạy lần lượt mọi khúc đang bật (xem jobbot/phien.py).
+        """ONE SESSION: run each enabled stage in turn (see jobbot/phien.py).
 
-        Khác `scan_once` ở chỗ nó chạy CẢ dây chuyền chứ không riêng lượt
-        tìm việc. Vòng 24/7 gọi hàm này, và nút «Start session» trên Home
-        cũng vậy — hai lối vào, MỘT việc. Hai định nghĩa "một vòng" là có
-        ngày bấm tay ra một đằng, để tự chạy ra một nẻo.
+        Different from `scan_once` in that it runs the WHOLE pipeline, not
+        just the search pass. The 24/7 loop calls this, and so does the
+        «Start session» button on Home — two entry points, ONE job. Two
+        definitions of "one loop" means that one day pressing the button and
+        letting it run do different things.
 
-        DÙNG CHUNG KHOÁ với scan_once: hai phiên chồng nhau thì hai chỗ cùng
-        ghi một file SQLite và cùng mở Chrome.
+        SHARES THE LOCK with scan_once: two overlapping sessions would have
+        two places writing one SQLite file and both launching Chrome.
         """
         if not self._gate.acquire(blocking=False):
-            jlog.warn(SYSTEM, "đang chạy dở — bỏ qua yêu cầu chạy chồng")
+            jlog.warn(SYSTEM, "already running — ignoring the overlapping request")
             return self.last_result
         self.last_scan = time.time()
         try:
             from ..phien import chay
             ra = chay()
-            self.last_result = ("cả ba khúc đang tắt" if ra.get("tat") else
-                                f"{len(ra['xong'])} khúc xong"
-                                + (f", {len(ra['hong'])} hỏng" if ra["hong"] else ""))
+            self.last_result = ("all three stages are off" if ra.get("tat") else
+                                f"{len(ra['xong'])} stage(s) done"
+                                + (f", {len(ra['hong'])} failed" if ra["hong"] else ""))
         except Exception as exc:                        # noqa: BLE001
-            self.last_result = f"lỗi: {type(exc).__name__}: {exc}"
-            jlog.error(SYSTEM, f"phiên hỏng: {type(exc).__name__} — {str(exc)[:70]}")
+            self.last_result = f"error: {type(exc).__name__}: {exc}"
+            jlog.error(SYSTEM, f"session failed: {type(exc).__name__} — {str(exc)[:70]}")
         finally:
             self._gate.release()
             jlog.done(SEARCH)
@@ -235,31 +240,32 @@ class Scheduler:
 
     @staticmethod
     def _maybe_notify(result: dict) -> None:
-        """Chỉ báo khi có việc MỚI đáng xem. Không báo mỗi lần quét.
+        """Only notify when there is NEW work worth seeing. Not every scan.
 
-        Nuốt giá trị trả về là lý do lỗi rào chuỗi AppleScript sống sót qua
-        cả quá trình: mọi thông báo đều hỏng mà không ai biết. Hỏng thì GHI
-        VÀO NHẬT KÝ, để nó hiện ở màn hình Settings.
+        Swallowing the return value is why the AppleScript quoting bug
+        survived the whole project: every notification failed and nobody
+        knew. On failure, WRITE IT TO THE JOURNAL so it shows up on Settings.
         """
         fresh = result.get("new_matches", 0)
         if fresh <= 0:
             return
         sent = notify.send("jobbot",
-                           f"{fresh} việc mới khớp hồ sơ của bạn",
-                           subtitle="Mở dashboard để xem")
+                           f"{fresh} new jobs matching your profile",
+                           subtitle="Open the dashboard to see them")
         try:
             conn = connect()
             postings.log(conn, "notify" if sent else "notify_failed",
-                         f"{fresh} việc mới" if sent
-                         else f"{fresh} việc mới — thông báo KHÔNG hiện được")
+                         f"{fresh} new jobs" if sent
+                         else f"{fresh} new jobs — the notification did NOT appear")
             conn.close()
         except Exception:                               # noqa: BLE001
             pass
 
 
-# Một bản dùng chung: app.py dựng vòng chạy, server.py cần nó cho nút RUN/PAUSE.
-# Luồn qua tham số thì phải xuyên qua serve() -> Handler -> từng route, mà
-# Handler thì do http.server dựng, không truyền gì vào được.
+# One shared instance: app.py builds the loop, server.py needs it for the
+# RUN/PAUSE buttons. Threading it through arguments would mean serve() ->
+# Handler -> every route, and Handler is constructed by http.server, which
+# takes no arguments of ours.
 _current: Scheduler | None = None
 
 

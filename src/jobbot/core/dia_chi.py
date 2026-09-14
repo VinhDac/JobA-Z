@@ -1,22 +1,25 @@
-"""Địa chỉ của lượt chạy đang sống — ghi ra tệp để NGOÀI đọc được.
+"""The address of the live run — written to a file so the OUTSIDE can read it.
 
-Vì sao cần: server không còn chạy cố định ở 8765. `serve()` để hệ điều hành
-cấp cổng trống, nên cổng đổi theo từng lượt chạy. Mà `start.command` (bấm đúp
-để mở) thì đang hỏi đúng 8765 — đo thật: app đang chạy ở 8766 thì bấm đúp
-KHÔNG mở nó, mà khởi động một lượt thứ hai đè lên cùng một tệp SQLite.
+Why it is needed: the server no longer sits on a fixed 8765. `serve()` lets
+the operating system hand out a free port, so the port changes from run to
+run. Meanwhile `start.command` (double-click to open) was asking for exactly
+8765 — measured: with the app alive on 8766, a double-click does NOT open it,
+it boots a SECOND run on top of the same SQLite file.
 
-Tệp phẳng, hai dòng, cố ý:
+A flat two-line file, deliberately:
 
     http://127.0.0.1:8766/
     54321
 
-Dòng 1 địa chỉ, dòng 2 PID. Shell đọc bằng `head -1` — không cần Python, và
-người sửa `start.command` sau này không phải học một định dạng nào.
+Line 1 the address, line 2 the PID. A shell reads it with `head -1` — no
+Python needed, and whoever edits `start.command` later does not have to learn
+a format.
 
-TỆP CŨ KHÔNG ĐÁNG TIN, và đó là thiết kế chứ không phải thiếu sót. App bị
-kill -9 hay mất điện thì không ai kịp xoá tệp. Nên người ĐỌC phải tự kiểm
-chứng: hỏi `/api/alive` xem có đúng jobbot đang trả lời không. Chỉ xoá tệp
-lúc thoát êm là bẫy — nó làm người đọc tưởng "có tệp nghĩa là đang chạy".
+AN OLD FILE IS NOT TRUSTWORTHY, and that is the design, not an oversight. If
+the app is kill -9'd or the power drops, nobody gets to delete the file. So
+the READER has to verify for itself: ask `/api/alive` whether it really is
+jobbot answering. Deleting the file only on a clean exit is a trap — it
+teaches the reader that "file exists means running".
 """
 
 from __future__ import annotations
@@ -33,7 +36,7 @@ def tep():
 
 
 def ghi(url: str) -> None:
-    """Ghi địa chỉ + PID. Hỏng thì im — không đáng làm chết lượt khởi động."""
+    """Write address + PID. On failure stay quiet — not worth killing a boot."""
     try:
         tep().write_text(f"{url}\n{os.getpid()}\n", encoding="utf-8")
     except OSError:
@@ -41,7 +44,8 @@ def ghi(url: str) -> None:
 
 
 def doc() -> tuple[str, int] | None:
-    """(url, pid) nếu đọc được. KHÔNG hứa là nó còn sống — xem docstring."""
+    """(url, pid) if readable. Does NOT promise it is still alive — see the
+    module docstring."""
     try:
         dong = tep().read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeDecodeError):

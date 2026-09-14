@@ -1,20 +1,21 @@
-"""Nhật ký chạy — thứ quan trọng nhất trong một app chạy 24/7.
+"""The run journal — the single most important thing in a 24/7 app.
 
-Máy chạy suốt còn người thì không ngồi nhìn. Nên lúc mở app ra, câu hỏi đầu
-tiên luôn là "nó VỪA làm gì, và ĐANG làm gì". Không trả lời được câu đó thì
-mọi con số khác trên màn hình đều là số chết.
+The machine runs all the time; the person does not sit and watch. So the
+first question on opening the app is always "what did it JUST do, and what is
+it doing NOW". Without an answer to that, every other number on the screen is
+dead weight.
 
-Hai thứ KHÁC NHAU, đừng trộn:
+Two DIFFERENT things, do not mix them:
 
-    SỰ KIỆN   ghi thêm, không bao giờ sửa. "linkedin bị chặn ở tin 47".
-              Còn lại sau khi tắt app -> lưu xuống SQLite.
+    EVENTS    appended, never edited. "linkedin blocked at posting 47".
+              Survives a restart -> written to SQLite.
 
-    TIẾN ĐỘ   ghi đè, chỉ có giá trị lúc này. "đọc kỹ 47/192".
-              Tắt app là hết nghĩa -> CHỈ giữ trong bộ nhớ, không ghi đĩa.
-              Ghi 192 dòng tiến độ xuống đĩa mỗi lần quét là tự bóp mình.
+    PROGRESS  overwritten, only meaningful right now. "deep-read 47/192".
+              Meaningless once the app closes -> memory ONLY, never disk.
+              Writing 192 progress lines to disk per scan is self-harm.
 
-Mỗi sự kiện thuộc về một LUỒNG (stream). Nhờ nó mà tab Search chỉ hiện việc
-của Search, không lẫn việc của Score — mà Home vẫn gộp được tất cả.
+Every event belongs to a STREAM. That is what lets the Search tab show only
+Search's work, not Score's — while Home still merges everything.
 """
 
 from __future__ import annotations
@@ -27,20 +28,21 @@ from datetime import datetime, timezone
 
 from .paths import db_path
 
-# Luồng = một hệ con có thời gian chạy thật. Thêm luồng thì thêm vào đây,
-# đừng gõ chuỗi tự do ở chỗ gọi — sai một chữ là mất hút trong giao diện.
+# A stream = a subsystem with real running time. Add a stream here, never as
+# a free string at the call site — one typo and it vanishes from the UI.
 SYSTEM = "system"
 SEARCH = "search"
 SCORE = "score"
-# Tab CV có thời gian chạy thật kể từ khi nó có nút Chạy riêng: dựng bản
-# cho 364 tin mất 5 giây, và người dùng phải đọc được nó đang làm gì.
+# The CV tab has real running time now that it has its own Run button:
+# building versions for 364 postings takes 5 seconds, and the user has to be
+# able to read what it is doing.
 CV = "cv"
 STREAMS = (SYSTEM, SEARCH, SCORE, CV)
 
 INFO, OK, WARN, ERROR = "info", "ok", "warn", "error"
 
-RING = 400              # số dòng giữ trong bộ nhớ để vẽ ngay, không phải hỏi đĩa
-LOAD_ON_START = 120     # nạp lại bấy nhiêu dòng cũ khi mở app, để journal không trống
+RING = 400              # lines held in memory to draw instantly without the disk
+LOAD_ON_START = 120     # old lines reloaded at boot so the journal is not empty
 
 
 def _now() -> str:
@@ -59,28 +61,29 @@ class Event:
 
 
 def remain_text(seconds: int) -> str:
-    """Giây -> câu người đọc được. MỘT chỗ định dạng cho cả app.
+    """Seconds -> a sentence a person can read. ONE formatter for the app.
 
-    Dòng nhật ký viết bằng Python, thanh tiến độ vẽ bằng JavaScript. Để mỗi
-    bên tự định dạng thì cùng một con số hiện ra hai kiểu chữ khác nhau trên
-    cùng một màn hình — nên chỗ này tính sẵn thành chữ rồi đẩy xuống.
+    Journal lines are written in Python, the progress bar is drawn in
+    JavaScript. Let each side format for itself and the same number appears
+    in two different wordings on the same screen — so this turns it into text
+    here and ships the text down.
 
-    Luôn kèm dấu ~: đây là ước lượng theo nhịp hiện tại, không phải lời hứa.
+    Always carries ~: this is an estimate at the current pace, not a promise.
     """
     if seconds <= 0:
         return ""
     if seconds < 90:
-        return f"~{seconds} giây"
+        return f"~{seconds}s"
     phut = round(seconds / 60)
     if phut < 60:
-        return f"~{phut} phút"
+        return f"~{phut} min"
     gio, le = divmod(phut, 60)
-    return f"~{gio} giờ {le} phút" if le else f"~{gio} giờ"
+    return f"~{gio}h {le}min" if le else f"~{gio}h"
 
 
 @dataclass
 class Progress:
-    """Đang làm gì, tới đâu, còn bao lâu nữa xong."""
+    """What it is doing, how far along, how long until it finishes."""
     what: str
     done: int = 0
     total: int = 0
@@ -92,16 +95,17 @@ class Progress:
 
     @property
     def eta(self) -> int:
-        """Còn bao nhiêu GIÂY nữa xong. Chưa đoán được thì 0.
+        """SECONDS left. 0 when it cannot be estimated yet.
 
-        Đo bằng nhịp THẬT của vòng đang chạy, không dùng hằng số đoán sẵn:
-        vòng đọc kỹ LinkedIn nhanh chậm theo mạng, theo nhịp nghỉ, và theo
-        số tin đã đọc từ trước — một con số cứng trong mã nguồn sai ngay
-        hôm sau.
+        Measured from the REAL pace of the loop in flight, never a guessed
+        constant: the LinkedIn deep-read pass speeds up and slows down with
+        the network, with cool-downs, and with how many postings were
+        already read — a hardcoded number is wrong by the next day.
 
-        Chờ đủ 3 nhịp mới dám nói. Nhịp đầu còn lẫn thời gian mở Chrome và
-        mở trang; chia ra thì phút đầu báo "còn 9 tiếng" rồi tụt dần, mà một
-        con số nhảy loạn còn tệ hơn không có con số nào.
+        It waits for 3 ticks before saying anything. The first tick still
+        carries the cost of launching Chrome and opening a page; divide by
+        that and the first minute announces "9 hours left" then falls away,
+        and a number that jumps around is worse than no number at all.
         """
         if not self.total or self.done < 3 or not self.started:
             return 0
@@ -117,7 +121,7 @@ class Progress:
 
 
 class Journal:
-    """Một bản duy nhất cho cả tiến trình. Nhiều luồng cùng ghi nên có khoá."""
+    """One instance per process. Several threads write to it, hence the lock."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -125,17 +129,18 @@ class Journal:
         self._progress: dict[str, Progress] = {}
         self._subs: list[queue.Queue] = []
         self._conn: sqlite3.Connection | None = None
-        self._path = None          # None = CHƯA gắn vào file nào -> chỉ ghi bộ nhớ
+        self._path = None          # None = not attached to a file -> memory only
         self._loaded = False
 
-    # --- lưu xuống đĩa ----------------------------------------------------
+    # --- persistence ------------------------------------------------------
     def _db(self) -> sqlite3.Connection | None:
-        """Kết nối riêng của nhật ký, mở một lần rồi giữ.
+        """The journal's own connection, opened once and kept.
 
-        Chưa open() thì trả None -> chỉ ghi bộ nhớ, không đụng file nào.
+        Before open() it returns None -> memory only, no file touched.
 
-        check_same_thread=False vì luồng nền ghi còn luồng web đọc. An toàn
-        vì mọi lối vào đều đi qua self._lock.
+        check_same_thread=False because a background thread writes while the
+        web thread reads. Safe because every entry point goes through
+        self._lock.
         """
         if self._path is None:
             return None
@@ -157,20 +162,23 @@ class Journal:
                 (event.at, event.text[:60], event.text, event.stream, event.level))
             conn.commit()
         except Exception:       # noqa: BLE001
-            # Bắt RỘNG là cố ý. Nhật ký mất một dòng là chuyện nhỏ; nhật ký
-            # ném lỗi ra và giết vòng quét đang chạy dở mới là hỏng thật.
-            # sqlite3.Error thôi thì chưa đủ: đĩa đầy, kết nối chết, DB bị
-            # khoá quá lâu đều ra lỗi kiểu khác.
+            # Catching BROADLY is deliberate. Losing one journal line is a
+            # small thing; the journal raising and killing a scan half-way
+            # through is the real failure. sqlite3.Error alone is not enough:
+            # a full disk, a dead connection, and a DB locked too long all
+            # raise something else.
             pass
 
     def open(self, path=None) -> int:
-        """Gắn nhật ký vào một file DB và nạp lại lịch sử. Gọi một lần lúc mở app.
+        """Attach the journal to a DB file and reload history. Called once
+        at boot.
 
-        CHƯA gọi thì nhật ký chỉ sống trong bộ nhớ. Cố ý: nếu mặc định là ghi
-        thẳng vào db_path(), thì mọi bài test gọi derive() đều đổ dòng của nó
-        vào nhật ký THẬT của người dùng — đã xảy ra, 24 dòng "đang giữ 1 tin".
-        Bắt từng file test phải nhớ đặt biến môi trường là cách chờ hỏng lần
-        sau; để mặc định câm thì không ai phải nhớ gì.
+        Until it is called the journal lives in memory only. That is
+        deliberate: if the default were to write straight to db_path(), every
+        test that calls derive() would pour its lines into the user's REAL
+        journal — which happened, 24 lines of "keeping 1 posting". Making
+        each test file remember to set an environment variable is waiting for
+        the next failure; a silent default means nobody has to remember.
         """
         with self._lock:
             if self._loaded:
@@ -186,15 +194,16 @@ class Journal:
                     " ORDER BY id DESC LIMIT ?", (LOAD_ON_START,)).fetchall()
             except Exception:                   # noqa: BLE001
                 return 0
-            # detail rỗng thì lấy kind: dòng ghi bằng postings.log() đời trước
-            # chỉ có kind ('scan_started'), và hiện ra sẽ là một dòng trống trơn.
+            # Empty detail falls back to kind: lines written by the older
+            # postings.log() only have a kind ('scan_started'), and would
+            # render as a completely blank row.
             self._ring = [Event(at=r[0], stream=r[1] or SYSTEM,
                                 level=r[2] or INFO,
                                 text=r[3] or (r[4] or "").replace("_", " "))
                           for r in reversed(rows)]
             return len(self._ring)
 
-    # --- ghi ---------------------------------------------------------------
+    # --- writing -----------------------------------------------------------
     def emit(self, stream: str, text: str, level: str = INFO,
              persist: bool = True) -> Event:
         event = Event(at=_now(), stream=stream, level=level, text=text)
@@ -218,14 +227,15 @@ class Journal:
         return self.emit(stream, text, ERROR)
 
     def progress(self, stream: str, what: str, done: int = 0, total: int = 0) -> None:
-        """Đang làm tới đâu. KHÔNG ghi đĩa — gọi bao nhiêu lần cũng được."""
+        """How far along. NEVER written to disk — call it as often as you like."""
         with self._lock:
             found = self._progress.get(stream)
-            # Mốc thời gian đặt lại khi sang VIỆC KHÁC — nhận ra bằng TỔNG đổi
-            # hoặc số đếm tụt về, KHÔNG bằng dòng chữ đổi. Vòng tìm LinkedIn
-            # viết tên chức danh đang tìm vào `what`, nên mỗi nhịp là một chữ
-            # khác nhau; lấy chữ làm mốc thì đồng hồ reset mỗi nhịp và câu
-            # "còn bao lâu" không bao giờ tính ra được.
+            # The clock restarts on a DIFFERENT JOB — recognised by the
+            # TOTAL changing or the counter going backwards, NOT by the text
+            # changing. The LinkedIn search writes the job title it is
+            # querying into `what`, so every tick is a different string;
+            # keying on the text resets the clock each tick and "how long
+            # left" can never be computed.
             if found is None or found.total != total or done < found.done:
                 found = Progress(what=what, started=_monotonic())
                 self._progress[stream] = found
@@ -235,27 +245,28 @@ class Journal:
         self._push(subs, payload)
 
     def done(self, stream: str) -> None:
-        """Xong việc — xoá thanh tiến độ, để giao diện không đứng hình ở 47/192."""
+        """Finished — clear the bar so the UI does not freeze at 47/192."""
         with self._lock:
             self._progress.pop(stream, None)
             subs = list(self._subs)
         self._push(subs, {"type": "progress", "stream": stream, "what": ""})
 
-    # --- đọc ---------------------------------------------------------------
+    # --- reading -----------------------------------------------------------
     def tail(self, stream: str | None = None, limit: int = 60) -> list[Event]:
         with self._lock:
             rows = [e for e in self._ring if stream is None or e.stream == stream]
-        return rows[-limit:][::-1]          # mới nhất lên đầu
+        return rows[-limit:][::-1]          # newest first
 
     def running(self) -> dict[str, dict]:
         with self._lock:
             return {k: v.as_dict() for k, v in self._progress.items()}
 
     def remaining(self, stream: str) -> str:
-        """Còn bao lâu nữa xong, đã thành chữ. Không đoán được thì rỗng.
+        """How long is left, already as text. Empty when it cannot be told.
 
-        Để dòng NHẬT KÝ nói đúng cùng con số với THANH TIẾN ĐỘ. Hai chỗ tự
-        tính là hai con số, và có ngày chúng lệch nhau ngay trên một màn hình.
+        So a JOURNAL line quotes the same number as the PROGRESS BAR. Two
+        places computing it are two numbers, and one day they disagree on the
+        same screen.
         """
         with self._lock:
             found = self._progress.get(stream)
@@ -265,7 +276,7 @@ class Journal:
         with self._lock:
             return bool(self._progress)
 
-    # --- đẩy cho giao diện -------------------------------------------------
+    # --- pushing to the UI -------------------------------------------------
     def subscribe(self) -> queue.Queue:
         chan: queue.Queue = queue.Queue(maxsize=200)
         with self._lock:
@@ -279,10 +290,10 @@ class Journal:
 
     @staticmethod
     def _push(subs: list[queue.Queue], payload: dict) -> None:
-        """Người xem chậm thì BỎ tin, không được chặn việc đang chạy.
+        """A slow viewer DROPS messages; it must never block the work.
 
-        Giao diện đứng hình một nhịp là chuyện nhỏ; vòng quét đứng lại vì
-        chờ một cái hàng đợi đầy mới là hỏng thật.
+        The UI missing a tick is a small thing; the scan stalling because it
+        is waiting on a full queue is the real failure.
         """
         for chan in subs:
             try:
@@ -296,5 +307,5 @@ def _monotonic() -> float:
     return time.monotonic()
 
 
-# Một bản dùng chung cho cả tiến trình.
+# One shared instance for the whole process.
 log = Journal()

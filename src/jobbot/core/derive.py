@@ -1,21 +1,22 @@
-"""Tầng suy diễn — tính lại được, chỉ tính cái đã cũ, và là MỘT giao dịch.
+"""The derived layer — recomputable, only recomputes what is stale, and it is
+ONE transaction.
 
-Kiến trúc:
+The architecture:
 
-    raw_posting   nguyên văn đã lấy về. KHÔNG BAO GIỜ sửa.
-    posting       chuẩn hoá + phán quyết. Tính lại được hoàn toàn từ raw.
+    raw_posting   exactly what was fetched. NEVER edited.
+    posting       normalised + judged. Fully recomputable from raw.
 
-Ba tính chất phải giữ:
+Three properties that must hold:
 
-1. **Tính lại được.** `rebuild()` dựng lại toàn bộ phán quyết từ raw. Không có
-   nó thì một lỗi trong luật là hỏng vĩnh viễn.
+1. **Recomputable.** `rebuild()` rebuilds every judgement from raw. Without
+   it, one bug in the rules is damage that never goes away.
 
-2. **Gắn phiên bản.** Mỗi phán quyết ghi rõ nó sinh ra từ hồ sơ phiên bản nào,
-   luật phiên bản nào. Đổi hồ sơ hay đổi luật -> tin cũ tự động thành cần tính
-   lại, không im lặng.
+2. **Versioned.** Every judgement records which profile version and which
+   rule version produced it. Change the profile or the rules and old
+   postings become stale automatically, not silently.
 
-3. **Một giao dịch.** Web đọc giữa chừng phải thấy trạng thái CŨ trọn vẹn, chứ
-   không thấy trạng thái dở dang.
+3. **One transaction.** A web request reading half-way through must see the
+   whole OLD state, never a half-built one.
 """
 
 from __future__ import annotations
@@ -41,10 +42,10 @@ def _row_to_posting(row: sqlite3.Row) -> Posting:
 
 
 def stale_count(conn: sqlite3.Connection) -> int:
-    """Bao nhiêu tin đang mang phán quyết cũ — LỌC hay CHẤM đều tính.
+    """How many postings carry a stale judgement — FILTERING or SCORING.
 
-    Chỉ đếm phần lọc là nói dối: đổi SCORE_RULES thì mọi điểm đều cũ mà màn
-    hình vẫn báo "không có gì cần tính lại".
+    Counting only the filter half is a lie: change SCORE_RULES and every
+    score is stale while the screen still says "nothing to recompute".
     """
     pv = store.latest_version_id(conn) or 0
     return int(conn.execute(
@@ -56,7 +57,7 @@ def stale_count(conn: sqlite3.Connection) -> int:
 
 def derive(conn: sqlite3.Connection, force: bool = False,
            log=lambda _m: None) -> dict:
-    """Tính lại phán quyết cho tin đã cũ. Trả về thống kê."""
+    """Re-judge stale postings. Returns the counts."""
     answers = store.load(conn)
     profile_version = store.latest_version_id(conn) or 0
 
@@ -67,23 +68,24 @@ def derive(conn: sqlite3.Connection, force: bool = False,
             "SELECT * FROM posting WHERE judged_profile != ? OR judged_rules != ?",
             (profile_version, versions.FILTER_RULES)).fetchall()
 
-    # sqlite3 của Python tự mở giao dịch ở lệnh ghi đầu tiên và giữ tới commit().
-    # Nên chỉ cần KHÔNG commit ở giữa là cả khối này là một giao dịch.
+    # Python's sqlite3 opens a transaction on the first write and holds it
+    # until commit(). So simply NOT committing in the middle makes this whole
+    # block one transaction.
     try:
         judged = kept = agencies = 0
         for index, row in enumerate(rows, 1):
             if index % 25 == 0 or index == len(rows):
-                jlog.progress(SCORE, "lọc tin", index, len(rows))
+                jlog.progress(SCORE, "filtering", index, len(rows))
             item = _row_to_posting(row)
             keep, reason = jobfilter.judge(item, answers)
-            # NGƯỜI ĐÈ LÊN MÁY. Đây là chỗ DUY NHẤT biết điều đó, nên quyết
-            # định của Vin sống sót qua mọi lần tính lại — kể cả khi đổi hồ sơ
-            # hay đổi luật lọc, tức là đúng lúc mà một cú sửa tay lẽ ra bị
-            # nuốt mất.
+            # THE HUMAN OVERRIDES THE MACHINE. This is the ONLY place that
+            # knows it, so Vin's decision survives every recompute —
+            # including across a profile change or a filter-rule change,
+            # which is exactly when a manual fix would otherwise be eaten.
             #
-            # Giữ nguyên bất biến cũ: drop_reason rỗng <=> tin đang được giữ.
-            # Vì sao tin này nằm trong danh sách thì badge "bạn giữ" nói, chứ
-            # không nhét thêm nghĩa vào drop_reason.
+            # Keeps the old invariant: empty drop_reason <=> the posting is
+            # kept. Why it is in the list is what the "you kept this" badge
+            # says; do not overload drop_reason with a second meaning.
             if row["user_keep"]:
                 keep, reason = True, ""
             is_agency, _ = judge_agency(row["company"], row["description"] or "")
@@ -93,11 +95,13 @@ def derive(conn: sqlite3.Connection, force: bool = False,
                 (int(keep), "" if keep else reason, int(is_agency),
                  profile_version, versions.FILTER_RULES, row["id"]))
             if not keep:
-                # Tin bị loại thì XOÁ điểm cũ. Không xoá thì nó giữ một con số
-                # sinh ra từ luật cũ, không có phiên bản, và không bao giờ được
-                # tính lại vì vòng chấm chỉ chạy trên tin đang giữ.
-                # KHÔNG lọc thêm "score IS NOT NULL": tin chấm ra độ tin 'none'
-                # có score=NULL nhưng vẫn còn realism và scored_rules cũ bám lại.
+                # A dropped posting has its old score DELETED. Leave it and
+                # it keeps a number produced by old rules, with no version,
+                # which is never recomputed because the scoring pass only
+                # runs over kept postings.
+                # Do NOT add "score IS NOT NULL": a posting scored with
+                # confidence 'none' has score=NULL but still carries a stale
+                # realism and scored_rules.
                 conn.execute(
                     "UPDATE posting SET score=NULL, score_conf='', score_json='',"
                     " scored_rules='', scored_profile=0, realism='', realism_why='',"
@@ -106,14 +110,16 @@ def derive(conn: sqlite3.Connection, force: bool = False,
             kept += int(keep)
             agencies += int(is_agency)
 
-        jlog.progress(SCORE, "gộp tin trùng")
+        jlog.progress(SCORE, "grouping duplicates")
         n_rows, n_groups = group.regroup(conn, commit=False)
 
-        # Chấm điểm phụ thuộc CẢ luật chấm LẪN hồ sơ (score_job đọc answers),
-        # nên cũ theo phía nào cũng phải chấm lại. scored_rules='' != SCORE_RULES
-        # nên tin chưa từng chấm đã nằm trong điều kiện này rồi.
-        # force cũng phải xuyên qua đây — nếu không, tin từng chấm lúc mô tả còn
-        # rỗng sẽ đứng nguyên score=NULL kể cả khi gọi derive(force=True).
+        # Scoring depends on BOTH the scoring rules AND the profile
+        # (score_job reads answers), so stale on either side means rescore.
+        # scored_rules='' != SCORE_RULES, so a never-scored posting is
+        # already covered by this condition.
+        # force has to reach here too — otherwise a posting scored while its
+        # description was still empty stays at score=NULL even under
+        # derive(force=True).
         to_score = conn.execute(
             "SELECT id, title, description FROM posting WHERE kept = 1"
             + ("" if force else
@@ -122,10 +128,11 @@ def derive(conn: sqlite3.Connection, force: bool = False,
         scored = 0
         for index, row in enumerate(to_score, 1):
             if index % 25 == 0 or index == len(to_score):
-                jlog.progress(SCORE, "chấm điểm", index, len(to_score))
+                jlog.progress(SCORE, "scoring", index, len(to_score))
             text = row["description"] or ""
             result = score_job(row["title"], text, answers)
-            # "khớp" và "có cửa" là hai câu hỏi khác nhau — tính riêng
+            # "does it match" and "do you stand a chance" are two different
+            # questions — computed separately
             chance = assess(row["title"], text, result, answers)
             deadline, deadline_ts = find_deadline(text)
             conn.execute(
@@ -142,8 +149,9 @@ def derive(conn: sqlite3.Connection, force: bool = False,
         conn.rollback()
         raise
 
-    # Số đếm phải là TỔNG hiện tại, không phải phần vừa phán lượt này.
-    # Không có gì cũ -> judged=0, mà báo "giữ 0" thì đọc ra là mất hết dữ liệu.
+    # The counts must be the CURRENT totals, not what this pass judged.
+    # Nothing stale -> judged=0, and reporting "keeping 0" reads as "all the
+    # data is gone".
     totals = conn.execute(
         "SELECT COUNT(*) AS n, SUM(via_agency) AS ag FROM posting WHERE kept = 1"
     ).fetchone()
@@ -152,19 +160,19 @@ def derive(conn: sqlite3.Connection, force: bool = False,
 
     jlog.done(SCORE)
     if judged or scored:
-        jlog.ok(SCORE, f"phán lại {judged} · chấm {scored} · đang giữ {kept_total}"
-                       f" · {n_groups} việc duy nhất")
-    log(f"  suy diễn: phán lại {judged} · đang giữ {kept_total} "
-        f"({agency_total} môi giới) · {n_groups} việc duy nhất · chấm {scored}")
+        jlog.ok(SCORE, f"re-judged {judged} · scored {scored} · keeping "
+                       f"{kept_total} · {n_groups} distinct jobs")
+    log(f"  derive: re-judged {judged} · keeping {kept_total} "
+        f"({agency_total} agency) · {n_groups} distinct jobs · scored {scored}")
     return {"judged": judged, "kept": kept_total, "agencies": agency_total,
             "kept_new": kept, "groups": n_groups, "scored": scored}
 
 
 def rebuild(conn: sqlite3.Connection, log=lambda _m: None) -> dict:
-    """Dựng lại TOÀN BỘ tầng suy diễn từ tầng raw.
+    """Rebuild the WHOLE derived layer from the raw layer.
 
-    Dùng khi sửa luật, sửa hàm bóc HTML, hay nghi ngờ dữ liệu suy diễn hỏng.
-    Không mất gì: raw vẫn nguyên.
+    Use it after changing rules, changing the HTML stripper, or whenever the
+    derived data looks wrong. Nothing is lost: raw is untouched.
     """
     from ..ingest.base import strip_html
     rows = conn.execute(
@@ -174,5 +182,5 @@ def rebuild(conn: sqlite3.Connection, log=lambda _m: None) -> dict:
                      [(strip_html(r["body"])[:20000], r["id"]) for r in rows])
     conn.execute("UPDATE posting SET judged_rules = '', scored_rules = ''")
     conn.commit()
-    log(f"  bóc lại mô tả từ raw: {len(rows)} tin")
+    log(f"  re-extracted descriptions from raw: {len(rows)} postings")
     return derive(conn, force=True, log=log)

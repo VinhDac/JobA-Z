@@ -1,16 +1,18 @@
-"""Cờ DỪNG — một chỗ, một cờ cho mỗi khúc.
+"""STOP flags — one place, one flag per stage.
 
-Vì sao cần: `stop()` của lịch trình chỉ chặn lần chạy SAU. Một vòng quét đang
-chạy mất 8–16 phút vì phải mở Chrome đọc từng tin; bấm Dừng mà nó vẫn chạy tiếp
-là một nút nói dối — đúng loại nút đã phải giết ba lần trong dự án này.
+Why this exists: the scheduler's `stop()` only blocks the NEXT run. A scan
+already under way takes 8-16 minutes because it opens Chrome and reads each
+posting; pressing Stop and watching it carry on is a button that lies — the
+exact kind of button this project has had to kill three times.
 
-Vì sao theo TỪNG KHÚC chứ không một cờ chung: dừng vòng quét không được dừng
-luôn việc quét thư đang chạy song song. Mỗi chức năng có nút dừng riêng thì
-phải có cờ riêng.
+Why PER STAGE rather than one shared flag: stopping the scan must not also
+stop the mailbox pass running alongside it. Each function has its own Stop
+button, so each needs its own flag.
 
-Việc đang chạy tự kiểm `wanted(khúc)` ở những chỗ ngắt được — giữa hai nguồn,
-giữa hai trang — rồi dừng sạch và nói ra là đã dừng. KHÔNG giết luồng giữa
-chừng: nửa giao dịch ghi vào DB còn tệ hơn chạy nốt.
+Work in flight checks `wanted(stage)` at the points where it can break —
+between two sources, between two pages — then stops cleanly and says so. It
+does NOT kill a thread mid-flight: half a transaction written to the DB is
+worse than finishing the one in hand.
 """
 
 from __future__ import annotations
@@ -27,12 +29,12 @@ def _flag(stage: str) -> threading.Event:
 
 
 def ask(stage: str) -> None:
-    """Xin khúc này dừng ở điểm ngắt gần nhất."""
+    """Ask this stage to stop at its next break point."""
     _flag(stage).set()
 
 
 def clear(stage: str) -> None:
-    """Bắt đầu một lượt mới — xoá cờ cũ, nếu không lượt này dừng ngay."""
+    """Starting a fresh run — clear the old flag, or this run stops at once."""
     _flag(stage).clear()
 
 

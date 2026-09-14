@@ -1,18 +1,21 @@
-"""Làm lại từ đầu — MỘT chỗ biết "trạng thái ban đầu" nghĩa là gì.
+"""Start over — ONE place that knows what "initial state" means.
 
-Đây là đường phá hoại mạnh nhất trong app, nên nó có ba chốt, và cả ba đều
-do một lần làm hỏng thật mà có:
+This is the most destructive path in the app, so it has three guards, and
+each one exists because something really broke once:
 
-    1. LUÔN sao lưu trước. Sao lưu hỏng thì KHÔNG xoá. Không có chốt này thì
-       một cú bấm nhầm là mất hết, không lấy lại được.
-    2. Bảng cần dọn ĐỌC TỪ DB, không gõ tay. Gõ tay thì hôm nào thêm bảng mới
-       là bảng đó sống sót qua "làm lại từ đầu" — người dùng tưởng sạch mà
-       vẫn còn dữ liệu cũ lẫn vào, đây là kiểu lỗi không ai ngờ tới.
-    3. Giữ nguyên SCHEMA. Xoá dòng chứ không xoá tệp DB: server đang mở tệp
-       đó, xoá tệp thì nó vẫn ghi tiếp vào inode đã bị gỡ tên.
+    1. ALWAYS back up first. If the backup fails, delete NOTHING. Without
+       this guard one mis-click loses everything, unrecoverably.
+    2. The tables to clear are READ FROM THE DB, not typed by hand. Typed by
+       hand, the day someone adds a table it survives "start over" — the
+       user believes they are clean while old data is still mixed in, which
+       is the kind of bug nobody thinks to look for.
+    3. KEEP THE SCHEMA. Delete rows, not the DB file: the server has that
+       file open, and deleting it just means the server keeps writing into an
+       unlinked inode.
 
-Thứ KHÔNG xoá: cấu hình đi kèm app (boards.toml, companies.toml, các tệp
-.example) — đó là phần của app, không phải dữ liệu người dùng.
+What is NOT deleted: config that ships with the app (boards.toml,
+companies.toml, the .example files) — that is part of the app, not the
+user's data.
 """
 
 from __future__ import annotations
@@ -25,11 +28,11 @@ from pathlib import Path
 
 from .paths import data_dir, db_path, project_root
 
-# Tệp/thư mục là dữ liệu NGƯỜI DÙNG. Đường dẫn tương đối so với gốc repo.
+# Files/directories that are USER data. Paths relative to the repo root.
 USER_FILES = ("config/config.toml", "config/profile.seed.json")
 USER_DIRS = ("cv", "chrome-profile", "chrome-pdf",
              "chrome-apply", "chrome-ui")
-# Tệp trong data/ không thuộc thư mục nào ở trên.
+# Files in data/ that belong to none of the directories above.
 DATA_FILES = ("app.log",)
 
 
@@ -40,7 +43,7 @@ def _tables(conn: sqlite3.Connection) -> list[str]:
 
 
 def inventory(conn: sqlite3.Connection) -> dict:
-    """Xoá đi sẽ mất những gì — để MÀN HÌNH nói ra trước khi hỏi."""
+    """What deleting would cost — so the SCREEN can say it before asking."""
     rows = {t: conn.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0]
             for t in _tables(conn)}
     files = 0
@@ -65,9 +68,10 @@ def backup_dir() -> Path:
 
 
 def backup(stamp: str | None = None) -> Path:
-    """Gói mọi thứ sắp mất vào một tệp .tar.gz cạnh người dùng.
+    """Pack everything about to be lost into one .tar.gz next to the user.
 
-    Để ở Desktop chứ không để trong data/ — chỗ đó chính là chỗ sắp bị dọn.
+    On the Desktop, not inside data/ — that directory is the one about to be
+    wiped.
     """
     stamp = stamp or datetime.now().strftime("%Y%m%d-%H%M%S")
     out = backup_dir() / f"jobbot-sao-luu-{stamp}.tar.gz"
@@ -82,29 +86,31 @@ def backup(stamp: str | None = None) -> Path:
             d = data_dir() / name
             if d.is_dir():
                 tar.add(d, arcname=f"data/{name}")
-    out.chmod(0o600)          # trong này có app password và dữ liệu cá nhân
+    out.chmod(0o600)          # this holds an app password and personal data
     return out
 
 
 def run(conn: sqlite3.Connection) -> dict:
-    """Sao lưu rồi dọn sạch. Sao lưu hỏng thì KHÔNG dọn gì cả."""
-    sao_luu = backup()        # lỗi ở đây là ném ra ngoài — cố ý, đừng nuốt
+    """Back up, then wipe. If the backup fails, wipe NOTHING."""
+    sao_luu = backup()        # an error here propagates — deliberately, do not swallow
     bang = _tables(conn)
     try:
-        # TẮT KHOÁ NGOẠI TRONG LÚC DỌN.
+        # FOREIGN KEYS OFF WHILE WIPING.
         #
-        # Bản trước xoá theo thứ tự `_tables()` trả về và nổ ngay bảng đầu
-        # tiên: IntegrityError FOREIGN KEY constraint failed. Kết quả đo
-        # được trên bản sao DB thật: 5.177 tin và 37 đơn còn NGUYÊN, mà gói
-        # sao lưu (có app password trong đó) thì đã ghi ra Desktop rồi —
-        # mỗi lần bấm lại đẻ thêm một gói.
+        # The previous version deleted in whatever order `_tables()` returned
+        # and blew up on the very first table: IntegrityError FOREIGN KEY
+        # constraint failed. Measured on a copy of the real DB: 5,177
+        # postings and 37 applications still THERE, while the backup archive
+        # (with the app password inside it) had already been written to the
+        # Desktop — one more archive per press of the button.
         #
-        # Sắp xếp lại thứ tự xoá cũng chữa được, nhưng đó là cách KHÔNG hệ
-        # thống: thêm một bảng mới có khoá ngoại là hỏng lại, và hỏng đúng
-        # lúc người ta cần nó nhất. Tắt khoá ngoại thì thứ tự hết vai trò —
-        # ta đang xoá SẠCH, không có dòng nào phải trỏ tới dòng nào.
+        # Reordering the deletes would also work, but it is NOT systemic: add
+        # one table with a foreign key and it breaks again, exactly when it
+        # is needed most. With foreign keys off the order stops mattering —
+        # we are deleting EVERYTHING, so no row has to point at any row.
         #
-        # MỘT GIAO DỊCH: đứt giữa chừng thì cuộn lại hết, không để DB nửa vời.
+        # ONE TRANSACTION: an interruption rolls the whole thing back rather
+        # than leaving the DB half-wiped.
         conn.execute("PRAGMA foreign_keys = OFF")
         conn.execute("BEGIN")
         for t in bang:
@@ -112,9 +118,9 @@ def run(conn: sqlite3.Connection) -> dict:
         conn.commit()
     except Exception:                       # noqa: BLE001
         conn.rollback()
-        # DỌN KHÔNG XONG THÌ BỎ LUÔN GÓI SAO LƯU. Giữ lại một tệp chứa app
-        # password cho một việc KHÔNG xảy ra là để lại rủi ro mà không đổi
-        # được gì.
+        # IF THE WIPE FAILED, DROP THE BACKUP TOO. Keeping a file that holds
+        # an app password, for something that did NOT happen, leaves risk
+        # behind and buys nothing.
         try:
             sao_luu.unlink()
         except OSError:
@@ -122,12 +128,13 @@ def run(conn: sqlite3.Connection) -> dict:
         raise
     finally:
         conn.execute("PRAGMA foreign_keys = ON")
-    # VACUUM trả lại chỗ trống cho đĩa; không có nó thì tệp DB vẫn to như cũ
-    # và người dùng tưởng chưa xoá được gì.
+    # VACUUM hands the space back to the disk; without it the DB file is
+    # still the same size and the user thinks nothing was deleted.
     conn.execute("VACUUM")
 
-    # Cache TRONG TIẾN TRÌNH cũng phải quên. Nó khoá theo nội dung nên tự hết
-    # hạn, nhưng "về trạng thái ban đầu" mà máy còn nhớ bản cũ là nói dối.
+    # The IN-PROCESS cache has to forget too. It is keyed by content so it
+    # expires on its own, but "back to the initial state" while the machine
+    # still remembers the old version is a lie.
     try:
         from ..dashboard import live as _live
         _live.quen()

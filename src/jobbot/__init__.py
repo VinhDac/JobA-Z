@@ -1,7 +1,7 @@
-"""jobbot — hệ thống quản lý tìm việc, người giữ quyền quyết định.
+"""jobbot — a job-search system where the human keeps the decisions.
 
-Đọc docs/strategy.md rồi docs/design.md trước khi thêm bất cứ thứ gì.
+Read docs/strategy.md then docs/design.md before adding anything.
 
-Luật xuyên suốt: module chỉ ĐỀ XUẤT, lõi mới THỰC THI.
-Không module nào được tự gây tác động ra ngoài.
+The rule that runs through everything: modules only PROPOSE, the core
+EXECUTES. No module is allowed to reach outside on its own.
 """

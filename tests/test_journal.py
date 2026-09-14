@@ -117,10 +117,10 @@ with tempfile.TemporaryDirectory() as tmp:
 
     print("\n[còn bao lâu nữa xong]")
     from jobbot.core.journal import remain_text
-    check("dưới 90 giây thì nói giây", remain_text(45) == "~45 giây")
-    check("trên 90 giây thì đổi sang phút", remain_text(600) == "~10 phút")
-    check("trên một giờ thì nói giờ + phút", remain_text(11520) == "~3 giờ 12 phút")
-    check("tròn giờ thì không viết '0 phút'", remain_text(7200) == "~2 giờ")
+    check("dưới 90 giây thì nói giây", remain_text(45) == "~45s")
+    check("trên 90 giây thì đổi sang phút", remain_text(600) == "~10 min")
+    check("trên một giờ thì nói giờ + phút", remain_text(11520) == "~3h 12min")
+    check("tròn giờ thì không viết '0 phút'", remain_text(7200) == "~2h")
     check("không biết thì im, không đoán bừa", remain_text(0) == "")
 
     eta = Journal()

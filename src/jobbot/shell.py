@@ -1,20 +1,21 @@
-"""Vỏ cửa sổ — chọn cách tốt nhất mà máy này làm được.
+"""The window shell — pick the best one this machine can actually do.
 
-    macOS + PyObjC   cửa sổ NSWindow thật, có icon Dock, icon thanh menu
-    còn lại          cửa sổ Chrome ở chế độ --app: không thanh địa chỉ,
-                     không tab, có icon riêng trên taskbar
+    macOS + PyObjC   a real NSWindow, with a Dock icon and a menu-bar icon
+    everything else  a Chrome window in --app mode: no address bar, no tabs,
+                     its own icon on the taskbar
 
-Vì sao Chrome --app chứ không phải mở trình duyệt bình thường: mở tab trình
-duyệt thì nó là một trang web nằm lẫn giữa hai chục tab khác. --app cho một
-cửa sổ đứng riêng, đóng mở như một ứng dụng. Không phải NSWindow, nhưng là
-thứ gần nhất mà KHÔNG phải cài gói nào — mà cả app này không cài gói nào.
+Why Chrome --app rather than just opening the browser: a browser tab makes
+this a web page lost among twenty other tabs. --app gives a window that
+stands on its own and opens and closes like an application. It is not an
+NSWindow, but it is the closest thing that needs NO package installed — and
+this whole app installs no packages.
 
-Chrome đã là thứ bắt buộc phải có (bước 1 điều khiển nó để đọc LinkedIn), nên
-dùng nó làm vỏ không thêm ràng buộc mới.
+Chrome is already required (step 1 drives it to read LinkedIn), so using it
+as the shell adds no new constraint.
 
-QUAN TRỌNG: cửa sổ giao diện dùng PROFILE RIÊNG, khác profile đi cào. Chung
-profile thì cửa sổ người dùng đang mở và tab máy đang lái tranh nhau, và
-đóng cái này là chết cái kia.
+IMPORTANT: the UI window uses its OWN PROFILE, separate from the scraping
+profile. Share one and the user's open window fights the tab the machine is
+driving, and closing one kills the other.
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ def ui_profile_dir() -> Path:
 
 
 def has_mac_native() -> bool:
-    """macOS có PyObjC không. Không có thì lùi về cửa sổ Chrome."""
+    """Does this macOS have PyObjC. If not, fall back to a Chrome window."""
     if sys.platform != "darwin":
         return False
     try:
@@ -47,7 +48,8 @@ def has_mac_native() -> bool:
 
 
 def open_window(url: str) -> subprocess.Popen | None:
-    """Mở cửa sổ app trỏ vào url. Trả về tiến trình, hoặc None nếu không mở được."""
+    """Open an app window pointing at url. Returns the process, or None if it
+    could not be opened."""
     from .browser import chrome
 
     try:
@@ -62,9 +64,9 @@ def open_window(url: str) -> subprocess.Popen | None:
         f"--window-size={WINDOW[0]},{WINDOW[1]}",
         "--no-first-run", "--no-default-browser-check",
         "--disable-background-networking", "--disable-sync",
-        # KHÔNG bật --remote-debugging-port ở đây: cổng đó dành cho cửa sổ đi
-        # cào. Mở hai cửa sổ cùng cổng thì cdp.open_tab() có thể lái nhầm vào
-        # cửa sổ người dùng đang xem.
+        # Do NOT turn on --remote-debugging-port here: that port belongs to
+        # the scraping window. Two windows on one port and cdp.open_tab()
+        # can steer into the window the user is looking at.
     ]
     try:
         return subprocess.Popen(args, stdout=subprocess.DEVNULL,
@@ -74,11 +76,11 @@ def open_window(url: str) -> subprocess.Popen | None:
 
 
 def describe() -> str:
-    """Một dòng cho người dùng biết đang chạy vỏ nào."""
+    """One line telling the user which shell is running."""
     if has_mac_native():
-        return "cửa sổ macOS (PyObjC)"
+        return "macOS window (PyObjC)"
     try:
         from .browser import chrome
-        return f"cửa sổ Chrome --app ({Path(chrome.binary()).name})"
+        return f"Chrome --app window ({Path(chrome.binary()).name})"
     except Exception:                                      # noqa: BLE001
-        return "không có vỏ — chỉ chạy server, tự mở trình duyệt"
+        return "no shell — server only, opens your browser"

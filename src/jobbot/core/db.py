@@ -1,7 +1,7 @@
-"""SQLite — một file, không cần server, restart không mất dữ liệu.
+"""SQLite — one file, no server, nothing lost on restart.
 
-Migration chạy tiến, không lùi. Mỗi thay đổi schema thêm một phần tử vào
-MIGRATIONS, không bao giờ sửa phần tử cũ — DB đang chạy thật ngoài kia.
+Migrations run forward only. Every schema change appends an entry to
+MIGRATIONS and never edits an old one — there is a real DB running out there.
 """
 
 from __future__ import annotations
@@ -11,9 +11,9 @@ from pathlib import Path
 
 from .paths import db_path
 
-# Chỉ THÊM vào cuối. Không sửa, không xoá phần tử đã có.
+# APPEND only. Never edit, never delete an existing entry.
 MIGRATIONS: list[str] = [
-    # 1 — hồ sơ người dùng, lưu theo phiên bản (M0)
+    # 1 — the user profile, stored per version (M0)
     """
     CREATE TABLE profile_version (
         id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,15 +27,15 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (version_id, question_id)
     );
     """,
-    # 2 — tin tuyển dụng: raw (nguyên văn) / posting (đã chuẩn hoá) / nhật ký
+    # 2 — postings: raw (verbatim) / posting (normalised) / the audit log
     """
     CREATE TABLE raw_posting (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         source      TEXT    NOT NULL,     -- 'linkedin' | 'greenhouse:monzo'
-        source_id   TEXT    NOT NULL,     -- id bên nguồn
+        source_id   TEXT    NOT NULL,     -- the id on the source side
         url         TEXT,
         fetched_at  TEXT    NOT NULL,
-        payload     TEXT    NOT NULL,     -- JSON nguyên văn, không đụng vào
+        payload     TEXT    NOT NULL,     -- verbatim JSON, never touched
         UNIQUE (source, source_id)
     );
 
@@ -51,9 +51,9 @@ MIGRATIONS: list[str] = [
         url          TEXT    NOT NULL DEFAULT '',
         posted_at    TEXT    NOT NULL DEFAULT '',
         description  TEXT    NOT NULL DEFAULT '',
-        fingerprint  TEXT    NOT NULL,    -- công ty + chức danh đã chuẩn hoá
-        group_id     TEXT,                -- cùng group_id = cùng một việc
-        kept         INTEGER NOT NULL DEFAULT 1,   -- 0 = bị lọc bỏ
+        fingerprint  TEXT    NOT NULL,    -- normalised company + title
+        group_id     TEXT,                -- same group_id = the same job
+        kept         INTEGER NOT NULL DEFAULT 1,   -- 0 = filtered out
         drop_reason  TEXT    NOT NULL DEFAULT '',
         UNIQUE (raw_id)
     );
@@ -71,7 +71,8 @@ MIGRATIONS: list[str] = [
         error      TEXT    NOT NULL DEFAULT ''
     );
 
-    -- Ghi từ BƯỚC 1. Thiếu thì đến bước 6 không có gì để đếm và không lấy lại được.
+    -- Written from STEP 1. Without it, step 6 has nothing to count and no
+    -- way to reconstruct it.
     CREATE TABLE audit (
         id     INTEGER PRIMARY KEY AUTOINCREMENT,
         at     TEXT NOT NULL,
@@ -80,12 +81,12 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX audit_at ON audit(at);
     """,
-    # 3 — vòng đời ứng tuyển + thư đọc từ hộp thư
+    # 3 — the application lifecycle + mail read from the mailbox
     """
     CREATE TABLE application (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
         company       TEXT    NOT NULL,
-        company_key   TEXT    NOT NULL,          -- tên đã chuẩn hoá, để khớp
+        company_key   TEXT    NOT NULL,          -- normalised name, for matching
         role          TEXT    NOT NULL DEFAULT '',
         posting_id    INTEGER REFERENCES posting(id),
         origin        TEXT    NOT NULL DEFAULT 'mail',   -- mail | manual | auto
@@ -99,7 +100,7 @@ MIGRATIONS: list[str] = [
 
     CREATE TABLE message (
         id             INTEGER PRIMARY KEY AUTOINCREMENT,
-        msg_id         TEXT    NOT NULL UNIQUE,  -- Message-ID của thư
+        msg_id         TEXT    NOT NULL UNIQUE,  -- the mail's Message-ID
         from_addr      TEXT    NOT NULL DEFAULT '',
         from_name      TEXT    NOT NULL DEFAULT '',
         subject        TEXT    NOT NULL DEFAULT '',
@@ -113,33 +114,35 @@ MIGRATIONS: list[str] = [
     CREATE INDEX message_kind ON message(kind);
     CREATE INDEX message_app  ON message(application_id);
     """,
-    # 4 — mốc thời gian dạng số. posted_at là chuỗi và mỗi nguồn một kiểu
-    # (ISO của Greenhouse/Lever, unix của Arbeitnow) nên SQL không so được.
+    # 4 — a numeric timestamp. posted_at is a string and each source uses a
+    # different shape (ISO for Greenhouse/Lever, unix for Arbeitnow), so SQL
+    # cannot compare them.
     """
     ALTER TABLE posting ADD COLUMN posted_ts INTEGER NOT NULL DEFAULT 0;
     CREATE INDEX posting_ts ON posting(posted_ts);
     """,
-    # 5 — điểm khớp. score NULL = chưa chấm HOẶC không đọc được yêu cầu;
-    # score_conf phân biệt hai trường hợp đó.
+    # 5 — the match score. score NULL = not scored yet OR the requirements
+    # could not be read; score_conf tells those two apart.
     """
     ALTER TABLE posting ADD COLUMN score INTEGER;
     ALTER TABLE posting ADD COLUMN score_conf TEXT NOT NULL DEFAULT '';
     ALTER TABLE posting ADD COLUMN score_json TEXT NOT NULL DEFAULT '';
     CREATE INDEX posting_score ON posting(score);
     """,
-    # 6 — công ty mục tiêu. Đi thẳng trang tuyển dụng của họ thay vì qua
-    # board trung gian: tên công ty không mơ hồ, JD nguyên bản, và có sẵn
-    # đúng form để nộp ở bước 5.
+    # 6 — target companies. Going straight to their careers page rather than
+    # through an intermediary board: the company name is unambiguous, the JD
+    # is the original, and the right application form is already there for
+    # step 5.
     """
     CREATE TABLE company (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,
         name         TEXT    NOT NULL,
-        key          TEXT    NOT NULL UNIQUE,     -- tên đã chuẩn hoá
+        key          TEXT    NOT NULL UNIQUE,     -- the normalised name
         domain       TEXT    NOT NULL DEFAULT '',
         careers_url  TEXT    NOT NULL DEFAULT '',
         ats          TEXT    NOT NULL DEFAULT '', -- greenhouse|lever|ashby|workday|...
         ats_slug     TEXT    NOT NULL DEFAULT '',
-        is_agency    INTEGER NOT NULL DEFAULT 0,  -- 1 = môi giới, không phải chủ việc
+        is_agency    INTEGER NOT NULL DEFAULT 0,  -- 1 = an agency, not the employer
         checked_at   TEXT    NOT NULL DEFAULT '',
         roles_found  INTEGER NOT NULL DEFAULT 0,
         note         TEXT    NOT NULL DEFAULT ''
@@ -147,9 +150,10 @@ MIGRATIONS: list[str] = [
     CREATE INDEX company_ats ON company(ats);
     ALTER TABLE posting ADD COLUMN via_agency INTEGER NOT NULL DEFAULT 0;
     """,
-    # 7 — `kept` mặc định 1 nghĩa là tin vừa nạp đã được coi là "giữ" trước khi
-    # vòng lọc chạy. Bất cứ ai đọc DB giữa hai bước đó đều thấy tin chưa lọc.
-    # Mặc định đúng là 0: chưa phán thì chưa hiện.
+    # 7 — `kept` defaulting to 1 meant a freshly loaded posting counted as
+    # "kept" before the filter had run. Anyone reading the DB between those
+    # two steps saw unfiltered postings. The right default is 0: not judged,
+    # not shown.
     """
     CREATE TABLE posting_new (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -159,7 +163,7 @@ MIGRATIONS: list[str] = [
         salary TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '',
         posted_at TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',
         fingerprint TEXT NOT NULL, group_id TEXT,
-        kept INTEGER NOT NULL DEFAULT 0,           -- 0 = chưa phán HOẶC đã bị lọc
+        kept INTEGER NOT NULL DEFAULT 0,           -- 0 = not judged yet OR filtered out
         drop_reason TEXT NOT NULL DEFAULT 'not judged yet',
         posted_ts INTEGER NOT NULL DEFAULT 0,
         score INTEGER, score_conf TEXT NOT NULL DEFAULT '',
@@ -178,17 +182,19 @@ MIGRATIONS: list[str] = [
     CREATE INDEX posting_ts    ON posting(posted_ts);
     CREATE INDEX posting_score ON posting(score);
     """,
-    # 8 — sửa ba lỗi LÕI, không phải vá:
+    # 8 — fixes three CORE defects, not patches:
     #
-    # (a) Tầng raw không thật sự raw. `posting.description` là bản DUY NHẤT của
-    #     mô tả; strip_html sai là mất gốc, mà tin LinkedIn hết hạn thì không
-    #     fetch lại được. Giờ giữ nguyên văn trong raw_posting.body.
+    # (a) The raw layer was not actually raw. `posting.description` was the
+    #     ONLY copy of the description; a bug in strip_html lost the
+    #     original, and an expired LinkedIn posting cannot be refetched. Now
+    #     the verbatim text lives in raw_posting.body.
     #
-    # (b) Phán quyết (kept/score) không gắn với PHIÊN BẢN hồ sơ và PHIÊN BẢN
-    #     luật đã sinh ra nó. Đổi hồ sơ hay đổi luật thì mọi phán quyết cũ
-    #     thành sai — im lặng, không ai biết cái nào còn dùng được.
+    # (b) A judgement (kept/score) was not tied to the profile VERSION and
+    #     rule VERSION that produced it. Change the profile or the rules and
+    #     every old judgement is wrong — silently, with nobody able to tell
+    #     which ones still hold.
     #
-    # (c) Không có cách tính lại toàn bộ tầng suy diễn từ tầng raw.
+    # (c) There was no way to recompute the whole derived layer from raw.
     """
     ALTER TABLE raw_posting ADD COLUMN body TEXT NOT NULL DEFAULT '';
     ALTER TABLE posting ADD COLUMN judged_profile INTEGER NOT NULL DEFAULT 0;
@@ -196,16 +202,18 @@ MIGRATIONS: list[str] = [
     ALTER TABLE posting ADD COLUMN scored_rules TEXT NOT NULL DEFAULT '';
     CREATE INDEX posting_judged ON posting(judged_profile, judged_rules);
     """,
-    # 9 — nguồn hỏng phải TRÔNG khác nguồn chạy tốt.
-    # Trước đây vòng đọc kỹ nuốt mọi ngoại lệ (`except Exception: continue`),
-    # nên một nguồn đổi giao diện và hỏng 100% trông y hệt nguồn bình thường:
-    # ok=1, không có mô tả nào, không ai biết.
+    # 9 — a broken source has to LOOK different from a healthy one.
+    # The deep-read pass used to swallow every exception
+    # (`except Exception: continue`), so a source that changed its markup and
+    # failed 100% looked exactly like a normal one: ok=1, no descriptions,
+    # nobody the wiser.
     """
     ALTER TABLE source_run ADD COLUMN attempted INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE source_run ADD COLUMN failed INTEGER NOT NULL DEFAULT 0;
     """,
-    # 10 — "khớp" khác "có cửa". Điểm khớp cao ở một tin đòi PhD và 5 năm kinh
-    # nghiệm không nói lên gì về xác suất được gọi. Tách hai thứ ra.
+    # 10 — "matches" is not "stands a chance". A high match score on a
+    # posting demanding a PhD and 5 years says nothing about the odds of a
+    # callback. Keep the two apart.
     """
     ALTER TABLE posting ADD COLUMN realism TEXT NOT NULL DEFAULT '';
     ALTER TABLE posting ADD COLUMN realism_why TEXT NOT NULL DEFAULT '';
@@ -213,37 +221,42 @@ MIGRATIONS: list[str] = [
     ALTER TABLE posting ADD COLUMN deadline_ts INTEGER NOT NULL DEFAULT 0;
     CREATE INDEX posting_realism ON posting(realism);
     """,
-    # 11 — điểm cũng phải gắn phiên bản HỒ SƠ, không chỉ phiên bản luật.
-    # Thiếu cột này thì đổi hồ sơ chỉ lọc lại chứ không chấm lại: 72/204 tin
-    # đang giữ bị đóng băng ở score=NULL vì chúng được chấm lúc còn rỗng mô tả.
-    # DEFAULT 0 = "chưa chấm với hồ sơ nào" -> mọi tin cũ tự thành cần chấm lại.
+    # 11 — the score must also carry the PROFILE version, not just the rule
+    # version. Without this column a profile change only re-filtered and
+    # never rescored: 72 of 204 kept postings were frozen at score=NULL
+    # because they had been scored while their description was still empty.
+    # DEFAULT 0 = "scored against no profile" -> every old posting becomes
+    # due for rescoring on its own.
     """
     ALTER TABLE posting ADD COLUMN scored_profile INTEGER NOT NULL DEFAULT 0;
     """,
-    # 12 — nhật ký chạy: mỗi dòng thuộc một LUỒNG và có MỨC.
-    # Nhờ luồng mà tab Search chỉ hiện việc của Search; nhờ mức mà lỗi không
-    # nằm lẫn với dòng thường. Dòng cũ không có -> mặc định 'system'/'info'.
+    # 12 — the run journal: every line belongs to a STREAM and has a LEVEL.
+    # The stream is what lets the Search tab show only Search's work; the
+    # level is what keeps errors from sitting among ordinary lines. Old rows
+    # have neither -> default 'system'/'info'.
     """
     ALTER TABLE audit ADD COLUMN stream TEXT NOT NULL DEFAULT 'system';
     ALTER TABLE audit ADD COLUMN level  TEXT NOT NULL DEFAULT 'info';
     CREATE INDEX audit_stream ON audit(stream, id);
     """,
-    # 13 — tuỳ chọn của APP (khác profile_answer: đó là hồ sơ NGƯỜI DÙNG).
-    # Chỗ để nhớ "có tự quét khi mở app không" qua các lần khởi động.
+    # 13 — APP preferences (not profile_answer: that is the USER's profile).
+    # Where "auto-scan at boot?" is remembered across restarts.
     """
     CREATE TABLE pref (
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
     );
     """,
-    # 14 — KHO PROJECT. Trước đây pipeline sinh đề bài rồi vẽ ra màn hình và
-    # VỨT: mỗi lần mở trang chạy lại cả bảy chặng, không có gì tích lại.
-    # Một project làm mất 2-3 ngày thì nó phải sống lâu hơn một lần vẽ trang.
+    # 14 — THE PROJECT STORE. The pipeline used to generate briefs, draw
+    # them on screen and THROW THEM AWAY: every page load re-ran all seven
+    # stages and nothing accumulated. A project that costs 2-3 days has to
+    # outlive one page render.
     #
-    # skills = TRỤC (kỹ năng nào project này chứng minh được)
-    # industries = NHÃN (ngành nào kể được câu chuyện này)
-    # Trục là kỹ năng chứ không phải nhóm JD: nhóm sinh ra từ dữ liệu nên đổi
-    # là đề bài mồ côi — đã xảy ra thật với nhóm ma 'excel'.
+    # skills = the AXIS (which skill this project proves)
+    # industries = the LABEL (which industry this story can be told in)
+    # The axis is a skill, not a JD cluster: clusters are derived from data,
+    # so when they shift the brief is orphaned — which really happened, with
+    # the phantom 'excel' cluster.
     """
     CREATE TABLE project (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -257,68 +270,75 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX project_state ON project(state);
     """,
-    # 15 — BẢN CV nào đã gửi cho lần nộp nào. Không có cột này thì mở bảng ra
-    # chỉ biết "đã nộp Point72", không biết đã đưa họ bản nào — mà 43 bản khác
-    # nhau, và khi họ gọi phỏng vấn thì phải đọc lại đúng bản đó.
+    # 15 — WHICH CV version went with which application. Without this column
+    # the table only says "applied to Point72" and not which version they
+    # were given — and there are 43 different ones, and when they call for an
+    # interview you have to re-read exactly that one.
     """
     ALTER TABLE application ADD COLUMN cv_file TEXT NOT NULL DEFAULT '';
     ALTER TABLE application ADD COLUMN note    TEXT NOT NULL DEFAULT '';
     """,
-    # 16 — TÊN KHỐI mà máy đã chèn vào CV. Chèn xong thì trong cv_text nó
-    # không khác gì project người dùng tự viết — không có cột này thì sau đó
-    # không cách nào chỉ ra "cái này máy đẻ ra". Đã xảy ra thật: khối "Alpha
-    # Research" nằm trong CV suốt và phải so hai phiên bản liền nhau mới truy
-    # ra được.
+    # 16 — THE BLOCK NAME the machine inserted into the CV. Once inserted,
+    # inside cv_text it is indistinguishable from a project the user wrote
+    # themselves — without this column there is no later way to point at
+    # "the machine produced this". It really happened: an "Alpha Research"
+    # block sat in the CV for ages and only a diff of two adjacent versions
+    # traced it.
     #
-    # Dấu để Ở ĐÂY chứ KHÔNG để trong cv_text: bản CV đó gửi cho nhà tuyển
-    # dụng, không được mang chú thích nội bộ nào.
+    # The marker lives HERE and NOT in cv_text: that CV goes to an employer
+    # and must carry no internal annotation.
     """
     ALTER TABLE project ADD COLUMN cv_title TEXT NOT NULL DEFAULT '';
     """,
-    # 17 — NGƯỜI giữ lại một tin máy đã loại.
+    # 17 — THE HUMAN keeping a posting the machine dropped.
     #
-    # `kept` là cột SUY RA: derive() tính lại nó từ luật + hồ sơ, và tính lại
-    # MỖI LẦN hồ sơ đổi phiên bản. Nên sửa thẳng kept=1 bằng tay là một quyết
-    # định có hạn sử dụng: lần sau Vin chỉnh một chữ trong hồ sơ là nó bị ghi
-    # đè, im lặng, không báo gì — và điểm vừa chấm cũng bị xoá theo.
+    # `kept` is a DERIVED column: derive() recomputes it from the rules + the
+    # profile, and recomputes it EVERY TIME the profile version changes. So
+    # setting kept=1 by hand is a decision with an expiry date: the next time
+    # Vin edits one word in the profile it is overwritten, silently, with no
+    # warning — and the score just computed is deleted with it.
     #
-    # Quyết định của NGƯỜI phải nằm ở cột RIÊNG, và derive() đọc nó. Đây đúng
-    # là luật "máy đề xuất, người duyệt" của cả app, chỉ là lần này người
-    # duyệt ngược lại máy.
+    # A HUMAN's decision has to live in its OWN column, which derive() reads.
+    # This is exactly the app's "machine proposes, human approves" rule, only
+    # this time the human is overruling the machine.
     """
     ALTER TABLE posting ADD COLUMN user_keep INTEGER NOT NULL DEFAULT 0;
     CREATE INDEX posting_user_keep ON posting(user_keep);
     """,
-    # 18 — BỎ HẲN personal project. Máy không nghĩ đề bài nữa; Vin tự chọn
-    # project của mình.
+    # 18 — DROP personal projects entirely. The machine no longer invents
+    # briefs; Vin picks his own projects.
     #
-    # Vì sao bỏ: bảng này sống được 14 bước migration và giữ đúng 0 dòng.
-    # Đổi lại là 1.253 dòng máy dựng đề bài cộng 955 dòng khung repo. Cách
-    # thay thế — lấy project mẫu trên YouTube — đo ra không sạch: lượt tìm
-    # "data science portfolio project tutorial" cho 0/10 là project thật
-    # (9/10 là video dạy làm website), nên máy khớp từ khoá không có cách nào
-    # chọn đúng; và chính cổng TUTORIAL trong brief.py đã loại sẵn lớp đó.
+    # Why: this table survived 14 migrations holding exactly 0 rows. The
+    # price was 1,253 lines of brief generation plus 955 lines of repo
+    # scaffolding. The alternative — pulling sample projects off YouTube —
+    # measured badly: a search for "data science portfolio project tutorial"
+    # returned 0/10 real projects (9/10 were website-building videos), so
+    # keyword matching had no way to pick right; and brief.py's own TUTORIAL
+    # gate already excluded that whole class.
     #
-    # Bước 14 và 16 KHÔNG sửa: DB nào đã chạy qua chúng rồi thì sửa lại là
-    # viết lại lịch sử. Danh sách này chỉ được thêm vào đuôi.
+    # Migrations 14 and 16 are NOT edited: any DB that has already run them
+    # would be having its history rewritten. This list is append-only.
     #
-    # Hai thứ trong cụm đó KHÔNG chết theo, vì chúng chưa bao giờ thuộc về
-    # nó: phép đếm thị trường (-> scoring/market.py) và bộ từ ngành
-    # (-> scoring/vocab.py). Cả hai chỉ đọc `posting`, không biết project là gì.
+    # Two things in that cluster did NOT die with it, because they never
+    # belonged to it: the market counts (-> scoring/market.py) and the
+    # industry vocabulary (-> scoring/vocab.py). Both only read `posting` and
+    # have no idea what a project is.
     """
     DROP INDEX IF EXISTS project_state;
     DROP TABLE IF EXISTS project;
     """,
-    # 19 — BẢN CV ĐÃ DỰNG, cất lại. Trước đây tab CV dựng ngay lúc vẽ trang:
-    # đo được 5,3 giây cho 364 tin, mỗi lần mở tab. Người vừa search xong chưa
-    # tới bước làm CV, mà vẫn phải chờ 5 giây để xem thứ mình chưa yêu cầu.
+    # 19 — THE BUILT CVs, stored. The CV tab used to build them during the
+    # page render: measured at 5.3 seconds for 364 postings, every time the
+    # tab opened. Someone who just finished a search is nowhere near making a
+    # CV, yet still waited 5 seconds for something they did not ask for.
     #
-    # ĐÚNG MỘT DÒNG (CHECK id = 1). Không giữ lịch sử: "trước" trong bản so
-    # sánh before/after là CV GỐC của Vin, không phải lần dựng trước — giữ
-    # lịch sử ở đây là giữ thứ không ai đọc.
+    # EXACTLY ONE ROW (CHECK id = 1). No history: the "before" in a
+    # before/after comparison is Vin's ORIGINAL CV, not the previous build —
+    # keeping history here is keeping something nobody reads.
     #
-    # `stamp` là dấu cũ-mới: chữ CV + luật viết + luật chấm + tập tin. Nút
-    # Chạy đọc nó để biết nên ghi "Chạy", "Cập nhật" hay "Dựng lại".
+    # `stamp` is the freshness stamp: CV text + writing rules + scoring rules
+    # + the posting set. The Run button reads it to decide whether to say
+    # "Run", "Update" or "Rebuild".
     """
     CREATE TABLE cv_build (
         id       INTEGER PRIMARY KEY CHECK (id = 1),
@@ -327,18 +347,21 @@ MIGRATIONS: list[str] = [
         payload  TEXT NOT NULL
     );
     """,
-    # 20 — NGƯỜI CHỌN LẠI CÂU cho MỘT tin cụ thể.
+    # 20 — THE HUMAN RE-PICKING SENTENCES for ONE specific posting.
     #
-    # Máy xếp câu theo trọng số, và trọng số là luật chung — nó không biết Vin
-    # vừa nói chuyện với ai, hay tin này nghiêng về mảng nào. Nên Vin phải
-    # chọn lại được: ghim một câu vào, gạt một câu ra.
+    # The machine orders sentences by weight, and weights are a general rule
+    # — it does not know who Vin just spoke to, or which way this posting
+    # leans. So Vin has to be able to re-pick: pin a sentence in, push one
+    # out.
     #
-    # ĐÂY VẪN LÀ CHỌN, KHÔNG PHẢI VIẾT. Câu ghim vào phải là câu đã có trong
-    # hồ sơ — đúng luật gốc "mọi câu trên CV đều là câu Vin đã viết".
+    # THIS IS STILL PICKING, NOT WRITING. A pinned sentence must already
+    # exist in the profile — the founding rule, "every sentence on the CV is
+    # one Vin wrote".
     #
-    # Lưu theo NGUYÊN VĂN CÂU chứ không theo số thứ tự: thứ tự đổi mỗi lần
-    # dựng lại, còn câu thì không. Sửa chữ câu đó trong hồ sơ thì lựa chọn cũ
-    # tự hết hiệu lực — đúng, vì nó không còn là câu ấy nữa.
+    # Stored by the VERBATIM SENTENCE, not by index: the order changes on
+    # every rebuild, the sentence does not. Edit that sentence in the profile
+    # and the old choice lapses on its own — correctly, because it is no
+    # longer that sentence.
     """
     CREATE TABLE cv_pick (
         posting_id INTEGER NOT NULL REFERENCES posting(id) ON DELETE CASCADE,
@@ -348,24 +371,26 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (posting_id, text)
     );
     """,
-    # 21 — dọn núm "độ dày từ khoá" đã bỏ.
+    # 21 — clean out the dropped "keyword density" knob.
     #
-    # Đo trên 60 tin: xoay sang "dày" đổi ĐÚNG 0 bản CV. Và nó dựa trên
-    # "keyword density" — thứ không nhà cung cấp ATS nào công bố công thức.
-    # Giá trị cũ nằm lại trong bảng pref thì không hại gì, nhưng người đọc
-    # sau sẽ tưởng còn dùng.
+    # Measured over 60 postings: turning it to "dense" changed EXACTLY 0 CV
+    # builds. And it rested on "keyword density" — something no ATS vendor
+    # publishes a formula for. The old value sitting in the pref table harms
+    # nothing, but a later reader will assume it is still in use.
     """
     DELETE FROM pref WHERE key = 'cv_khoa';
     """,
-    # 22 — CHUẨN HOÁ received_at VỀ UTC.
+    # 22 — NORMALISE received_at TO UTC.
     #
-    # Trước đây thư được lưu nguyên múi giờ người gửi. Ba chỗ so mốc thời
-    # gian bằng SO CHUỖI (scan.settle, board.all max(), ORDER BY) nên sai với
-    # mọi lá không ở UTC: '...01:30-04:00' (05:30 UTC) đứng TRƯỚC
-    # '...02:00+00:00' theo bảng chữ cái, nên thư mới hơn 3,5 tiếng bị coi là
-    # cũ rồi bị bỏ. Đo trên hộp thư thật: 200/1.046 lá.
+    # Mail used to be stored in whatever timezone the sender used. Three
+    # places compare timestamps by STRING COMPARISON (scan.settle,
+    # board.all max(), ORDER BY), so every non-UTC mail was wrong:
+    # '...01:30-04:00' (05:30 UTC) sorts BEFORE '...02:00+00:00'
+    # alphabetically, so mail 3.5 hours newer counted as older and was
+    # dropped. Measured on the real mailbox: 200 of 1,046 messages.
     #
-    # Chỉ đụng dòng CÓ offset và KHÔNG phải +00:00 — không viết lại cái đã đúng.
+    # Only touches rows that HAVE an offset and are NOT +00:00 — it does not
+    # rewrite what is already right.
     """
     UPDATE message
        SET received_at = strftime('%Y-%m-%dT%H:%M:%S+00:00', received_at)
@@ -375,31 +400,33 @@ MIGRATIONS: list[str] = [
        AND strftime('%Y-%m-%dT%H:%M:%S+00:00', received_at) IS NOT NULL;
     """,
 
-    # 23 — dọn ba tuỳ chọn ĐÃ CHẾT khỏi bảng pref.
+    # 23 — clean three DEAD preferences out of the pref table.
     #
-    # `cv_bo_cuc`, `cv_giong`, `cv_giu_rui_ro` là tuỳ chọn của một bản dựng CV
-    # cũ. Mã đọc chúng đã bị xoá từ lâu, nhưng HÀNG THÌ CÒN NẰM TRONG DB —
-    # đo thật trên máy Vin: cả ba vẫn ở đó. Không hại gì, nhưng mở bảng pref
-    # ra đọc thì ba hàng đó nói dối rằng có ba cái nút đâu đó đang điều khiển
-    # chúng, và lần sau ai đó sẽ đi tìm cái nút không tồn tại.
+    # `cv_bo_cuc`, `cv_giong`, `cv_giu_rui_ro` belonged to an older CV
+    # builder. The code that read them was deleted long ago, but THE ROWS
+    # STAYED IN THE DB — measured on Vin's machine: all three still there.
+    # They harm nothing, but open the pref table and those three rows claim
+    # there are three knobs somewhere driving them, and sooner or later
+    # somebody goes looking for a knob that does not exist.
     #
-    # XOÁ ĐÍCH DANH, không xoá "mọi khoá lạ": `title_vocab` và vài khoá khác
-    # cũng không có trong DEFAULTS mà vẫn sống — quét sạch theo danh sách
-    # trắng là xoá mất 60 chức danh người dùng tự gõ.
+    # DELETED BY NAME, not "every unknown key": `title_vocab` and a few
+    # others are also absent from DEFAULTS and very much alive — an
+    # allowlist sweep would delete 60 job titles the user typed themselves.
     """
     DELETE FROM pref WHERE key IN ('cv_bo_cuc', 'cv_giong', 'cv_giu_rui_ro');
     """,
 ]
 
-SECRET = 0o600      # chỉ chủ máy đọc — xem _lock_down
+SECRET = 0o600      # owner-only — see _lock_down
 
 
 def _lock_down(path: Path) -> None:
-    """Chỉ chủ máy đọc được DB, và cả tệp WAL/SHM đi kèm.
+    """Only the owner can read the DB, and the WAL/SHM files beside it.
 
-    Trong đó có TOÀN VĂN CV, hồ sơ cá nhân, và tiêu đề + 400 ký tự đầu của mọi
-    thư tuyển dụng. Mặc định của sqlite là 0644 — bất kỳ tài khoản nào trên
-    máy cũng đọc được. Đặt một lần lúc mở kết nối thì không phải nhớ.
+    It holds the FULL TEXT of the CV, the personal profile, and the subject
+    plus first 400 characters of every recruiting email. sqlite's default is
+    0644 — any account on the machine can read it. Setting it once at connect
+    time means nobody has to remember.
     """
     for suffix in ("", "-wal", "-shm"):
         try:
@@ -416,25 +443,26 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     _lock_down(Path(path))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode = WAL")   # đọc được trong lúc đang ghi (chạy 24/7)
+    conn.execute("PRAGMA journal_mode = WAL")   # readable while writing (24/7)
     migrate(conn)
     return conn
 
 
 def migrate(conn: sqlite3.Connection) -> int:
-    """Chạy các migration còn thiếu. Trả về số migration vừa chạy."""
+    """Run the migrations still missing. Returns how many ran."""
     current = conn.execute("PRAGMA user_version").fetchone()[0]
     ran = 0
     for index in range(current, len(MIGRATIONS)):
-        # MỖI MIGRATION LÀ MỘT GIAO DỊCH, và `user_version` nhích lên TRONG
-        # cùng giao dịch đó.
+        # EACH MIGRATION IS ONE TRANSACTION, and `user_version` advances
+        # INSIDE that same transaction.
         #
-        # Bản trước chạy executescript rồi mới commit: executescript TỰ commit
-        # trước khi chạy, nên nếu câu lệnh thứ ba trong một migration hỏng
-        # (mất điện, đĩa đầy, khoá ngoại), hai câu đầu đã vào DB mà
-        # user_version vẫn là số cũ. Lần mở app sau nó chạy LẠI migration đó
-        # từ đầu — và một migration chạy hai lần thì "ADD COLUMN" nổ, "INSERT"
-        # nhân đôi. DB chết vĩnh viễn, không có đường lùi.
+        # The previous version ran executescript and committed afterwards:
+        # executescript COMMITS BY ITSELF before running, so if the third
+        # statement of a migration failed (power cut, full disk, a foreign
+        # key), the first two were already in the DB while user_version still
+        # held the old number. The next boot ran that migration AGAIN from
+        # the top — and a migration run twice makes "ADD COLUMN" raise and
+        # "INSERT" duplicate. The DB dies permanently, with no way back.
         try:
             conn.execute("BEGIN")
             for cau in _tach_cau(MIGRATIONS[index]):
@@ -449,9 +477,10 @@ def migrate(conn: sqlite3.Connection) -> int:
 
 
 def _tach_cau(script: str) -> list[str]:
-    """Tách một migration thành từng câu lệnh, để chạy TRONG giao dịch.
+    """Split a migration into statements, so it can run INSIDE a transaction.
 
-    `executescript` tiện hơn nhưng nó tự COMMIT trước khi chạy — tức là
-    không thể nằm trong giao dịch nào cả. Đó chính là lý do phải tự tách.
+    `executescript` is more convenient but it COMMITS by itself before
+    running — which means it cannot be inside any transaction at all. That is
+    precisely why this splits by hand.
     """
     return [c.strip() for c in script.split(";") if c.strip()]
