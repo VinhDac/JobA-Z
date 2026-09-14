@@ -1,4 +1,4 @@
-"""Test bước 1 — lọc theo hồ sơ và gộp trùng.  python3 tests/test_ingest.py"""
+"""Test step 1 — filtering by profile and merging duplicates.  python3 tests/test_ingest.py"""
 
 import sys, tempfile
 from pathlib import Path
@@ -23,156 +23,160 @@ def P(title, company="Acme", location="London", remote=False):
 PROFILE = {"job_titles": "Quantitative Analyst\nData Scientist\nGraduate Analyst",
            "seniority": ["grad", "junior"], "markets": ["uk_onsite", "uk_remote"]}
 
-print("\n[chuẩn hoá]")
-check("bỏ đuôi công ty", norm_company("Monzo Bank Ltd") == norm_company("Monzo Bank"))
-check("bỏ ngoặc trong chức danh", norm_title("Analyst (London)") == "analyst")
-check("bỏ mã tin", norm_title("Analyst - REQ1042") == "analyst")
-check("bỏ thẻ HTML", strip_html("<p>a<br>b</p>").replace("\n", " ").strip() == "a b")
+print("\n[normalising]")
+check("company suffixes dropped", norm_company("Monzo Bank Ltd") == norm_company("Monzo Bank"))
+check("brackets dropped from a title", norm_title("Analyst (London)") == "analyst")
+check("the requisition code dropped", norm_title("Analyst - REQ1042") == "analyst")
+check("HTML tags dropped", strip_html("<p>a<br>b</p>").replace("\n", " ").strip() == "a b")
 
-print("\n[lọc]")
+print("\n[filtering]")
 keep, why = jf.judge(P("Quantitative Analyst"), PROFILE)
-check("khớp chức danh -> giữ", keep)
-check("giải thích được vì sao giữ", "matched target title" in why)
+check("a matching title -> kept", keep)
+check("it can explain why it was kept", "matched target title" in why)
 
 keep, why = jf.judge(P("Product Manager"), PROFILE)
-check("không khớp -> bỏ", not keep and "does not match" in why)
+check("no match -> dropped", not keep and "does not match" in why)
 
-# LỖI ĐÃ TỪNG CÓ: 'analyst' nằm trong JUNIOR_WORDS làm mọi tin Senior lọt qua
+# A BUG THAT ONCE EXISTED: 'analyst' was in JUNIOR_WORDS, letting every Senior posting through
 for t in ["Senior Data Scientist", "Senior Quantitative Analyst", "Head of Data Scientist"]:
     keep, why = jf.judge(P(t), PROFILE)
-    check(f"bỏ cấp cao: {t}", not keep and "senior level" in why)
+    check(f"senior level dropped: {t}", not keep and "senior level" in why)
 
 keep, _ = jf.judge(P("Graduate Analyst to Senior Analyst"), PROFILE)
-check("tin ghi cả grad lẫn senior -> vẫn giữ", keep)
+check("a posting naming both grad and senior -> still kept", keep)
 
 keep, why = jf.judge(P("Data Scientist", location="New York"), PROFILE)
-check("ngoài khu vực -> bỏ", not keep and "outside your area" in why)
-# Lý do phải NÓI RÕ khu vực nào, vì khu vực đó nay suy từ ô "Where you're
-# based" chứ không còn đóng cứng UK. Không ghi ra thì đọc nhật ký không biết
-# máy đang lấy đâu làm nhà.
-check("và nói rõ lấy đâu làm nhà", "(UK)" in why, )
+check("outside the area -> dropped", not keep and "outside your area" in why)
+# The reason has to NAME the area, because the area is now derived from the
+# "Where you're based" field rather than hardcoded to the UK. Without it,
+# reading the journal never says where the machine thinks home is.
+check("and it names where home is", "(UK)" in why, )
 
-# Ô "Where you're based" GIỜ CÓ TÁC DỤNG THẬT. Trước đây không một dòng nào
-# trong tìm/lọc đọc nó — trong khi chính câu `why` của nó hứa
+# The "Where you're based" field NOW REALLY DOES SOMETHING. Not one line in
+# the search or the filter used to read it — while its own `why` promised
 # "Used to filter on-site and hybrid roles by commute".
-# Ở Mỹ, và KHÔNG chọn thị trường UK -> việc London là ngoài khu vực.
+# Living in the US, with the UK market NOT ticked -> a London job is outside the area.
 o_my = dict(PROFILE, location="New York, NY", markets=["us_remote"])
 keep, _ = jf.judge(P("Data Scientist", location="New York"), o_my)
-check("ở Mỹ thì việc New York được giữ", keep)
+check("in the US, a New York job is kept", keep)
 keep, why = jf.judge(P("Data Scientist", location="London"), o_my)
-check("và việc London thành ngoài khu vực", not keep and "(US)" in why)
+check("and a London job becomes outside the area", not keep and "(US)" in why)
 
-# Ô "thị trường" LÀ MỘT LỜI KHAI, không phải trang trí. Ở Mỹ mà tick
-# "UK — onsite" nghĩa là sẵn sàng nhận việc ở UK, nên London phải được GIỮ.
+# The "markets" field IS A DECLARATION, not decoration. Living in the US and
+# ticking "UK — onsite" means being willing to take UK work, so London has to
+# be KEPT.
 #
-# Bản trước location_ok nhận `markets` rồi không đọc một lần nào: hồ sơ chọn
-# "US — remote" mà tin New York vẫn bị vứt vì "outside your area (UK)". Tệ
-# hơn, LinkedIn dịch đúng mấy khoá đó thành nơi ĐI TÌM — app đi tìm ở Mỹ rồi
-# tự ném sạch kết quả về.
+# The previous location_ok took `markets` and never read it once: a profile
+# choosing "US — remote" still had its New York postings thrown away as
+# "outside your area (UK)". Worse, LinkedIn translated those keys correctly
+# into WHERE TO SEARCH — so the app searched in the US and then threw every
+# result away itself.
 o_my_uk = dict(PROFILE, location="New York, NY",
                markets=["uk_onsite", "uk_remote"])
 keep, _ = jf.judge(P("Data Scientist", location="London"), o_my_uk)
-check("ở Mỹ nhưng chọn thị trường UK -> việc London được giữ", keep)
+check("in the US but with the UK market ticked -> a London job is kept", keep)
 o_uk_us = dict(PROFILE, location="London, UK", markets=["us_remote"])
 keep, _ = jf.judge(P("Data Scientist", location="New York, NY"), o_uk_us)
-check("ở UK nhưng chọn US remote -> việc New York được giữ", keep)
+check("in the UK but with US remote ticked -> a New York job is kept", keep)
 keep, _ = jf.judge(P("Data Scientist", location="Berlin, Germany"), o_uk_us)
-check("nhưng Berlin thì không — không chọn EU", not keep)
+check("but not Berlin — the EU was not ticked", not keep)
 o_all = dict(PROFILE, location="London, UK", markets=["global_remote"])
 keep, _ = jf.judge(P("Data Scientist", location="Berlin, Germany"), o_all)
-check("chọn global remote -> bỏ hẳn chốt địa điểm", keep)
-# Ô để trống thì giữ NẾP CŨ, không tự ý đổi thứ đang giữ.
+check("global remote ticked -> the location latch is dropped entirely", keep)
+# An empty field KEEPS THE OLD BEHAVIOUR, never silently changing what is kept.
 keep, _ = jf.judge(P("Data Scientist", location="London"),
                    dict(PROFILE, location=""))
-check("hồ sơ chưa khai nơi ở -> vẫn xử như UK", keep)
+check("no location declared -> still treated as the UK", keep)
 
-# CHỐT CHẶN tên thành phố đụng nhau. "Birmingham, AL" là Alabama — mà nó
-# đang nằm trong danh sách việc UK của Vin (đo 12/09, Mission Pet Health).
+# A LATCH against colliding city names. "Birmingham, AL" is Alabama — and it
+# was sitting in Vin's UK job list (measured 12/09, Mission Pet Health).
 keep, _ = jf.judge(P("Data Scientist", location="Birmingham, AL"), PROFILE)
-check("Birmingham, AL (Alabama) KHÔNG phải việc UK", not keep)
+check("Birmingham, AL (Alabama) is NOT a UK job", not keep)
 keep, _ = jf.judge(P("Data Scientist", location="Birmingham, England"), PROFILE)
-check("nhưng Birmingham, England thì vẫn là UK", keep)
-# Dấu hiệu MẠNH thắng chốt chặn: có "United Kingdom" thì mã bang không cứu
-# nổi — tin đăng nhiều nơi là chuyện thường.
+check("but Birmingham, England still is the UK", keep)
+# A STRONG signal beats the latch: with "United Kingdom" present, a state code
+# cannot save it — a posting listed in several places is ordinary.
 keep, _ = jf.judge(P("Data Scientist",
                      location="New York, NY; London, United Kingdom"), PROFILE)
-check("tin đăng cả hai nơi, có UK rõ ràng -> vẫn giữ", keep)
+check("posted in both places with an explicit UK -> still kept", keep)
 
 keep, _ = jf.judge(P("Data Scientist", location="London, United Kingdom"), PROFILE)
-check("nhiều địa điểm có London -> giữ", keep)
+check("several locations including London -> kept", keep)
 
 keep, _ = jf.judge(P("Data Scientist", location="Remote - Europe", remote=True), PROFILE)
-check("remote châu Âu -> giữ", keep)
+check("remote across Europe -> kept", keep)
 
 keep, why = jf.judge(P("Anything At All"), {})
-check("chưa có job_titles -> giữ hết", keep and "no job_titles" in why)
+check("no job_titles yet -> keep everything", keep and "no job_titles" in why)
 
-print("\n[cache + gộp trùng]")
+print("\n[the cache + merging duplicates]")
 with tempfile.TemporaryDirectory() as tmp:
     conn = db.connect(Path(tmp) / "t.db")
     batch = [P("Quantitative Analyst", "Monzo Bank Ltd"),
-             P("Quantitative Analyst", "Monzo Bank"),      # cùng việc, tên khác
+             P("Quantitative Analyst", "Monzo Bank"),      # same job, different name
              P("Data Scientist", "Wise")]
     for i, item in enumerate(batch):
         item.source_id = f"s{i}"
     seen, new = postings.save_batch(conn, "test", batch)
-    check("ghi lần đầu", (seen, new) == (3, 3))
+    check("the first write", (seen, new) == (3, 3))
 
     seen, new = postings.save_batch(conn, "test", batch)
-    check("chạy lại KHÔNG ghi trùng (đây là cache)", (seen, new) == (3, 0))
-    check("số tin không đổi", postings.count(conn) == 3)
+    check("a rerun writes NO duplicate (this is the cache)", (seen, new) == (3, 0))
+    check("the posting count is unchanged", postings.count(conn) == 3)
 
-    # LỖI ĐÃ SỬA: cache chặn cả việc bổ sung. Vòng quét nhanh ghi tin không mô tả,
-    # vòng đọc kỹ lấy được mô tả nhưng không ghi vào đâu được.
+    # A BUG SINCE FIXED: the cache blocked enrichment too. The fast scan wrote
+    # postings with no description, and the deep-read pass fetched a
+    # description with nowhere to write it.
     deep = P("Quantitative Analyst", "Monzo Bank Ltd")
     deep.source_id, deep.description = "s0", "x" * 900
     seen, new = postings.save_batch(conn, "test", [deep])
-    check("bổ sung KHÔNG tạo dòng mới", (seen, new) == (1, 0))
+    check("enrichment creates NO new row", (seen, new) == (1, 0))
     got = conn.execute("SELECT p.description FROM posting p"
                        " JOIN raw_posting r ON p.raw_id = r.id"
                        " WHERE r.source_id = 's0'").fetchone()[0]
-    check("mô tả được ghi vào tin đã có", len(got) == 900)
+    check("the description is written onto the existing posting", len(got) == 900)
 
     deep2 = P("Quantitative Analyst", "Monzo Bank Ltd")
-    deep2.source_id, deep2.description = "s0", "ngắn hơn nhiều"
+    deep2.source_id, deep2.description = "s0", "much shorter"
     postings.save_batch(conn, "test", [deep2])
     kept_long = conn.execute("SELECT p.description FROM posting p"
                              " JOIN raw_posting r ON p.raw_id = r.id"
                              " WHERE r.source_id = 's0'").fetchone()[0]
-    check("KHÔNG đè mô tả dài bằng mô tả ngắn", len(kept_long) == 900)
+    check("a long description is NOT overwritten by a short one", len(kept_long) == 900)
 
-    # kept mặc định 0 (chưa phán) — vòng lọc thật mới bật lên
+    # kept defaults to 0 (not judged) — only a real filter pass turns it on
     conn.execute("UPDATE posting SET kept = 1, drop_reason = ''")
     conn.commit()
     n_rows, n_groups = group.regroup(conn)
-    check("gộp Monzo Bank Ltd + Monzo Bank", (n_rows, n_groups) == (3, 2))
+    check("Monzo Bank Ltd + Monzo Bank merged", (n_rows, n_groups) == (3, 2))
 
     groups = group.groups(conn)
     merged = next(g for g in groups if g["count"] == 2)
-    check("nhóm gộp giải thích được nguồn", merged["sources"] == ["test"])
+    check("a merged group can name its sources", merged["sources"] == ["test"])
 
-    postings.log(conn, "test_event", "chi tiết")
-    check("nhật ký ghi được", len(postings.recent_audit(conn)) == 1)
+    postings.log(conn, "test_event", "details")
+    check("the journal writes", len(postings.recent_audit(conn)) == 1)
     conn.close()
 
-print("\n[địa điểm khớp theo TỪ, không theo chuỗi con]")
+print("\n[a location matches by WORD, never by substring]")
 from jobbot.ingest.filter import location_ok as _loc
 _P = lambda loc, co="", rm=False: Posting(source_id="x", title="t", company=co,
                                           location=loc, remote=rm)
 for _loc_text, _co in [("London", ""), ("Manchester, UK", ""),
                        ("United Kingdom", ""), ("Edinburgh", "")]:
-    check(f"giữ {_loc_text!r}", _loc(_P(_loc_text, _co), []))
-# 17 tin thật lọt qua vì 'uk' nằm trong 'ukraine', 'gb' nằm trong 'gbagada'
+    check(f"kept {_loc_text!r}", _loc(_P(_loc_text, _co), []))
+# 17 real postings slipped through because 'uk' is inside 'ukraine' and 'gb' inside 'gbagada'
 for _loc_text, _co in [("Kyiv, Ukraine", ""), ("Köln", "teamZUKUNFT gGmbH"),
                        ("Paris", "Bigblue"), ("Bremen", "GBC Group"),
                        ("Gbagada, Lagos", "")]:
-    check(f"loại {_loc_text!r} {_co}", not _loc(_P(_loc_text, _co), []))
-check("remote toàn cầu vẫn giữ", _loc(_P("Anywhere", "", True), []))
+    check(f"dropped {_loc_text!r} {_co}", not _loc(_P(_loc_text, _co), []))
+check("global remote is still kept", _loc(_P("Anywhere", "", True), []))
 
-print("\n[danh sách board: người chọn + máy học, KHÔNG bỏ bên nào]")
-# LỖI THẬT: boards.toml chỉ là DỰ PHÒNG khi bảng công ty rỗng. Bảng có 53 dòng
-# nên file không bao giờ được đọc — aqr, cohere, palantir, ramp, synthesia gõ
-# tay vào đó mà chưa từng được quét lần nào, và không có gì báo.
+print("\n[the board list: what a person picked + what the machine learnt, NEITHER dropped]")
+# THE REAL BUG: boards.toml was only a FALLBACK for an empty company table.
+# The table had 53 rows, so the file was never read — aqr, cohere, palantir,
+# ramp and synthesia had been typed in there and never scanned once, with
+# nothing to say so.
 import os as _os, tempfile as _tf
 from pathlib import Path as _P
 with _tf.TemporaryDirectory() as _tmp:
@@ -183,32 +187,32 @@ with _tf.TemporaryDirectory() as _tmp:
     _conn = _db.connect(_P(_tmp) / "b.db")
     seed = seed_boards()
     seed_slugs = {s for v in seed.values() for s in v}
-    check("boards.toml đọc được", bool(seed_slugs))
+    check("boards.toml can be read", bool(seed_slugs))
 
-    # bảng công ty RỖNG -> vẫn phải ra danh sách gõ tay
+    # an EMPTY company table -> the hand-typed list still has to come out
     got = {s for v in load_boards(_conn).values() for s in v}
-    check("bảng rỗng -> dùng danh sách gõ tay", seed_slugs <= got)
+    check("an empty table -> the hand-typed list is used", seed_slugs <= got)
 
-    # bảng công ty CÓ dữ liệu -> danh sách gõ tay KHÔNG được biến mất
+    # a company table WITH data -> the hand-typed list must NOT disappear
     _conn.execute(
         "INSERT INTO company (name, key, ats, ats_slug, is_agency, checked_at,"
         " roles_found, note) VALUES (?,?,?,?,0,?,?,?)",
-        ("Máy Nhặt Được", "may nhat duoc", "greenhouse", "maynhat",
+        ("Machine Found It", "machine found it", "greenhouse", "maynhat",
          "2026-01-01", 5, "seen in a posting"))
     _conn.commit()
     got = {s for v in load_boards(_conn).values() for s in v}
-    check("bảng có dữ liệu -> vẫn giữ danh sách gõ tay", seed_slugs <= got)
-    check("và gộp thêm cái máy học được", "maynhat" in got)
+    check("a table with data -> the hand-typed list is still kept", seed_slugs <= got)
+    check("and what the machine learnt is merged in", "maynhat" in got)
 
     every = [s for v in load_boards(_conn).values() for s in v]
-    check("không lặp slug", len(every) == len(set(every)))
+    check("no duplicate slug", len(every) == len(set(every)))
     _conn.close()
     _os.environ.pop("JOBBOT_DATA_DIR", None)
 
-print("\n[thư báo việc — nguồn thứ ba, và là nguồn sạch nhất]")
-# LinkedIn TỰ GỬI thư này vào hộp thư của Vin. Đọc hộp thư của chính mình thì
-# không đụng gì tới Điều khoản của ai — khác hẳn vòng quét Chrome, vốn nằm
-# ngoài mục 8.2 và app phải ghi rõ điều đó.
+print("\n[job alert mail — the third source, and the cleanest of them]")
+# LinkedIn SENDS these itself to Vin's mailbox. Reading your own mailbox
+# touches nobody's Terms — quite unlike the Chrome scan, which falls outside
+# clause 8.2 and which the app has to say so about.
 from jobbot.ingest import alerts as _al
 
 _THU = """
@@ -224,24 +228,25 @@ _THU = """
 </a>
 """
 _tin = _al.parse(_THU)
-check("bóc được đủ số việc", len(_tin) == 2)
+check("the right number of jobs parsed out", len(_tin) == 2)
 _m = {t.source_id: t for t in _tin}
-check("tách đúng chức danh",
+check("the title parses correctly",
       _m["4464889773"].title == "Data Analyst, Business Intelligence — Entry Level")
-# Chức danh và tên công ty nằm ở hai phần tử CẠNH NHAU, không có dấu gì ngăn.
-# Nối bằng khoảng trắng thì ra "…Entry Level Jobright.ai" và không tách lại
-# được — nên phải thay THẺ bằng XUỐNG DÒNG.
-check("tách đúng công ty", _m["4464889773"].company == "Jobright.ai")
-check("tách đúng địa điểm", _m["4464889773"].location == "United Kingdom (Remote)")
-check("bỏ nhãn quảng cáo", "Fast growing" not in _m["4464889773"].title)
-# URL trong thư là đường theo dõi dài loằng ngoằng; dựng lại URL sạch từ id.
-check("dựng lại URL sạch, bỏ tham số theo dõi",
+# The title and the company name are in ADJACENT elements with nothing
+# between them. Joined with a space it becomes "…Entry Level Jobright.ai" and
+# cannot be split again — so the TAG has to be replaced by A NEWLINE.
+check("the company parses correctly", _m["4464889773"].company == "Jobright.ai")
+check("the location parses correctly", _m["4464889773"].location == "United Kingdom (Remote)")
+check("the promo label is dropped", "Fast growing" not in _m["4464889773"].title)
+# The URL in the email is a long tracking link; a clean URL is rebuilt from the id.
+check("a clean URL is rebuilt, tracking parameters dropped",
       _m["4464889773"].url == "https://www.linkedin.com/jobs/view/4464889773/")
-check("cùng một việc xuất hiện 3 lần -> chỉ lấy một", len(set(_m)) == 2)
-check("thư rỗng thì trả rỗng, không nổ", _al.parse("") == [])
-check("thư không có việc nào cũng không nổ", _al.parse("<p>hello</p>") == [])
-# Khối logo/nút không mang chữ -> phải bỏ, không được đẻ ra tin rỗng.
-check("khối không có 'công ty · nơi' thì bỏ",
+check("the same job appearing 3 times -> taken once", len(set(_m)) == 2)
+check("an empty email returns empty, it does not blow up", _al.parse("") == [])
+check("an email with no jobs does not blow up either", _al.parse("<p>hello</p>") == [])
+# A logo/button block carries no text -> it has to be dropped, never turned
+# into an empty posting.
+check("a block with no 'company · place' is dropped",
       not _al.parse('<a href="/jobs/view/9999999/"><img></a>'))
 
 print(f"\n{ok} ok, {fail} fail")
