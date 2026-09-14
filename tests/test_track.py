@@ -168,7 +168,7 @@ print("\n[hai lỗi audit ở khúc thư]")
 _mailsrc = (Path(__file__).resolve().parent.parent
             / "src/jobbot/track/mail.py").read_text(encoding="utf-8")
 check("mỗi lá thư có vòng bảo vệ riêng", "broken += 1" in _mailsrc)
-check("và báo ra số thư bỏ qua", "thư đọc không nổi" in _mailsrc)
+check("và báo ra số thư bỏ qua", "unreadable messages" in _mailsrc)
 check("ngày sai định dạng không nổ", "except (TypeError, ValueError)" in _mailsrc)
 # (12) Một công ty, nhiều lần nộp: đẩy bừa dòng đầu là chuyển trạng thái đơn
 #      khác — thư từ chối vai trò A hạ luôn vai trò B đang chờ phỏng vấn.
@@ -330,18 +330,18 @@ check("route xoá đòi xác nhận", '!= "xoa"' in _srv2)
 check("mật khẩu bị bịt trong thông báo lỗi",
       mail._hide("login failed for hunter2", "hunter2") == "login failed for ***")
 check("chưa điền thì nói ngay, không gọi mạng",
-      mail.check("", "") == "chưa điền đủ địa chỉ và app password")
+      mail.check("", "") == "the address and app password are not both filled in")
 # Dán nhầm MẬT KHẨU TÀI KHOẢN là chuyện thường. Bắt bằng hình dạng, TRƯỚC khi
 # gửi nó qua mạng — không thì mật khẩu thật đã bay đi rồi mới biết là vô ích.
 check("mật khẩu tài khoản bị chặn tại chỗ",
-      "không phải app password" in mail.check("a@gmail.com", "Work123@"))
+      "not an app password" in mail.check("a@gmail.com", "Work123@"))
 check("và không hề gọi mạng",
       "Gmail từ chối" not in mail.check("a@gmail.com", "Work123@"))
 # HÌNH DẠNG ĐÓ LÀ CỦA GOOGLE. Bản cũ áp nó cho MỌI địa chỉ, nên ai dùng
 # Outlook / iCloud / hộp thư công ty bị chặn ngay cửa bằng một câu chẳng
 # liên quan gì tới lý do thật — mà mật khẩu của họ có thể hoàn toàn đúng.
 check("nhà cung cấp khác KHÔNG bị bộ lọc của Google chặn",
-      "không phải app password" not in mail.check("a@outlook.com", "Work123@"))
+      "not an app password" not in mail.check("a@outlook.com", "Work123@"))
 check("app password đúng hình dạng thì cho qua vòng kiểm hình dạng",
       "không phải app password" not in mail.check.__doc__ or
       bool(mail.APP_PASSWORD.fullmatch("abcdefghijklmnop")))
@@ -565,7 +565,7 @@ print("\n[hai lỗi audit ở khúc thư]")
 _mailsrc = (Path(__file__).resolve().parent.parent
             / "src/jobbot/track/mail.py").read_text(encoding="utf-8")
 check("mỗi lá thư có vòng bảo vệ riêng", "broken += 1" in _mailsrc)
-check("và báo ra số thư bỏ qua", "thư đọc không nổi" in _mailsrc)
+check("và báo ra số thư bỏ qua", "unreadable messages" in _mailsrc)
 check("ngày sai định dạng không nổ", "except (TypeError, ValueError)" in _mailsrc)
 # (12) Một công ty, nhiều lần nộp: đẩy bừa dòng đầu là chuyển trạng thái đơn
 #      khác — thư từ chối vai trò A hạ luôn vai trò B đang chờ phỏng vấn.
@@ -727,18 +727,18 @@ check("route xoá đòi xác nhận", '!= "xoa"' in _srv2)
 check("mật khẩu bị bịt trong thông báo lỗi",
       mail._hide("login failed for hunter2", "hunter2") == "login failed for ***")
 check("chưa điền thì nói ngay, không gọi mạng",
-      mail.check("", "") == "chưa điền đủ địa chỉ và app password")
+      mail.check("", "") == "the address and app password are not both filled in")
 # Dán nhầm MẬT KHẨU TÀI KHOẢN là chuyện thường. Bắt bằng hình dạng, TRƯỚC khi
 # gửi nó qua mạng — không thì mật khẩu thật đã bay đi rồi mới biết là vô ích.
 check("mật khẩu tài khoản bị chặn tại chỗ",
-      "không phải app password" in mail.check("a@gmail.com", "Work123@"))
+      "not an app password" in mail.check("a@gmail.com", "Work123@"))
 check("và không hề gọi mạng",
       "Gmail từ chối" not in mail.check("a@gmail.com", "Work123@"))
 # HÌNH DẠNG ĐÓ LÀ CỦA GOOGLE. Bản cũ áp nó cho MỌI địa chỉ, nên ai dùng
 # Outlook / iCloud / hộp thư công ty bị chặn ngay cửa bằng một câu chẳng
 # liên quan gì tới lý do thật — mà mật khẩu của họ có thể hoàn toàn đúng.
 check("nhà cung cấp khác KHÔNG bị bộ lọc của Google chặn",
-      "không phải app password" not in mail.check("a@outlook.com", "Work123@"))
+      "not an app password" not in mail.check("a@outlook.com", "Work123@"))
 check("app password đúng hình dạng thì cho qua vòng kiểm hình dạng",
       "không phải app password" not in mail.check.__doc__ or
       bool(mail.APP_PASSWORD.fullmatch("abcdefghijklmnop")))
