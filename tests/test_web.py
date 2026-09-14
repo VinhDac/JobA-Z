@@ -1923,8 +1923,8 @@ with tempfile.TemporaryDirectory() as tmp:
     # phút vì mở Chrome đọc từng tin — nút Dừng mà không ngắt được là nút chết.
     check("ngắt giữa hai nguồn API", "halt.wanted(STAGE)" in _run)
     check("truyền cờ xuống LinkedIn", "stop=lambda: halt.wanted(STAGE)" in _run)
-    check("ngắt trong vòng ĐỌC KỸ (chỗ tốn 8-16 phút)", "đã đọc kỹ" in _li)
-    check("ngắt cả trong vòng tìm", "mới xong" in _li)
+    check("ngắt trong vòng ĐỌC KỸ (chỗ tốn 8-16 phút)", "deep-read" in _li)
+    check("ngắt cả trong vòng tìm", "queries done" in _li)
     _halt = (Path(__file__).resolve().parent.parent
              / "src/jobbot/core/halt.py").read_text(encoding="utf-8")
     # Dừng vòng quét KHÔNG được dừng luôn việc quét thư đang chạy song song.

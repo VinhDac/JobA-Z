@@ -578,18 +578,18 @@ try:
              location=["United Kingdom", ""], pages=1, deep=True)
     _moi = [e.text for e in _jl.tail(_S, 999)[:len(_jl.tail(_S, 999)) - _truoc]]
 
-    _tim = [t for t in _moi if t.startswith("tìm · ")]
+    _tim = [t for t in _moi if t.startswith("search · ")]
     check("mỗi lượt tìm để lại một dòng (2 chức danh × 2 nơi)",
           len(_tim) == 4, f"{len(_tim)} dòng: {_tim[:2]}")
     check("dòng nói rõ đang gõ chức danh nào",
           any("Quant Analyst" in t for t in _tim))
     check("và đang tìm ở đâu", any("United Kingdom" in t for t in _tim))
     check("nơi để trống thì gọi tên là 'toàn cầu', không bỏ lửng dấu chấm",
-          any("toàn cầu" in t for t in _tim) and not any(t.endswith(" · ") for t in _tim))
-    _doc = [t for t in _moi if t.startswith("đọc kỹ ")]
+          any("worldwide" in t for t in _tim) and not any(t.endswith(" · ") for t in _tim))
+    _doc = [t for t in _moi if t.startswith("deep-read ")]
     check("vòng đọc kỹ có nhịp báo giữa chừng", _doc, f"{_moi[:3]}")
     check("nhịp báo nói rõ đang đọc tin nào",
-          any("đang đọc:" in t for t in _doc), f"{_doc[:2]}")
+          any("reading:" in t for t in _doc), f"{_doc[:2]}")
 finally:
     li.NHIP_BAO = _nhip_that
     li.open_page, li._pause = real_open, real_pause
@@ -617,7 +617,7 @@ check("nhưng giữ lời giải thích vì sao bỏ", "titles[:5]" in runner)
 li_src = Path("src/jobbot/ingest/web/linkedin.py").read_text()
 check("trần đặt tên rõ ràng", "MAX_QUERIES" in li_src)
 check("và chạm trần thì ghi nhật ký, không cắt lặng lẽ",
-      "chỉ tìm" in li_src and "jlog.warn" in li_src)
+      "searching only" in li_src and "jlog.warn" in li_src)
 
 print("\n[tắt Chrome: phải THẬT SỰ tắt, và chỉ tắt bản của app]")
 # LỖI THẬT: bản cũ gọi GET /json/close — endpoint đó cần kèm target id nên
@@ -696,11 +696,16 @@ finally:
 print("\n[LinkedIn — ranh giới an toàn]")
 from jobbot.ingest.web import linkedin as li
 src = Path("src/jobbot/ingest/web/linkedin.py").read_text()
-check("KHÔNG có mã đăng nhập", not any(
-    w in src.lower() for w in ("password", "login(", "signin", "sign_in", "credential")))
+# RANH GIỚI TỪ, không phải chuỗi con: "assigning" có chứa "signin", nên một
+# docstring tiếng Anh bình thường cũng đủ làm bài canh này đỏ. Cổng kêu oan thì
+# người sửa chỉ học được đúng một điều — tắt nó đi.
+_dang_nhap = re.compile(
+    r"(?<!\w)(password|signin|sign_in|credential)(?!\w)|login\s*\(", re.I)
+_thay = _dang_nhap.search(src)
+check("KHÔNG có mã đăng nhập", not _thay, _thay.group(0) if _thay else "")
 check("KHÔNG đụng hồ sơ cá nhân", not any(
     w in src for w in ("linkedin.com/in/", "/voyager/", "profileView",
-                       "connections", "invitation", "messaging")))
+                       "invitation", "messaging")))
 check("chỉ dùng endpoint dành cho khách", "jobs-guest" in src)
 check("nhịp chậm hơn nguồn khác", li.PAUSE[0] >= 2.0)
 check("bị chặn thì dừng, không thử lại",

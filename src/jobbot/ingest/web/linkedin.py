@@ -1,21 +1,25 @@
-"""LinkedIn — chỉ tin tuyển dụng CÔNG KHAI, KHÔNG đăng nhập.
+"""LinkedIn — PUBLIC job postings only, NEVER logged in.
 
-Ranh giới, cố ý và không thoả hiệp:
+The boundary, deliberate and not negotiable:
 
-    ĐƯỢC   trang tin công khai, xem khi chưa đăng nhập, nhịp người
-    KHÔNG  đăng nhập tài khoản người dùng   -> đó là thứ mất được, và mất là
-                                               mất luôn mạng lưới nghề nghiệp
-    KHÔNG  hồ sơ cá nhân, kết nối, tin nhắn -> đó là thứ LinkedIn kiện Proxycurl
-    KHÔNG  cãi lại khi bị chặn              -> chặn thì dừng, ghi nhận, đi tiếp
+    YES  public posting pages, as a logged-out visitor, at a human pace
+    NO   logging in with the user's account  -> that is the thing that can be
+                                                lost, and losing it means
+                                                losing a professional network
+    NO   people pages, network graph, inbox  -> that is what LinkedIn sued
+                                                Proxycurl over
+    NO   arguing when blocked                -> blocked means stop, note it,
+                                                move on
 
-Chạy trên profile Chrome riêng, không đăng nhập gì cả. Không có tài khoản thì
-không có tài khoản nào để mất.
+It runs on a separate Chrome profile, logged into nothing. With no account
+there is no account to lose.
 
-Dùng đúng endpoint LinkedIn tự phục vụ khách chưa đăng nhập
-(`/jobs-guest/jobs/api/seeMoreJobPostings/search`), 10 tin một trang.
+It uses the exact endpoint LinkedIn serves to logged-out visitors
+(`/jobs-guest/jobs/api/seeMoreJobPostings/search`), 10 postings per page.
 
-LƯU Ý: việc này vẫn nằm ngoài Điều khoản sử dụng của LinkedIn (mục 8.2). Vin đã
-được nói rõ điều đó và tự quyết định. Ghi lại ở đây để người đọc code sau này biết.
+NOTE: this is still outside LinkedIn's Terms of Use (§8.2). Vin was told that
+plainly and decided for himself. Recorded here so whoever reads this code
+later knows.
 """
 
 from __future__ import annotations
@@ -33,35 +37,38 @@ NAME = "linkedin"
 GUEST = ("https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
          "?keywords={q}&location={loc}&f_E={exp}&start={start}{tpr}")
 
-# Cửa sổ thời gian, tính bằng giây. ĐÃ THỬ THẬT trên cổng guest:
+# The time window, in seconds. MEASURED against the guest endpoint:
 #
-#   f_TPR=r86400   CHẠY  — 10/10 tin trả về đều từ 24 giờ qua
-#   sortBy=DD      bị phớt lờ — kết quả y hệt không truyền gì
-#   f_WT=2         bị phớt lờ — (đo hôm trước, cùng kiểu)
+#   f_TPR=r86400   WORKS    — 10/10 returned postings were from the last 24h
+#   sortBy=DD      ignored   — identical results to passing nothing
+#   f_WT=2         ignored   — (measured the day before, same way)
 #
-# Phải thử từng cái, không được đoán: hai trong ba tham số trông hợp lý kia
-# không làm gì cả, mà cổng vẫn trả 200 nên nhìn như đang chạy.
+# Each has to be tested rather than assumed: two of those three
+# reasonable-looking parameters do nothing, while the endpoint still returns
+# 200 so they look like they work.
 NGAY = 86400
 TUAN = 7 * NGAY
-# Mô tả đầy đủ, vẫn là đường LinkedIn phục vụ khách chưa đăng nhập.
+# The full description, still on the route LinkedIn serves to logged-out
+# visitors.
 GUEST_JOB = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{jid}"
 VIEW = "https://www.linkedin.com/jobs/view/{jid}/"
 PER_PAGE = 10
-# Cứ bấy nhiêu tin đọc kỹ thì nói một câu vào nhật ký. Không ghi từng tin:
-# 2.297 dòng cho một lần quét thì nhật ký không đọc được nữa. Không ghi gì
-# thì im lặng 27 phút — đã đo trên lượt quét 19:22. 25 tin ≈ 2 phút một câu.
+# One journal line per this many deep-read postings. Not one per posting:
+# 2,297 lines for a single scan makes the journal unreadable. None at all
+# means 27 minutes of silence — measured on the 19:22 scan. 25 postings ≈ one
+# line every 2 minutes.
 NHIP_BAO = 25
 
 # f_E: 1=internship 2=entry 3=associate 4=mid-senior
 EXPERIENCE = {"intern": "1", "grad": "2", "grad_scheme": "2", "junior": "2,3",
               "mid": "3,4", "senior": "4", "lead": "4"}
 
-# Nhịp chậm hơn hẳn nguồn khác. Không phải để né — mà vì đây là bên duy nhất
-# mình đang ở nhờ, nên đi nhẹ chân.
+# A much slower pace than the other sources. Not to evade anything — but
+# because this is the one host we are a guest of, so tread lightly.
 PAUSE = (2.5, 5.0)
 
-# Ba nhịp cho người dùng chọn. Module này chỉ BIẾT nhịp nghĩa là gì ở cổng
-# này; ai gọi thì người đó quyết chọn nhịp nào — y như `worth`.
+# Three paces for the user to choose from. This module only KNOWS what a pace
+# means at this endpoint; the caller decides which one — exactly like `worth`.
 NHIP = {"nhe": (4.0, 7.0), "thuong": PAUSE, "nhanh": (1.2, 2.5)}
 
 LIST_JS = """
@@ -95,9 +102,9 @@ DETAIL_JS = """
     const crit = [...document.querySelectorAll('[class*=job-criteria__item]')]
         .map(e => e.innerText.replace(/\\s+/g, ' ').trim());
     return JSON.stringify([{
-      // innerHTML chứ KHÔNG phải innerText: innerText của <ul><li> trả về
-      // các dòng trần, mất dấu gạch đầu dòng — mà bộ tách yêu cầu nhận
-      // diện danh sách BẰNG dấu đó. strip_html() dựng lại '· ' từ <li>.
+      // innerHTML, NOT innerText: innerText of <ul><li> returns bare lines
+      // with the bullets gone — and the requirements extractor recognises a
+      // list BY those bullets. strip_html() rebuilds '· ' from <li>.
       description: box ? box.innerHTML.slice(0, 60000) : '',
       criteria: crit.join(' | ').slice(0, 400)
     }]);
@@ -117,9 +124,10 @@ def _from_row(row: dict) -> Posting | None:
     found = JOB_ID.search(url)
     if not found or not row.get("title"):
         return None
-    # LỖI ĐÃ SỬA: href trong kết quả tìm kiếm trỏ về tên miền theo nước
-    # (uk.linkedin.com), và tên miền đó đá thẳng sang trang đăng ký — nên vòng
-    # đọc kỹ chỉ nhận được "Sign Up | LinkedIn". Dựng lại URL từ id trên www.
+    # A BUG THAT WAS FIXED: the href in search results points at a
+    # country domain (uk.linkedin.com), and that domain redirects straight to
+    # a signup page — so the deep-read pass only ever received "Sign Up |
+    # LinkedIn". The URL is rebuilt from the id on www.
     jid = found.group(1)
     return Posting(
         source_id=jid,
@@ -131,29 +139,29 @@ def _from_row(row: dict) -> Posting | None:
         payload={"guest": True})
 
 
-# Thị trường trong hồ sơ -> chỗ LinkedIn hiểu. Trước đây địa điểm là chuỗi
-# cứng "London" trong chữ ký hàm và KHÔNG ai truyền vào — nên ô Thị trường
-# người dùng chọn chưa bao giờ đi tới đâu.
+# The profile's markets -> places LinkedIn understands. The location used to
+# be the hardcoded string "London" in a function signature that NOBODY passed
+# — so the Markets field the user picked never reached anything.
 MARKET_PLACE = {
     "uk_onsite": "United Kingdom",
     "uk_remote": "United Kingdom",
     "eu_remote": "European Union",
     "us_remote": "United States",
-    "global_remote": "",            # rỗng = LinkedIn tìm toàn cầu
+    "global_remote": "",            # empty = LinkedIn searches worldwide
     "relocate": "",
 }
 
 
 def places_for(markets: list[str], location: str = "") -> list[str]:
-    """Cần tìm ở mấy nơi. Giữ thứ tự khai trong hồ sơ, bỏ trùng.
+    """Which places to search. Profile order preserved, duplicates dropped.
 
-    'United Kingdom' rộng hơn 'London' và bao cả London — chọn nơi rộng hơn.
-    Đo được ngày 12/09: trong 290 việc đang giữ có 75 việc ở UK ngoài London,
-    và 71/75 do LinkedIn mang về. Thu câu tìm về đúng "London" là mất chỗ đó,
-    vì board không phủ nổi.
+    'United Kingdom' is wider than 'London' and contains it — take the wider
+    place. Measured 12 Sep: of 290 kept jobs, 75 were in the UK outside
+    London, and 71 of those 75 came from LinkedIn. Narrowing the query to
+    exactly "London" loses those, because the boards do not cover them.
 
-    Chưa khai thị trường nào thì tìm ở NƠI BẠN Ở, không phải ở một chữ "United
-    Kingdom" đóng cứng trong mã nguồn.
+    With no market declared it searches WHERE YOU ARE, not a hardcoded
+    "United Kingdom" in the source.
     """
     from ..filter import NOI, noi_o
     out: list[str] = []
@@ -167,16 +175,16 @@ def places_for(markets: list[str], location: str = "") -> list[str]:
     return [NOI[nha]["place"]] if nha else ["United Kingdom"]
 
 
-# Chức danh gửi đi mỗi vòng. Có TRẦN, và trần đó được GHI RA nhật ký khi
-# chạm — không cắt lặng lẽ như `titles[:5]` trước đây.
+# Job titles queried per pass. There is a CEILING, and hitting it is WRITTEN
+# to the journal — not a silent cut like the old `titles[:5]`.
 MAX_QUERIES = 20
 
 
 def signed_in(tab) -> bool:
-    """Profile này có đang đăng nhập LinkedIn không.
+    """Is this profile logged into LinkedIn.
 
-    `li_at` là cookie phiên của LinkedIn. Đọc bằng JS không thấy (httpOnly),
-    nên hỏi thẳng trình duyệt qua CDP.
+    `li_at` is LinkedIn's session cookie. JS cannot see it (httpOnly), so the
+    browser is asked directly over CDP.
     """
     try:
         got = tab.call("Network.getCookies",
@@ -189,90 +197,100 @@ def signed_in(tab) -> bool:
 def read_deep(tab, items: list[Posting], skip: frozenset[str] = frozenset(),
               worth=None, pace: str = "thuong", stop=None,
               ten: str = NAME) -> Health:
-    """Mở từng tin lấy MÔ TẢ. Tách khỏi fetch() vì đây là VIỆC RIÊNG.
+    """Open each posting for its DESCRIPTION. Split from fetch() because it
+    is A SEPARATE JOB.
 
-    `ten` là tên NGUỒN đang được đọc, chỉ dùng để ghi nhật ký. Trang thì vẫn
-    là trang LinkedIn, nhưng tin tới từ đâu là chuyện khác: đọc 106 tin của
-    thư báo mà nhật ký ghi "linkedin: 106 tin" thì người dùng tưởng vòng quét
-    LinkedIn đang chạy trong khi họ vừa tắt nó đi.
+    `ten` is the name of the SOURCE being read, used only for the journal.
+    The page is still a LinkedIn page, but where the posting came from is a
+    different matter: deep-reading 106 alert postings while the journal says
+    "linkedin: 106 postings" makes the user think the LinkedIn scan is
+    running when they have just switched it off.
 
-    Ba lượt quét cần ba việc khác nhau, và trước khi tách thì cả ba đều phải
-    đi qua vòng tìm 30 phút:
+    The three kinds of scan need three different jobs, and before the split
+    all three had to go through the 30-minute search:
 
-        lần đầu    tìm đầy  -> đọc kỹ
-        cập nhật   tìm mới  -> đọc kỹ
-        tiếp tục   (không tìm gì cả) -> đọc nốt chỗ dở
+        first run  full search  -> deep read
+        update     new only     -> deep read
+        continue   (no search at all) -> finish what is left
 
-    Cái thứ ba là lý do phải tách. "Tiếp tục" mà vẫn chạy vòng tìm thì nó chỉ
-    là chữ khác của "quét lại từ đầu" — tìm lại 2.296 tin y hệt, mất 30 phút,
-    để rồi đọc nốt 11 tin.
+    The third is why it had to be split. "Continue" that still runs the
+    search is just another word for "scan again from the top" — re-finding
+    the same 2,296 postings over 30 minutes in order to deep-read 11.
 
-    Sửa `items` tại chỗ (gán description vào từng Posting) và trả về sức khoẻ.
+    It edits `items` in place (assigning description to each Posting) and
+    returns the health.
     """
     nhip = NHIP.get(pace, PAUSE)
     fresh = [i for i in items if i.source_id not in skip]
 
-    # LỌC TRƯỚC KHI ĐỌC KỸ. Đây là chỗ tốn nhất của cả vòng quét — mỗi tin một
-    # lần mở trang cộng 2,5-5 giây nghỉ — mà 89% số tin mở ra sẽ bị lưới sàng
-    # loại ngay sau đó. Đo trên kho thật: 2.389 tin LinkedIn, chỉ 257 tin lọt
-    # lưới, tức là hơn hai tiếng mỗi lượt quét đổ đi.
+    # FILTER BEFORE DEEP-READING. This is the most expensive part of the
+    # whole scan — one page open per posting plus 2.5-5 seconds of pause —
+    # and 89% of the postings opened are dropped by the filter immediately
+    # afterwards. Measured on the real store: 2,389 LinkedIn postings, only
+    # 257 through the filter, which is more than two hours per scan thrown
+    # away.
     #
-    # Lọc được trước vì `judge()` chỉ đụng TIÊU ĐỀ, CÔNG TY, ĐỊA ĐIỂM — ba thứ
-    # trang danh sách đã đưa sẵn. Nó không cần mô tả, mà mô tả mới là thứ phải
-    # mở trang mới có.
+    # It can be filtered first because `judge()` only touches the TITLE,
+    # COMPANY and LOCATION — the three things the list page already gives. It
+    # does not need the description, and the description is the only thing
+    # that requires opening a page.
     #
-    # Nhận một HÀM chứ không nhận hồ sơ: module này lo việc lấy tin, không
-    # được biết gì về hồ sơ hay luật lọc. Ai gọi thì người đó quyết.
+    # It takes a FUNCTION rather than the profile: this module fetches
+    # postings and must know nothing about profiles or filter rules. The
+    # caller decides.
     #
-    # Tin bị bỏ qua VẪN được trả về và vẫn được lưu — nhờ vậy chồng "Đã loại"
-    # còn nguyên, và nút Giữ lại vẫn có cái để giữ.
+    # Skipped postings are STILL returned and still saved — which keeps the
+    # "Dropped" pile intact, and leaves the Keep button something to keep.
     if worth is not None and fresh:
         truoc = len(fresh)
         fresh = [i for i in fresh if worth(i)]
         if truoc != len(fresh):
             jlog.emit(SEARCH,
-                      f"lọc trước khi đọc kỹ: {truoc} -> {len(fresh)} tin"
-                      f" · bỏ qua {truoc - len(fresh)} tin lưới sàng sẽ loại")
+                      f"filtered before deep-reading: {truoc} -> {len(fresh)}"
+                      f" · skipped {truoc - len(fresh)} the filter would drop")
 
     health = Health(attempted=len(fresh), failed=0)
-    jlog.emit(SEARCH, f"{ten}: {len(items)} tin trong tay"
-                      + (f", {len(items) - len(fresh)} đã đọc từ trước"
-                         f" -> chỉ đọc kỹ {len(fresh)}" if skip else
-                         f", đọc kỹ cả {len(fresh)}"))
+    jlog.emit(SEARCH, f"{ten}: {len(items)} postings in hand"
+                      + (f", {len(items) - len(fresh)} already read"
+                         f" -> deep-reading only {len(fresh)}" if skip else
+                         f", deep-reading all {len(fresh)}"))
     for index, item in enumerate(fresh):
-        # Điểm ngắt THẬT: đây là vòng tốn 8-16 phút, mở Chrome đọc từng tin.
-        # Đặt cờ dừng ở ngoài vòng này thì bấm Dừng xong vẫn phải chờ hết.
+        # The REAL break point: this loop costs 8-16 minutes opening Chrome
+        # per posting. Check the stop flag outside this loop and pressing Stop
+        # still means waiting for the whole thing.
         if stop and stop():
-            jlog.warn(SEARCH, f"dừng theo yêu cầu — đã đọc kỹ {index}/{len(fresh)} tin")
+            jlog.warn(SEARCH, f"stopped on request — deep-read {index}/{len(fresh)}")
             break
-        # Chỗ vòng quét đứng lâu nhất — mỗi tin nghỉ 2.5-5 giây. Không báo
-        # tiến độ ở đây thì màn hình im lặng suốt.
+        # Where the scan sits longest — 2.5-5 seconds of pause per posting.
+        # Without progress here the screen is silent throughout.
         #
-        # Viết TÊN TIN đang đọc vào thanh, không chỉ "đọc kỹ LinkedIn": người
-        # dùng phải thấy máy đang mở cái gì, mới biết nó còn sống.
-        jlog.progress(SEARCH, f"đọc kỹ · {item.title[:44]} — {item.company[:22]}",
+        # Write THE POSTING'S NAME onto the bar, not just "deep-reading
+        # LinkedIn": the user has to see what the machine is opening to know
+        # it is still alive.
+        jlog.progress(SEARCH, f"deep-read · {item.title[:44]} — {item.company[:22]}",
                       index + 1, len(fresh))
         if index and index % NHIP_BAO == 0:
             con = jlog.remaining(SEARCH)
-            jlog.emit(SEARCH, f"đọc kỹ {index}/{len(fresh)} tin"
-                              f"{f' · còn {con}' if con else ''}"
-                              f" · đang đọc: {item.title[:40]}")
+            jlog.emit(SEARCH, f"deep-read {index}/{len(fresh)}"
+                              f"{f' · {con} left' if con else ''}"
+                              f" · reading: {item.title[:40]}")
         try:
             open_page(tab, GUEST_JOB.format(jid=item.source_id), timeout=30)
             detail = grab(tab, DETAIL_JS)
             raw = detail[0].get("description", "") if detail else ""
-            if len(raw) < 200:            # mở được trang nhưng không có mô tả = hỏng
+            if len(raw) < 200:            # page opened but no description = failed
                 health.failed += 1
-                health.note(f"{item.source_id}: mô tả rỗng")
+                health.note(f"{item.source_id}: empty description")
             else:
                 item.raw_body = raw[:60000]
                 item.description = strip_html(raw)[:20000]
                 item.payload["criteria"] = detail[0].get("criteria", "")
         except Blocked:
-            # Dừng hẳn, không cãi lại — nhưng phải NÓI RA là đã dừng, và số
-            # tin còn lại chưa đọc được tính vào phần hỏng. Chỉ note() rồi
-            # break thì failed=0 và lần quét này trông y hệt một lần thành công.
-            health.block(f"bị chặn ở tin {index + 1}/{len(fresh)}",
+            # Stop outright, do not argue — but it has to SAY it stopped,
+            # and the postings left unread count as failures. Just note() and
+            # break leaves failed=0 and this scan looks identical to a
+            # successful one.
+            health.block(f"blocked at posting {index + 1}/{len(fresh)}",
                          unread=len(fresh) - index)
             break
         except Exception as exc:           # noqa: BLE001
@@ -288,54 +306,59 @@ def fetch(tab, queries: list[str], location: str = "United Kingdom",
           worth=None, pace: str = "thuong", recent: int = 0,
           covered: frozenset[str] = frozenset(), done_out=None,
           stop=None) -> list[Posting]:
-    """Tìm rồi đọc kỹ tin LinkedIn.
+    """Search, then deep-read LinkedIn postings.
 
-    skip = id những tin ĐÃ có mô tả. Vòng đọc kỹ bỏ qua chúng.
+    skip = the ids of postings that ALREADY have a description. The deep-read
+    pass skips them.
 
-    Đây là chỗ sửa quan trọng nhất của cả bước 1: trước đây vòng đọc kỹ mở
-    lại TOÀN BỘ tin tìm được, mỗi giờ. Trên máy thật 194/196 tin đã có mô tả
-    từ trước, nên 97% thời gian là đọc lại thứ đã đọc — 8-16 phút mở Chrome
-    liên tục mỗi tiếng, ~4.600 lượt gọi mỗi ngày, và LinkedIn bóp lại 40-82%.
+    This is the most important fix in the whole of step 1: the deep-read pass
+    used to reopen EVERY posting found, every hour. On the real machine 194
+    of 196 already had a description, so 97% of the time was re-reading what
+    had been read — 8-16 minutes of continuous Chrome every hour, ~4,600
+    calls per day, and LinkedIn throttling 40-82% of them.
     """
-    # Ranh buộc ở đầu tệp — "không có tài khoản thì không có tài khoản nào để
-    # mất" — giờ do MÁY canh, không do người nhớ. Đã xảy ra một lần: cửa sổ
-    # quét và cửa sổ nộp trông giống hệt nhau, đăng nhập nhầm là mỗi lần quét
-    # chạy dưới tài khoản thật.
+    # The constraint at the top of this file — "with no account there is no
+    # account to lose" — is now guarded BY THE MACHINE rather than by
+    # memory. It happened once: the scan window and the apply window look
+    # identical, and logging into the wrong one means every scan runs under
+    # the real account.
     if signed_in(tab):
         raise Blocked(
-            "profile QUÉT đang đăng nhập LinkedIn — quét bằng tài khoản thật là "
-            "cách mất tài khoản. Đăng xuất ở cửa sổ quét; đăng nhập ở cửa sổ NỘP.")
+            "the SCAN profile is logged into LinkedIn — scanning under a real "
+            "account is how accounts are lost. Log out in the scan window; log "
+            "in only in the APPLY window.")
 
     if len(queries) > MAX_QUERIES:
-        jlog.warn(SEARCH, f"chỉ tìm {MAX_QUERIES}/{len(queries)} chức danh"
-                          f" — bỏ: {', '.join(queries[MAX_QUERIES:])}")
+        jlog.warn(SEARCH, f"searching only {MAX_QUERIES}/{len(queries)} titles"
+                          f" — dropped: {', '.join(queries[MAX_QUERIES:])}")
         queries = queries[:MAX_QUERIES]
     nhip = NHIP.get(pace, PAUSE)
     exp = ",".join(sorted({e for lv in (levels or ["grad", "junior"])
                            for e in EXPERIENCE.get(lv, "2").split(",")}))
     found: dict[str, Posting] = {}
-    dut = ""                  # lý do đứt giữa chừng; rỗng = chạy trọn
+    dut = ""                  # why it was cut short; empty = ran to the end
 
-    # Ghép sẵn từng cặp (chức danh, nơi) rồi chạy MỘT vòng — lồng hai vòng
-    # vào nhau thì thân vòng thụt thêm một tầng và lệch cả file.
+    # Pair up (title, place) in advance and run ONE loop — nesting two loops
+    # indents the body one more level and skews the whole file.
     places = location if isinstance(location, list) else [location]
     pairs = [(q, p) for q in queries for p in places]
 
     for step, (query, place) in enumerate(pairs, 1):
         if stop and stop():
-            jlog.warn(SEARCH, f"dừng theo yêu cầu — mới xong {step - 1}/{len(pairs)} lượt tìm")
+            jlog.warn(SEARCH, f"stopped on request — {step - 1}/{len(pairs)} queries done")
             break
-        # `place` rỗng nghĩa là LinkedIn tìm toàn cầu. Để nguyên thì màn hình
-        # hiện "Operations Analyst · " — một dấu chấm giữa treo lơ lửng, người
-        # đọc tưởng chữ bị cắt mất.
-        o_dau = place or "toàn cầu"
-        # CẶP NÀY ĐÃ HỎI ĐẦY BAO GIỜ CHƯA. Chưa thì hỏi đầy; rồi thì chỉ hỏi
-        # tin mới. Hai kiểu chạy được trong CÙNG một lượt, nên thêm một chức
-        # danh không bắt cả lưới quét lại — chỉ mấy cặp mới là quét đầy.
+        # An empty `place` means LinkedIn searches worldwide. Left as is the
+        # screen shows "Operations Analyst · " — a dangling separator that
+        # reads as truncated text.
+        o_dau = place or "worldwide"
+        # HAS THIS PAIR EVER BEEN ASKED FULLY. If not, ask fully; if so, ask
+        # only for what is new. Both run in the SAME pass, so adding a title
+        # does not force a full rescan of the grid — only the new pairs are
+        # scanned fully.
         khoa = f"{query}|{place}"
         cua_so = 0 if khoa not in covered else recent
-        jlog.progress(SEARCH, f"tìm LinkedIn · {query} · {o_dau}"
-                              + ("" if cua_so else " · quét đầy"),
+        jlog.progress(SEARCH, f"searching LinkedIn · {query} · {o_dau}"
+                              + ("" if cua_so else " · full scan"),
                       step, len(pairs))
         truoc, so_trang = len(found), 0
         try:
@@ -355,43 +378,45 @@ def fetch(tab, queries: list[str], location: str = "United Kingdom",
                         found.setdefault(item.source_id, item)
                 _pause(nhip)
         except Exception as exc:                     # noqa: BLE001
-            # ĐỨT GIỮA CHỪNG THÌ GIỮ LẠI THỨ ĐÃ TÌM ĐƯỢC, không ném lên trên.
+            # CUT SHORT MEANS KEEP WHAT WAS FOUND, not raise upward.
             #
-            # Trước đây lỗi ở đây bay thẳng ra ngoài fetch(), nên `items` không
-            # bao giờ trả về và save_batch() không bao giờ chạy: cả kho tin đã
-            # tìm được đổ đi sạch. Xảy ra thật lúc 17:18 — 48/76 lượt tìm xong,
-            # một ConnectionResetError, fetched=0.
+            # An error here used to fly straight out of fetch(), so `items`
+            # was never returned and save_batch() never ran: every posting
+            # found was thrown away. It really happened at 17:18 — 48 of 76
+            # queries done, one ConnectionResetError, fetched=0.
             #
-            # Máy ngủ dậy là đúng cái lỗi này: socket CDP chết, mà app chạy
-            # 24/7 nên chuyện đó là chuyện thường ngày, không phải tai nạn.
+            # A machine waking from sleep produces exactly this error: a dead
+            # CDP socket, and with the app running 24/7 that is an everyday
+            # event, not an accident.
             dut = f"{type(exc).__name__}: {str(exc)[:50]}"
-            jlog.warn(SEARCH, f"đứt ở lượt {step}/{len(pairs)} ({dut})"
-                              f" — giữ lại {len(found)} tin đã tìm được")
+            jlog.warn(SEARCH, f"cut off at query {step}/{len(pairs)} ({dut})"
+                              f" — keeping the {len(found)} postings found")
             break
-        # MỘT DÒNG CHO MỖI LƯỢT TÌM. Trước đây cả vòng này im lặng: đo trên
-        # lượt quét 19:22 là 31 phút chạy mà nhật ký để lại đúng một dòng ở
-        # đầu. Người dùng ngồi nhìn một thanh tiến độ nhích, không biết máy
-        # đang gõ chức danh nào, ở đâu, được gì.
-        # Cặp này vừa được hỏi ĐẦY và chạy trọn -> ghi nhận đã phủ. Chỉ ghi
-        # khi cua_so == 0: một lượt hỏi cửa sổ 24 giờ không phủ được cặp nào,
-        # nó chỉ liếc phần mới nhất.
+        # ONE LINE PER QUERY. This loop used to be silent: measured on the
+        # 19:22 scan, 31 minutes of running left exactly one journal line at
+        # the start. The user watched a progress bar inch along with no idea
+        # which title the machine was typing, where, or what it found.
+        # This pair was just asked FULLY and ran to the end -> record it as
+        # covered. Only when cua_so == 0: a 24-hour-window query covers
+        # nothing, it only glances at the newest slice.
         if done_out is not None and not cua_so:
             done_out.add(khoa)
         con = jlog.remaining(SEARCH)
         jlog.emit(SEARCH,
-                  f"tìm · {query} · {o_dau} — {len(found) - truoc} tin mới"
-                  f" / {so_trang} trang · kho {len(found)}"
-                  f"{'' if cua_so else ' · đã phủ'}"
-                  f"{f' · còn {con}' if con else ''}")
+                  f"search · {query} · {o_dau} — {len(found) - truoc} new"
+                  f" / {so_trang} pages · store {len(found)}"
+                  f"{'' if cua_so else ' · covered'}"
+                  f"{f' · {con} left' if con else ''}")
 
     if not deep or dut:
-        # Đứt rồi thì đừng đọc kỹ nữa: cổng vừa từ chối mình xong, mở tiếp
-        # 2.000 trang chỉ để nhận 2.000 lỗi. Trả tin về cho save_batch ghi
-        # xuống, lần quét sau đọc kỹ tiếp — save_batch vá mô tả vào đúng dòng
-        # cũ, nên chỗ dở không thành lỗ hổng.
+        # Once cut off, do not deep-read: the endpoint just refused us, and
+        # opening 2,000 more pages only collects 2,000 more errors. Return the
+        # postings for save_batch to write down and deep-read on the next scan
+        # — save_batch patches the description into the existing row, so the
+        # unfinished part does not become a hole.
         suc = Health(0, 0)
         if dut:
-            suc.broke(f"đứt khi đang tìm: {dut}")
+            suc.broke(f"cut off while searching: {dut}")
         return list(found.values()), suc
 
     health = read_deep(tab, list(found.values()), skip=skip, worth=worth,

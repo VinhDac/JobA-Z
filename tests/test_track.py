@@ -217,7 +217,7 @@ except _Blocked as exc:
     _raised = str(exc)
 except Exception as exc:                          # noqa: BLE001
     _raised = f"SAI LOẠI: {type(exc).__name__}"
-check("quét khi đang đăng nhập -> Blocked", _raised.startswith("profile QUÉT"))
+check("quét khi đang đăng nhập -> Blocked", _raised.startswith("the SCAN profile"))
 # Blocked phải được bắt RIÊNG cho từng nguồn: LinkedIn bị bỏ qua thì các nguồn
 # khác vẫn chạy, chứ không giết cả vòng quét.
 _runner = (Path(__file__).resolve().parent.parent
@@ -614,7 +614,7 @@ except _Blocked as exc:
     _raised = str(exc)
 except Exception as exc:                          # noqa: BLE001
     _raised = f"SAI LOẠI: {type(exc).__name__}"
-check("quét khi đang đăng nhập -> Blocked", _raised.startswith("profile QUÉT"))
+check("quét khi đang đăng nhập -> Blocked", _raised.startswith("the SCAN profile"))
 # Blocked phải được bắt RIÊNG cho từng nguồn: LinkedIn bị bỏ qua thì các nguồn
 # khác vẫn chạy, chứ không giết cả vòng quét.
 _runner = (Path(__file__).resolve().parent.parent
