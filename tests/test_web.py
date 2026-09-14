@@ -230,7 +230,7 @@ with tempfile.TemporaryDirectory() as tmp:
           == ["CFA Level I", "IBM Data Science", "IBM ML"])
     check("và hình dạng mới", _tach2("A\nB", "\n") == ["A", "B"])
     check("dấu phẩy vẫn đúng", _tach2("python, sql", ", ") == ["python", "sql"])
-    check("lúc nghỉ chỉ mời gõ, không bày cả kho", "gõ để tìm trong" in _mt)
+    check("lúc nghỉ chỉ mời gõ, không bày cả kho", "type to search" in _mt)
     print("\n[RESET = về trạng thái ban đầu, KHÔNG sót chỗ nào]")
     # Chạy trên thư mục RIÊNG, kể cả HOME — reset.backup() ghi ra ~/Desktop,
     # để nguyên thì mỗi lần chạy test là rơi một tệp lên Desktop thật.
@@ -457,7 +457,7 @@ with tempfile.TemporaryDirectory() as tmp:
           _di.endswith("/profile/muc_tieu"), f"{_ma} -> {_di}")
     # Trang đó phải NÓI vì sao giữ lại.
     _, _sec = get("/profile/muc_tieu")
-    check("và nói rõ còn mấy câu", "câu nữa là app chạy được" in _sec)
+    check("và nói rõ còn mấy câu", "and the app can run" in _sec)
     check("nhãn nút không hứa đi tiếp", "còn" in _sec and "câu nữa</button>" in _sec)
     # Điền đủ -> thả ra, đi tiếp bình thường.
     _ma2, _di2 = _post_lay_dich(
@@ -634,7 +634,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # CỔNG KIỂM lúc in. Nó soi chính trang sắp in, nên bắt được thứ test HTML
     # không bắt được: rác app lọt ra giấy, chữ nhợt, tờ CV lệch lề.
     from jobbot.cv import pdf as _pdfm
-    for _dau in ("rác app in ra", "chữ quá nhợt", "lệch vào"):
+    for _dau in ("app junk on the sheet", "text too pale", "is inset"):
         check(f"cổng kiểm có soi «{_dau}»", _dau in _pdfm._SOI)
     check("ngưỡng nhợt được đặt tên, không gõ số trong JS",
           "SANG_NHAT" in _pdfm._SOI and isinstance(_pdfm.SANG_NHAT, int))

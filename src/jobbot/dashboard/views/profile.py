@@ -1,7 +1,7 @@
-"""Profile — sinh HTML từ schema. CHỈ VẼ, không có luật nghiệp vụ ở đây.
+"""Profile — HTML generated from the schema. ONLY DRAWING, no business rules.
 
-Thêm câu hỏi thì sửa profile/schema.py, file này không phải đụng tới.
-Thấy mình sắp viết `if question.id == "..."` ở đây -> viết nhầm chỗ.
+Adding a question means editing profile/schema.py; this file is not touched.
+About to write `if question.id == "..."` here -> wrong place.
 """
 
 from __future__ import annotations
@@ -16,12 +16,13 @@ from ...profile.schema import (
 from ..layout import page
 
 Answers = dict[str, Any]
-# Số gợi ý bày sẵn lúc chưa gõ. Bày hết 60 cái là dồn mắt người xem;
-# phần còn lại tìm bằng cách gõ.
-_TEN_KHO = {"titles": "chức danh", "skills": "từ khoá",
-            "industries": "ngành"}
-# Kho tới bao nhiêu mục thì còn cho "chọn tất cả". Trên ngưỡng này, chọn hết
-# là tự tay vô hiệu hoá bộ lọc — giữ lại mọi tin thì lọc để làm gì.
+# How many suggestions to show before anything is typed. Showing all 60 at
+# once overwhelms the eye; the rest are found by typing.
+_TEN_KHO = {"titles": "job titles", "skills": "keywords",
+            "industries": "industries"}
+# Up to how many items a store still offers "select all". Above that,
+# selecting everything disables the filter by hand — keeping every posting
+# makes filtering pointless.
 _CHON_HET = 12
 OTHER_SUFFIX = "__other"
 
@@ -110,19 +111,20 @@ def render_section(section: Section, answers: Answers, done_ids: set[str],
                    next_label: str, gate_missing: list[str] | None = None,
                    kho: dict[str, list[str]] | None = None) -> str:
     optional = "<span class=opt-tag>optional</span>" if section.optional else ""
-    # Câu ẩn có trong schema để LƯU được, nhưng không vẽ ra form.
+    # Hidden questions exist in the schema so they can be SAVED, but they
+    # are not drawn on the form.
     questions = "".join(_question(q, answers, kho)
                         for q in section.questions if not q.hidden)
 
-    # Lưu xong mà còn thiếu câu bắt buộc thì người dùng bị đưa NGƯỢC về đây.
-    # Bị quay lại mà không biết vì sao là lỗi, không phải chu trình — nên phải
-    # nói rõ còn mấy câu và chúng nằm ở đâu.
+    # If a required question is still missing after saving, the user is sent
+    # BACK here. Being returned without knowing why reads as a bug, not a
+    # flow — so it has to say how many are left and where they are.
     nhac = ""
     if gate_missing:
         qs = all_questions()
         ten = " · ".join(esc(qs[q].text) for q in gate_missing if q in qs)
-        nhac = (f"<div class='gate block'><b>Còn {len(gate_missing)} câu nữa "
-                f"là app chạy được.</b> {ten}</div>")
+        nhac = (f"<div class='gate block'><b>{len(gate_missing)} more "
+                f"question(s) and the app can run.</b> {ten}</div>")
 
     return page(
         section.title,
@@ -139,12 +141,14 @@ def render_section(section: Section, answers: Answers, done_ids: set[str],
 
 def _o_the(question: Question, answers: Answers,
            kho: dict[str, list[str]] | None = None) -> str:
-    """Ô TÌM ở trên · gợi ý ở giữa · thứ ĐÃ CHỌN ở dưới. Ba vùng, ba việc.
+    """A SEARCH box on top · suggestions in the middle · what is CHOSEN
+    below. Three areas, three jobs.
 
-    Gộp ô nhập vào chung khung thẻ thì khung vừa là chỗ gõ vừa là chỗ hiện
-    kết quả: đầy vài thẻ là hết chỗ, hàng gợi ý bị ép cụt. Và gõ dở rồi bấm đi
-    chỗ khác là chữ dở biến thành thẻ — "analys", "Quant" lọt vào hồ sơ thật
-    đúng kiểu đó.
+    Merging the input into the tag box makes that box both where you type and
+    where results appear: a few tags and there is no room left, and the
+    suggestion row gets squeezed. And typing half a word then clicking away
+    turns the fragment into a tag — "analys" and "Quant" got into the real
+    profile exactly that way.
     """
     thoi = question.tags
     co = _tach(str(answers.get(question.id, "")), thoi)
@@ -153,22 +157,23 @@ def _o_the(question: Question, answers: Answers,
     chips = "".join(
         f"<span class=tag>{esc(t)}"
         f"<input type=hidden name={esc(question.id)} value='{esc(t)}'>"
-        # type=button — thiếu nó thì bấm × là gửi luôn cả form
+        # type=button — without it, clicking × submits the whole form
         f"<button type=button class=untag data-untag title='bỏ'>×</button>"
         f"</span>" for t in co)
-    chon = (f"<div class=chosenhead>đã chọn</div>"
+    chon = (f"<div class=chosenhead>chosen</div>"
             f"<div class=tagbox data-tags='{esc(question.id)}'>{chips}"
             f"<span class=tagempty{' hidden' if co else ''}>"
-            f"tìm ở ô trên rồi bấm để thêm</span></div>")
+            f"search above and click to add</span></div>")
 
     nguon = (kho or {}).get(question.suggest) or suggestions(question.suggest)
     goi_y = [g for g in nguon if g.lower() not in da]
     if not goi_y:
-        # Chưa có kho chức danh: KHÔNG bày danh sách gõ tay cho có. Mời lấy từ
-        # tin thật — đó mới trả lời đúng câu "viết như trên tin".
+        # No title store yet: do NOT show a hand-typed list for the sake of
+        # it. Offer to take them from real postings — that is what actually
+        # answers "write them as they appear on postings".
         moi = ("<button type=button class='mbtn tiny' "
                "data-post='/api/titles/refresh' data-arg='lay'>"
-               "Lấy kho chức danh từ tin thật (~15 giây)</button>"
+               "Build the title store from real postings (~15s)</button>"
                if question.suggest == "titles" else "")
         return f"<div class=tagfield data-tagfield>{moi}{chon}</div>"
 
@@ -176,26 +181,27 @@ def _o_the(question: Question, answers: Answers,
         f"<button type=button class=addtag data-addtag='{esc(g)}'>{esc(g)}</button>"
         for g in goi_y)
     ten = _TEN_KHO.get(question.suggest, "gợi ý")
-    # Kho nhỏ thì "chọn hết" là một cú bấm thay cho bảy. Kho lớn (chức danh,
-    # kỹ năng) KHÔNG có nút này: chọn cả 60 chức danh là tự tay làm lưới lọc
-    # thành vô nghĩa, giữ lại mọi tin.
+    # For a small store "select all" is one click instead of seven. A large
+    # store (titles, skills) does NOT get this button: selecting all 60 titles
+    # renders the filter meaningless and keeps every posting.
     tat_ca = ("<button type=button class='mbtn tiny' data-addall>"
               f"chọn tất cả {len(goi_y)}</button>" if len(goi_y) <= _CHON_HET else "")
     return (
         f"<div class=tagfield data-tagfield>"
         f"<div class=findrow>"
         f"<input class='txt tagfind' type=text autocomplete=off"
-        f" placeholder='gõ để tìm trong {len(goi_y)} {ten}…'>{tat_ca}</div>"
+        f" placeholder='type to search {len(goi_y)} {ten}…'>{tat_ca}</div>"
         f"<div class=sugdrop data-sugdrop>{nut}"
-        f"<div class=sugnone hidden>không có trong kho — Enter để thêm"
-        f" nguyên văn</div></div>{chon}</div>")
+        f"<div class=sugnone hidden>not in the store — press Enter to add"
+        f" it verbatim</div></div>{chon}</div>")
 
 
-# Ô học vấn: MỖI BẰNG MỘT HÀNG. Tên ô trùng nhau giữa các hàng — trình duyệt
-# gửi lên thành mảng song song theo đúng thứ tự hàng, server zip lại.
+# The education field: ONE ROW PER DEGREE. Field names repeat across rows —
+# the browser submits them as parallel arrays in row order, and the server
+# zips them back together.
 _COT = (("degree", "Bằng", "MSc"),
-        ("discipline", "Ngành", "Computational Finance"),
-        ("school", "Trường", "Royal Holloway, University of London"),
+        ("discipline", "Field of study", "Computational Finance"),
+        ("school", "University", "Royal Holloway, University of London"),
         ("start", "Từ", "Sep 2025"),
         ("end", "Đến", "Sep 2026"),
         ("note", "Điểm / hạng", "IPM 86 · Data Analysis 83"))
@@ -212,7 +218,7 @@ def _hang_hoc_van(e=None) -> str:
         f" placeholder='{esc(vd)}' autocomplete=off></label>"
         for key, nhan, vd in _COT)
     return (f"<div class=edurow>{o}"
-            f"<button type=button class=edudrop data-rowdrop title='bỏ bằng này'>×</button>"
+            f"<button type=button class=edudrop data-rowdrop title='remove this degree'>×</button>"
             f"</div>")
 
 
@@ -227,32 +233,36 @@ _THANG = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
 
 
 def _o_hoc_van(question: Question, answers: Answers) -> str:
-    """Bằng cấp thành HÀNG có ô rời, không phải một khối chữ thô.
+    """Degrees as ROWS of separate fields, not one raw text block.
 
-    Lý do không để text thô: ngữ pháp của ô này là thứ CÓ TẢI — apply/answer
-    đọc nó ra ngày tốt nghiệp để điền vào form xin việc. Gõ thô thì sai một
-    dấu gạch là mất tháng, và mỗi lá đơn Vin phải tự chọn lại ngày.
+    Why not raw text: this field's grammar is LOAD-BEARING — apply/answer
+    reads the graduation date out of it to fill in application forms. Typed
+    raw, one wrong dash loses the month, and Vin picks the date by hand on
+    every single application.
 
-    Form ghi ra bằng `answer.line()`, đọc vào bằng `answer.educations()` —
-    một ngữ pháp, hai chiều, không có bản sao nào để lệch.
+    The form writes with `answer.line()` and reads with
+    `answer.educations()` — one grammar, both directions, no second copy to
+    drift.
     """
     from ...apply.answer import educations
     co = educations(str(answers.get(question.id, "")))
     hang = "".join(_hang_hoc_van(e) for e in co) or _hang_hoc_van()
     return (f"<div class=edurows data-rows>{hang}</div>"
-            f"<button type=button class='mbtn tiny' data-rowadd>+ thêm bằng</button>")
+            f"<button type=button class='mbtn tiny' data-rowadd>+ add a degree</button>")
 
 
 def _o_khoi(question: Question, answers: Answers,
             kho: dict | None = None) -> str:
-    """Kinh nghiệm / project: mỗi thứ một KHỐI, mỗi khối một hàng.
+    """Experience / projects: one BLOCK each, one row per block.
 
-    Đây là thông tin cá nhân, nên chỗ sửa là hồ sơ. Chỗ LƯU vẫn là khối trong
-    cv_text — bộ chấm điểm và bộ dựng CV đều đọc ở đó, nên viết ra bản sao thứ
-    hai là chắc chắn có ngày hai bên lệch nhau.
+    This is personal information, so the place to edit it is the profile. The
+    place it is STORED is still a block inside cv_text — the scorer and the CV
+    builder both read it there, so writing a second copy guarantees the two
+    drift apart eventually.
 
-    Mỗi dòng trong ô mô tả là MỘT CÂU có thể lên CV. Máy chọn câu nào hợp tin
-    nào — viết thêm câu là CV trúng hơn, không phải chọn khéo hơn.
+    Each line in the description box is ONE SENTENCE that can go on the CV.
+    The machine picks which sentence fits which posting — writing more
+    sentences makes the CV hit harder, not picking more cleverly.
     """
     from ...cv.blocks import parse as parse_cv
     loai = question.block_kind
@@ -260,7 +270,7 @@ def _o_khoi(question: Question, answers: Answers,
     hang = "".join(_hang_khoi(question, b) for b in co) or _hang_khoi(question)
     ten = "việc" if loai == "experience" else "project"
     return (f"<div class=blockrows data-rows>{hang}</div>"
-            f"<button type=button class='mbtn tiny' data-rowadd>+ thêm {ten}</button>")
+            f"<button type=button class='mbtn tiny' data-rowadd>+ add {ten}</button>")
 
 
 def _hang_khoi(question: Question, b=None) -> str:
@@ -268,37 +278,38 @@ def _hang_khoi(question: Question, b=None) -> str:
     title = getattr(b, "title", "")
     meta = getattr(b, "meta", "")
     body = "\n".join(getattr(b, "lines", []) or [])
-    nhan_meta = ("Nơi làm · thời gian" if question.block_kind == "experience"
-                 else "Ghi chú · thời gian")
+    nhan_meta = ("Where · when" if question.block_kind == "experience"
+                 else "Note · when")
     return (
         "<div class=blockrow>"
-        f"<label class='edufield btitle'><span>Tên</span>"
+        f"<label class='edufield btitle'><span>Name</span>"
         f"<input class=txt type=text name='{esc(key)}__title' value='{esc(title)}'"
         f" placeholder='Quantitative Analyst — Schonfeld' autocomplete=off></label>"
         f"<label class='edufield bmeta'><span>{esc(nhan_meta)}</span>"
         f"<input class=txt type=text name='{esc(key)}__meta' value='{esc(meta)}'"
         f" placeholder='Jan 2025 – Sep 2025' autocomplete=off></label>"
-        f"<button type=button class=edudrop data-rowdrop title='bỏ khối này'>×</button>"
-        f"<label class='edufield bbody'><span>Đã làm được gì — mỗi dòng một câu</span>"
+        f"<button type=button class=edudrop data-rowdrop title='remove this block'>×</button>"
+        f"<label class='edufield bbody'><span>What you did — one sentence per line</span>"
         f"<textarea class=txt rows=4 name='{esc(key)}__body'"
         f" placeholder='{esc(question.placeholder)}'>{esc(body)}</textarea></label>"
         f"</div>")
 
 
 def _tach(gia_tri: str, thoi: str) -> list[str]:
-    """Chuỗi đã lưu -> danh sách thẻ. ĐỌC được cả hình dạng cũ.
+    """A stored string -> a list of tags. It can READ the older shape too.
 
-    Dữ liệu cũ lưu kiểu "A · B · C" trên một dòng (CV viết vậy, máy nhập chép
-    y nguyên). Chỉ cắt theo dấu nối mới thì cả cụm thành MỘT thẻ khổng lồ, mà
-    cv/build.py lại đọc theo dòng nên nó vẫn tưởng chỉ có một chứng chỉ.
+    Old data was stored as "A · B · C" on one line (that is how the CV wrote
+    it, and the importer copied it verbatim). Splitting only on the new
+    separator turns the whole thing into ONE enormous tag, while cv/build.py
+    reads line by line and therefore still believes there is one certificate.
 
-    Đọc rộng, ghi chặt: nhận cả hai kiểu, nhưng lưu lại luôn theo `thoi`. Lần
-    bấm Lưu đầu tiên là dữ liệu cũ tự nắn về hình dạng đúng — không cần
-    migration, không cần người dùng làm gì.
+    Read loosely, write strictly: it accepts both shapes but always saves in
+    `thoi`. The first press of Save straightens old data into the right shape
+    — no migration, and nothing for the user to do.
     """
     chinh = thoi.strip() or "\n"
     phan = [v for v in gia_tri.split(chinh)]
-    if len(phan) <= 1:                       # chưa từng cắt được -> thử kiểu cũ
+    if len(phan) <= 1:                       # nothing split -> try the old shape
         for cu in (" · ", " | ", "; "):
             if cu in gia_tri:
                 phan = gia_tri.split(cu)

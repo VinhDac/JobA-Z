@@ -1,15 +1,16 @@
-"""In một bản CV ra PDF — bằng chính Chrome đã có, không thêm thư viện.
+"""Print a CV version to PDF — with the Chrome already here, no library.
 
-Vì sao không dùng reportlab/weasyprint: cả app là stdlib, và thêm một bộ dựng
-PDF nghĩa là có HAI cách vẽ cùng một tờ CV — bản màn hình và bản giấy sẽ trôi
-xa nhau, mà bản giấy mới là bản nhà tuyển dụng đọc.
+Why not reportlab/weasyprint: the whole app is stdlib, and adding a PDF
+renderer means TWO ways of drawing the same CV — the screen version and the
+paper version drift apart, and it is the paper version the employer reads.
 
-Chrome in ĐÚNG trang đang hiển thị, qua `@media print` trong app.css. Một
+Chrome prints EXACTLY the page on screen, through `@media print` in app.css.
+One
 nguồn sự thật cho cả hai.
 
-Chạy Chrome HEADLESS ở cổng riêng: cổng 9333 là của vòng quét, đang mở cửa sổ
-thật để đọc LinkedIn. Bấm nút In mà cướp mất tab của vòng quét là hỏng việc
-đang chạy.
+Chrome runs HEADLESS on its own port: 9333 belongs to the scan, which has a
+real window open reading LinkedIn. Pressing Print and stealing the scan's tab
+would break work in flight.
 """
 
 from __future__ import annotations
@@ -24,16 +25,17 @@ from ..core.journal import CV, log as jlog
 
 PORT = chrome.PDF_PORT   # cổng RIÊNG, profile RIÊNG — xem chrome.PROFILE
 
-# MỘT lượt in tại một thời điểm. Cả in-một-bản lẫn in-hàng-loạt đều mở rồi TẮT
-# Chrome ở cổng này; chạy chồng thì luồng xong trước tắt Chrome của luồng kia,
-# và 37 bản còn lại im lặng không được in.
+# ONE print at a time. Both single and batch printing open and then CLOSE
+# Chrome on this port; overlapping runs mean the thread that finishes first
+# closes the other thread's Chrome, and the remaining 37 versions silently
+# never print.
 _ONE_AT_A_TIME = threading.Lock()
 
 PAPER = {                                    # A4, lề 14mm — khớp @page trong CSS
     "paperWidth": 8.27, "paperHeight": 11.69,
     "marginTop": 0.55, "marginBottom": 0.55,
     "marginLeft": 0.59, "marginRight": 0.59,
-    "printBackground": False,                # nền tối của app không được in ra
+    "printBackground": False,                # the app's dark background must not print
     "preferCSSPageSize": True,
 }
 
@@ -45,42 +47,45 @@ def slug(text: str) -> str:
 
 # --- KIỂM CHẤT LƯỢNG NGAY TRƯỚC KHI IN ---------------------------------
 #
-# Ba lỗi dưới đây đều ĐÃ XẢY RA THẬT, và đều chỉ lộ ra khi in một tờ rồi mở
-# ảnh lên nhìn — test HTML không bắt được cái nào:
+# All three bugs below REALLY HAPPENED, and every one of them only showed up
+# by printing a sheet and looking at the image — no HTML test caught any:
 #
-#   rác app    thanh trạng thái in đè lên dòng cuối, mang cả đường dẫn tệp
-#              trên máy ("PDF: /Users/davi/…") ra tờ giấy gửi nhà tuyển dụng;
-#              tiêu đề cửa sổ in thành dòng đầu tiên
-#   chữ nhợt   luật màu in liệt kê từng lớp cần tô đen, nên lớp nào quên thì
-#              giữ màu giao diện TỐI — đo được .cvskill ở 192/255, tức là cả
-#              mục TECHNICAL SKILLS gần như vô hình trên giấy trắng
-#   lệch lề    `main` là position:fixed left:226px (chừa chỗ thanh bên); khi
-#              in, Chrome đặt phần tử fixed theo hộp trang và left không ghi
-#              đè được — tờ CV bị đẩy vào giữa, phí một phần tư mặt giấy
+#   app junk    the status bar printed over the last line, carrying a local
+#               file path ("PDF: /Users/davi/…") onto the sheet sent to an
+#               employer; the window title printed as the first line
+#   pale text   the print colour rules listed each class to blacken, so any
+#               class forgotten kept the DARK interface colour — measured
+#               .cvskill at 192/255, which made the whole TECHNICAL SKILLS
+#               section nearly invisible on white paper
+#   bad margin  `main` is position:fixed left:226px (leaving room for the
+#               sidebar); when printing, Chrome positions fixed elements
+#               against the page box and left cannot be overridden — the CV
+#               was pushed to the middle, wasting a quarter of the sheet
 #
-# Nên kiểm NGAY TRÊN TRANG SẮP IN, không kiểm trên chuỗi HTML. Không chặn in
-# — vẫn ra tệp, nhưng nói thẳng tờ giấy đang hỏng chỗ nào.
-SANG_NHAT = 90          # 0 = đen. Chữ nhạt hơn ngần này thì in ra đọc không rõ.
+# So the check runs ON THE PAGE ABOUT TO PRINT, not on an HTML string. It does
+# not block printing — the file still comes out, but it says plainly what is
+# wrong with the sheet.
+SANG_NHAT = 90          # 0 = black. Lighter than this does not read on paper.
 
 _SOI = r"""(() => {
   const den = c => { const m = c.match(/\d+/g); return m ? (+m[0] + +m[1] + +m[2]) / 3 : 255 };
   const to = document.querySelector('.cvpaper');
-  if (!to) return JSON.stringify(['không tìm thấy tờ CV (.cvpaper) trên trang']);
+  if (!to) return JSON.stringify(['no CV sheet (.cvpaper) found on the page']);
   const loi = [];
 
-  // 1. RÁC APP: phần tử có chữ, đang hiện, mà KHÔNG nằm trong tờ CV.
+  // 1. APP JUNK: a visible element with text that is NOT inside the CV sheet.
   for (const e of document.querySelectorAll('body *')) {
     if (to.contains(e) || e.contains(to)) continue;
     if (e.children.length || !e.textContent.trim()) continue;
     const r = e.getBoundingClientRect();
     if (r.width < 1 || r.height < 1) continue;
     if (getComputedStyle(e).visibility === 'hidden') continue;
-    loi.push('rác app in ra: ' + (e.className || e.tagName) + ' «'
+    loi.push('app junk on the sheet: ' + (e.className || e.tagName) + ' «'
              + e.textContent.trim().slice(0, 40) + '»');
     if (loi.length > 4) break;
   }
 
-  // 2. CHỮ NHỢT trong chính tờ CV.
+  // 2. PALE TEXT inside the CV sheet itself.
   let nhat = 0, ai = '';
   for (const e of to.querySelectorAll('*')) {
     if (e.children.length || !e.textContent.trim()) continue;
@@ -88,23 +93,25 @@ _SOI = r"""(() => {
     if (v > nhat) { nhat = v; ai = (e.className || e.tagName) + ' «'
                                   + e.textContent.trim().slice(0, 30) + '»' }
   }
-  if (nhat > SANG_NHAT) loi.push('chữ quá nhợt (' + Math.round(nhat) + '/255): ' + ai);
+  if (nhat > SANG_NHAT) loi.push('text too pale (' + Math.round(nhat) + '/255): ' + ai);
 
-  // 3. LỆCH LỀ: tờ CV phải bắt đầu ở mép trái và dùng gần hết bề ngang.
+  // 3. MARGINS: the sheet must start at the left edge and use most of the width.
   const p = to.getBoundingClientRect(), W = document.documentElement.clientWidth;
-  if (p.left > 8) loi.push('tờ CV lệch vào ' + Math.round(p.left) + 'px — phí lề trái');
+  if (p.left > 8) loi.push('the CV sheet is inset ' + Math.round(p.left) + 'px — wasted left margin');
   if (p.width < W * 0.9) loi.push('tờ CV chỉ rộng ' + Math.round(p.width / W * 100) + '% mặt giấy');
   return JSON.stringify(loi);
 })()"""
 
 
 def kiem(tab) -> list[str]:
-    """Soi TRANG SẮP IN. Trả về danh sách chỗ hỏng, rỗng là sạch.
+    """Inspect THE PAGE ABOUT TO PRINT. Returns the problems; empty is clean.
 
-    CHÍNH CỔNG NÀY HỎNG THÌ PHẢI KÊU. Bản đầu dùng `_SOI % SANG_NHAT` để nhét
-    ngưỡng vào, mà chuỗi JS có ký tự `%` thật ('% mặt giấy') — Python ném
-    ValueError, `except` nuốt mất, và cổng báo "sạch" ở mọi lượt in. Một cổng
-    kiểm im lặng báo sạch khi chính nó gãy thì tệ hơn là không có cổng nào.
+    IF THIS GATE ITSELF BREAKS IT MUST SAY SO. The first version used
+    `_SOI % SANG_NHAT` to inject the threshold, while the JS string contains
+    a real `%` character ('% of the sheet') — Python raised ValueError, the
+    `except` swallowed it, and the gate reported "clean" on every print. A
+    gate that silently reports clean when it is itself broken is worse than
+    no gate.
     """
     import json
     tab.call("Emulation.setEmulatedMedia", {"media": "print"})
@@ -113,13 +120,13 @@ def kiem(tab) -> list[str]:
         return json.loads(tab.eval(js)) or []
     except Exception as exc:            # noqa: BLE001
         return [f"KHÔNG SOI ĐƯỢC tờ in ({type(exc).__name__}: {exc}) — "
-                f"không ai kiểm tờ giấy này"]
+                f"nobody checked this sheet"]
 
 
 def _print_one(tab, url: str, out: Path, timeout: float) -> Path:
     tab.go(url, wait_for=".cvpaper", timeout=timeout)
     for loi in kiem(tab):
-        jlog.warn(CV, f"tờ CV in ra có vấn đề — {loi}")
+        jlog.warn(CV, f"the printed CV sheet has problems — {loi}")
     reply = tab.call("Page.printToPDF", PAPER, timeout=timeout)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(base64.b64decode(reply["data"]))
@@ -132,13 +139,13 @@ def render(url: str, out: Path, timeout: float = 45.0) -> Path:
 
 
 def render_many(jobs, timeout: float = 45.0, on_done=None):
-    """In NHIỀU bản, dùng chung MỘT Chrome và MỘT tab.
+    """Print MANY versions, sharing ONE Chrome and ONE tab.
 
-    Mở/tắt Chrome chiếm gần hết thời gian một lần in. Mở lại cho từng bản thì
-    41 bản mất mấy phút và bật tắt Chrome 41 lần; giữ một tab rồi điều hướng
-    liên tiếp thì phần cố định trả đúng một lần.
+    Launching and closing Chrome is most of the cost of a print. Relaunching
+    per version means 41 versions take minutes and Chrome starts and stops 41
+    times; keeping one tab and navigating it pays the fixed cost once.
 
-    `jobs` = [(url, đường dẫn ra)]. `on_done(i, tổng, đường dẫn)` để báo tiến độ.
+    `jobs` = [(url, output path)]. `on_done(i, total, path)` reports progress.
     """
     jobs = list(jobs)
     if not jobs:
@@ -156,7 +163,7 @@ def _render_all(jobs, timeout, on_done):
             try:
                 made.append(_print_one(tab, url, Path(out), timeout))
             except Exception:                       # noqa: BLE001
-                # Một bản hỏng KHÔNG được làm chết cả lô. Bản còn lại vẫn in.
+                # One broken version must NOT kill the batch. The rest print.
                 made.append(None)
             if on_done:
                 on_done(index, len(jobs), made[-1])
@@ -172,21 +179,21 @@ def _render_all(jobs, timeout, on_done):
 # --- GIAO TỆP TẬN TAY ---------------------------------------------------
 
 def tai_ve(src: Path) -> Path | None:
-    """Chép bản vừa in sang ~/Downloads rồi mở Finder trỏ vào nó.
+    """Copy the printed file to ~/Downloads and reveal it in Finder.
 
-    VÌ SAO KHÔNG DÙNG LINK TẢI. Vỏ app là WKWebView (xem app.py), mà WKWebView
-    KHÔNG tự tải tệp: không có WKDownloadDelegate thì `Content-Disposition:
-    attachment` không xảy ra chuyện gì cả — bấm nút, im lặng, không có tệp,
-    không có lỗi. Kiểm bằng cách đọc app.py: ở đó chỉ khai delegate cho hộp
-    chọn tệp và cho cửa sổ mới.
+    WHY NOT A DOWNLOAD LINK. The app shell is WKWebView (see app.py), and
+    WKWebView does NOT download files by itself: without a WKDownloadDelegate
+    a `Content-Disposition: attachment` does nothing at all — press the
+    button, silence, no file, no error. Verify by reading app.py: it only
+    declares delegates for the file picker and for new windows.
 
-    Mà đây là app CHẠY TRÊN MÁY MÌNH: tệp đã nằm sẵn trên đĩa rồi. Thứ còn
-    thiếu chỉ là đưa nó ra chỗ người ta tìm được. Nên chép sang Downloads và
-    mở Finder — làm được ngay, chạy đúng ở cả hai vỏ, không phải viết delegate
-    PyObjC nào.
+    And this is an app RUNNING ON YOUR OWN MACHINE: the file is already on
+    disk. All that is missing is putting it somewhere findable. So copy it to
+    Downloads and open Finder — works immediately, works in both shells, and
+    needs no PyObjC delegate.
 
-    BẢN GỐC Ở LẠI `data/cv/`: vòng nộp đơn tìm tệp đính kèm ở đó
-    (live.cv_pdf_for). Chuyển hẳn đi là làm chết đường nộp.
+    THE ORIGINAL STAYS IN `data/cv/`: the apply flow looks for the attachment
+    there (live.cv_pdf_for). Moving it outright kills the apply path.
     """
     import shutil
     import subprocess
@@ -196,8 +203,8 @@ def tai_ve(src: Path) -> Path | None:
     if not dest_dir.is_dir():
         return None
     dest = dest_dir / src.name
-    # Trùng tên thì thêm số, KHÔNG đè: bản cũ có thể đang mở, hoặc đã gửi đi
-    # rồi và người ta còn cần đối chiếu.
+    # A name collision adds a number rather than OVERWRITING: the old file
+    # may be open, or already sent and still needed for comparison.
     if dest.exists():
         for i in range(2, 100):
             thu = dest_dir / f"{src.stem}-{i}{src.suffix}"
@@ -206,12 +213,13 @@ def tai_ve(src: Path) -> Path | None:
                 break
     shutil.copy2(src, dest)
     try:
-        # -R: hiện Finder và CHỌN SẴN tệp, không chỉ mở thư mục. Người dùng
-        # thấy ngay tệp nào vừa ra, kéo thẳng vào ô đính kèm của đơn.
+        # -R: reveal in Finder with the file SELECTED, not just the folder
+        # opened. The user sees which file just appeared and can drag it
+        # straight into the application's attachment field.
         subprocess.run(["open", "-R", str(dest)], check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                        timeout=10)
     except (OSError, subprocess.SubprocessError):
-        pass                      # không mở được Finder thì tệp vẫn nằm đó
+        pass                      # if Finder will not open, the file is still there
     return dest
 
