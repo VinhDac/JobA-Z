@@ -1533,11 +1533,11 @@ with tempfile.TemporaryDirectory() as tmp:
     check("thứ CÓ THỨ TỰ vẽ thành THANH, không phải pill rời",
           _f0.count("class=lvltrack") == 2, str(_f0.count("class=lvltrack")))
     check("thanh có tên đứng đầu (Cơ hội / Điểm)",
-          "Cơ hội" in _f0 and "class=lvlname" in _f0)
+          "Chance" in _f0 and "class=lvlname" in _f0)
     # Xếp KHÔNG lọc gì cả, nên nó phải có nhãn riêng và đứng ở ĐẦU KIA của
     # hàng — lẫn vào giữa đám chip lọc thì người dùng tưởng nó cũng cắt bớt
     # danh sách.
-    check("Xếp theo có nhãn riêng", "Xếp theo" in _f0 and "class=vlabel" in _f0)
+    check("Xếp theo có nhãn riêng", "Sort by" in _f0 and "class=vlabel" in _f0)
     # Hàng nút chia hai NHÓM, một đẩy trái một đẩy phải: ô này rộng gần
     # 2000px, nép hết vào mép trái thì nửa màn hình bỏ không.
     check("mỗi hàng nút có hai đầu", _f0.count("class=vgrp") == 6,
@@ -1649,7 +1649,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     # MỘT nút thay cho hai: "Can't tell" và "Not scorable" là cùng một chồng.
     check("chỉ còn MỘT nút cho tin máy chưa đọc",
-          "Máy chưa đọc" in _f0 and "Not scorable" not in _f0
+          "Not read yet" in _f0 and "Not scorable" not in _f0
           and "Can't tell" not in _f0)
     # Hai thang đòi máy ĐỌC ĐƯỢC, nút này đòi ngược lại — cùng bật thì danh
     # sách luôn rỗng, nên bấm nút phải thả hai thang về Tất cả.
@@ -1662,18 +1662,21 @@ with tempfile.TemporaryDirectory() as tmp:
     # tập con của giữ: 91 > 64 là con số không thể tồn tại.
     import re as _re
     _giu = lambda h: _re.search(
-        r"class='metric stock[^']*'><b>([0-9,]+)</b>đáng nộp", h)
+        r"class='metric stock[^']*'><b>([0-9,]+)</b>worth applying", h)
     check("thanh khúc giữ nguyên số KHO khi đang tìm — "
           f"{_giu(_s1) and _giu(_s1).group(1)} vs {_giu(_s0) and _giu(_s0).group(1)}",
           bool(_giu(_s1) and _giu(_s0) and _giu(_s1).group(1) == _giu(_s0).group(1)))
     # MỖI SỐ PHẢI HÀNH ĐỘNG ĐƯỢC. Thanh cũ có "363 giữ" cạnh "364 đáng nộp" —
     # hai cách đếm cùng một chồng, gần trùng nhau nên không nói thêm gì; và
     # "50 đang hiện" chỉ là cỡ trang, danh sách ngay dưới đã nói rồi.
+    # Canh đúng Ô SỐ trên thanh, không dò chữ "shown" khắp trang: chữ đó
+    # còn nằm trong lời chú và nhãn khác, và một bài canh đỏ vì lý do chẳng
+    # liên quan thì người sửa học được đúng một điều — tắt nó đi.
     check("bỏ số 'đang hiện' — đó là cỡ trang, không phải tin tức",
-          "đang hiện" not in _s0)
-    check("có hàng đợi THẬT: điểm cao mà chưa nộp", "nên nộp" in _s0)
+          not _re.search(r"class='metric [^']*'><b>[0-9,]+</b>shown", _s0))
+    check("có hàng đợi THẬT: điểm cao mà chưa nộp", "to apply to" in _s0)
     check("và số đó mang vai HÀNH ĐỘNG (xanh), không phải số nền",
-          _re.search(r"class='metric act[^']*'><b>[0-9,]+</b>nên nộp", _s0))
+          _re.search(r"class='metric act[^']*'><b>[0-9,]+</b>to apply to", _s0))
 
     # Con số trên chip phải ĐI THEO chữ tìm, không thì nó nói dối.
     import re as _re
@@ -1690,7 +1693,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # 19 chức danh khai trong hồ sơ. Người liếc qua đống bị loại chắc chắn nhặt
     # được tin thật, nên phải có đường nhặt.
     _, _bo = get("/search?show=dropped")
-    check("dòng bị loại có nút Giữ lại", "Giữ lại" in _bo and "/api/keep" in _bo)
+    check("dòng bị loại có nút Giữ lại", "Keep it" in _bo and "/api/keep" in _bo)
     _, _giu = get("/search")
     check("dòng đang giữ KHÔNG có nút đó — không có gì để giữ thêm",
           "Giữ lại" not in _giu)
@@ -1701,8 +1704,8 @@ with tempfile.TemporaryDirectory() as tmp:
     _, _sau = get("/search")
     check("tin đó chuyển sang danh sách giữ", f"/jobs/{_bo_id}" in _sau)
     check("và nói rõ nó nằm đây vì NGƯỜI, không phải vì máy chấm đạt",
-          "bạn giữ" in _sau)
-    check("nút đổi chiều thành Bỏ giữ", "Bỏ giữ" in _sau)
+          "you kept" in _sau)
+    check("nút đổi chiều thành Bỏ giữ", "Unkeep" in _sau)
     check("không còn nằm bên danh sách bị loại",
           f"/jobs/{_bo_id}" not in get("/search?show=dropped")[1])
     check("bấm lần nữa thì trả về cho máy", gui(_bo_id) == 200
@@ -1908,7 +1911,7 @@ with tempfile.TemporaryDirectory() as tmp:
           and "data-act=pause" not in _srch)
     # ⚟ dùng LẠI tấm phủ của Cài đặt — mỗi đường mới là một nút có thể chết.
     _cA, _adj = get("/adjust/search")
-    check("/adjust/search trả mảnh HTML", _cA == 200 and "Điều chỉnh" in _adj)
+    check("/adjust/search trả mảnh HTML", _cA == 200 and "Adjust" in _adj)
     check("và chứa lưới sàng", "/api/sieve" in _adj)
     check("khúc lạ thì 404", get("/adjust/khong-co-that")[0] == 404)
     # Lọc (bấm vài giây một lần) phải ở NGAY trên trang, không giấu vào menu.
@@ -2058,7 +2061,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     _, search_html = get("/search")
     _, adj_html = get("/adjust/search")
-    check("ô danh sách việc", "Việc tìm được" in search_html)
+    check("ô danh sách việc", "What it found" in search_html)
     check("ô nhật ký dạng dẹt", "class=jflat" in search_html)
     check("tiến độ gộp vào dải nhật ký", "data-progress='search'" in search_html)
     # Lưới sàng đã chuyển vào ⚟ nên cột trái hết việc: danh sách — thứ Vin
@@ -2088,11 +2091,11 @@ with tempfile.TemporaryDirectory() as tmp:
     check("có ô để gõ thêm", "class=taginput" in adj_html)
     check("có ô tích cấp bậc và thị trường",
           "name=seniority" in adj_html and "name=markets" in adj_html)
-    check("có nút Áp dụng", "Áp dụng" in adj_html)
+    check("có nút Áp dụng", ">Apply<" in adj_html)
     # Nút phải nói TRƯỚC hậu quả, không phải "Lưu" trống không.
-    check("nút nói rõ sẽ phán lại bao nhiêu tin", "phán lại" in adj_html)
+    check("nút nói rõ sẽ phán lại bao nhiêu tin", "re-judges" in adj_html)
     check("và nói rõ đây là hồ sơ, sửa là đổi cả điểm",
-          "hồ sơ" in adj_html and "đổi cả điểm" in adj_html)
+          "profile" in adj_html and "changes the scores too" in adj_html)
 
     # Nút XEM tách khỏi lưới: bấm là đổi ngay, không qua Áp dụng.
     check("nút XEM là link, không nằm trong form",
@@ -2109,7 +2112,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     print("\n[Search: đổi cách xem KHÔNG cần Áp dụng]")
     _, dropped = get("/search?show=dropped")
-    check("xem được tin đã bỏ", "bỏ vì" in dropped)
+    check("xem được tin đã bỏ", "dropped:" in dropped)
     check("và kèm lý do bỏ thật",
           "title does not match" in dropped or "senior level" in dropped)
     for q in ("?show=all", "?chance=likely", "?via=all", "?band=75",
@@ -2127,9 +2130,9 @@ with tempfile.TemporaryDirectory() as tmp:
     _, p1 = get("/search?show=all")
     _, p2 = get("/search?show=all&page=2")
     check("trang 1 đầy", rows(p1) > 0)
-    check("có nút sang trang", "class=pager" in p1 and "sau →" in p1)
+    check("có nút sang trang", "class=pager" in p1 and "next →" in p1)
     check("trang 2 ra thẻ KHÁC trang 1", rows(p2) > 0 and p1 != p2)
-    check("nói rõ đang ở trang mấy trên mấy", "trang 1/" in p1 and "trang 2/" in p2)
+    check("nói rõ đang ở trang mấy trên mấy", "page 1/" in p1 and "page 2/" in p2)
     _, far = get("/search?page=9999")
     check("trang vượt quá thì rỗng, không sập", far and rows(far) == 0)
     _filters.PER_PAGE = real_per
@@ -3211,7 +3214,7 @@ with tempfile.TemporaryDirectory() as tmp:
     _loc = _cK.execute("SELECT COUNT(*) FROM posting WHERE kept=1").fetchone()[0]
     _cK.close()
     check("nút nạp đạn nói rõ SỐ TIN sắp mất — đếm CẢ KHO, không phải phần lọc",
-          f"Bỏ {_ca_kho:,} tin?" in _srh, f"kho {_ca_kho} · lọc {_loc}")
+          f"Drop {_ca_kho:,} postings?" in _srh, f"kho {_ca_kho} · lọc {_loc}")
     check("POST rỗng -> từ chối", post_form("/api/search/xoa", "") == 400)
     check("POST sai chữ -> từ chối", post_form("/api/search/xoa", "arg=co") == 400)
 
